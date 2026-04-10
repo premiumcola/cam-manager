@@ -1,0 +1,274 @@
+
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>TAM-spy</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div id="wizard" class="wizard hidden">
+    <div class="wizard-card panel">
+      <div class="wizard-head">
+        <div class="logo lg">🐈‍⬛</div>
+        <div>
+          <div class="eyebrow">TAM-spy · First Start</div>
+          <h2>Erstkonfiguration</h2>
+          <div class="muted">Kompakter Startassistent für Unraid, MQTT, Telegram und die erste Kamera.</div>
+        </div>
+      </div>
+      <div class="wizard-steps">
+        <button class="wiz-tab active" data-step="1">1 App</button>
+        <button class="wiz-tab" data-step="2">2 Telegram</button>
+        <button class="wiz-tab" data-step="3">3 MQTT</button>
+        <button class="wiz-tab" data-step="4">4 Kamera</button>
+      </div>
+      <div class="wizard-body">
+        <section class="wiz-step active" data-step="1">
+          <div class="form compact">
+            <input id="wiz_app_name" placeholder="App-Name" value="TAM-spy" />
+            <input id="wiz_tagline" placeholder="Tagline" value="Analyse · Sicherheit · Tierbeobachtung" />
+            <input id="wiz_logo" placeholder="Logo Emoji" value="🐈‍⬛" />
+            <input id="wiz_subnet" placeholder="Discovery-Subnet" value="192.168.1.0/24" />
+          </div>
+        </section>
+        <section class="wiz-step" data-step="2">
+          <div class="form compact">
+            <label class="toggle-row"><span>Telegram aktiv</span><label class="switch"><input type="checkbox" id="wiz_tg_enabled" /><span class="slider"></span></label></label>
+            <div class="field-help">Beispiel Token: <code>123456789:AAExampleBotToken</code></div>
+            <input id="wiz_tg_token" placeholder="Telegram Token · Beispiel: 123456789:AAExampleBotToken" />
+            <div class="field-help">Beispiel Chat-ID: <code>123456789</code> oder <code>-1001234567890</code> bei Gruppen.</div>
+            <input id="wiz_tg_chat_id" placeholder="Telegram Chat ID · Beispiel: 123456789" />
+          </div>
+        </section>
+        <section class="wiz-step" data-step="3">
+          <div class="form compact">
+            <label class="toggle-row"><span>MQTT aktiv</span><label class="switch"><input type="checkbox" id="wiz_mqtt_enabled" checked /><span class="slider"></span></label></label>
+            <div class="field-help">Beispiel Host: <code>192.168.X.X</code> oder <code>homeassistant.local</code></div>
+            <input id="wiz_mqtt_host" placeholder="MQTT Host · Beispiel: 192.168.X.X" value="homeassistant.local" />
+            <div class="row3"><input id="wiz_mqtt_port" placeholder="Port · Beispiel: 1883" value="1883" /><input id="wiz_mqtt_username" placeholder="MQTT Benutzer" /><input id="wiz_mqtt_password" placeholder="MQTT Passwort" /></div>
+            <div class="field-help">Base Topic = Präfix aller MQTT-Nachrichten. Beispiel: <code>tam-spy</code></div>
+            <input id="wiz_mqtt_topic" placeholder="Base Topic · Beispiel: tam-spy" value="tam-spy" />
+          </div>
+        </section>
+        <section class="wiz-step" data-step="4">
+          <div class="form compact">
+            <div class="field-help">Für deine Kamera <code>192.168.X.X</code>: IP kommt nicht extra in ein eigenes Feld, sondern in die RTSP- oder Snapshot-URL.</div>
+            <input id="wiz_cam_id" placeholder="Kamera-ID · Beispiel: cam-werkstatt" />
+            <input id="wiz_cam_name" placeholder="Kameraname · Beispiel: Werkstatt" />
+            <input id="wiz_cam_location" placeholder="Ort · Beispiel: Werkbank / Tor" />
+            <div class="field-help">RTSP URL = der Video-Stream deiner Kamera. Beispiele:<br><code>rtsp://user:pass@192.168.X.X:554/h264Preview_01_main</code> (Reolink)<br><code>rtsp://user:pass@192.168.X.X:554/Streaming/Channels/101</code> (Hikvision)<br><code>rtsp://user:pass@192.168.X.X:554/cam/realmonitor?channel=1&amp;subtype=0</code> (Dahua)</div>
+            <input id="wiz_cam_rtsp" placeholder="RTSP URL · Beispiel: rtsp://user:pass@192.168.X.X:554/Streaming/Channels/101" />
+            <div class="field-help">Snapshot URL = einzelnes JPG-Bild der Kamera. Optional. Beispiel: <code>http://user:pass@192.168.X.X/cgi-bin/snapshot.cgi</code></div>
+            <input id="wiz_cam_snapshot" placeholder="Snapshot URL optional · Beispiel: http://user:pass@192.168.X.X/cgi-bin/snapshot.cgi" />
+            <select id="wiz_cam_group">
+              <option value="sicherheit">Sicherheit</option>
+              <option value="bereichsuebersicht">Bereichsübersicht</option>
+              <option value="tierbeobachtung">Tierbeobachtung</option>
+              <option value="eingangskamera">Eingangskamera</option>
+            </select>
+          </div>
+        </section>
+      </div>
+      <div class="wizard-actions">
+        <button id="wizPrev" class="ghost">Zurück</button>
+        <button id="wizNext">Weiter</button>
+        <button id="wizFinish" class="hidden">Setup abschließen</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="shell">
+    <aside class="sidebar panel">
+      <div class="brand">
+        <div class="logo">🐈‍⬛</div>
+        <div>
+          <div class="eyebrow" id="sideAppName">TAM-spy</div>
+          <h1>Analyse & Sicherheit</h1>
+          <div class="muted">PoE · Coral · MQTT · Telegram</div>
+        </div>
+      </div>
+      <nav class="nav">
+        <a href="#dashboard">Dashboard</a>
+        <a href="#timeline">Timeline</a>
+        <a href="#media">Mediathek</a>
+        <a href="#cameras">Kameras</a>
+        <a href="#groups">Kameragruppen</a>
+        <a href="#profiles">Profile</a>
+        <a href="#telegram">Telegram</a>
+        <a href="#settings">Einstellungen</a>
+      </nav>
+    </aside>
+    <main class="main">
+      <section class="hero panel">
+        <div>
+          <div class="eyebrow" id="appName">TAM-spy</div>
+          <h2 id="appTagline">Schlicht, funktional, analytisch</h2>
+          <p class="muted">Desktop-first, iOS-tauglich, mit Timeline, Mediathek, Kameragruppen, Preset-Telegram-Menü und MQTT-Basis für Home Assistant.</p>
+        </div>
+        <div class="hero-actions">
+          <button id="reloadBtn">Neu laden</button>
+          <button id="discoverBtn" class="ghost">Netzwerk-Discovery</button>
+          <button id="openWizardBtn" class="ghost hidden">Setup-Wizard</button>
+        </div>
+      </section>
+
+      <section id="dashboard" class="panel section">
+        <div class="section-head"><h3>Dashboard</h3><div id="globalSummary" class="muted"></div></div>
+        <div class="toolbar">
+          <select id="cameraFilter"></select>
+          <select id="labelFilter"><option value="">Alle Objekte</option><option>person</option><option>cat</option><option>bird</option><option>car</option><option>motion</option></select>
+          <select id="periodFilter"><option value="day">Tag</option><option value="week" selected>Woche</option><option value="month">Monat</option></select>
+        </div>
+        <div id="cameraCards" class="camera-grid"></div>
+      </section>
+
+      <section id="timeline" class="panel section">
+        <div class="section-head"><h3>Timeline</h3><div class="muted">Zeitachse je Kamera + globaler Flow</div></div>
+        <svg id="timelineSvg" viewBox="0 0 1200 340" preserveAspectRatio="none"></svg>
+      </section>
+
+      <section id="media" class="panel section">
+        <div class="section-head"><h3>Mediathek</h3><div class="muted">Letzte Erkennungen, Clips, Reviews</div></div>
+        <div id="mediaGrid" class="media-grid"></div>
+      </section>
+
+      <section id="cameras" class="panel section split two-thirds">
+        <div>
+          <div class="section-head"><h3>Kameras</h3><div class="muted">anlegen, bearbeiten, armed, Timelapse, RTSP</div></div>
+          <div id="cameraSettingsList" class="list"></div>
+        </div>
+        <div>
+          <div class="section-head"><h3>Kamera bearbeiten</h3><div class="muted">inkl. Masken- & Zonen-Editor</div></div>
+          <form id="cameraForm" class="form">
+            <input name="id" placeholder="ID · Beispiel: cam-werkstatt" required />
+            <input name="name" placeholder="Name · Beispiel: Werkstatt" required />
+            <input name="location" placeholder="Ort · Beispiel: Werkbank / Tor" />
+            <div class="field-help">RTSP URL = Live-Video deiner Kamera. Hier kommt die IP rein, zusammen mit Benutzer, Passwort und Pfad.</div>
+            <input name="rtsp_url" placeholder="RTSP URL · Beispiel: rtsp://user:pass@192.168.X.X:554/Streaming/Channels/101" />
+            <div class="field-help">Snapshot URL = einzelnes JPG-Bild. Optional, aber oft hilfreich für Vorschaubilder.</div>
+            <input name="snapshot_url" placeholder="Snapshot URL · Beispiel: http://user:pass@192.168.X.X/cgi-bin/snapshot.cgi" />
+            <select name="group_id" id="groupSelect"></select>
+            <input name="object_filter" placeholder="Objektfilter · Beispiel: person,cat,bird" />
+            <div class="row"><label><input type="checkbox" name="enabled" checked /> aktiv</label><label><input type="checkbox" name="armed" checked /> armed</label><label><input type="checkbox" name="timelapse_enabled" /> timelapse</label></div>
+            <div class="row3"><input name="schedule_start" placeholder="22:00" /><input name="schedule_end" placeholder="06:00" /><label><input type="checkbox" name="schedule_enabled" /> Zeitplan</label></div>
+            <div class="row"><label><input type="checkbox" name="telegram_enabled" checked /> Telegram</label><label><input type="checkbox" name="mqtt_enabled" checked /> MQTT</label><input name="whitelist_names" placeholder="Whitelist Namen · Beispiel: Bruder,Ich" /></div>
+            <input type="hidden" name="zones_json" />
+            <input type="hidden" name="masks_json" />
+            <button>Speichern & Reload</button>
+          </form>
+          <div class="mask-editor panel inset">
+            <div class="section-head"><h3>Masken & Zonen</h3><div class="muted" id="shapeStatus">Punktweise zeichnen auf dem Snapshot</div></div>
+            <div class="shape-toolbar">
+              <button class="ghost small-btn" id="refreshMaskSnapshotBtn" type="button">Snapshot aktualisieren</button>
+              <button class="ghost small-btn" id="editZoneBtn" type="button">Zone zeichnen</button>
+              <button class="ghost small-btn" id="editMaskBtn" type="button">Maske zeichnen</button>
+              <button class="ghost small-btn" id="undoShapeBtn" type="button">Letzten Punkt löschen</button>
+              <button class="ghost small-btn" id="saveShapeBtn" type="button">Polygon übernehmen</button>
+              <button class="ghost small-btn danger-btn" id="clearShapesBtn" type="button">Alle löschen</button>
+            </div>
+            <div class="canvas-wrap">
+              <img id="maskSnapshot" src="" alt="Snapshot" />
+              <canvas id="maskCanvas" width="1280" height="720"></canvas>
+            </div>
+            <div class="small muted">Zonen = aktiv relevanter Bereich. Masken = Bereich ignorieren.</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="groups" class="panel section split">
+        <div>
+          <div class="section-head"><h3>Kameragruppen</h3><div class="muted">Rollen, Alarmprofil, Modellstapel</div></div>
+          <div id="groupList" class="list"></div>
+        </div>
+        <div>
+          <div class="section-head"><h3>Gruppe bearbeiten</h3></div>
+          <form id="groupForm" class="form">
+            <input name="id" placeholder="id" required />
+            <input name="name" placeholder="Name" required />
+            <input name="category" placeholder="Kategorie" required />
+            <select name="alarm_profile"><option>hard</option><option>medium</option><option>soft</option><option>info</option></select>
+            <input name="coarse_objects" placeholder="coarse_objects" />
+            <input name="fine_models" placeholder="fine_models" />
+            <div class="row3"><input name="schedule_start" placeholder="22:00" /><input name="schedule_end" placeholder="06:00" /><label><input type="checkbox" name="schedule_enabled" /> Zeitplan</label></div>
+            <button>Gruppe speichern</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="profiles" class="panel section split">
+        <div>
+          <div class="section-head"><h3>Katzen & Personen</h3></div>
+          <div id="profileLists" class="list"></div>
+        </div>
+        <div>
+          <div class="section-head"><h3>Telegram / MQTT / Audit</h3></div>
+          <div id="auditPanel" class="audit"></div>
+        </div>
+      </section>
+
+      <section id="telegram" class="panel section">
+        <div class="section-head"><h3>Telegram Menü</h3><div class="muted">Nur Preset-Buttons · keine Texteingabe nötig</div></div>
+        <div class="tg-grid">
+          <div class="tg-card">📷 Live-Bild</div>
+          <div class="tg-card">🎥 Live 5s Clip</div>
+          <div class="tg-card">⏱ Letzte 24h Zeitraffer</div>
+          <div class="tg-card">🕘 Last detections</div>
+          <div class="tg-card">📊 Statistiken</div>
+          <div class="tg-card">🛡 Scharf / Unscharf</div>
+        </div>
+      </section>
+
+      <section id="settings" class="panel section split">
+        <div>
+          <div class="section-head"><h3>Einstellungen</h3><div class="muted">GUI-first: App, Telegram, MQTT, Discovery</div></div>
+          <form id="settingsForm" class="form">
+            <input name="app_name" placeholder="App-Name" />
+            <input name="app_tagline" placeholder="Tagline" />
+            <input name="app_logo" placeholder="Logo Emoji" />
+            <input name="public_base_url" placeholder="Public Base URL" />
+            <input name="discovery_subnet" placeholder="Discovery Subnet" />
+            <label><input type="checkbox" name="telegram_enabled" /> Telegram aktiv</label>
+            <input name="telegram_token" placeholder="Telegram Token" />
+            <input name="telegram_chat_id" placeholder="Telegram Chat ID" />
+            <label><input type="checkbox" name="mqtt_enabled" /> MQTT aktiv</label>
+            <input name="mqtt_host" placeholder="MQTT Host" />
+            <div class="row3"><input name="mqtt_port" placeholder="1883" /><input name="mqtt_username" placeholder="MQTT Benutzer" /><input name="mqtt_password" placeholder="MQTT Passwort" /></div>
+            <input name="mqtt_base_topic" placeholder="Base Topic" />
+            <button>Settings speichern & Reload</button>
+          </form>
+        </div>
+        <div>
+          <div class="section-head"><h3>Import / Export</h3></div>
+          <div class="audit import-export">
+            <div class="row">
+              <button id="exportJsonBtn" type="button" class="ghost">Export JSON</button>
+              <button id="exportYamlBtn" type="button" class="ghost">Export YAML</button>
+              <button id="reloadConfigBtn" type="button" class="ghost">Config neu laden</button>
+            </div>
+            <textarea id="importBox" rows="14" placeholder="Hier JSON oder YAML einfügen …"></textarea>
+            <div class="row">
+              <button id="importJsonBtn" type="button">Import JSON</button>
+              <button id="importYamlBtn" type="button">Import YAML</button>
+              <button id="clearImportBtn" type="button" class="ghost">Feld leeren</button>
+            </div>
+            <div class="audit-item"><strong>Hinweis</strong><div class="small">GUI bleibt die Hauptquelle. Import/Export dient als Backup, Restore und Massenpflege.</div></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/static/app.js"></script>
+
+  <div id="discoveryModal" class="modal hidden">
+    <div class="modal-card panel">
+      <div class="section-head"><h3>Netzwerk-Discovery</h3><button id="closeDiscoveryBtn" class="ghost small-btn" type="button">Schließen</button></div>
+      <div class="field-help">Gefundene Hosts mit typischen Kamera-Ports. Klick auf "Als RTSP-Beispiel übernehmen" trägt die IP direkt in die Form ein.</div>
+      <div id="discoveryStatus" class="small muted">Noch keine Suche gestartet.</div>
+      <div id="discoveryResults" class="list" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+</body>
+</html>

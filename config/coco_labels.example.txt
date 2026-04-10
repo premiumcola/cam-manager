@@ -1,0 +1,15 @@
+0 background
+1 person
+2 bicycle
+3 car
+4 motorcycle
+15 bird
+16 cat
+17 dog
+18 horse
+19 sheep
+20 cow
+21 elephant
+22 bear
+23 zebra
+24 giraffe

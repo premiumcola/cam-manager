@@ -1,0 +1,119 @@
+server:
+  host: 0.0.0.0
+  port: 8099
+  public_base_url: http://192.168.X.X:8099
+  default_discovery_subnet: 192.168.1.0/24
+
+storage:
+  root: /app/storage
+  retention_days: 14
+  media_limit_default: 24
+
+telegram:
+  enabled: false
+  token: ""
+  chat_id: ""
+
+mqtt:
+  enabled: false
+  host: homeassistant.local
+  port: 1883
+  username: ""
+  password: ""
+  base_topic: tam-spy
+
+processing:
+  event_cooldown_seconds: 25
+  motion:
+    enabled: true
+    min_area: 1800
+    cooldown_seconds: 25
+    blur_size: 21
+    frame_interval_ms: 350
+  detection:
+    mode: coral
+    model_path: /app/models/coco_ssd_mobilenet_v2_coco_quant_postprocess_edgetpu.tflite
+    labels_path: /app/config/coco_labels.example.txt
+    min_score: 0.55
+    device: usb
+  bird_species:
+    enabled: false
+    model_path: /app/models/bavarian_birds_edgetpu.tflite
+    labels_path: /app/config/bavarian_birds_common.txt
+    min_score: 0.45
+    device: usb
+  cat_identity:
+    match_threshold: 10
+  person_identity:
+    match_threshold: 10
+
+camera_groups:
+  - id: sicherheit
+    name: Sicherheit
+    category: Sicherheit
+    alarm_profile: hard
+    coarse_objects: [person, car, cat, bird, motion]
+    fine_models: []
+    schedule: { enabled: true, start: "22:00", end: "06:00" }
+  - id: bereichsuebersicht
+    name: Bereichsübersicht
+    category: Bereichsübersicht
+    alarm_profile: soft
+    coarse_objects: [person, car, cat, bird, motion]
+    fine_models: []
+    schedule: { enabled: false, start: "00:00", end: "00:00" }
+  - id: tierbeobachtung
+    name: Tierbeobachtung
+    category: Tierbeobachtung
+    alarm_profile: info
+    coarse_objects: [bird, cat, motion, person]
+    fine_models: [bird_species, squirrel]
+    schedule: { enabled: false, start: "00:00", end: "00:00" }
+  - id: eingangskamera
+    name: Eingangskamera
+    category: Eingangskamera
+    alarm_profile: medium
+    coarse_objects: [person, cat, bird, motion]
+    fine_models: [cat_identity, person_identity]
+    schedule: { enabled: true, start: "23:00", end: "06:00" }
+
+cameras:
+  - id: cam-garten
+    name: Garten
+    location: Zaun / Beet
+    enabled: true
+    group_id: tierbeobachtung
+    role: Tierbeobachtung
+    rtsp_url: rtsp://user:pass@192.168.X.X:554/h264Preview_01_main
+    snapshot_url: ""
+    username: user
+    password: pass
+    object_filter: [bird, cat, person]
+    armed: true
+    telegram_enabled: true
+    mqtt_enabled: true
+    whitelist_names: []
+    schedule: { enabled: false, start: "22:00", end: "06:00" }
+    timelapse:
+      enabled: true
+      fps: 12
+
+  - id: cam-werkstatt
+    name: Werkstatt
+    location: Werkbank / Tor
+    enabled: true
+    group_id: sicherheit
+    role: Sicherheit
+    rtsp_url: rtsp://user:pass@192.168.X.X:554/Streaming/Channels/101
+    snapshot_url: ""
+    username: user
+    password: pass
+    object_filter: [person, cat, car]
+    armed: true
+    telegram_enabled: true
+    mqtt_enabled: true
+    whitelist_names: [Bruder]
+    schedule: { enabled: true, start: "22:00", end: "06:00" }
+    timelapse:
+      enabled: false
+      fps: 12

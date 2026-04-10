@@ -1,0 +1,17 @@
+services:
+  tam-spy:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.coral
+    container_name: tam-spy
+    restart: unless-stopped
+    ports:
+      - "8099:8099"
+    environment:
+      - TZ=Europe/Berlin
+      - GARDEN_MONITOR_CONFIG=/app/config/config.yaml
+    volumes:
+      - ../config:/app/config
+      - ../storage:/app/storage
+      - ../models:/app/models
+    # Optional: USB Coral device mapping in Unraid template / docker run
