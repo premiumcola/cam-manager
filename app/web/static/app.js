@@ -81,7 +81,7 @@ function renderDashboard(){
         <div class="chip-row">
           <button class="action-btn" onclick="toggleArm('${esc(c.id)}',${!c.armed})">${c.armed?'Unscharf':'Scharf'}</button>
           <button class="action-btn" onclick="loadTimelapse('${esc(c.id)}')">Timelapse</button>
-          <button class="action-btn" onclick="editCamera('${esc(c.id)}')">Bearbeiten</button>
+          <button class="edit-camera-btn action-btn" data-camid="${esc(c.id)}">Bearbeiten</button>
         </div>
       </div>
     </article>`).join('');
@@ -174,7 +174,7 @@ function parseRtspUrl(url){
 }
 
 function renderCameraSettings(){
-  byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`<div class="item" data-camid="${esc(c.id)}"><div class="item-head"><strong>${esc(c.name)}</strong><button class="action-btn" onclick="editCamera('${esc(c.id)}')">Bearbeiten</button></div><div class="small">${esc(c.location||'')} · ${esc(c.group_id||'—')} · ${c.armed?'scharf':'unscharf'}</div></div>`).join('');
+  byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`<div class="item" data-camid="${esc(c.id)}"><div class="item-head"><strong>${esc(c.name)}</strong><button class="edit-camera-btn action-btn" data-camid="${esc(c.id)}">Bearbeiten</button></div><div class="small">${esc(c.location||'')} · ${esc(c.group_id||'—')} · ${c.armed?'scharf':'unscharf'}</div></div>`).join('');
 }
 
 // ── Whitelist chips ───────────────────────────────────────────────────────────
@@ -257,6 +257,12 @@ function editCamera(camId){
   setTimeout(()=>wrapper.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
 }
 window.editCamera=editCamera;
+
+// Event delegation for dynamically rendered edit buttons
+document.addEventListener('click',function(e){
+  const btn=e.target.closest('.edit-camera-btn');
+  if(btn) editCamera(btn.dataset.camid);
+});
 
 byId('deleteCameraBtn').onclick=async()=>{
   const camId=byId('deleteCameraBtn').dataset.camId;

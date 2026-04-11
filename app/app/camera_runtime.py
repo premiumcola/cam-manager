@@ -33,6 +33,7 @@ class CameraRuntime:
         self.capture = None
         self.connect_time = None
         self.prev_gray = None
+        self._error_streak = 0
         self.lock = threading.Lock()
         proc = self.global_cfg.get("processing", {})
         self.detector = CoralObjectDetector(proc.get("detection", {}))
@@ -157,6 +158,7 @@ class CameraRuntime:
                 with self.lock:
                     self.frame = frame
                 self.last_error = None  # clear on every successful frame read
+                self._error_streak = 0
                 # Quality gate: skip corrupt/uniform/artifact frames for events only
                 if not self._is_frame_valid(frame):
                     time.sleep(interval)
@@ -266,15 +268,17 @@ class CameraRuntime:
                             self.notifier.send_alert_sync(caption=caption, jpeg_bytes=fh.read(), snapshot_url=snapshot_url, dashboard_url=public_base, camera_id=self.camera_id)
                 self.last_error = None
             except Exception as e:
+                self._error_streak += 1
                 self.last_error = str(e)
-                log.error("[%s] %s", self.camera_id, e)
+                if self._error_streak % 3 == 1:
+                    log.error("[%s] error_streak=%d: %s", self.camera_id, self._error_streak, e)
                 try:
                     if self.capture is not None:
                         self.capture.release()
                 except Exception:
                     pass
                 self.capture = None
-                time.sleep(2.0)
+                time.sleep(5.0)
             time.sleep(interval)
 
     def snapshot_jpeg(self, quality=88):
@@ -297,7 +301,7 @@ class CameraRuntime:
             "armed": cfg.get("armed", True),
             "source": "rtsp" if cfg.get("rtsp_url") else "snapshot",
             "last_error": self.last_error,
-            "status": "error" if self.last_error else ("active" if self.frame is not None else "starting"),
+            "status": "error" if self._error_streak >= 10 else ("active" if self.frame is not None else "starting"),
             "today_events": self.event_counter_today,
             "timelapse_enabled": bool((cfg.get("timelapse") or {}).get("enabled")),
             "detection_mode": self.global_cfg.get("processing", {}).get("detection", {}).get("mode", "none"),

@@ -16,10 +16,10 @@ class EventStore:
         return p
 
     def add_event(self, camera_id: str, payload: dict):
-        ts = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         payload = dict(payload)
-        payload.setdefault("event_id", ts)
-        path = self._cam_dir(camera_id) / f"{ts}.json"
+        event_id = payload.get("event_id") or datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+        payload["event_id"] = event_id
+        path = self._cam_dir(camera_id) / f"{event_id}.json"
         path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return path
 
