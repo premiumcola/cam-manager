@@ -74,6 +74,7 @@ class CameraRuntime:
         self.bird_classifier = BirdSpeciesClassifier(proc.get("bird_species", {}))
         self._ach_lock = threading.Lock()
         self._ach_path = Path(self.global_cfg["storage"]["root"]) / "achievements.json"
+        self.preview_cap = None   # sub-stream capture (H.264, no pink)
 
     @property
     def cfg(self):
@@ -86,11 +87,20 @@ class CameraRuntime:
 
     def stop(self):
         self.running = False
-        if self.capture is not None:
-            try:
-                self.capture.release()
-            except Exception:
-                pass
+        for cap in (self.capture, self.preview_cap):
+            if cap is not None:
+                try:
+                    cap.release()
+                except Exception:
+                    pass
+        self.preview_cap = None
+
+    @staticmethod
+    def _sub_stream_url(url: str) -> str | None:
+        """Derive H.264 sub-stream URL from main-stream URL (Reolink pattern)."""
+        if "/h264Preview_01_main" in url:
+            return url.replace("/h264Preview_01_main", "/h264Preview_01_sub")
+        return None
 
     def _open_capture(self):
         src = self.cfg.get("rtsp_url") or self.cfg.get("snapshot_url")
@@ -98,15 +108,34 @@ class CameraRuntime:
             raise RuntimeError(f"Kamera {self.camera_id}: keine Quelle gesetzt")
         if self.cfg.get("rtsp_url"):
             import os
-            # Force TCP + disable hardware acceleration to prevent H.265 tile-split
-            # pink/magenta artifact (classic half-frame corruption bug in FFmpeg/OpenCV).
-            # hwaccel;none forces pure software decode — tested working on 4K HEVC stream.
+            rtsp_url = self.cfg["rtsp_url"]
+
+            # ── Main stream: motion detection + event snapshots ──────────────
+            # TCP + software decode to prevent H.265 tile-split pink artifact.
             os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|hwaccel;none"
-            cap = cv2.VideoCapture(self.cfg["rtsp_url"], cv2.CAP_FFMPEG)
+            cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             if not cap.isOpened():
                 raise RuntimeError(f"Kamera {self.camera_id}: RTSP konnte nicht geöffnet werden")
             self.capture = cap
+
+            # ── Sub-stream: H.264 preview for dashboard (no pink) ────────────
+            sub_url = self._sub_stream_url(rtsp_url)
+            if sub_url:
+                try:
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
+                    pcap = cv2.VideoCapture(sub_url, cv2.CAP_FFMPEG)
+                    pcap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    if pcap.isOpened():
+                        self.preview_cap = pcap
+                        log.info("[%s] Sub-stream opened for preview: %s", self.camera_id, sub_url)
+                    else:
+                        pcap.release()
+                        self.preview_cap = None
+                except Exception as e:
+                    log.warning("[%s] Sub-stream open failed: %s", self.camera_id, e)
+                    self.preview_cap = None
+
             self.connect_time = time.time()
             self.prev_gray = None  # reset motion state on reconnect
         else:
@@ -120,10 +149,10 @@ class CameraRuntime:
             if not ok or frame is None:
                 raise RuntimeError(f"Kamera {self.camera_id}: Frame lesen fehlgeschlagen")
             # Reject H.265 pink/magenta corruption frames (hardware decode artifact)
-            mean_r = float(frame[:, :, 2].mean())
-            mean_b = float(frame[:, :, 0].mean())
-            if mean_r > mean_b * 2.5 and mean_r > 150:
-                log.debug("[%s] Pink frame discarded (R=%.0f B=%.0f)", self.camera_id, mean_r, mean_b)
+            r = float(frame[:, :, 2].mean())
+            b = float(frame[:, :, 0].mean())
+            if r > b * 2.5 and r > 150:
+                log.debug("[%s] Pink frame discarded (R=%.0f B=%.0f)", self.camera_id, r, b)
                 ok2, frame2 = self.capture.read()
                 if ok2 and frame2 is not None:
                     return frame2
@@ -448,6 +477,21 @@ class CameraRuntime:
             time.sleep(interval)
 
     def snapshot_jpeg(self, quality=88):
+        # Prefer sub-stream (H.264, no pink) for the live dashboard thumbnail.
+        # Falls back to main-stream preview (annotated frame) if sub-stream unavailable.
+        if self.preview_cap is not None:
+            try:
+                if self.preview_cap.isOpened():
+                    ok, frame = self.preview_cap.read()
+                    if ok and frame is not None:
+                        r = float(frame[:, :, 2].mean())
+                        b = float(frame[:, :, 0].mean())
+                        if not (r > b * 2.5 and r > 150):  # skip pink frames
+                            ok2, buf = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+                            if ok2:
+                                return buf.tobytes()
+            except Exception:
+                pass
         with self.lock:
             frame = self.preview if self.preview is not None else self.frame
             if frame is None:
