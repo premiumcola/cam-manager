@@ -3,12 +3,42 @@ import cv2
 import time
 import threading
 import logging
+import json as _json_mod
 from datetime import datetime
 from pathlib import Path
 import requests
 import numpy as np
 from .detectors import CoralObjectDetector, BirdSpeciesClassifier, draw_detections
 from .event_logic import is_in_schedule, choose_alarm_level
+
+# Species name → achievement ID mapping (German species names → normalised IDs)
+_SPECIES_TO_ACH_ID = {
+    "blaumeise": "blaumeise",
+    "kohlmeise": "kohlmeise",
+    "rotkehlchen": "rotkehlchen",
+    "buchfink": "buchfink",
+    "amsel": "amsel",
+    "hausspatz": "hausspatz",
+    "grünfink": "gruenfink",
+    "gruenfink": "gruenfink",
+    "stieglitz": "stieglitz",
+    "kleiber": "kleiber",
+    "buntspecht": "buntspecht",
+    "eichelhäher": "eichelhaher",
+    "eichelhaher": "eichelhaher",
+    "elster": "elster",
+    "rabenkrähe": "rabenkraehe",
+    "rabenkraehe": "rabenkraehe",
+    "mäusebussard": "maeusebussard",
+    "maeusebussard": "maeusebussard",
+    "turmfalke": "turmfalke",
+    "eichhörnchen": "eichhoernchen",
+    "eichhoernchen": "eichhoernchen",
+    "igel": "igel",
+    "feldhase": "feldhase",
+    "reh": "reh",
+    "fuchs": "fuchs",
+}
 
 log = logging.getLogger(__name__)
 
@@ -42,6 +72,8 @@ class CameraRuntime:
         proc = self.global_cfg.get("processing", {})
         self.detector = CoralObjectDetector(proc.get("detection", {}))
         self.bird_classifier = BirdSpeciesClassifier(proc.get("bird_species", {}))
+        self._ach_lock = threading.Lock()
+        self._ach_path = Path(self.global_cfg["storage"]["root"]) / "achievements.json"
 
     @property
     def cfg(self):
@@ -65,7 +97,12 @@ class CameraRuntime:
         if not src:
             raise RuntimeError(f"Kamera {self.camera_id}: keine Quelle gesetzt")
         if self.cfg.get("rtsp_url"):
-            cap = cv2.VideoCapture(self.cfg["rtsp_url"])
+            import os
+            # Force TCP transport to avoid H.265/HEVC corruption and pink artifacts
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
+            cap = cv2.VideoCapture(self.cfg["rtsp_url"], cv2.CAP_FFMPEG)
+            # Minimize buffer lag
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             if not cap.isOpened():
                 raise RuntimeError(f"Kamera {self.camera_id}: RTSP konnte nicht geöffnet werden")
             self.capture = cap
@@ -94,7 +131,7 @@ class CameraRuntime:
         return frame
 
     def _is_frame_valid(self, frame) -> bool:
-        """Reject corrupt, uniform-gray, white, or artifact frames."""
+        """Reject corrupt, uniform-gray, white, pink-artifact, or near-black frames."""
         if frame is None or frame.size == 0:
             return False
         h, w = frame.shape[:2]
@@ -102,18 +139,21 @@ class CameraRuntime:
             return False
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         mean_val = float(np.mean(gray))
-        if mean_val < 20 or mean_val > 240:
+        if mean_val < 8 or mean_val > 250:
             return False
-        std_val = float(np.std(gray))
-        if std_val > 80:
-            return False
-        # Reject frames where >30% of pixels are R≈G≈B (uniform gray/white)
         b_ch, g_ch, r_ch = cv2.split(frame)
+        mean_r = float(r_ch.mean())
+        mean_g = float(g_ch.mean())
+        mean_b = float(b_ch.mean())
+        # Reject H.265 pink/magenta corruption: dominant red channel + low green/blue
+        if mean_r > 180 and mean_r > mean_g * 2:
+            return False
+        # Reject frames where >40% of pixels are R≈G≈B (uniform gray/white)
         uniform = np.sum(
             (np.abs(r_ch.astype(np.int16) - g_ch.astype(np.int16)) < 10) &
             (np.abs(r_ch.astype(np.int16) - b_ch.astype(np.int16)) < 10)
         )
-        if uniform > 0.3 * h * w:
+        if uniform > 0.4 * h * w:
             return False
         return True
 
@@ -173,6 +213,33 @@ class CameraRuntime:
         except Exception as e:
             log.error("[%s] Video save error: %s", self.camera_id, e)
             return None
+
+    def _try_unlock_achievement(self, species_name: str, species_label: str) -> bool:
+        """Unlock achievement for a bird/animal species. Returns True if newly unlocked."""
+        ach_id = _SPECIES_TO_ACH_ID.get(species_name.lower().strip())
+        if not ach_id:
+            return False
+        try:
+            with self._ach_lock:
+                data: dict = {}
+                if self._ach_path.exists():
+                    try:
+                        data = _json_mod.loads(self._ach_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        data = {}
+                if ach_id in data:
+                    return False  # already unlocked
+                data[ach_id] = {
+                    "date": datetime.now().isoformat(timespec="seconds"),
+                    "camera_id": self.camera_id,
+                    "species": species_label,
+                }
+                self._ach_path.write_text(_json_mod.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            log.info("[%s] Achievement unlocked: %s (%s)", self.camera_id, ach_id, species_label)
+            return True
+        except Exception as e:
+            log.warning("[%s] Achievement unlock failed: %s", self.camera_id, e)
+            return False
 
     def _loop(self):
         interval = max(0.05, float(self.global_cfg.get("processing", {}).get("motion", {}).get("frame_interval_ms", 150)) / 1000.0)
@@ -323,6 +390,16 @@ class CameraRuntime:
                             elif gr.get("from") and gr.get("to"):
                                 if not is_in_schedule({"enabled": True, "start": gr["from"], "end": gr["to"]}):
                                     _send_tg = False
+                    # Achievement unlock for first-time species detection
+                    if bird_species:
+                        newly_unlocked = self._try_unlock_achievement(bird_species, bird_species)
+                        if newly_unlocked and self.notifier:
+                            try:
+                                ach_msg = f"🏆 Neue Trophäe freigeschaltet: {bird_species}!\n📷 Kamera: {self.cfg.get('name', self.camera_id)}"
+                                import threading as _thr
+                                _thr.Thread(target=self.notifier.send_alert_sync, kwargs={"caption": ach_msg}, daemon=True).start()
+                            except Exception:
+                                pass
                     if _send_tg:
                         top_bird_score = next((d.score for d in detections if d.label == "bird" and d.species), None)
                         if bird_species:

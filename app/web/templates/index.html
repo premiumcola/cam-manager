@@ -101,6 +101,7 @@
         <a href="#groups" title="Kameragruppen"><span class="nav-icon">🗂</span><span class="nav-label">Kameragruppen</span></a>
         <a href="#profiles" title="Profile"><span class="nav-icon">👤</span><span class="nav-label">Profile</span></a>
         <a href="#telegram" title="Telegram"><span class="nav-icon">📨</span><span class="nav-label">Telegram</span></a>
+        <a href="#achievements" title="Trophäen"><span class="nav-icon">🏆</span><span class="nav-label">Trophäen</span></a>
         <a href="#settings" title="Einstellungen"><span class="nav-icon">⚙️</span><span class="nav-label">Einstellungen</span></a>
         <a href="#logs" title="Logs"><span class="nav-icon">📋</span><span class="nav-label">Logs</span></a>
       </nav>
@@ -113,7 +114,6 @@
           <p class="muted">Desktop-first, iOS-tauglich, mit Timeline, Mediathek, Kameragruppen, Preset-Telegram-Menü und MQTT-Basis für Home Assistant.</p>
         </div>
         <div class="hero-actions">
-          <button id="reloadBtn">Neu laden</button>
           <button id="discoverBtn" class="ghost">Netzwerk-Discovery</button>
           <button id="openWizardBtn" class="ghost hidden">Setup-Wizard</button>
           <span id="liveIndicator" class="live-dot hidden" title="Live-Update aktiv"></span>
@@ -179,7 +179,7 @@
       </section>
 
       <section id="cameras" class="panel section">
-        <div class="section-head"><h3>Kameras</h3><button type="button" id="addCameraBtn" class="add-btn">+ Neue Kamera</button></div>
+        <div class="section-head"><h3>Kameras</h3><span class="muted" style="font-size:13px">Kameras über Netzwerk-Discovery hinzufügen ↑</span></div>
         <div id="cameraSettingsList" class="list"></div>
         <div id="cameraEditWrapper" class="cam-edit-wrapper">
           <div class="cam-edit-inner">
@@ -549,6 +549,17 @@
 
           <button type="submit" class="settings-save-btn">💾 Speichern &amp; Neu laden</button>
         </form>
+      </section>
+
+      <section id="achievements" class="panel section">
+        <div class="section-head"><h3>🏆 Trophäen</h3><div class="muted">Erkannte Tierarten · Entdeckungstagebuch</div></div>
+        <div id="achievementsProgress" class="ach-progress-bar"></div>
+        <div class="ach-tabs">
+          <button class="ach-tab active" data-tab="all">Alle</button>
+          <button class="ach-tab" data-tab="birds">Vögel</button>
+          <button class="ach-tab" data-tab="mammals">Säugetiere</button>
+        </div>
+        <div id="achievementsGrid" class="ach-grid"></div>
       </section>
 
       <section id="logs" class="panel section">

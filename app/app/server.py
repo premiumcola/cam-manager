@@ -608,5 +608,50 @@ def api_camera_timelapse(cam_id):
     return jsonify({"ok": True, "day": day, "url": f"/media/{rel.as_posix()}"})
 
 
+# ── Achievements / Trophäen ──────────────────────────────────────────────────
+import json as _json_mod
+import threading as _threading_mod
+
+_ach_lock = _threading_mod.Lock()
+_ach_path = storage_root / "achievements.json"
+
+def _load_achievements() -> dict:
+    try:
+        if _ach_path.exists():
+            return _json_mod.loads(_ach_path.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+def _save_achievements(data: dict):
+    try:
+        _ach_path.write_text(_json_mod.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        logging.getLogger(__name__).warning("achievements save: %s", e)
+
+@app.get('/api/achievements')
+def api_achievements_get():
+    with _ach_lock:
+        return jsonify({"achievements": _load_achievements()})
+
+@app.post('/api/achievements/unlock')
+def api_achievements_unlock():
+    payload = request.get_json(force=True, silent=True) or {}
+    species_id = (payload.get("id") or "").strip().lower()
+    if not species_id:
+        return jsonify({"ok": False, "error": "id fehlt"}), 400
+    with _ach_lock:
+        data = _load_achievements()
+        already = species_id in data
+        if not already:
+            data[species_id] = {
+                "date": datetime.now().isoformat(timespec="seconds"),
+                "camera_id": payload.get("camera_id", ""),
+                "species": payload.get("species", species_id),
+            }
+            _save_achievements(data)
+    return jsonify({"ok": True, "already_had": already, "achievements": data})
+
+
 if __name__ == '__main__':
     app.run(host=cfg.get('server', {}).get('host', '0.0.0.0'), port=int(cfg.get('server', {}).get('port', 8099)), threaded=True)

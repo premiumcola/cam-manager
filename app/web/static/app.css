@@ -165,3 +165,29 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .ie-btn{padding:9px 10px;border:none;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;color:#fff;min-height:38px}
 .ie-blue{background:#2563eb}.ie-green{background:#16a34a}.ie-gray{background:#374151}
 .ie-btn:hover{filter:brightness(1.12)}
+
+/* ── Achievements / Trophäen ───────────────────────────────────────────────── */
+.ach-progress-bar{margin-bottom:16px;padding:14px 18px;border-radius:16px;background:var(--surface);display:flex;align-items:center;gap:14px}
+.ach-progress-text{font-weight:700;font-size:16px;white-space:nowrap}
+.ach-progress-track{flex:1;height:10px;border-radius:999px;background:#1a2b3c;overflow:hidden}
+.ach-progress-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#d4a017,#f0c040);transition:width .5s cubic-bezier(.4,0,.2,1)}
+.ach-progress-pct{font-size:13px;font-weight:700;color:#f0c040;white-space:nowrap}
+.ach-tabs{display:flex;gap:8px;margin-bottom:16px}
+.ach-tab{padding:9px 18px;border-radius:999px;border:none;background:var(--surface);color:var(--muted);font-weight:600;font-size:13px;cursor:pointer;transition:all .15s}
+.ach-tab.active{background:linear-gradient(135deg,#c09010,#d4a017);color:#fff}
+.ach-tab:hover:not(.active){background:#32395a}
+.ach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
+.ach-card{border-radius:18px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;transition:transform .2s,box-shadow .2s;cursor:default;background:var(--surface)}
+.ach-card.unlocked{background:linear-gradient(160deg,#1a2a0d,#2a3a1a);border:1.5px solid #4a7a20;box-shadow:0 4px 16px rgba(74,122,32,.2)}
+.ach-card.locked{filter:grayscale(.7);opacity:.55}
+.ach-card.unlocked:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(74,122,32,.35)}
+.ach-icon{font-size:38px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
+.ach-card.locked .ach-icon{filter:grayscale(1) brightness(.6)}
+.ach-name{font-weight:700;font-size:14px;color:var(--text)}
+.ach-card.locked .ach-name{color:var(--muted)}
+.ach-category{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.ach-date{font-size:11px;color:#a3c040;font-weight:600;margin-top:2px}
+.ach-badge{padding:4px 10px;border-radius:999px;background:rgba(212,160,23,.15);border:1px solid #d4a017;color:#f0c040;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+
+/* Discovery add-camera form */
+.disc-add-form{background:#131e2e;border-radius:12px;padding:12px;margin-top:8px}

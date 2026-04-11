@@ -684,7 +684,6 @@ async function finishWizard(){
   await loadAll();
 }
 
-byId('reloadBtn').onclick=()=>loadAll();
 byId('reloadConfigBtn').onclick=()=>loadAll();
 // alias so discovery modal code still works
 const RTSP_PATHS=RTSP_PATH_OPTS;
@@ -722,6 +721,7 @@ function _renderDiscoveryResults(){
     const uid=x.ip.replace(/\./g,'_');
     const already=allConfigured.has(x.ip);
     const vendor=x.guess==='Unbekannte Kamera'?`Unbekannte Kamera (${x.ip})`:esc(x.guess||'Unbekannte Kamera');
+    const groupOpts=state.groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
     return `<div class="item" data-disc-ip="${esc(x.ip)}">
       <div class="item-head">
         <div>
@@ -731,13 +731,25 @@ function _renderDiscoveryResults(){
         <span class="small muted">Ports: ${esc(ports)}</span>
       </div>
       <div class="small" style="color:${already?'var(--good)':'var(--muted)'};margin-bottom:6px">${vendor}</div>
-      ${already?'':(`<div class="discovery-creds">
-        <input id="disc_user_${uid}" class="disc-input" placeholder="Benutzer" value="admin" />
-        <input id="disc_pass_${uid}" class="disc-input" type="password" placeholder="Passwort" />
-        <select id="disc_path_${uid}" class="disc-select">${pathOpts}</select>
-      </div>
-      <div class="chip-row" style="margin-top:8px">
-        <button class="action-btn" onclick="applyDiscoveryRtsp('${esc(x.ip)}')">Als RTSP übernehmen</button>
+      ${already?'':(`<div id="disc_form_wrap_${uid}">
+        <div class="discovery-creds">
+          <input id="disc_user_${uid}" class="disc-input" placeholder="Benutzer" value="admin" />
+          <input id="disc_pass_${uid}" class="disc-input" type="password" placeholder="Passwort" />
+          <select id="disc_path_${uid}" class="disc-select">${pathOpts}</select>
+        </div>
+        <div id="disc_add_form_${uid}" class="disc-add-form hidden">
+          <div class="discovery-creds" style="margin-top:8px">
+            <input id="disc_name_${uid}" class="disc-input" placeholder="Kameraname" value="${esc(vendor)}" style="flex:1.5"/>
+            <select id="disc_group_${uid}" class="disc-select" style="flex:1">${groupOpts}</select>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button class="action-btn" style="flex:1;background:var(--accent)" onclick="saveDiscoveryCamera('${esc(x.ip)}')">💾 Kamera speichern</button>
+            <button class="action-btn" style="flex:0 0 auto" onclick="byId('disc_add_form_${uid}').classList.add('hidden')">Abbrechen</button>
+          </div>
+        </div>
+        <div class="chip-row" style="margin-top:8px">
+          <button class="action-btn" onclick="openDiscoveryAddForm('${esc(x.ip)}')">+ Kamera hinzufügen</button>
+        </div>
       </div>`)}
     </div>`;
   }).join('');
@@ -765,6 +777,33 @@ byId('discoveryHideConfigured')?.addEventListener('change',_renderDiscoveryResul
 byId('closeDiscoveryBtn').onclick=()=>closeDiscoveryModal();
 byId('discoveryModal').onclick=(e)=>{if(e.target===byId('discoveryModal')) closeDiscoveryModal();};
 byId('openWizardBtn').onclick=()=>openWizard();
+window.openDiscoveryAddForm=(ip)=>{
+  const uid=ip.replace(/\./g,'_');
+  byId(`disc_add_form_${uid}`)?.classList.remove('hidden');
+};
+window.saveDiscoveryCamera=async(ip)=>{
+  const uid=ip.replace(/\./g,'_');
+  const user=byId(`disc_user_${uid}`)?.value||'admin';
+  const pass=byId(`disc_pass_${uid}`)?.value||'';
+  const path=byId(`disc_path_${uid}`)?.value||'/Streaming/Channels/101';
+  const name=byId(`disc_name_${uid}`)?.value||ip;
+  const groupId=byId(`disc_group_${uid}`)?.value||state.groups[0]?.id||'';
+  const rtsp=`rtsp://${user}:${_rtspEnc(pass)}@${ip}:554${path}`;
+  const snap=`http://${user}:${_rtspEnc(pass)}@${ip}/cgi-bin/snapshot.cgi`;
+  const camId='cam-'+ip.replace(/\./g,'-');
+  const payload={id:camId,name,location:'',rtsp_url:rtsp,snapshot_url:snap,
+    group_id:groupId,enabled:true,armed:true,
+    object_filter:['person','cat','bird'],
+    timelapse:{enabled:false,fps:12},zones:[],masks:[],
+    schedule:{enabled:false,start:'22:00',end:'06:00'},
+    telegram_enabled:true,mqtt_enabled:true,whitelist_names:[]};
+  try{
+    await j('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    closeDiscoveryModal();
+    await loadAll();
+  }catch(e){alert('Fehler beim Speichern: '+e.message);}
+};
+// Legacy alias – wizard still uses this
 window.applyDiscoveryRtsp=(ip)=>{
   const uid=ip.replace(/\./g,'_');
   const user=byId(`disc_user_${uid}`)?.value||'admin';
@@ -774,9 +813,6 @@ window.applyDiscoveryRtsp=(ip)=>{
   const snap=`http://${user}:${_rtspEnc(pass)}@${ip}/cgi-bin/snapshot.cgi`;
   const wizRtsp=byId('wiz_cam_rtsp'); if(wizRtsp) wizRtsp.value=rtsp;
   const wizSnap=byId('wiz_cam_snapshot'); if(wizSnap) wizSnap.value=snap;
-  const form=byId('cameraForm');
-  if(form?.elements['rtsp_url']) form.elements['rtsp_url'].value=rtsp;
-  if(form?.elements['snapshot_url']) form.elements['snapshot_url'].value=snap;
   closeDiscoveryModal();
 };
 byId('cameraFilter').onchange=e=>{state.camera=e.target.value; loadAll();};
@@ -800,27 +836,6 @@ byId('cameraForm').onsubmit=async(e)=>{
   await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll(); editCamera(_savedId);
 };
 byId('closeCameraEdit').onclick=()=>_closeEditPanel();
-byId('addCameraBtn').onclick=()=>{
-  _initCameraFormListeners();
-  byId('cameraForm').reset();
-  const f=byId('cameraForm').elements;
-  f['id'].value=''; f['id'].dataset.autoGen='1';
-  byId('cameraEditTitle').textContent='Neue Kamera';
-  if(state.groups[0]) f['group_id'].value=state.groups[0].id;
-  byId('camScheduleSection')?.classList.remove('hidden');
-  byId('timelapseSettingsPanel')?.classList.add('hidden');
-  byId('tlDailyLabel').textContent='60s'; byId('tlWeeklyLabel').textContent='180s';
-  j('/api/persons').then(r=>_renderWhitelistChips(r.profiles||[],[])).catch(()=>_renderWhitelistChips([],[]));
-  shapeState.camera=null; shapeState.zones=[]; shapeState.masks=[]; shapeState.points=[];
-  f['zones_json'].value='[]'; f['masks_json'].value='[]';
-  byId('deleteCameraBtn').dataset.camId='';
-  byId('maskSnapshot').src='';
-  _restoreEditWrapper(); // ensure wrapper is in #cameras section
-  const _addWrapper=byId('cameraEditWrapper');
-  byId('cameraSettingsList').after(_addWrapper);
-  requestAnimationFrame(()=>_addWrapper.classList.add('slide-open'));
-  setTimeout(()=>_addWrapper.scrollIntoView({behavior:'smooth',block:'nearest'}),120);
-};
 byId('addGroupBtn').onclick=()=>{
   document.querySelectorAll('.group-inline').forEach(el=>el.remove());
   byId('groupList').insertAdjacentHTML('beforeend',`<div class="item" data-gid="">${groupEditHTML({id:'',name:'',category:'',alarm_profile:'soft',coarse_objects:[],fine_models:[],schedule:{enabled:false,start:'22:00',end:'06:00'}})}</div>`);
@@ -1046,5 +1061,72 @@ byId('lightboxDelete').onclick=async()=>{
   }catch(e){alert('Löschen fehlgeschlagen: '+e.message);}
 };
 
-loadAll().then(startLiveUpdate);
+// ── Achievements / Trophäen ───────────────────────────────────────────────────
+const ACH_DEFS=[
+  // Vögel
+  {id:'blaumeise',    name:'Blaumeise',     icon:'🐦', cat:'birds'},
+  {id:'kohlmeise',    name:'Kohlmeise',     icon:'🐦', cat:'birds'},
+  {id:'rotkehlchen',  name:'Rotkehlchen',   icon:'🐦', cat:'birds'},
+  {id:'buchfink',     name:'Buchfink',      icon:'🐦', cat:'birds'},
+  {id:'amsel',        name:'Amsel',         icon:'🐦', cat:'birds'},
+  {id:'hausspatz',    name:'Hausspatz',     icon:'🐦', cat:'birds'},
+  {id:'gruenfink',    name:'Grünfink',      icon:'🐦', cat:'birds'},
+  {id:'stieglitz',    name:'Stieglitz',     icon:'🐦', cat:'birds'},
+  {id:'kleiber',      name:'Kleiber',       icon:'🐦', cat:'birds'},
+  {id:'buntspecht',   name:'Buntspecht',    icon:'🐦', cat:'birds'},
+  {id:'eichelhaher',  name:'Eichelhäher',   icon:'🦅', cat:'birds'},
+  {id:'elster',       name:'Elster',        icon:'🐦', cat:'birds'},
+  {id:'rabenkraehe',  name:'Rabenkrähe',    icon:'🐦', cat:'birds'},
+  {id:'maeusebussard',name:'Mäusebussard',  icon:'🦅', cat:'birds'},
+  {id:'turmfalke',    name:'Turmfalke',     icon:'🦅', cat:'birds'},
+  // Säugetiere
+  {id:'eichhoernchen',name:'Eichhörnchen',  icon:'🐿️', cat:'mammals'},
+  {id:'igel',         name:'Igel',          icon:'🦔', cat:'mammals'},
+  {id:'feldhase',     name:'Feldhase',      icon:'🐇', cat:'mammals'},
+  {id:'reh',          name:'Reh',           icon:'🦌', cat:'mammals'},
+  {id:'fuchs',        name:'Fuchs',         icon:'🦊', cat:'mammals'},
+];
+
+let _achTab='all';
+let _achData={};
+
+async function loadAchievements(){
+  try{
+    const r=await j('/api/achievements');
+    _achData=r.achievements||{};
+  }catch{_achData={};}
+  renderAchievements();
+}
+
+function renderAchievements(){
+  const unlocked=ACH_DEFS.filter(a=>_achData[a.id]);
+  const total=ACH_DEFS.length;
+  const pct=Math.round(unlocked.length/total*100);
+  byId('achievementsProgress').innerHTML=`
+    <span class="ach-progress-text">🏆 ${unlocked.length} von ${total} entdeckt</span>
+    <div class="ach-progress-track"><div class="ach-progress-fill" style="width:${pct}%"></div></div>
+    <span class="ach-progress-pct">${pct}%</span>`;
+
+  const visible=_achTab==='all'?ACH_DEFS:ACH_DEFS.filter(a=>a.cat===_achTab);
+  byId('achievementsGrid').innerHTML=visible.map(a=>{
+    const info=_achData[a.id];
+    const isUnlocked=!!info;
+    return `<div class="ach-card ${isUnlocked?'unlocked':'locked'}">
+      <div class="ach-icon">${isUnlocked?a.icon:'🔒'}</div>
+      <div class="ach-name">${esc(a.name)}</div>
+      <div class="ach-category">${a.cat==='birds'?'Vogel':'Säugetier'}</div>
+      ${isUnlocked?`<div class="ach-date">Entdeckt ${esc((info.date||'').slice(0,10))}</div><span class="ach-badge">entdeckt</span>`:''}
+    </div>`;
+  }).join('');
+}
+
+document.querySelectorAll('.ach-tab').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    _achTab=btn.dataset.tab;
+    document.querySelectorAll('.ach-tab').forEach(b=>b.classList.toggle('active',b===btn));
+    renderAchievements();
+  });
+});
+
+loadAll().then(()=>{startLiveUpdate(); loadAchievements();});
 loadLogs();
