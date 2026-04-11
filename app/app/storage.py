@@ -141,6 +141,24 @@ class EventStore:
             "top_cat_names": cat_names.most_common(8),
         }
 
+    def delete_event(self, camera_id: str, event_id: str) -> dict:
+        """Delete event JSON and its snapshot file. Returns info about what was deleted."""
+        json_path = self._cam_dir(camera_id) / f"{event_id}.json"
+        event = None
+        if json_path.exists():
+            try:
+                event = json.loads(json_path.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+            json_path.unlink(missing_ok=True)
+        snap_deleted = False
+        if event and event.get("snapshot_relpath"):
+            snap_path = self.root / event["snapshot_relpath"]
+            if snap_path.exists():
+                snap_path.unlink(missing_ok=True)
+                snap_deleted = True
+        return {"json_deleted": event is not None, "snap_deleted": snap_deleted}
+
     def cleanup_old(self, retention_days: int):
         cutoff = datetime.now() - timedelta(days=retention_days)
         removed = 0

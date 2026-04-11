@@ -93,6 +93,23 @@ def rebuild_runtimes():
 rebuild_runtimes()
 
 
+def _run_daily_cleanup():
+    import threading
+    retention = int(base_cfg.get("storage", {}).get("retention_days", 14))
+    try:
+        removed = store.cleanup_old(retention)
+        if removed:
+            logging.getLogger(__name__).info(f"[cleanup] Removed {removed} old event files (>{retention}d)")
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"[cleanup] Failed: {e}")
+    t = threading.Timer(86400, _run_daily_cleanup)
+    t.daemon = True
+    t.start()
+
+
+_run_daily_cleanup()
+
+
 @app.get('/')
 def index():
     return render_template('index.html')
@@ -412,6 +429,14 @@ def api_camera_media(cam_id):
         if review:
             item["review"] = review
     return jsonify({"items": items})
+
+
+@app.delete('/api/camera/<cam_id>/events/<event_id>')
+def api_event_delete(cam_id, event_id):
+    result = store.delete_event(cam_id, event_id)
+    if not result["json_deleted"]:
+        return jsonify({"ok": False, "error": "Event nicht gefunden"}), 404
+    return jsonify({"ok": True, **result})
 
 
 @app.post('/api/camera/<cam_id>/review/<event_id>')
