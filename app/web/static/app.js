@@ -119,15 +119,41 @@ async function loadAll(){
   byId('openWizardBtn').classList.toggle('hidden', !!state.bootstrap?.wizard_completed || !state.bootstrap?.needs_wizard);
 }
 
-async function loadMedia(){
+async function loadMedia(append=false){
+  const LIMIT=24;
+  if(!append){ state.media=[]; state.mediaOffset=0; }
   const cams = state.camera ? [state.camera] : state.cameras.map(c=>c.id);
-  const all=[];
+  const page=[];
+  let hasMore=false;
   for(const camId of cams){
-    const data=await j(`/api/camera/${camId}/media?limit=8${state.label?`&label=${encodeURIComponent(state.label)}`:''}`);
-    for(const item of data.items||[]) all.push({...item,camera_id:camId});
+    const data=await j(`/api/camera/${camId}/media?limit=${LIMIT}&offset=${state.mediaOffset||0}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`);
+    const items=data.items||[];
+    if(items.length>=LIMIT) hasMore=true;
+    for(const item of items) page.push({...item,camera_id:camId});
   }
-  all.sort((a,b)=>(b.time||'').localeCompare(a.time||''));
-  state.media=all.slice(0,24);
+  page.sort((a,b)=>(b.time||'').localeCompare(a.time||''));
+  state.media=[...(state.media||[]),...page];
+  state.mediaHasMore=hasMore;
+  state.mediaOffset=(state.mediaOffset||0)+LIMIT;
+}
+async function loadMoreMedia(){
+  await loadMedia(true);
+  const grid=byId('mediaGrid');
+  const lmBtn=byId('mediaLoadMoreBtn');
+  const _mediaItems=state.media;
+  grid.innerHTML=_mediaItems.map(item=>{
+    const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
+    return `<article class="media-card" data-event-id="${esc(item.event_id||'')}" style="cursor:pointer" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
+      <img src="${esc(imgSrc)}" alt="event" loading="lazy" />
+      <div class="media-meta">
+        <strong>${esc(item.camera_id)}</strong>
+        <div class="small">${esc(item.time||'')}</div>
+        <div class="chip-row">${(item.labels||[]).map(l=>`<span class="chip">${esc(l)}</span>`).join('')}</div>
+      </div>
+    </article>`;
+  }).join('')||'<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
+  if(lmBtn) lmBtn.style.display=state.mediaHasMore?'':'none';
+  window._openMediaItem=id=>{const item=_mediaItems.find(x=>x.event_id===id); if(item) openLightbox(item);};
 }
 
 function renderShell(){
@@ -191,7 +217,7 @@ function renderDashboard(){
   </div>
 </article>`;
   }).join('');
-  const _mediaItems=state.media;
+  const _mediaItems=state.media||[];
   byId('mediaGrid').innerHTML=_mediaItems.map(item=>{
     const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
     return `<article class="media-card" data-event-id="${esc(item.event_id||'')}" style="cursor:pointer" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
@@ -202,7 +228,9 @@ function renderDashboard(){
         <div class="chip-row">${(item.labels||[]).map(l=>`<span class="chip">${esc(l)}</span>`).join('')}</div>
       </div>
     </article>`;
-  }).join('')||'<div class="item">Noch keine Medien.</div>';
+  }).join('')||'<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
+  const lmBtn=byId('mediaLoadMoreBtn');
+  if(lmBtn) lmBtn.style.display=state.mediaHasMore?'':'none';
   window._openMediaItem=id=>{const item=_mediaItems.find(x=>x.event_id===id); if(item) openLightbox(item);};
 }
 
@@ -669,6 +697,7 @@ byId('telegramForm')?.addEventListener('submit',async e=>{
   }};
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   await loadAll();
+  const sec=byId('tg-verbindung'); if(sec?.classList.contains('open')) toggleSetSection('tg-verbindung');
 });
 
 document.querySelectorAll('[name="tg_format"]').forEach(r=>{
@@ -681,6 +710,7 @@ byId('saveTgFormatBtn')?.addEventListener('click',async()=>{
   const payload={telegram:{...existing,format:fmt}};
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   await loadAll();
+  const sec=byId('tg-was'); if(sec?.classList.contains('open')) toggleSetSection('tg-was');
 });
 
 byId('saveTgGroupRulesBtn')?.addEventListener('click',async()=>{
@@ -691,6 +721,7 @@ byId('saveTgGroupRulesBtn')?.addEventListener('click',async()=>{
   await loadAll();
   const btn=byId('saveTgGroupRulesBtn');
   if(btn){const orig=btn.textContent;btn.textContent='✓ Gespeichert';setTimeout(()=>btn.textContent=orig,2000);}
+  const sec=byId('tg-wann'); if(sec?.classList.contains('open')) toggleSetSection('tg-wann');
 });
 
 function getCanvasCtx(){ return byId('maskCanvas').getContext('2d'); }
@@ -953,6 +984,15 @@ byId('cleanupNowBtn').onclick=async()=>{
   }catch(e){showToast('Fehler: '+e.message,'error');}
 };
 
+byId('purgeOrphansBtn').onclick=async()=>{
+  if(!await showConfirm('Verwaiste Events löschen? Alle Event-Einträge ohne zugehörige Snapshot-Datei werden entfernt.')) return;
+  try{
+    const r=await j('/api/media/purge-orphans',{method:'POST'});
+    showToast(`${r.removed||0} verwaiste Events entfernt.`,'success');
+    await loadAll();
+  }catch(e){showToast('Fehler: '+e.message,'error');}
+};
+
 byId('mediaSettingsForm').onsubmit=async(e)=>{
   e.preventDefault();
   const f=e.target.elements;
@@ -1105,7 +1145,12 @@ byId('lightboxDelete').onclick=async()=>{
     await j(`/api/camera/${encodeURIComponent(camera_id)}/events/${encodeURIComponent(event_id)}`,{method:'DELETE'});
     const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(event_id)}"]`);
     if(card) card.remove();
+    state.media=(state.media||[]).filter(x=>x.event_id!==event_id);
+    if(!byId('mediaGrid').querySelector('.media-card')){
+      byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
+    }
     closeLightbox();
+    await loadMediaStorageStats();
   }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
 };
 

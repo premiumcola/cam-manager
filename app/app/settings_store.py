@@ -111,7 +111,8 @@ class SettingsStore:
         }
 
     def load(self):
-        if self.path.exists():
+        file_existed = self.path.exists()
+        if file_existed:
             try:
                 loaded = json.loads(self.path.read_text(encoding="utf-8"))
                 self.data.update(loaded)
@@ -120,7 +121,9 @@ class SettingsStore:
         self._ensure_groups()
         self._ensure_camera_defaults()
         self.data.setdefault("ui", {}).setdefault("wizard_completed", bool(self.data.get("cameras")))
-        self.save()
+        # Only write defaults when no file existed yet; never truncate an existing settings file.
+        if not file_existed:
+            self.save()
 
     def save(self):
         self.path.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -138,9 +141,10 @@ class SettingsStore:
             if c["id"] not in by_id:
                 cameras.append(self._default_camera(c))
             else:
-                # Keep previously saved fields but ensure new keys exist.
-                merged = self._default_camera(by_id[c["id"]])
-                by_id[c["id"]].update(merged)
+                # Only add missing keys; never overwrite user-saved values.
+                defaults = self._default_camera(c)
+                for key, val in defaults.items():
+                    by_id[c["id"]].setdefault(key, val)
 
     def get_camera(self, cam_id: str) -> dict | None:
         return next((c for c in self.data.get("cameras", []) if c.get("id") == cam_id), None)

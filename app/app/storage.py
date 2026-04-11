@@ -24,25 +24,27 @@ class EventStore:
         return path
 
     def get_event(self, camera_id: str, event_id: str) -> dict | None:
-        path = self._cam_dir(camera_id) / f"{event_id}.json"
-        if not path.exists():
+        cam_dir = self._cam_dir(camera_id)
+        matches = list(cam_dir.rglob(f"{event_id}.json"))
+        if not matches:
             return None
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            return json.loads(matches[0].read_text(encoding="utf-8"))
         except Exception:
             return None
 
     def update_event(self, camera_id: str, event_id: str, payload: dict) -> bool:
-        path = self._cam_dir(camera_id) / f"{event_id}.json"
-        if not path.exists():
+        cam_dir = self._cam_dir(camera_id)
+        matches = list(cam_dir.rglob(f"{event_id}.json"))
+        if not matches:
             return False
-        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        matches[0].write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return True
 
-    def list_events(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None, limit: int = 24):
+    def list_events(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None, limit: int = 24, offset: int = 0):
         items = []
         cam_dir = self._cam_dir(camera_id)
-        for file in sorted(cam_dir.glob("*.json"), reverse=True):
+        for file in sorted(cam_dir.rglob("*.json"), reverse=True):
             try:
                 obj = json.loads(file.read_text(encoding="utf-8"))
             except Exception:
@@ -56,9 +58,9 @@ class EventStore:
             if label and label not in labels and obj.get("cat_name") != label and obj.get("bird_species") != label:
                 continue
             items.append(obj)
-            if len(items) >= limit:
+            if len(items) >= offset + limit:
                 break
-        return items
+        return items[offset:]
 
     def stats_range(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None):
         from collections import Counter, defaultdict
@@ -143,9 +145,11 @@ class EventStore:
 
     def delete_event(self, camera_id: str, event_id: str) -> dict:
         """Delete event JSON and its snapshot file. Returns info about what was deleted."""
-        json_path = self._cam_dir(camera_id) / f"{event_id}.json"
+        cam_dir = self._cam_dir(camera_id)
+        matches = list(cam_dir.rglob(f"{event_id}.json"))
         event = None
-        if json_path.exists():
+        if matches:
+            json_path = matches[0]
             try:
                 event = json.loads(json_path.read_text(encoding="utf-8"))
             except Exception:
@@ -158,6 +162,25 @@ class EventStore:
                 snap_path.unlink(missing_ok=True)
                 snap_deleted = True
         return {"json_deleted": event is not None, "snap_deleted": snap_deleted}
+
+    def purge_orphans(self) -> int:
+        """Delete event JSON files whose snapshot file no longer exists. Returns count removed."""
+        removed = 0
+        if not self.events_dir.exists():
+            return 0
+        for cam_dir in (d for d in self.events_dir.iterdir() if d.is_dir()):
+            for jf in list(cam_dir.rglob("*.json")):
+                try:
+                    obj = json.loads(jf.read_text(encoding="utf-8"))
+                except Exception:
+                    jf.unlink(missing_ok=True)
+                    removed += 1
+                    continue
+                snap_rel = obj.get("snapshot_relpath")
+                if snap_rel and not (self.root / snap_rel).exists():
+                    jf.unlink(missing_ok=True)
+                    removed += 1
+        return removed
 
     def scan_media_files(self, camera_ids: list[str], public_base_url: str = "") -> int:
         """Scan storage/events for orphaned media files (.jpg/.jpeg/.mp4) not yet registered as events.
@@ -217,6 +240,9 @@ class EventStore:
                 existing_ids.add(event_id)
                 scanned += 1
         log.info("[MediaScan] %d neue Medien-Events registriert", scanned)
+        orphans = self.purge_orphans()
+        if orphans:
+            log.info("[MediaScan] %d verwaiste Events bereinigt", orphans)
         return scanned
 
     def cleanup_old(self, retention_days: int):

@@ -368,6 +368,15 @@ def api_media_rescan():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.post('/api/media/purge-orphans')
+def api_media_purge_orphans():
+    try:
+        removed = store.purge_orphans()
+        return jsonify({"ok": True, "removed": removed})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.post('/api/media/cleanup')
 def api_media_cleanup():
     payload = request.get_json(force=True) or {}
@@ -502,7 +511,8 @@ def api_camera_media(cam_id):
     start = request.args.get('start')
     end = request.args.get('end')
     limit = int(request.args.get('limit') or get_effective_config().get("storage", {}).get("media_limit_default", 24))
-    items = store.list_events(cam_id, label=label, start=start, end=end, limit=limit)
+    offset = int(request.args.get('offset') or 0)
+    items = store.list_events(cam_id, label=label, start=start, end=end, limit=limit, offset=offset)
     for item in items:
         review = settings.get_review(f"{cam_id}:{item['event_id']}")
         if review:

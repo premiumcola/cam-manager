@@ -153,6 +153,7 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .set-section.open .set-inner{padding:0 16px 16px}
 .settings-save-btn{width:100%;min-height:46px;padding:13px 16px;background:var(--accent);color:#fff;font-weight:700;border:none;border-radius:14px;font-size:15px;cursor:pointer;margin-top:6px}
 .settings-save-btn:hover{background:#2563eb}
+#telegram .set-section+.set-section{margin-top:8px}
 
 /* ── Telegram page ───────────────────────────────────────────────────────────── */
 /* Format selector (segmented control) */
