@@ -98,10 +98,11 @@ class CameraRuntime:
             raise RuntimeError(f"Kamera {self.camera_id}: keine Quelle gesetzt")
         if self.cfg.get("rtsp_url"):
             import os
-            # Force TCP transport to avoid H.265/HEVC corruption and pink artifacts
-            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
+            # Force TCP + disable hardware acceleration to prevent H.265 tile-split
+            # pink/magenta artifact (classic half-frame corruption bug in FFmpeg/OpenCV).
+            # hwaccel;none forces pure software decode — tested working on 4K HEVC stream.
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|hwaccel;none"
             cap = cv2.VideoCapture(self.cfg["rtsp_url"], cv2.CAP_FFMPEG)
-            # Minimize buffer lag
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             if not cap.isOpened():
                 raise RuntimeError(f"Kamera {self.camera_id}: RTSP konnte nicht geöffnet werden")
@@ -118,6 +119,15 @@ class CameraRuntime:
             ok, frame = self.capture.read()
             if not ok or frame is None:
                 raise RuntimeError(f"Kamera {self.camera_id}: Frame lesen fehlgeschlagen")
+            # Reject H.265 pink/magenta corruption frames (hardware decode artifact)
+            mean_r = float(frame[:, :, 2].mean())
+            mean_b = float(frame[:, :, 0].mean())
+            if mean_r > mean_b * 2.5 and mean_r > 150:
+                log.debug("[%s] Pink frame discarded (R=%.0f B=%.0f)", self.camera_id, mean_r, mean_b)
+                ok2, frame2 = self.capture.read()
+                if ok2 and frame2 is not None:
+                    return frame2
+                raise RuntimeError(f"Kamera {self.camera_id}: Frame nach Pink-Discard fehlgeschlagen")
             return frame
         url = self.cfg.get("snapshot_url")
         auth = None
