@@ -14,4 +14,7 @@ services:
       - ../config:/app/config
       - ../storage:/app/storage
       - ../models:/app/models
-    # Optional: USB Coral device mapping in Unraid template / docker run
+    # Google Coral USB TPU device passthrough
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+    # privileged: true   # nur aktivieren wenn devices-Passthrough nicht reicht (ältere Unraid-Versionen)

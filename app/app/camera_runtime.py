@@ -324,16 +324,25 @@ class CameraRuntime:
                                 if not is_in_schedule({"enabled": True, "start": gr["from"], "end": gr["to"]}):
                                     _send_tg = False
                     if _send_tg:
-                        details = []
+                        top_bird_score = next((d.score for d in detections if d.label == "bird" and d.species), None)
                         if bird_species:
-                            details.append(f"🐦 {bird_species}")
-                        if cat_match:
-                            details.append(f"🐈 {cat_match}")
-                        if person_match:
-                            details.append(f"🧍 {person_match}{' (Whitelist)' if whitelisted else ''}")
-                        caption = f"{ '🚨' if level == 'alarm' else 'ℹ️' } {', '.join(sorted(set(labels)))}\n📷 {self.cfg.get('name', self.camera_id)}\n📍 {self.cfg.get('location', '')}\n🕒 {event['time']}"
-                        if details:
-                            caption += "\n" + " · ".join(details)
+                            # Spezielles Vogel-Format
+                            score_pct = f"{top_bird_score * 100:.0f}" if top_bird_score else "?"
+                            caption = (
+                                f"🐦 Vogel erkannt: {bird_species}\n"
+                                f"📷 Kamera: {self.cfg.get('name', self.camera_id)}\n"
+                                f"⏰ {event['time']}\n"
+                                f"📊 Sicherheit: {score_pct}%"
+                            )
+                        else:
+                            details = []
+                            if cat_match:
+                                details.append(f"🐈 {cat_match}")
+                            if person_match:
+                                details.append(f"🧍 {person_match}{' (Whitelist)' if whitelisted else ''}")
+                            caption = f"{'🚨' if level == 'alarm' else 'ℹ️'} {', '.join(sorted(set(labels)))}\n📷 {self.cfg.get('name', self.camera_id)}\n📍 {self.cfg.get('location', '')}\n🕒 {event['time']}"
+                            if details:
+                                caption += "\n" + " · ".join(details)
                         with open(snap_path, "rb") as fh:
                             self.notifier.send_alert_sync(caption=caption, jpeg_bytes=fh.read(), snapshot_url=snapshot_url, dashboard_url=public_base, camera_id=self.camera_id)
                 self.last_error = None
@@ -374,8 +383,9 @@ class CameraRuntime:
             "status": "error" if self._error_streak >= 10 else ("active" if self.frame is not None else "starting"),
             "today_events": self.event_counter_today,
             "timelapse_enabled": bool((cfg.get("timelapse") or {}).get("enabled")),
-            "detection_mode": self.global_cfg.get("processing", {}).get("detection", {}).get("mode", "none"),
+            "detection_mode": getattr(self.detector, "mode", "motion_only"),
             "coral_available": getattr(self.detector, "available", False),
             "coral_reason": getattr(self.detector, "reason", "disabled"),
             "bird_species_available": getattr(self.bird_classifier, "available", False),
+            "bird_species_mode": getattr(self.bird_classifier, "mode", "none"),
         }

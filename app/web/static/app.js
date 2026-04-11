@@ -114,8 +114,14 @@ function cardStats(cam){
   return `<div class="legend">${legend}</div>`;
 }
 
+function detectionModeBadge(cam){
+  const mode=(cam.detection_mode||'motion_only').toLowerCase();
+  if(mode==='coral')       return '<span class="badge coral-active" title="Google Coral TPU aktiv">🟢 Coral aktiv</span>';
+  if(mode==='cpu')         return '<span class="badge cpu-mode"    title="CPU-Fallback (kein Coral)">🟡 CPU Modus</span>';
+  return                          '<span class="badge motion-only" title="Nur Bewegungserkennung">⚫ Nur Bewegung</span>';
+}
+
 function renderDashboard(){
-  const coralActive=(state.config?.coral?.mode||'').toLowerCase()==='coral';
   const cams=(state.camera?state.cameras.filter(c=>c.id===state.camera):state.cameras);
   byId('cameraCards').innerHTML=cams.map(c=>`<article class="camera-card" data-camid="${esc(c.id)}">
       <div class="stream">
@@ -125,7 +131,7 @@ function renderDashboard(){
           <span class="badge">${esc(c.group_id||'ohne Gruppe')}</span>
           <span class="badge ${c.armed?'danger':'good'}">${c.armed?'scharf':'unscharf'}</span>
           <span class="badge">Heute ${c.today_events||0}</span>
-          ${!coralActive?'<span class="badge motion-only">Nur Bewegungserkennung aktiv</span>':''}
+          ${detectionModeBadge(c)}
         </div>
       </div>
       <div>

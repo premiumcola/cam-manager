@@ -16,9 +16,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 COPY app/ /app/app/
 COPY config/ /app/config/
+COPY scripts/ /app/scripts/
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r /app/requirements.txt \
- && python -m pip install --no-cache-dir --extra-index-url https://google-coral.github.io/py-repo pycoral~=2.0 || true
+ # pycoral für Coral TPU (schlägt fehl wenn kein USB-EdgeTPU → ignoriert)
+ && python -m pip install --no-cache-dir --extra-index-url https://google-coral.github.io/py-repo pycoral~=2.0 || true \
+ # tflite-runtime als CPU-Fallback wenn pycoral nicht verfügbar ist
+ && python -m pip install --no-cache-dir tflite-runtime || true
 
 EXPOSE 8099
 CMD ["python", "-m", "app.server"]
