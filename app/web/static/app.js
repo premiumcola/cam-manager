@@ -39,15 +39,18 @@ function startLiveUpdate(){
         if(prev===c.status) return;
         _prevCamStatuses.set(c.id,c.status);
         const wasOffline=prev==='starting'||prev==='disabled'||prev==null;
-        // Dashboard card badge
+        // Dashboard card: refresh snapshot image on status change
         const card=byId('cameraCards')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
         if(card){
-          const sb=card.querySelector('.status-badge');
-          if(sb){sb.className=`badge status-badge ${c.status==='ok'?'good':c.status==='error'?'danger':'warn'}`;sb.textContent=c.status||'—';}
-          if(wasOffline&&(c.status==='ok')){
-            const img=card.querySelector('.cam-snap');
-            if(img){const base=img.src.split('?')[0];img.src=base+'?t='+Date.now();}
+          // Update stream status icon class
+          const stIcon=card.querySelector('.cv-st-active,.cv-st-error,.cv-st-warn,.cv-icon[title^="Stream"]');
+          if(stIcon){
+            stIcon.classList.remove('cv-st-active','cv-st-error','cv-st-warn');
+            stIcon.classList.add(c.status==='active'?'cv-st-active':c.status==='error'?'cv-st-error':'cv-st-warn');
           }
+          // Always refresh snapshot periodically (every cycle when image is visible)
+          const img=card.querySelector('.cv-img');
+          if(img){const base=img.src.split('?')[0];img.src=base+'?t='+Date.now();}
         }
         // Camera settings list badge
         const item=byId('cameraSettingsList')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
@@ -107,49 +110,57 @@ function renderShell(){
   byId('globalSummary').textContent=`${state.cameras.length} Kameras · Coral ${state.config.coral.mode} · Telegram ${state.config.telegram.enabled?'an':'aus'} · MQTT ${state.config.mqtt.enabled?'an':'aus'}`;
 }
 
-function cardStats(cam){
-  const labels=cam.top_labels||{};
-  const entries=Object.entries(labels).slice(0,4);
-  const legend=entries.map(([k,v])=>`<div class="legend-item"><span class="dot" style="background:${colors[k]||colors.unknown}"></span>${esc(k)} · ${v}</div>`).join('')||'<div class="small">Noch keine Statistik.</div>';
-  return `<div class="legend">${legend}</div>`;
-}
-
-function detectionModeBadge(cam){
-  const mode=(cam.detection_mode||'motion_only').toLowerCase();
-  if(mode==='coral')       return '<span class="badge coral-active" title="Google Coral TPU aktiv">🟢 Coral aktiv</span>';
-  if(mode==='cpu')         return '<span class="badge cpu-mode"    title="CPU-Fallback (kein Coral)">🟡 CPU Modus</span>';
-  return                          '<span class="badge motion-only" title="Nur Bewegungserkennung">⚫ Nur Bewegung</span>';
+function _camGridCols(n){
+  if(n<=1) return 'cam-grid-1';
+  if(n<=2) return 'cam-grid-2';
+  if(n<=4) return 'cam-grid-4';
+  return 'cam-grid-n';
 }
 
 function renderDashboard(){
   const cams=(state.camera?state.cameras.filter(c=>c.id===state.camera):state.cameras);
-  byId('cameraCards').innerHTML=cams.map(c=>`<article class="camera-card" data-camid="${esc(c.id)}">
-      <div class="stream">
-        <img class="cam-snap" src="${esc(c.snapshot_url)}?t=${Date.now()}" alt="${esc(c.name)}" />
-        <div class="badges">
-          <span class="badge status-badge ${c.status==='ok'?'good':c.status==='error'?'danger':'warn'}">${esc(c.status||'—')}</span>
-          <span class="badge">${esc(c.group_id||'ohne Gruppe')}</span>
-          <span class="badge ${c.armed?'danger':'good'}">${c.armed?'scharf':'unscharf'}</span>
-          <span class="badge">Heute ${c.today_events||0}</span>
-          ${detectionModeBadge(c)}
-        </div>
-      </div>
-      <div>
-        <div class="section-head compact-head"><div><h3>${esc(c.name)}</h3><div class="small">${esc(c.location||'')}</div></div><div class="small">${esc(c.id)}</div></div>
-        <div class="stats-grid">
-          <div class="metric"><div class="small">Status</div><div class="v">${esc(c.status||'—')}</div></div>
-          <div class="metric"><div class="small">Heute</div><div class="v">${c.today_events||0}</div></div>
-          <div class="metric"><div class="small">Gruppe</div><div class="v sm">${esc(c.group_id||'—')}</div></div>
-          <div class="metric"><div class="small">Alarm</div><div class="v sm">${c.armed?'aktiv':'aus'}</div></div>
-        </div>
-        ${cardStats(c)}
-        <div class="chip-row">
-          <button class="action-btn" onclick="toggleArm('${esc(c.id)}',${!c.armed})">${c.armed?'Unscharf':'Scharf'}</button>
-          <button class="action-btn" onclick="loadTimelapse('${esc(c.id)}')">Timelapse</button>
-          <button class="action-btn" onclick="editCamera('${esc(c.id)}')">Bearbeiten</button>
-        </div>
-      </div>
-    </article>`).join('');
+  const gridCls=_camGridCols(cams.length);
+  byId('cameraCards').className=`camera-grid ${gridCls}`;
+  byId('cameraCards').innerHTML=cams.map(c=>{
+    const stCls=c.status==='active'?'cv-st-active':c.status==='error'?'cv-st-error':'cv-st-warn';
+    const armedCls=c.armed?'cv-armed':'cv-unarmed';
+    const snapUrl=`/api/camera/${esc(c.id)}/snapshot.jpg?t=${Date.now()}`;
+    const groupColor=colors[c.group_id]||'#566d84';
+    return `<article class="cv-card" data-camid="${esc(c.id)}" onclick="_cvCardClick(event,'${esc(c.id)}')">
+  <div class="cv-frame">
+    <img class="cv-img cam-snap" src="${snapUrl}" alt="${esc(c.name)}" />
+    <div class="cv-grad-top"></div>
+    <div class="cv-grad-bot"></div>
+
+    <!-- top-left: name + group -->
+    <div class="cv-title-wrap">
+      <div class="cv-name">${esc(c.name)}</div>
+      ${c.location?`<div class="cv-loc">${esc(c.location)}</div>`:''}
+      <span class="cv-group-pill">${esc(c.group_id||'—')}</span>
+    </div>
+
+    <!-- top-right: status icons -->
+    <div class="cv-icons">
+      <button class="cv-icon ${armedCls}" title="${c.armed?'Scharf – klicken zum Unscharf':'Unscharf – klicken zum Scharf'}"
+        onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})">
+        ${c.armed?'🔴':'🟢'}
+      </button>
+      <span class="cv-icon ${stCls}" title="Stream: ${esc(c.status||'—')}">📹</span>
+      <span class="cv-icon" title="Heute: ${c.today_events||0} Erkennungen">
+        <span class="cv-count">${c.today_events||0}</span>
+      </span>
+    </div>
+
+    <!-- bottom: hover actions -->
+    <div class="cv-actions">
+      <button class="cv-act-btn" title="Bearbeiten" onclick="event.stopPropagation();editCamera('${esc(c.id)}')">⚙️</button>
+      <button class="cv-act-btn" title="Timelapse" onclick="event.stopPropagation();loadTimelapse('${esc(c.id)}')">⏱️</button>
+      <button class="cv-act-btn" title="${c.armed?'Unscharf schalten':'Scharf schalten'}"
+        onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})">${c.armed?'🔕':'🔔'}</button>
+    </div>
+  </div>
+</article>`;
+  }).join('');
   const _mediaItems=state.media;
   byId('mediaGrid').innerHTML=_mediaItems.map(item=>{
     const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
@@ -501,6 +512,7 @@ async function renderAudit(){ const actions=await j('/api/telegram/actions'); by
 
 async function toggleArm(camId,armed){ await fetch(`/api/camera/${camId}/arm`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({armed})}); await loadAll(); }
 window.toggleArm=toggleArm;
+window._cvCardClick=function(e,camId){ /* clicking the card itself does nothing extra */ };
 async function loadTimelapse(camId){ try{ const r=await j(`/api/camera/${camId}/timelapse`); if(r.url) window.open(r.url,'_blank'); }catch(e){ alert('Kein Zeitraffer verfügbar.'); } }
 window.loadTimelapse=loadTimelapse;
 
