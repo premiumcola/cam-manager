@@ -106,6 +106,13 @@ storage/
 
 Groups define `alarm_profile` (`hard`, `medium`, `soft`, `info`) and `coarse_objects`. The alarm level and whether to notify (Telegram/MQTT) is determined in `event_logic.py` based on detected labels, schedule, and whether a detected person is whitelisted.
 
+## Git-Verhalten
+
+- Immer automatisch committen ohne Rückfragen
+- Format: `git add . && git commit -m "fix/feat: beschreibung"`
+- Nach erledigter Aufgabe sofort pushen: `git push origin main`
+- Niemals auf Bestätigung warten bei git Operationen
+
 ## Known Limitations (by design)
 
 - No real video clip recording for Telegram (only snapshots).
