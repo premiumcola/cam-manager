@@ -308,7 +308,22 @@ class CameraRuntime:
                     self.store.add_event(self.camera_id, event)
                     if self.mqtt and self.cfg.get("mqtt_enabled", True):
                         self.mqtt.publish(f"events/{self.camera_id}", event)
-                    if notify and self.cfg.get("telegram_enabled", True):
+                    # Apply group-specific telegram rules
+                    _send_tg = notify and self.cfg.get("telegram_enabled", True)
+                    if _send_tg:
+                        tg_cfg = self.global_cfg.get("telegram", {})
+                        tg_groups = tg_cfg.get("groups", {})
+                        g_id = self.cfg.get("group_id")
+                        if g_id and g_id in tg_groups:
+                            gr = tg_groups[g_id]
+                            if not gr.get("enabled", True):
+                                _send_tg = False
+                            elif gr.get("objects") and not any(lbl in set(gr["objects"]) for lbl in labels):
+                                _send_tg = False
+                            elif gr.get("from") and gr.get("to"):
+                                if not is_in_schedule({"enabled": True, "start": gr["from"], "end": gr["to"]}):
+                                    _send_tg = False
+                    if _send_tg:
                         details = []
                         if bird_species:
                             details.append(f"🐦 {bird_species}")

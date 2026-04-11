@@ -81,6 +81,7 @@ async function loadAll(){
   await renderProfiles();
   await renderAudit();
   hydrateSettings();
+  hydrateTelegram();
   if(state.bootstrap.needs_wizard) openWizard();
   byId('openWizardBtn').classList.toggle('hidden', !!state.bootstrap?.wizard_completed || !state.bootstrap?.needs_wizard);
 }
@@ -498,10 +499,9 @@ async function loadTimelapse(camId){ try{ const r=await j(`/api/camera/${camId}/
 window.loadTimelapse=loadTimelapse;
 
 function hydrateSettings(){
-  const app=state.config.app||{}, server=state.config.server||{}, telegram=state.config.telegram||{}, mqtt=state.config.mqtt||{};
+  const app=state.config.app||{}, server=state.config.server||{}, mqtt=state.config.mqtt||{};
   const f=byId('settingsForm').elements;
   f['app_name'].value=app.name||''; f['app_tagline'].value=app.tagline||''; f['app_logo'].value=app.logo||''; f['public_base_url'].value=server.public_base_url||''; f['discovery_subnet'].value=state.config.default_discovery_subnet||'';
-  f['telegram_enabled'].checked=!!telegram.enabled; f['telegram_token'].value=telegram.token||''; f['telegram_chat_id'].value=telegram.chat_id||'';
   f['mqtt_enabled'].checked=!!mqtt.enabled; f['mqtt_host'].value=mqtt.host||''; f['mqtt_port'].value=mqtt.port||1883; f['mqtt_username'].value=mqtt.username||''; f['mqtt_password'].value=mqtt.password||''; f['mqtt_base_topic'].value=mqtt.base_topic||'tam-spy';
   const proc=state.config.processing||{}; const coral=state.config.coral||{};
   f['coral_enabled'].checked=!!(proc.coral_enabled ?? coral.mode==='coral');
@@ -525,6 +525,125 @@ function hydrateSettings(){
   const rdEl=byId('ms_retention_days'); if(rdEl) rdEl.value=storageSec.retention_days||14;
   const acEl=byId('ms_auto_cleanup'); if(acEl) acEl.checked=!!storageSec.auto_cleanup_enabled;
 }
+
+// ── Telegram page hydrate & logic ─────────────────────────────────────────────
+const TG_OBJECTS=['person','cat','bird','car','motion'];
+
+function hydrateTelegram(){
+  const tg=state.config?.telegram||{};
+  const el=byId('tg_enabled'); if(el) el.checked=!!tg.enabled;
+  const tok=byId('tg_token'); if(tok) tok.value=tg.token||'';
+  const cid=byId('tg_chat_id'); if(cid) cid.value=tg.chat_id||'';
+  // Format
+  const fmt=tg.format||'photo';
+  document.querySelectorAll('[name="tg_format"]').forEach(r=>r.checked=r.value===fmt);
+  renderTgFormatPreview(fmt);
+  // Group rules
+  renderTgGroupRules();
+}
+
+function renderTgGroupRules(){
+  const container=byId('tgGroupRules'); if(!container) return;
+  const tgGroups=(state.config?.telegram||{}).groups||{};
+  if(!state.groups.length){
+    container.innerHTML='<div class="small muted">Keine Kameragruppen konfiguriert.</div>';
+    return;
+  }
+  container.innerHTML=state.groups.map(g=>{
+    const rule=tgGroups[g.id]||{enabled:true,from:'',to:'',objects:[...TG_OBJECTS]};
+    const objList=rule.objects||TG_OBJECTS;
+    return `<div class="tg-group-rule" data-gid="${esc(g.id)}">
+      <div class="tg-gr-head">
+        <span class="tg-gr-name">${esc(g.name)}</span>
+        <label class="tg-gr-toggle"><span class="small muted">Telegram</span><label class="switch switch-sm"><input type="checkbox" class="tg-gr-enabled" ${rule.enabled!==false?'checked':''}><span class="slider"></span></label></label>
+      </div>
+      <div class="tg-gr-body">
+        <div class="tg-gr-time">
+          <span class="small muted">Zeitfenster:</span>
+          <input class="disc-input tg-gr-from" type="time" value="${esc(rule.from||'')}" title="Von (leer = immer)" style="width:100px"/>
+          <span class="small muted">–</span>
+          <input class="disc-input tg-gr-to" type="time" value="${esc(rule.to||'')}" title="Bis" style="width:100px"/>
+          <span class="small muted">(leer = immer)</span>
+        </div>
+        <div class="tg-gr-objects">
+          ${TG_OBJECTS.map(obj=>`<label class="tg-obj-chip${objList.includes(obj)?' active':''}">
+            <input type="checkbox" ${objList.includes(obj)?'checked':''} data-obj="${esc(obj)}" />
+            <span>${esc(obj)}</span>
+          </label>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  // Wire chip interactivity
+  container.querySelectorAll('.tg-obj-chip input').forEach(cb=>{
+    cb.addEventListener('change',()=>cb.closest('.tg-obj-chip').classList.toggle('active',cb.checked));
+  });
+}
+
+function readTgGroupRules(){
+  const rules={};
+  document.querySelectorAll('#tgGroupRules .tg-group-rule').forEach(row=>{
+    const gid=row.dataset.gid;
+    const enabled=row.querySelector('.tg-gr-enabled')?.checked??true;
+    const from=row.querySelector('.tg-gr-from')?.value||'';
+    const to=row.querySelector('.tg-gr-to')?.value||'';
+    const objects=[...row.querySelectorAll('.tg-gr-objects input:checked')].map(cb=>cb.dataset.obj);
+    rules[gid]={enabled,from,to,objects};
+  });
+  return rules;
+}
+
+function renderTgFormatPreview(fmt){
+  const preview=byId('tgFormatPreview'); if(!preview) return;
+  const cam=state.cameras?.[0];
+  const ts=new Date().toLocaleString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  let html=`<div class="tg-bubble">
+    <div class="tg-bubble-meta">🚨 motion, person · 📷 ${esc(cam?.name||'Kamera')} · 📍 Einfahrt · 🕒 ${ts}</div>`;
+  if(fmt==='photo'||fmt==='video'){
+    const snap=cam?.snapshot_url||'';
+    html+=`<div class="tg-bubble-img">${snap?`<img src="${esc(snap)}" alt="snapshot"/>`:'<div class="tg-bubble-img-ph">📷 Snapshot</div>'}</div>`;
+  }
+  if(fmt==='video') html+=`<div class="tg-bubble-vid">🎬 Video-Clip angehängt (wenn verfügbar)</div>`;
+  html+=`<div class="tg-bubble-btns">[ 📷 Live ] [ 🎥 Clip ] [ 🖥 Dashboard ]</div></div>`;
+  preview.innerHTML=html;
+}
+
+byId('telegramForm')?.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const existingToken=state.config?.telegram?.token||'';
+  const token=byId('tg_token')?.value||existingToken;
+  const payload={telegram:{
+    enabled:!!byId('tg_enabled')?.checked,
+    token,
+    chat_id:byId('tg_chat_id')?.value||'',
+    format:(state.config?.telegram||{}).format||'photo',
+    groups:(state.config?.telegram||{}).groups||{}
+  }};
+  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  await loadAll();
+});
+
+document.querySelectorAll('[name="tg_format"]').forEach(r=>{
+  r.addEventListener('change',()=>renderTgFormatPreview(r.value));
+});
+
+byId('saveTgFormatBtn')?.addEventListener('click',async()=>{
+  const fmt=[...document.querySelectorAll('[name="tg_format"]')].find(r=>r.checked)?.value||'photo';
+  const existing=state.config?.telegram||{};
+  const payload={telegram:{...existing,format:fmt}};
+  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  await loadAll();
+});
+
+byId('saveTgGroupRulesBtn')?.addEventListener('click',async()=>{
+  const rules=readTgGroupRules();
+  const existing=state.config?.telegram||{};
+  const payload={telegram:{...existing,groups:rules}};
+  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  await loadAll();
+  const btn=byId('saveTgGroupRulesBtn');
+  if(btn){const orig=btn.textContent;btn.textContent='✓ Gespeichert';setTimeout(()=>btn.textContent=orig,2000);}
+});
 
 function getCanvasCtx(){ return byId('maskCanvas').getContext('2d'); }
 function loadMaskSnapshot(camId){ if(!camId) return; byId('maskSnapshot').src=`/api/camera/${camId}/snapshot.jpg?t=${Date.now()}`; byId('shapeStatus').textContent=`Bearbeite ${camId} · ${shapeState.mode==='zone'?'Zone':'Maske'}`; }
@@ -703,15 +822,11 @@ byId('addGroupBtn').onclick=()=>{
 };
 byId('settingsForm').onsubmit=async(e)=>{
   e.preventDefault(); const f=e.target.elements;
-  // Preserve existing token if the field is still type=password and unchanged (value might be empty if browser masked it)
-  const existingToken=(state.config?.telegram?.token||'');
-  const token=f['telegram_token'].value||existingToken;
   const existingMqttPass=(state.config?.mqtt?.password||'');
   const mqttPass=f['mqtt_password'].value||existingMqttPass;
   const payload={
     app:{name:f['app_name'].value||'TAM-spy',tagline:f['app_tagline'].value||'',logo:f['app_logo'].value||'🐈‍⬛'},
     server:{public_base_url:f['public_base_url'].value||'',default_discovery_subnet:f['discovery_subnet'].value||'192.168.1.0/24'},
-    telegram:{enabled:f['telegram_enabled'].checked,token,chat_id:f['telegram_chat_id'].value||''},
     mqtt:{enabled:f['mqtt_enabled'].checked,host:f['mqtt_host'].value||'',port:Number(f['mqtt_port'].value||1883),username:f['mqtt_username'].value||'',password:mqttPass,base_topic:f['mqtt_base_topic'].value||'tam-spy'},
     processing:{coral_enabled:f['coral_enabled'].checked,bird_species_enabled:f['bird_species_enabled'].checked},
     storage:{retention_days:Number(f['retention_days']?.value||14),media_limit_default:Number(f['media_limit_default']?.value||24),auto_cleanup_enabled:!!(f['auto_cleanup_enabled']?.checked)}
@@ -742,6 +857,10 @@ window.togglePwField=function(btn,fieldName){
   const input=f?.elements[fieldName]; if(!input) return;
   input.type=input.type==='password'?'text':'password';
   btn.textContent=input.type==='password'?'👁':'🙈';
+};
+window.togglePwFieldById=function(id){
+  const input=byId(id); if(!input) return;
+  input.type=input.type==='password'?'text':'password';
 };
 
 // ── Media storage stats ───────────────────────────────────────────────────────

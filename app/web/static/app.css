@@ -104,6 +104,53 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .settings-save-btn{width:100%;min-height:46px;padding:13px 16px;background:var(--accent);color:#fff;font-weight:700;border:none;border-radius:14px;font-size:15px;cursor:pointer;margin-top:6px}
 .settings-save-btn:hover{background:#2563eb}
 
+/* ── Telegram page ───────────────────────────────────────────────────────────── */
+/* Format selector (segmented control) */
+.tg-format-opts{display:flex;gap:8px;flex-wrap:wrap}
+.tg-fmt-opt{display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:12px;background:var(--surface);cursor:pointer;border:2px solid transparent;font-weight:600;font-size:13px;transition:all .15s}
+.tg-fmt-opt:hover{border-color:var(--accent);background:#1a2d42}
+.tg-fmt-opt input[type=radio]{accent-color:var(--accent);width:16px;height:16px;flex-shrink:0}
+.tg-fmt-opt:has(input:checked){border-color:var(--accent);background:rgba(59,130,246,.12);color:#93c5fd}
+
+/* Preview bubble */
+.tg-preview{padding:14px;background:#0d1117;border-radius:14px;border:1px solid #1e2d3d}
+.tg-bubble{background:#1e2d3d;border-radius:14px;padding:12px 14px;display:grid;gap:8px;max-width:400px}
+.tg-bubble-meta{font-size:12px;color:#cfe7ff;line-height:1.5}
+.tg-bubble-img{border-radius:10px;overflow:hidden;background:#0a0e1a}
+.tg-bubble-img img{width:100%;max-height:120px;object-fit:cover;display:block}
+.tg-bubble-img-ph{height:80px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:20px}
+.tg-bubble-vid{font-size:12px;color:#70d6ff;padding:4px 0}
+.tg-bubble-btns{font-size:11px;color:#566d84;border-top:1px solid #1a3040;padding-top:8px}
+
+/* Group rules */
+.tg-group-rule{background:var(--surface);border-radius:14px;padding:14px 16px;display:grid;gap:10px}
+.tg-gr-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tg-gr-name{font-weight:700;font-size:14px}
+.tg-gr-toggle{display:flex;align-items:center;gap:8px;font-size:12px}
+.tg-gr-body{display:grid;gap:10px}
+.tg-gr-time{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tg-gr-objects{display:flex;flex-wrap:wrap;gap:6px}
+.tg-obj-chip{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--bg);border:1.5px solid #2a3f56;cursor:pointer;font-size:12px;font-weight:600;transition:all .15s;user-select:none}
+.tg-obj-chip input{display:none}
+.tg-obj-chip.active{background:rgba(59,130,246,.18);border-color:var(--accent);color:#93c5fd}
+.tg-obj-chip:hover{border-color:var(--accent)}
+
+/* Dependency tree / flow diagram */
+.tg-flow{display:flex;flex-direction:column;align-items:flex-start;gap:0;max-width:640px}
+.tg-flow-node{padding:10px 20px;border-radius:12px;font-weight:600;font-size:14px;text-align:center;min-width:270px}
+.tgn-start,.tgn-action{background:rgba(34,197,94,.12);border:2px solid #22c55e;color:#4ade80}
+.tgn-decision{background:rgba(59,130,246,.1);border:2px solid #3b82f6;color:#93c5fd}
+.tgn-stop{background:rgba(239,68,68,.12);border:2px solid #ef4444;color:#fca5a5;min-width:72px;padding:8px 12px;font-size:13px}
+.tg-flow-conn{font-size:18px;color:#566d84;padding-left:110px;line-height:1.4}
+.tg-flow-step{display:flex;flex-direction:column;align-items:flex-start}
+.tg-flow-main{display:flex;align-items:center;gap:14px}
+.tg-flow-no-branch{display:flex;align-items:center;gap:8px}
+.tg-no-label{font-size:12px;color:#ef4444;font-weight:700;white-space:nowrap}
+.tg-flow-yes-label{font-size:12px;color:#22c55e;font-weight:700;padding:3px 0 3px 110px}
+.tg-flow-outputs{display:flex;gap:10px;padding-left:60px;margin-top:8px;flex-wrap:wrap}
+.tg-flow-out{padding:7px 14px;border-radius:10px;background:rgba(59,130,246,.1);border:1.5px solid #3b82f6;color:#93c5fd;font-size:13px;font-weight:600}
+.tg-flow-out.tgo-opt{opacity:.55;border-style:dashed}
+
 /* ── Timeline tooltip / hover popup ─────────────────────────────────────────── */
 .tl-tooltip{position:absolute;z-index:200;width:230px;background:#111d2b;border:1px solid #2a3f56;border-radius:14px;padding:12px 14px;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,.6);font-size:13px}
 .tl-tt-time{font-weight:700;color:#cfe7ff;margin-bottom:4px;font-size:12px}
