@@ -7,7 +7,26 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&
 const j=async(url,opt)=>{const r=await fetch(url,opt); if(!r.ok) throw new Error(await r.text()); return r.json();};
 const download=(url)=>window.open(url,'_blank');
 
+// ── Camera edit slide panel ───────────────────────────────────────────────────
+let _currentEditCamId=null;
+function _restoreEditWrapper(){
+  const w=byId('cameraEditWrapper'); if(!w) return;
+  w.classList.remove('slide-open');
+  document.querySelectorAll('.cam-item.editing').forEach(el=>el.classList.remove('editing'));
+  const sec=byId('cameras'); if(sec&&w.parentElement!==sec) sec.appendChild(w);
+  _currentEditCamId=null;
+}
+function _closeEditPanel(){
+  if(!_currentEditCamId) return;
+  const w=byId('cameraEditWrapper');
+  w?.classList.remove('slide-open');
+  document.querySelectorAll('.cam-item.editing').forEach(el=>el.classList.remove('editing'));
+  setTimeout(()=>{ const sec=byId('cameras'); if(sec) sec.appendChild(w); },400);
+  _currentEditCamId=null;
+}
+
 async function loadAll(){
+  _restoreEditWrapper();
   state.bootstrap=await j('/api/bootstrap');
   state.config=await j('/api/config');
   state.groups=(await j('/api/groups')).groups||[];
@@ -174,7 +193,21 @@ function parseRtspUrl(url){
 }
 
 function renderCameraSettings(){
-  byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`<div class="item" data-camid="${esc(c.id)}"><div class="item-head"><strong>${esc(c.name)}</strong><button class="action-btn" onclick="editCamera('${esc(c.id)}')">Bearbeiten</button></div><div class="small">${esc(c.location||'')} · ${esc(c.group_id||'—')} · ${c.armed?'scharf':'unscharf'}</div></div>`).join('');
+  const stCol=s=>s==='active'?'good':s==='error'?'danger':'warn';
+  byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`
+    <div class="cam-item" data-camid="${esc(c.id)}">
+      <div class="cam-item-head">
+        <div>
+          <div style="font-weight:700;font-size:15px">${esc(c.name)}</div>
+          <div class="small">${esc(c.location||'—')} · ${esc(c.group_id||'—')}</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <span class="badge ${stCol(c.status)}">${esc(c.status||'—')}</span>
+          <span class="badge ${c.armed?'danger':'good'}">${c.armed?'scharf':'unscharf'}</span>
+          <button class="cam-edit-toggle" onclick="editCamera('${esc(c.id)}')">✏️ Bearbeiten</button>
+        </div>
+      </div>
+    </div>`).join('');
 }
 
 // ── Whitelist chips ───────────────────────────────────────────────────────────
@@ -217,7 +250,12 @@ function _initCameraFormListeners(){
 }
 
 function editCamera(camId){
-  const c=(state.config?.cameras||[]).find(x=>x.id===camId)||(state.cameras||[]).find(x=>x.id===camId); if(!c){console.error('editCamera: camera not found',camId); return;}
+  const c=(state.config?.cameras||[]).find(x=>x.id===camId)||(state.cameras||[]).find(x=>x.id===camId);
+  if(!c){console.error('editCamera: not found',camId); return;}
+  // Toggle: clicking same camera closes the panel
+  if(_currentEditCamId===camId){_closeEditPanel(); return;}
+  // Switch camera: restore immediately then open new
+  _restoreEditWrapper();
   _initCameraFormListeners();
   initRtspBuilder();
   const f=byId('cameraForm').elements;
@@ -234,8 +272,8 @@ function editCamera(camId){
   f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed;
   byId('camScheduleSection')?.classList.toggle('hidden',!c.armed);
   f['schedule_start'].value=(c.schedule&&c.schedule.start)||''; f['schedule_end'].value=(c.schedule&&c.schedule.end)||''; f['schedule_enabled'].checked=!!(c.schedule&&c.schedule.enabled);
-  f['telegram_enabled'].checked=(c.telegram_enabled!==false); f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
-  // Timelapse
+  if(f['telegram_enabled']) f['telegram_enabled'].checked=(c.telegram_enabled!==false);
+  if(f['mqtt_enabled']) f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
   const tlOn=!!(c.timelapse&&c.timelapse.enabled);
   f['timelapse_enabled'].checked=tlOn; byId('timelapseSettingsPanel')?.classList.toggle('hidden',!tlOn);
   const tlDaily=(c.timelapse&&c.timelapse.daily_target_seconds)||60;
@@ -243,21 +281,18 @@ function editCamera(camId){
   if(f['tl_daily_seconds']){f['tl_daily_seconds'].value=tlDaily; byId('tlDailyLabel').textContent=tlDaily+'s';}
   if(f['tl_weekly_seconds']){f['tl_weekly_seconds'].value=tlWeekly; byId('tlWeeklyLabel').textContent=tlWeekly+'s';}
   if(f['timelapse_telegram']) f['timelapse_telegram'].checked=!!(c.timelapse&&c.timelapse.telegram_send);
-  // Whitelist chips
   j('/api/persons').then(r=>_renderWhitelistChips(r.profiles||[],c.whitelist_names||[])).catch(()=>_renderWhitelistChips([],c.whitelist_names||[]));
   shapeState.camera=camId; shapeState.zones=JSON.parse(JSON.stringify(c.zones||[])); shapeState.masks=JSON.parse(JSON.stringify(c.masks||[])); shapeState.points=[];
   f['zones_json'].value=JSON.stringify(shapeState.zones); f['masks_json'].value=JSON.stringify(shapeState.masks);
   byId('deleteCameraBtn').dataset.camId=camId;
   loadMaskSnapshot(camId); drawShapes();
-  const wrapper=byId('cameraEditWrapper');
-  // Always place the form in the #cameras section, after the camera row
+  // Slide down inside the clicked camera card
   const camRow=byId('cameraSettingsList')?.querySelector(`[data-camid="${camId}"]`);
-  if(camRow) camRow.insertAdjacentElement('afterend',wrapper);
-  else byId('cameraSettingsList')?.after(wrapper);
-  wrapper.classList.remove('hidden');
-  // Navigate to cameras section then scroll the form into view
-  location.hash='#cameras';
-  setTimeout(()=>wrapper.scrollIntoView({behavior:'smooth',block:'start'}),80);
+  const wrapper=byId('cameraEditWrapper');
+  if(camRow){ camRow.appendChild(wrapper); camRow.classList.add('editing'); }
+  requestAnimationFrame(()=>wrapper.classList.add('slide-open'));
+  _currentEditCamId=camId;
+  setTimeout(()=>wrapper.scrollIntoView({behavior:'smooth',block:'nearest'}),120);
 }
 window.editCamera=editCamera;
 
@@ -273,7 +308,7 @@ byId('deleteCameraBtn').onclick=async()=>{
   byId('maskSnapshot').src='';
   shapeState.camera=null; shapeState.zones=[]; shapeState.masks=[]; shapeState.points=[];
   const ctx=getCanvasCtx(); ctx.clearRect(0,0,byId('maskCanvas').width,byId('maskCanvas').height);
-  byId('cameraEditWrapper').classList.add('hidden');
+  _restoreEditWrapper();
   await loadAll();
 };
 
@@ -455,9 +490,10 @@ byId('cameraForm').onsubmit=async(e)=>{
     timelapse:{enabled:f['timelapse_enabled'].checked,fps:12,daily_target_seconds:parseInt(f['tl_daily_seconds']?.value||'60'),weekly_target_seconds:parseInt(f['tl_weekly_seconds']?.value||'180'),telegram_send:!!(f['timelapse_telegram']?.checked)},
     schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},
     zones:JSON.parse(f['zones_json'].value||'[]'),masks:JSON.parse(f['masks_json'].value||'[]')};
-  await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll(); editCamera(payload.id);
+  const _savedId=payload.id; _restoreEditWrapper();
+  await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll(); editCamera(_savedId);
 };
-byId('closeCameraEdit').onclick=()=>{ byId('cameraEditWrapper').classList.add('hidden'); };
+byId('closeCameraEdit').onclick=()=>_closeEditPanel();
 byId('addCameraBtn').onclick=()=>{
   _initCameraFormListeners();
   byId('cameraForm').reset();
@@ -473,8 +509,11 @@ byId('addCameraBtn').onclick=()=>{
   f['zones_json'].value='[]'; f['masks_json'].value='[]';
   byId('deleteCameraBtn').dataset.camId='';
   byId('maskSnapshot').src='';
-  byId('cameraEditWrapper').classList.remove('hidden');
-  byId('cameraEditWrapper').scrollIntoView({behavior:'smooth',block:'nearest'});
+  _restoreEditWrapper(); // ensure wrapper is in #cameras section
+  const _addWrapper=byId('cameraEditWrapper');
+  byId('cameraSettingsList').after(_addWrapper);
+  requestAnimationFrame(()=>_addWrapper.classList.add('slide-open'));
+  setTimeout(()=>_addWrapper.scrollIntoView({behavior:'smooth',block:'nearest'}),120);
 };
 byId('addGroupBtn').onclick=()=>{
   document.querySelectorAll('.group-inline').forEach(el=>el.remove());

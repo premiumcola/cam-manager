@@ -50,8 +50,15 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .cam-header-badges{display:flex;gap:8px;align-items:center;margin-left:auto;margin-right:12px}
 .cam-badge-toggle{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:10px;background:#0c141d;border:1px solid var(--line);cursor:pointer;font-size:13px}
 .switch-sm{width:36px!important;height:20px!important}.switch-sm .slider:before{width:14px!important;height:14px!important;top:2px!important;left:2px!important}.switch-sm input:checked + .slider:before{transform:translateX(16px)!important}
-/* Camera form */
-.cam-edit-wrapper{margin-top:14px;padding:20px;border-radius:20px;background:var(--panel)}.cam-edit-header{display:flex;align-items:center;margin-bottom:14px;gap:10px}
+/* Camera settings list items */
+.cam-item{border-radius:16px;background:var(--surface);transition:background .2s,box-shadow .2s}.cam-item+.cam-item{margin-top:8px}
+.cam-item-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;gap:12px}
+.cam-item.editing{background:var(--panel);box-shadow:0 8px 32px rgba(0,0,0,.35)}
+.cam-edit-toggle{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-weight:600;font-size:13px;cursor:pointer;transition:background .15s}.cam-edit-toggle:hover{background:#2563eb}
+/* Camera edit slide-down panel */
+.cam-edit-wrapper{display:grid;grid-template-rows:0fr;transition:grid-template-rows .38s cubic-bezier(.4,0,.2,1)}.cam-edit-wrapper.slide-open{grid-template-rows:1fr}
+.cam-edit-inner{overflow:hidden;min-height:0;padding:0 16px}.cam-edit-wrapper.slide-open .cam-edit-inner{padding:16px}
+.cam-edit-header{display:flex;align-items:center;margin-bottom:14px;gap:10px}
 /* Compact user+pass side by side */
 .cam-userpass{display:grid;grid-template-columns:1fr 1fr;gap:8px}.cam-userpass .field-wrap input{padding:9px 10px;background:var(--surface);border:none;outline:none;border-radius:12px;color:var(--text)}.cam-userpass .field-wrap input:focus{box-shadow:0 0 0 2px var(--accent)}
 /* Whitelist chips */

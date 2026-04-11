@@ -151,15 +151,16 @@
       <section id="cameras" class="panel section">
         <div class="section-head"><h3>Kameras</h3><button type="button" id="addCameraBtn" class="add-btn">+ Neue Kamera</button></div>
         <div id="cameraSettingsList" class="list"></div>
-        <div id="cameraEditWrapper" class="cam-edit-wrapper hidden">
+        <div id="cameraEditWrapper" class="cam-edit-wrapper">
+          <div class="cam-edit-inner">
           <div class="cam-edit-header">
             <h3 id="cameraEditTitle">Kamera bearbeiten</h3>
             <div class="cam-header-badges">
               <label class="cam-badge-toggle" title="Telegram">
-                <span>📨</span><label class="switch switch-sm"><input type="checkbox" name="telegram_enabled" /><span class="slider"></span></label>
+                <span>📨</span><label class="switch switch-sm"><input type="checkbox" name="telegram_enabled" form="cameraForm" /><span class="slider"></span></label>
               </label>
               <label class="cam-badge-toggle" title="MQTT">
-                <span>🔌</span><label class="switch switch-sm"><input type="checkbox" name="mqtt_enabled" /><span class="slider"></span></label>
+                <span>🔌</span><label class="switch switch-sm"><input type="checkbox" name="mqtt_enabled" form="cameraForm" /><span class="slider"></span></label>
               </label>
             </div>
             <button type="button" id="closeCameraEdit" class="close-btn">✕</button>
@@ -246,6 +247,7 @@
             </div>
             <div class="small muted">Zonen = aktiv relevanter Bereich. Masken = Bereich ignorieren.</div>
           </div>
+          </div><!-- /.cam-edit-inner -->
         </div>
       </section>
 
