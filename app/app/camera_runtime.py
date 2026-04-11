@@ -289,7 +289,9 @@ class CameraRuntime:
                 # Always store raw frame so status → "active" and snapshots work
                 with self.lock:
                     self.frame = frame
-                self.last_error = None  # clear on every successful frame read
+                if self._error_streak > 0:
+                    log.info("[%s] Stream wiederhergestellt nach %d Fehlern", self.camera_id, self._error_streak)
+                self.last_error = None
                 self._error_streak = 0
                 # Quality gate: skip corrupt/uniform/artifact frames for events only
                 if not self._is_frame_valid(frame):
@@ -465,8 +467,12 @@ class CameraRuntime:
             except Exception as e:
                 self._error_streak += 1
                 self.last_error = str(e)
-                if self._error_streak % 3 == 1:
-                    log.error("[%s] error_streak=%d: %s", self.camera_id, self._error_streak, e)
+                if self._error_streak == 1:
+                    log.debug("[%s] Frame lesen fehlgeschlagen: %s", self.camera_id, e)
+                elif self._error_streak == 5:
+                    log.warning("[%s] Verbindungsprobleme – %d aufeinanderfolgende Fehler: %s", self.camera_id, self._error_streak, e)
+                elif self._error_streak == 15 or (self._error_streak > 15 and self._error_streak % 30 == 0):
+                    log.error("[%s] Stream verloren (streak=%d): %s", self.camera_id, self._error_streak, e)
                 try:
                     if self.capture is not None:
                         self.capture.release()

@@ -163,19 +163,28 @@
 
         <div class="set-section" id="set-media-config" style="margin-top:14px">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-media-config')">
-            <span class="set-icon">⚙️</span><span>Mediathek-Einstellungen</span><span class="set-chevron">▶</span>
+            <span class="set-icon">⚙️</span><span>Mediathek-Einstellungen</span><span class="set-chevron set-chevron-lg">▶</span>
           </button>
           <div class="set-bd"><div class="set-inner">
-            <form id="mediaSettingsForm" class="form">
-              <div class="row" style="grid-template-columns:1fr 1fr">
-                <div class="field-wrap"><input id="ms_media_limit" name="media_limit_default" type="number" placeholder="24" /><span class="field-label">Anzeigelimit Mediathek</span></div>
-                <div class="field-wrap"><input id="ms_retention_days" name="retention_days" type="number" placeholder="14" /><span class="field-label">Aufbewahrung (Tage)</span></div>
+            <form id="mediaSettingsForm" class="form" style="padding-top:8px">
+              <div class="field-help" style="margin-bottom:10px">Maximale Anzahl Fotos die gleichzeitig in der Mediathek angezeigt werden.</div>
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+                <span style="font-size:13px;white-space:nowrap;color:var(--muted)">Fotos pro Seite</span>
+                <input id="ms_media_limit" name="media_limit_default" type="range" min="12" max="200" step="4" style="flex:1;min-width:100px;accent-color:var(--accent)" oninput="byId('ms_media_limit_val').textContent=this.value+' Fotos'" />
+                <span id="ms_media_limit_val" style="min-width:64px;font-size:13px;font-weight:600;color:var(--text)">24 Fotos</span>
+                <div class="field-wrap" style="width:90px;flex-shrink:0;margin:0">
+                  <input id="ms_retention_days" name="retention_days" type="number" placeholder="14" style="width:100%;padding:10px 12px" />
+                  <span class="field-label">Aufbewahrung (Tage)</span>
+                </div>
+                <label class="toggle-row" style="margin:0;white-space:nowrap;gap:8px">
+                  <span style="font-size:13px">Auto-Cleanup</span>
+                  <label class="switch"><input type="checkbox" id="ms_auto_cleanup" name="auto_cleanup_enabled" /><span class="slider"></span></label>
+                </label>
               </div>
-              <label class="toggle-row"><span>Auto-Cleanup aktiv</span><label class="switch"><input type="checkbox" id="ms_auto_cleanup" name="auto_cleanup_enabled" /><span class="slider"></span></label></label>
-              <div style="display:flex;gap:10px;flex-wrap:wrap">
-                <button type="submit">Speichern</button>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+                <button type="button" id="purgeOrphansBtn" class="ghost">🗑 Verwaiste Events</button>
                 <button type="button" id="cleanupNowBtn" class="ghost">🧹 Jetzt bereinigen</button>
-                <button type="button" id="purgeOrphansBtn" class="ghost">🗑 Verwaiste Events löschen</button>
+                <button type="submit" style="margin-left:auto">Speichern</button>
               </div>
             </form>
           </div></div>
@@ -511,24 +520,7 @@
             </div></div>
           </div>
 
-          <!-- 5. Speicher & Retention -->
-          <div class="set-section" id="set-storage">
-            <button type="button" class="set-hd" onclick="toggleSetSection('set-storage')">
-              <span class="set-icon">💾</span><span>Speicher &amp; Aufbewahrung</span><span class="set-chevron">▶</span>
-            </button>
-            <div class="set-bd"><div class="set-inner">
-              <div style="display:grid;gap:10px;padding-top:4px">
-                <div class="row" style="grid-template-columns:1fr 1fr">
-                  <div class="field-wrap"><input name="retention_days" type="number" placeholder="14" /><span class="field-label">Aufbewahrung (Tage)</span></div>
-                  <div class="field-wrap"><input name="media_limit_default" type="number" placeholder="24" /><span class="field-label">Max. Mediathek-Einträge</span></div>
-                </div>
-                <label class="toggle-row"><span>Auto-Cleanup aktiv</span><label class="switch"><input type="checkbox" name="auto_cleanup_enabled" /><span class="slider"></span></label></label>
-                <div class="field-wrap"><input name="storage_root" readonly style="color:var(--muted);font-size:11px" /><span class="field-label">Storage-Pfad (readonly)</span></div>
-              </div>
-            </div></div>
-          </div>
-
-          <!-- 6. Import / Export -->
+          <!-- 5. Import / Export -->
           <div class="set-section" id="set-importexport">
             <button type="button" class="set-hd" onclick="toggleSetSection('set-importexport')">
               <span class="set-icon">📦</span><span>Import / Export</span><span class="set-chevron">▶</span>

@@ -120,7 +120,7 @@ async function loadAll(){
 }
 
 async function loadMedia(append=false){
-  const LIMIT=24;
+  const LIMIT=Number(byId('ms_media_limit')?.value)||24;
   if(!append){ state.media=[]; state.mediaOffset=0; }
   const cams = state.camera ? [state.camera] : state.cameras.map(c=>c.id);
   const page=[];
@@ -582,12 +582,6 @@ function hydrateSettings(){
   const proc=state.config.processing||{}; const coral=state.config.coral||{};
   f['coral_enabled'].checked=!!(proc.coral_enabled ?? coral.mode==='coral');
   f['bird_species_enabled'].checked=!!(proc.bird_species_enabled ?? coral.bird_species_enabled);
-  // Storage section
-  const storageSec=state.config.storage||{};
-  if(f['retention_days']) f['retention_days'].value=storageSec.retention_days||14;
-  if(f['media_limit_default']) f['media_limit_default'].value=storageSec.media_limit_default||24;
-  if(f['auto_cleanup_enabled']) f['auto_cleanup_enabled'].checked=!!storageSec.auto_cleanup_enabled;
-  if(f['storage_root']) f['storage_root'].value=storageSec.root||'/app/storage';
   const hint=byId('coralStatusHint');
   if(hint){
     const cam=state.cameras[0];
@@ -597,7 +591,10 @@ function hydrateSettings(){
       : `⚠️ Coral nicht verfügbar: <code>${esc(reason)}</code>`;
   }
   // Hydrate media settings form
-  const mlEl=byId('ms_media_limit'); if(mlEl) mlEl.value=storageSec.media_limit_default||24;
+  const storageSec=state.config.storage||{};
+  const mlVal=storageSec.media_limit_default||24;
+  const mlEl=byId('ms_media_limit'); if(mlEl){ mlEl.value=mlVal; }
+  const mlLbl=byId('ms_media_limit_val'); if(mlLbl) mlLbl.textContent=mlVal+' Fotos';
   const rdEl=byId('ms_retention_days'); if(rdEl) rdEl.value=storageSec.retention_days||14;
   const acEl=byId('ms_auto_cleanup'); if(acEl) acEl.checked=!!storageSec.auto_cleanup_enabled;
 }
@@ -922,8 +919,7 @@ byId('settingsForm').onsubmit=async(e)=>{
     app:{name:f['app_name'].value||'TAM-spy',tagline:f['app_tagline'].value||'',logo:f['app_logo'].value||'🐈‍⬛'},
     server:{public_base_url:f['public_base_url'].value||'',default_discovery_subnet:f['discovery_subnet'].value||'192.168.1.0/24'},
     mqtt:{enabled:f['mqtt_enabled'].checked,host:f['mqtt_host'].value||'',port:Number(f['mqtt_port'].value||1883),username:f['mqtt_username'].value||'',password:mqttPass,base_topic:f['mqtt_base_topic'].value||'tam-spy'},
-    processing:{coral_enabled:f['coral_enabled'].checked,bird_species_enabled:f['bird_species_enabled'].checked},
-    storage:{retention_days:Number(f['retention_days']?.value||14),media_limit_default:Number(f['media_limit_default']?.value||24),auto_cleanup_enabled:!!(f['auto_cleanup_enabled']?.checked)}
+    processing:{coral_enabled:f['coral_enabled'].checked,bird_species_enabled:f['bird_species_enabled'].checked}
   };
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   await loadAll();
