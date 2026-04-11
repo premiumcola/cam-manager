@@ -81,7 +81,7 @@ function renderDashboard(){
         <div class="chip-row">
           <button class="action-btn" onclick="toggleArm('${esc(c.id)}',${!c.armed})">${c.armed?'Unscharf':'Scharf'}</button>
           <button class="action-btn" onclick="loadTimelapse('${esc(c.id)}')">Timelapse</button>
-          <button class="edit-camera-btn action-btn" data-camid="${esc(c.id)}">Bearbeiten</button>
+          <button class="action-btn" onclick="editCamera('${esc(c.id)}')">Bearbeiten</button>
         </div>
       </div>
     </article>`).join('');
@@ -174,7 +174,7 @@ function parseRtspUrl(url){
 }
 
 function renderCameraSettings(){
-  byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`<div class="item" data-camid="${esc(c.id)}"><div class="item-head"><strong>${esc(c.name)}</strong><button class="edit-camera-btn action-btn" data-camid="${esc(c.id)}">Bearbeiten</button></div><div class="small">${esc(c.location||'')} · ${esc(c.group_id||'—')} · ${c.armed?'scharf':'unscharf'}</div></div>`).join('');
+  byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`<div class="item" data-camid="${esc(c.id)}"><div class="item-head"><strong>${esc(c.name)}</strong><button class="action-btn" onclick="editCamera('${esc(c.id)}')">Bearbeiten</button></div><div class="small">${esc(c.location||'')} · ${esc(c.group_id||'—')} · ${c.armed?'scharf':'unscharf'}</div></div>`).join('');
 }
 
 // ── Whitelist chips ───────────────────────────────────────────────────────────
@@ -250,19 +250,16 @@ function editCamera(camId){
   byId('deleteCameraBtn').dataset.camId=camId;
   loadMaskSnapshot(camId); drawShapes();
   const wrapper=byId('cameraEditWrapper');
-  // Move wrapper directly after the clicked camera row (inline slide-in)
+  // Always place the form in the #cameras section, after the camera row
   const camRow=byId('cameraSettingsList')?.querySelector(`[data-camid="${camId}"]`);
   if(camRow) camRow.insertAdjacentElement('afterend',wrapper);
+  else byId('cameraSettingsList')?.after(wrapper);
   wrapper.classList.remove('hidden');
-  setTimeout(()=>wrapper.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
+  // Navigate to cameras section then scroll the form into view
+  location.hash='#cameras';
+  setTimeout(()=>wrapper.scrollIntoView({behavior:'smooth',block:'start'}),80);
 }
 window.editCamera=editCamera;
-
-// Event delegation for dynamically rendered edit buttons
-document.addEventListener('click',function(e){
-  const btn=e.target.closest('.edit-camera-btn');
-  if(btn) editCamera(btn.dataset.camid);
-});
 
 byId('deleteCameraBtn').onclick=async()=>{
   const camId=byId('deleteCameraBtn').dataset.camId;
