@@ -214,6 +214,20 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .ie-blue{background:#2563eb}.ie-green{background:#16a34a}.ie-gray{background:#374151}
 .ie-btn:hover{filter:brightness(1.12)}
 
+/* ── Toast notifications ─────────────────────────────────────────────────────── */
+#toastContainer{position:fixed;bottom:24px;right:24px;z-index:2000;display:flex;flex-direction:column;gap:10px;pointer-events:none}
+.toast{display:flex;align-items:flex-start;gap:10px;padding:13px 16px;border-radius:14px;background:var(--panel);box-shadow:0 8px 32px rgba(0,0,0,.5);border-left:4px solid var(--accent);font-size:14px;max-width:340px;pointer-events:auto;animation:toast-in .25s cubic-bezier(.4,0,.2,1) both}
+.toast.success{border-left-color:var(--good)}
+.toast.error{border-left-color:var(--danger)}
+.toast.warn{border-left-color:var(--warn)}
+.toast.info{border-left-color:var(--accent)}
+.toast-msg{flex:1;line-height:1.45;color:var(--text)}
+.toast-close{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:0;line-height:1;flex-shrink:0;margin-top:-1px}
+.toast-close:hover{color:var(--text)}
+.toast.toast-out{animation:toast-out .25s cubic-bezier(.4,0,.2,1) both}
+@keyframes toast-in{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
+@keyframes toast-out{from{opacity:1;transform:none}to{opacity:0;transform:translateX(40px)}}
+
 /* ── Achievements / Trophäen ───────────────────────────────────────────────── */
 .ach-progress-bar{margin-bottom:16px;padding:14px 18px;border-radius:16px;background:var(--surface);display:flex;align-items:center;gap:14px}
 .ach-progress-text{font-weight:700;font-size:16px;white-space:nowrap}

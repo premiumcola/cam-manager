@@ -161,6 +161,7 @@ class EventStore:
 
     def scan_media_files(self, camera_ids: list[str], public_base_url: str = "") -> int:
         """Scan storage/events for orphaned media files (.jpg/.jpeg/.mp4) not yet registered as events.
+        Covers both flat files directly in cam_dir/ and files in any depth of subdirectories.
         Returns count of newly registered events."""
         import logging as _log
         log = _log.getLogger(__name__)
@@ -169,52 +170,52 @@ class EventStore:
             cam_dir = self.events_dir / cam_id
             if not cam_dir.exists():
                 continue
-            # Collect existing event IDs
+            # Collect existing event IDs from all JSON files in the entire tree
             existing_ids: set[str] = set()
-            for jf in cam_dir.glob("*.json"):
+            for jf in cam_dir.rglob("*.json"):
                 existing_ids.add(jf.stem)
-            # Walk date subdirectories
-            for entry in sorted(cam_dir.iterdir()):
-                if not entry.is_dir():
+            # Collect all media files recursively (flat + subdirs)
+            media_files: list[Path] = []
+            for suffix in ("*.jpg", "*.jpeg", "*.mp4"):
+                media_files.extend(cam_dir.rglob(suffix))
+            for media_file in sorted(media_files):
+                if media_file.suffix.lower() not in (".jpg", ".jpeg", ".mp4"):
                     continue
-                for media_file in sorted(entry.iterdir()):
-                    if media_file.suffix.lower() not in (".jpg", ".jpeg", ".mp4"):
-                        continue
-                    event_id = media_file.stem
-                    if event_id in existing_ids:
-                        continue
-                    # Parse timestamp from filename (YYYYMMDD-HHMMSS-*)
-                    try:
-                        ts = datetime.strptime(event_id[:15], "%Y%m%d-%H%M%S")
-                    except ValueError:
-                        ts = datetime.now()
-                    rel = media_file.relative_to(self.root)
-                    is_video = media_file.suffix.lower() == ".mp4"
-                    base = (public_base_url or "").rstrip("/")
-                    event: dict = {
-                        "event_id": event_id,
-                        "camera_id": cam_id,
-                        "camera_name": cam_id,
-                        "time": ts.isoformat(timespec="seconds"),
-                        "labels": ["motion"],
-                        "top_label": "motion",
-                        "alarm_level": "info",
-                        "armed": True,
-                        "after_hours": False,
-                        "scanned": True,
-                    }
-                    if is_video:
-                        event["video_relpath"] = rel.as_posix()
-                        event["video_url"] = f"{base}/media/{rel.as_posix()}" if base else f"/media/{rel.as_posix()}"
-                        event["snapshot_relpath"] = None
-                        event["snapshot_url"] = None
-                    else:
-                        event["snapshot_relpath"] = rel.as_posix()
-                        event["snapshot_url"] = f"{base}/media/{rel.as_posix()}" if base else f"/media/{rel.as_posix()}"
-                        event["video_url"] = None
-                    self.add_event(cam_id, event)
-                    existing_ids.add(event_id)
-                    scanned += 1
+                event_id = media_file.stem
+                if event_id in existing_ids:
+                    continue
+                # Parse timestamp from filename (YYYYMMDD-HHMMSS-*)
+                try:
+                    ts = datetime.strptime(event_id[:15], "%Y%m%d-%H%M%S")
+                except ValueError:
+                    ts = datetime.now()
+                rel = media_file.relative_to(self.root)
+                is_video = media_file.suffix.lower() == ".mp4"
+                base = (public_base_url or "").rstrip("/")
+                event: dict = {
+                    "event_id": event_id,
+                    "camera_id": cam_id,
+                    "camera_name": cam_id,
+                    "time": ts.isoformat(timespec="seconds"),
+                    "labels": ["motion"],
+                    "top_label": "motion",
+                    "alarm_level": "info",
+                    "armed": True,
+                    "after_hours": False,
+                    "scanned": True,
+                }
+                if is_video:
+                    event["video_relpath"] = rel.as_posix()
+                    event["video_url"] = f"{base}/media/{rel.as_posix()}" if base else f"/media/{rel.as_posix()}"
+                    event["snapshot_relpath"] = None
+                    event["snapshot_url"] = None
+                else:
+                    event["snapshot_relpath"] = rel.as_posix()
+                    event["snapshot_url"] = f"{base}/media/{rel.as_posix()}" if base else f"/media/{rel.as_posix()}"
+                    event["video_url"] = None
+                self.add_event(cam_id, event)
+                existing_ids.add(event_id)
+                scanned += 1
         log.info("[MediaScan] %d neue Medien-Events registriert", scanned)
         return scanned
 

@@ -337,13 +337,15 @@ def api_media_storage_stats():
         jpg_count = 0
         json_count = 0
         if cam_dir.exists():
-            for p in cam_dir.rglob("*.jpg"):
-                try:
-                    size_bytes += p.stat().st_size
-                    jpg_count += 1
-                except Exception:
-                    pass
-            json_count = len(list(cam_dir.glob("*.json")))
+            for pattern in ("*.jpg", "*.jpeg", "*.mp4"):
+                for p in cam_dir.rglob(pattern):
+                    try:
+                        size_bytes += p.stat().st_size
+                        if pattern != "*.mp4":
+                            jpg_count += 1
+                    except Exception:
+                        pass
+            json_count = len(list(cam_dir.rglob("*.json")))
         result.append({
             "id": cam["id"],
             "name": cam.get("name", cam["id"]),

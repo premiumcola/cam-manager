@@ -1,5 +1,35 @@
 
 const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null};
+
+// ── Toast & Confirm helpers ───────────────────────────────────────────────────
+window.showToast=function(msg,type='info'){
+  const c=byId('toastContainer'); if(!c) return;
+  const t=document.createElement('div');
+  t.className=`toast ${type}`;
+  t.innerHTML=`<span class="toast-msg">${esc(msg)}</span><button class="toast-close" onclick="this.closest('.toast').remove()">✕</button>`;
+  c.appendChild(t);
+  const dismiss=()=>{ t.classList.add('toast-out'); t.addEventListener('animationend',()=>t.remove(),{once:true}); };
+  setTimeout(dismiss,4000);
+};
+
+let _confirmResolve=null;
+window.showConfirm=function(msg){
+  return new Promise(resolve=>{
+    _confirmResolve=resolve;
+    const modal=byId('confirmModal');
+    const msgEl=byId('confirmMsg');
+    if(!modal||!msgEl){resolve(false);return;}
+    msgEl.textContent=msg;
+    modal.classList.remove('hidden');
+    document.body.style.overflow='hidden';
+  });
+};
+function _resolveConfirm(val){
+  const modal=byId('confirmModal');
+  if(modal){modal.classList.add('hidden');document.body.style.overflow='';}
+  if(_confirmResolve){_confirmResolve(val);_confirmResolve=null;}
+}
+// Wire confirm buttons after DOM ready (done at bottom of file)
 const colors={bird:'#70d6ff',cat:'#ff8cc6',person:'#ffd166',car:'#9c89ff',motion:'#7ee787',alarm:'#ff6b6b',unknown:'#91a4b8'};
 const shapeState={mode:'zone',points:[],camera:null,zones:[],masks:[]};
 const byId=id=>document.getElementById(id);
@@ -451,9 +481,9 @@ window.editCamera=editCamera;
 byId('deleteCameraBtn').onclick=async()=>{
   const camId=byId('deleteCameraBtn').dataset.camId;
   if(!camId) return;
-  if(!confirm(`Kamera "${camId}" wirklich löschen?\n\nDieser Vorgang entfernt die Kamera aus der Konfiguration.\nEreignisse und Medien bleiben im Speicher erhalten.`)) return;
+  if(!await showConfirm(`Kamera "${camId}" wirklich löschen?\n\nDieser Vorgang entfernt die Kamera aus der Konfiguration. Ereignisse und Medien bleiben im Speicher erhalten.`)) return;
   const r=await j(`/api/settings/cameras/${encodeURIComponent(camId)}`,{method:'DELETE'});
-  if(r.event_count>0) alert(`Hinweis: Für diese Kamera existieren noch ${r.event_count} gespeicherte Ereignisse im Storage. Sie wurden NICHT gelöscht.`);
+  if(r.event_count>0) showToast(`Hinweis: Für diese Kamera existieren noch ${r.event_count} gespeicherte Ereignisse im Storage. Sie wurden NICHT gelöscht.`,'warn');
   // Clear form so deleted camera's data doesn't linger
   byId('cameraForm').reset();
   byId('deleteCameraBtn').dataset.camId='';
@@ -513,7 +543,7 @@ async function renderAudit(){ const actions=await j('/api/telegram/actions'); by
 async function toggleArm(camId,armed){ await fetch(`/api/camera/${camId}/arm`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({armed})}); await loadAll(); }
 window.toggleArm=toggleArm;
 window._cvCardClick=function(e,camId){ /* clicking the card itself does nothing extra */ };
-async function loadTimelapse(camId){ try{ const r=await j(`/api/camera/${camId}/timelapse`); if(r.url) window.open(r.url,'_blank'); }catch(e){ alert('Kein Zeitraffer verfügbar.'); } }
+async function loadTimelapse(camId){ try{ const r=await j(`/api/camera/${camId}/timelapse`); if(r.url) window.open(r.url,'_blank'); }catch(e){ showToast('Kein Zeitraffer verfügbar.','warn'); } }
 window.loadTimelapse=loadTimelapse;
 
 function hydrateSettings(){
@@ -813,7 +843,7 @@ window.saveDiscoveryCamera=async(ip)=>{
     await j('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     closeDiscoveryModal();
     await loadAll();
-  }catch(e){alert('Fehler beim Speichern: '+e.message);}
+  }catch(e){showToast('Fehler beim Speichern: '+e.message,'error');}
 };
 // Legacy alias – wizard still uses this
 window.applyDiscoveryRtsp=(ip)=>{
@@ -873,7 +903,7 @@ byId('exportYamlBtn').onclick=()=>download('/api/settings/export?format=yaml');
 byId('clearImportBtn').onclick=()=>{byId('importBox').value='';};
 byId('importJsonBtn').onclick=async()=>{await importConfig('json');};
 byId('importYamlBtn').onclick=async()=>{await importConfig('yaml');};
-async function importConfig(format){ const content=byId('importBox').value.trim(); if(!content) return alert('Bitte Inhalt einfügen.'); const r=await j('/api/settings/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({format,content})}); byId('importBox').value=''; await loadAll(); alert('Import erfolgreich.'); }
+async function importConfig(format){ const content=byId('importBox').value.trim(); if(!content){showToast('Bitte Inhalt einfügen.','warn');return;} const r=await j('/api/settings/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({format,content})}); byId('importBox').value=''; await loadAll(); showToast('Import erfolgreich.','success'); }
 
 // ── Settings collapsible sections ────────────────────────────────────────────
 window.toggleSetSection=function(id){
@@ -913,14 +943,14 @@ async function loadMediaStorageStats(){
 }
 
 byId('cleanupNowBtn').onclick=async()=>{
-  if(!confirm('Jetzt bereinigen? Alle Dateien älter als die konfigurierte Aufbewahrungszeit werden gelöscht.')) return;
+  if(!await showConfirm('Jetzt bereinigen? Alle Dateien älter als die konfigurierte Aufbewahrungszeit werden gelöscht.')) return;
   const rdEl=byId('ms_retention_days');
   const payload=rdEl?.value?{retention_days:Number(rdEl.value)}:{};
   try{
     const r=await j('/api/media/cleanup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    alert(`Bereinigung abgeschlossen. ${r.removed||0} Dateien entfernt.`);
+    showToast(`Bereinigung abgeschlossen. ${r.removed||0} Dateien entfernt.`,'success');
     await loadMediaStorageStats();
-  }catch(e){alert('Fehler: '+e.message);}
+  }catch(e){showToast('Fehler: '+e.message,'error');}
 };
 
 byId('mediaSettingsForm').onsubmit=async(e)=>{
@@ -936,8 +966,8 @@ byId('refreshMaskSnapshotBtn').onclick=()=>loadMaskSnapshot(shapeState.camera||b
 byId('editZoneBtn').onclick=()=>{shapeState.mode='zone'; byId('shapeStatus').textContent='Zone zeichnen';};
 byId('editMaskBtn').onclick=()=>{shapeState.mode='mask'; byId('shapeStatus').textContent='Maske zeichnen';};
 byId('undoShapeBtn').onclick=()=>{shapeState.points.pop(); drawShapes();};
-byId('saveShapeBtn').onclick=()=>{ if(shapeState.points.length<3) return alert('Mindestens 3 Punkte.'); if(shapeState.mode==='zone') shapeState.zones.push([...shapeState.points]); else shapeState.masks.push([...shapeState.points]); shapeState.points=[]; saveShapesIntoForm(); drawShapes(); };
-byId('clearShapesBtn').onclick=()=>{ if(!confirm('Alle Zonen und Masken löschen?')) return; shapeState.zones=[]; shapeState.masks=[]; shapeState.points=[]; saveShapesIntoForm(); drawShapes(); };
+byId('saveShapeBtn').onclick=()=>{ if(shapeState.points.length<3){showToast('Mindestens 3 Punkte.','warn');return;} if(shapeState.mode==='zone') shapeState.zones.push([...shapeState.points]); else shapeState.masks.push([...shapeState.points]); shapeState.points=[]; saveShapesIntoForm(); drawShapes(); };
+byId('clearShapesBtn').onclick=async()=>{ if(!await showConfirm('Alle Zonen und Masken löschen?')) return; shapeState.zones=[]; shapeState.masks=[]; shapeState.points=[]; saveShapesIntoForm(); drawShapes(); };
 byId('maskSnapshot').addEventListener('load',drawShapes);
 
 byId('wiz_cam_rtsp').value='rtsp://user:pass@192.168.X.X:554/Streaming/Channels/101';
@@ -1033,9 +1063,9 @@ byId('rescanMediaBtn')?.addEventListener('click',async()=>{
   btn.disabled=true; btn.textContent='Scanne …';
   try{
     const r=await j('/api/media/rescan',{method:'POST'});
-    alert(`Scan abgeschlossen: ${r.registered||0} neue Medien registriert.`);
+    showToast(`Scan abgeschlossen: ${r.registered||0} neue Medien registriert.`,'success');
     await loadAll();
-  }catch(e){alert('Fehler beim Scan: '+e.message);}
+  }catch(e){showToast('Fehler beim Scan: '+e.message,'error');}
   finally{btn.disabled=false;btn.textContent='🔍 Neu scannen';}
 });
 
@@ -1070,7 +1100,7 @@ byId('lightboxDelete').onclick=async()=>{
     const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(event_id)}"]`);
     if(card) card.remove();
     closeLightbox();
-  }catch(e){alert('Löschen fehlgeschlagen: '+e.message);}
+  }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
 };
 
 // ── Achievements / Trophäen ───────────────────────────────────────────────────
@@ -1139,6 +1169,11 @@ document.querySelectorAll('.ach-tab').forEach(btn=>{
     renderAchievements();
   });
 });
+
+// Wire confirm modal
+byId('confirmOk')?.addEventListener('click',()=>_resolveConfirm(true));
+byId('confirmCancel')?.addEventListener('click',()=>_resolveConfirm(false));
+byId('confirmModal')?.addEventListener('click',e=>{if(e.target===byId('confirmModal'))_resolveConfirm(false);});
 
 loadAll().then(()=>{startLiveUpdate(); loadAchievements();});
 loadLogs();
