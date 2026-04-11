@@ -1,5 +1,5 @@
 
-const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null};
+const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabel:'',mediaPeriod:'week'};
 
 // ── Toast & Confirm helpers ───────────────────────────────────────────────────
 window.showToast=function(msg,type='info'){
@@ -102,9 +102,7 @@ async function loadAll(){
   state.config=await j('/api/config');
   state.groups=(await j('/api/groups')).groups||[];
   state.cameras=(await j('/api/cameras')).cameras||[];
-  if(!state.camera && state.cameras[0]) state.camera='';
-  state.timeline=await j(`/api/timeline?period=${state.period}${state.camera?`&camera=${encodeURIComponent(state.camera)}`:''}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`);
-  await loadMedia();
+  state.timeline=await j(`/api/timeline?period=${state.period}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`);
   await loadMediaStorageStats();
   renderShell();
   renderDashboard();
@@ -122,11 +120,11 @@ async function loadAll(){
 async function loadMedia(append=false){
   const LIMIT=Number(byId('ms_media_limit')?.value)||24;
   if(!append){ state.media=[]; state.mediaOffset=0; }
-  const cams = state.camera ? [state.camera] : state.cameras.map(c=>c.id);
+  const cams = state.mediaCamera ? [state.mediaCamera] : state.cameras.map(c=>c.id);
   const page=[];
   let hasMore=false;
   for(const camId of cams){
-    const data=await j(`/api/camera/${camId}/media?limit=${LIMIT}&offset=${state.mediaOffset||0}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`);
+    const data=await j(`/api/camera/${camId}/media?limit=${LIMIT}&offset=${state.mediaOffset||0}${state.mediaLabel?`&label=${encodeURIComponent(state.mediaLabel)}`:''}`);
     const items=data.items||[];
     if(items.length>=LIMIT) hasMore=true;
     for(const item of items) page.push({...item,camera_id:camId});
@@ -138,22 +136,7 @@ async function loadMedia(append=false){
 }
 async function loadMoreMedia(){
   await loadMedia(true);
-  const grid=byId('mediaGrid');
-  const lmBtn=byId('mediaLoadMoreBtn');
-  const _mediaItems=state.media;
-  grid.innerHTML=_mediaItems.map(item=>{
-    const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
-    return `<article class="media-card" data-event-id="${esc(item.event_id||'')}" style="cursor:pointer" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
-      <img src="${esc(imgSrc)}" alt="event" loading="lazy" />
-      <div class="media-meta">
-        <strong>${esc(item.camera_id)}</strong>
-        <div class="small">${esc(item.time||'')}</div>
-        <div class="chip-row">${(item.labels||[]).map(l=>`<span class="chip">${esc(l)}</span>`).join('')}</div>
-      </div>
-    </article>`;
-  }).join('')||'<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
-  if(lmBtn) lmBtn.style.display=state.mediaHasMore?'':'none';
-  window._openMediaItem=id=>{const item=_mediaItems.find(x=>x.event_id===id); if(item) openLightbox(item);};
+  renderMediaGrid();
 }
 
 function renderShell(){
@@ -161,7 +144,6 @@ function renderShell(){
   byId('sideAppName').textContent=state.config.app.name||'TAM-spy';
   const tb=byId('topbarTitle'); if(tb) tb.textContent=state.config.app.name||'TAM-spy';
   byId('appTagline').textContent=state.config.app.tagline||'Schlicht, funktional, analytisch';
-  byId('cameraFilter').innerHTML='<option value="">Alle Kameras</option>'+state.cameras.map(c=>`<option value="${esc(c.id)}" ${state.camera===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
   byId('groupSelect').innerHTML=state.groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
   byId('globalSummary').textContent=`${state.cameras.length} Kameras · Coral ${state.config.coral.mode} · Telegram ${state.config.telegram.enabled?'an':'aus'} · MQTT ${state.config.mqtt.enabled?'an':'aus'}`;
 }
@@ -174,7 +156,7 @@ function _camGridCols(n){
 }
 
 function renderDashboard(){
-  const cams=(state.camera?state.cameras.filter(c=>c.id===state.camera):state.cameras);
+  const cams=state.cameras;
   const gridCls=_camGridCols(cams.length);
   byId('cameraCards').className=`camera-grid ${gridCls}`;
   byId('cameraCards').innerHTML=cams.map(c=>{
@@ -217,21 +199,6 @@ function renderDashboard(){
   </div>
 </article>`;
   }).join('');
-  const _mediaItems=state.media||[];
-  byId('mediaGrid').innerHTML=_mediaItems.map(item=>{
-    const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
-    return `<article class="media-card" data-event-id="${esc(item.event_id||'')}" style="cursor:pointer" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
-      <img src="${esc(imgSrc)}" alt="event" loading="lazy" />
-      <div class="media-meta">
-        <strong>${esc(item.camera_id)}</strong>
-        <div class="small">${esc(item.time||'')}</div>
-        <div class="chip-row">${(item.labels||[]).map(l=>`<span class="chip">${esc(l)}</span>`).join('')}</div>
-      </div>
-    </article>`;
-  }).join('')||'<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
-  const lmBtn=byId('mediaLoadMoreBtn');
-  if(lmBtn) lmBtn.style.display=state.mediaHasMore?'':'none';
-  window._openMediaItem=id=>{const item=_mediaItems.find(x=>x.event_id===id); if(item) openLightbox(item);};
 }
 
 // ── Timeline tooltip ─────────────────────────────────────────────────────────
@@ -885,10 +852,6 @@ window.applyDiscoveryRtsp=(ip)=>{
   const wizSnap=byId('wiz_cam_snapshot'); if(wizSnap) wizSnap.value=snap;
   closeDiscoveryModal();
 };
-byId('cameraFilter').onchange=e=>{state.camera=e.target.value; loadAll();};
-byId('labelFilter').onchange=e=>{state.label=e.target.value; loadAll();};
-byId('periodFilter').onchange=e=>{state.period=e.target.value; loadAll();};
-
 byId('cameraForm').onsubmit=async(e)=>{
   e.preventDefault(); const f=e.target.elements;
   const payload={id:f['id'].value,name:f['name'].value,location:f['location'].value,
@@ -959,14 +922,10 @@ async function loadMediaStorageStats(){
   try{
     const r=await j('/api/media/storage-stats');
     const cams=r.cameras||[];
-    if(!cams.length){bar.innerHTML=''; return;}
-    bar.innerHTML=`<div class="storage-bar-inner">${cams.map(c=>`
-      <div class="storage-cam-item">
-        <span class="storage-cam-name">${esc(c.name)}</span>
-        <span class="storage-cam-size">${c.size_mb} MB</span>
-        <span class="small muted">${c.event_count} Events · ${c.jpg_count} Fotos</span>
-      </div>`).join('')}</div>`;
-  }catch{bar.innerHTML='';}
+    state.mediaStats=cams;
+    bar.innerHTML='';
+    renderMediaOverview();
+  }catch{bar.innerHTML=''; state.mediaStats=[];}
 }
 
 byId('cleanupNowBtn').onclick=async()=>{
@@ -1145,10 +1104,116 @@ byId('lightboxDelete').onclick=async()=>{
     if(!byId('mediaGrid').querySelector('.media-card')){
       byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
     }
+    _decrementMediaOverviewCount(camera_id);
     closeLightbox();
     await loadMediaStorageStats();
   }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
 };
+
+// ── Media overview + drill-down ───────────────────────────────────────────────
+const CAM_COLORS=['#3b82f6','#f59e0b','#10b981','#8b5cf6','#ef4444','#06b6d4','#ec4899','#84cc16'];
+function camColor(camId){
+  const idx=state.cameras.findIndex(c=>c.id===camId);
+  return CAM_COLORS[(idx<0?0:idx)%CAM_COLORS.length];
+}
+function fmtMediaTime(ts){
+  if(!ts) return '';
+  try{
+    const d=new Date(ts.replace(' ','T'));
+    return d.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  }catch{return ts;}
+}
+function mediaCardHTML(item){
+  const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
+  const color=camColor(item.camera_id);
+  const confirmed=item.confirmed?'mmc-confirmed':'';
+  const topLabel=(item.labels||[])[0]||'motion';
+  return `<article class="media-card ${confirmed}" data-event-id="${esc(item.event_id||'')}" data-cam="${esc(item.camera_id||'')}">
+    <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
+      <img src="${esc(imgSrc)}" alt="event" loading="lazy" />
+      <div class="mmc-meta-bar">
+        <span>${fmtMediaTime(item.time||'')}</span>
+        <span>${esc(topLabel)}</span>
+      </div>
+      <div class="mmc-actions">
+        <button class="mmc-btn mmc-confirm" title="Bestätigen" onclick="event.stopPropagation();window.confirmMediaCard('${esc(item.camera_id||'')}','${esc(item.event_id||'')}',this)">✓</button>
+        <button class="mmc-btn mmc-delete" title="Löschen" onclick="event.stopPropagation();window.deleteMediaCard('${esc(item.camera_id||'')}','${esc(item.event_id||'')}',this)">✕</button>
+      </div>
+    </div>
+  </article>`;
+}
+function renderMediaOverview(){
+  const ov=byId('mediaOverview'); if(!ov) return;
+  const cams=state.cameras;
+  if(!cams.length){ov.innerHTML=''; return;}
+  const statsByid={};
+  (state.mediaStats||[]).forEach(s=>{ statsByid[s.camera_id||s.id||s.name]=s; });
+  ov.innerHTML=cams.map(c=>{
+    const s=statsByid[c.id]||{};
+    const color=camColor(c.id);
+    const snap=`/api/camera/${esc(c.id)}/snapshot.jpg?t=${Date.now()}`;
+    return `<div class="moc-card" style="border-left-color:${color}" onclick="openMediaDrilldown('${esc(c.id)}')">
+      <div class="moc-thumb"><img src="${snap}" alt="${esc(c.name)}" onerror="this.parentElement.innerHTML='<span class=moc-thumb-placeholder>📷</span>'" /></div>
+      <div style="min-width:0">
+        <div class="moc-name">${esc(c.name)}</div>
+        <div class="moc-counts">${s.event_count||0} Events · ${s.jpg_count||0} Fotos</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+function renderMediaGrid(){
+  const grid=byId('mediaGrid'); if(!grid) return;
+  const items=state.media||[];
+  grid.innerHTML=items.map(mediaCardHTML).join('')||'<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
+  const lmBtn=byId('mediaLoadMoreBtn');
+  if(lmBtn) lmBtn.style.display=state.mediaHasMore?'':'none';
+  window._openMediaItem=id=>{const item=(state.media||[]).find(x=>x.event_id===id); if(item) openLightbox(item);};
+}
+async function openMediaDrilldown(camId){
+  state.mediaCamera=camId;
+  state.mediaLabel=''; state.mediaPeriod='week';
+  const dl=byId('mediaDrillLabel'); if(dl) dl.value='';
+  const dp=byId('mediaDrillPeriod'); if(dp) dp.value='week';
+  byId('mediaOverview').style.display='none';
+  byId('mediaDrilldown').style.display='';
+  // highlight active card
+  document.querySelectorAll('.moc-card').forEach(c=>c.classList.toggle('moc-active',c.onclick?.toString().includes(`'${camId}'`)));
+  await loadMedia();
+  renderMediaGrid();
+}
+function closeMediaDrilldown(){
+  state.mediaCamera=null; state.media=[];
+  byId('mediaDrilldown').style.display='none';
+  byId('mediaOverview').style.display='';
+}
+window.deleteMediaCard=async(camId,eventId,btn)=>{
+  try{
+    await j(`/api/camera/${encodeURIComponent(camId)}/events/${encodeURIComponent(eventId)}`,{method:'DELETE'});
+    const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(eventId)}"]`);
+    if(card) card.remove();
+    state.media=(state.media||[]).filter(x=>x.event_id!==eventId);
+    _decrementMediaOverviewCount(camId);
+    if(!byId('mediaGrid').querySelector('.media-card')){
+      byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
+    }
+  }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
+};
+window.confirmMediaCard=async(camId,eventId,btn)=>{
+  try{
+    await j(`/api/camera/${encodeURIComponent(camId)}/events/${encodeURIComponent(eventId)}/confirm`,{method:'POST'});
+    const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(eventId)}"]`);
+    if(card) card.classList.add('mmc-confirmed');
+    if(btn){btn.classList.remove('mmc-confirm');btn.style.opacity='0.4';}
+  }catch(e){showToast('Bestätigen fehlgeschlagen: '+e.message,'error');}
+};
+function _decrementMediaOverviewCount(camId){
+  const s=state.mediaStats.find(x=>x.camera_id===camId||x.id===camId);
+  if(s){
+    if(s.event_count>0) s.event_count--;
+    if(s.jpg_count>0) s.jpg_count--;
+  }
+  renderMediaOverview();
+}
 
 // ── Achievements / Trophäen ───────────────────────────────────────────────────
 const ACH_DEFS=[

@@ -94,7 +94,7 @@
         </div>
       </div>
       <nav class="nav">
-        <a href="#dashboard" title="Dashboard"><span class="nav-icon">📊</span><span class="nav-label">Dashboard</span></a>
+        <a href="#dashboard" title="Kameraübersicht"><span class="nav-icon">📊</span><span class="nav-label">Kameraübersicht</span></a>
         <a href="#timeline" title="Timeline"><span class="nav-icon">⏱</span><span class="nav-label">Timeline</span></a>
         <a href="#media" title="Mediathek"><span class="nav-icon">🎞</span><span class="nav-label">Mediathek</span></a>
         <a href="#cameras" title="Kameras"><span class="nav-icon">📷</span><span class="nav-label">Kameras</span></a>
@@ -121,12 +121,7 @@
       </section>
 
       <section id="dashboard" class="panel section">
-        <div class="section-head"><h3>Dashboard</h3><div id="globalSummary" class="muted"></div></div>
-        <div class="toolbar">
-          <select id="cameraFilter"></select>
-          <select id="labelFilter"><option value="">Alle Objekte</option><option>person</option><option>cat</option><option>bird</option><option>car</option><option>motion</option></select>
-          <select id="periodFilter"><option value="day">Tag</option><option value="week" selected>Woche</option><option value="month">Monat</option></select>
-        </div>
+        <div class="section-head"><h3>Kameraübersicht</h3><div id="globalSummary" class="muted"></div></div>
         <div id="cameraCards" class="camera-grid"></div>
       </section>
 
@@ -156,9 +151,24 @@
           </div>
         </div>
         <div id="mediaStorageBar" class="media-storage-bar"></div>
-        <div id="mediaGrid" class="media-grid"></div>
-        <div id="mediaLoadMoreBtn" style="text-align:center;margin-top:10px;display:none">
-          <button type="button" class="ghost" style="padding:10px 28px" onclick="loadMoreMedia()">Mehr laden</button>
+        <!-- Level 1: Camera overview cards -->
+        <div id="mediaOverview" class="media-overview-grid"></div>
+        <!-- Level 2: Per-camera drill-down -->
+        <div id="mediaDrilldown" style="display:none">
+          <div class="media-drill-head">
+            <button type="button" class="media-drill-back" onclick="closeMediaDrilldown()">← Alle Kameras</button>
+            <select id="mediaDrillLabel" onchange="state.mediaLabel=this.value;loadMedia().then(()=>renderMediaGrid())">
+              <option value="">Alle Objekte</option>
+              <option>person</option><option>cat</option><option>bird</option><option>car</option><option>motion</option>
+            </select>
+            <select id="mediaDrillPeriod" onchange="state.mediaPeriod=this.value;loadMedia().then(()=>renderMediaGrid())">
+              <option value="day">Tag</option><option value="week" selected>Woche</option><option value="month">Monat</option>
+            </select>
+          </div>
+          <div id="mediaGrid" class="media-grid"></div>
+          <div id="mediaLoadMoreBtn" style="text-align:center;margin-top:10px;display:none">
+            <button type="button" class="ghost" style="padding:10px 28px" onclick="loadMoreMedia()">Mehr laden</button>
+          </div>
         </div>
 
         <div class="set-section" id="set-media-config" style="margin-top:14px">

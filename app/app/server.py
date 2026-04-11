@@ -528,6 +528,17 @@ def api_event_delete(cam_id, event_id):
     return jsonify({"ok": True, **result})
 
 
+@app.post('/api/camera/<cam_id>/events/<event_id>/confirm')
+def api_event_confirm(cam_id, event_id):
+    event = store.get_event(cam_id, event_id)
+    if not event:
+        return jsonify({"ok": False, "error": "Event nicht gefunden"}), 404
+    event["confirmed"] = True
+    event["confirmed_at"] = datetime.now().isoformat(timespec="seconds")
+    store.update_event(cam_id, event_id, event)
+    return jsonify({"ok": True})
+
+
 @app.post('/api/camera/<cam_id>/review/<event_id>')
 def api_camera_review(cam_id, event_id):
     payload = request.get_json(force=True, silent=True) or {}
