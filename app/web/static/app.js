@@ -41,6 +41,7 @@ async function loadMedia(){
 function renderShell(){
   byId('appName').textContent=state.config.app.name||'TAM-spy';
   byId('sideAppName').textContent=state.config.app.name||'TAM-spy';
+  const tb=byId('topbarTitle'); if(tb) tb.textContent=state.config.app.name||'TAM-spy';
   byId('appTagline').textContent=state.config.app.tagline||'Schlicht, funktional, analytisch';
   byId('cameraFilter').innerHTML='<option value="">Alle Kameras</option>'+state.cameras.map(c=>`<option value="${esc(c.id)}" ${state.camera===c.id?'selected':''}>${esc(c.name)}</option>`).join('');
   byId('groupSelect').innerHTML=state.groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
@@ -55,15 +56,17 @@ function cardStats(cam){
 }
 
 function renderDashboard(){
+  const coralActive=(state.config?.coral?.mode||'').toLowerCase()==='coral';
   const cams=(state.camera?state.cameras.filter(c=>c.id===state.camera):state.cameras);
   byId('cameraCards').innerHTML=cams.map(c=>`<article class="camera-card">
       <div class="stream">
-        <img src="${esc(c.snapshot_url)}&t=${Date.now()}" alt="${esc(c.name)}" />
+        <img src="${esc(c.snapshot_url)}?t=${Date.now()}" alt="${esc(c.name)}" />
         <div class="badges">
           <span class="badge ${c.status==='ok'?'good':'warn'}">${esc(c.status||'—')}</span>
           <span class="badge">${esc(c.group_id||'ohne Gruppe')}</span>
           <span class="badge ${c.armed?'danger':'good'}">${c.armed?'scharf':'unscharf'}</span>
           <span class="badge">Heute ${c.today_events||0}</span>
+          ${!coralActive?'<span class="badge motion-only">Nur Bewegungserkennung aktiv</span>':''}
         </div>
       </div>
       <div>
@@ -82,14 +85,19 @@ function renderDashboard(){
         </div>
       </div>
     </article>`).join('');
-  byId('mediaGrid').innerHTML=state.media.map(item=>`<article class="media-card">
-      <img src="${esc(item.snapshot_url||'')}" alt="event" />
+  const _mediaItems=state.media;
+  byId('mediaGrid').innerHTML=_mediaItems.map(item=>{
+    const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
+    return `<article class="media-card" data-event-id="${esc(item.event_id||'')}" style="cursor:pointer" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
+      <img src="${esc(imgSrc)}" alt="event" loading="lazy" />
       <div class="media-meta">
         <strong>${esc(item.camera_id)}</strong>
         <div class="small">${esc(item.time||'')}</div>
         <div class="chip-row">${(item.labels||[]).map(l=>`<span class="chip">${esc(l)}</span>`).join('')}</div>
       </div>
-    </article>`).join('')||'<div class="item">Noch keine Medien.</div>';
+    </article>`;
+  }).join('')||'<div class="item">Noch keine Medien.</div>';
+  window._openMediaItem=id=>{const item=_mediaItems.find(x=>x.event_id===id); if(item) openLightbox(item);};
 }
 
 function renderTimeline(){
@@ -107,7 +115,14 @@ function renderTimeline(){
   tracks.forEach((tr,i)=>{ out+=`<line x1="${left}" y1="${y(i)}" x2="${w-right}" y2="${y(i)}" stroke="#213241" stroke-width="1"/>`;
     out+=`<text x="18" y="${y(i)+5}" fill="#91a4b8" font-size="14">${esc(tr.camera_id)}</text>`;
   });
-  for(let k=0;k<6;k++){ const tx=left+((w-left-right)/5)*k; out+=`<line x1="${tx}" y1="${top-10}" x2="${tx}" y2="${h-bottom}" stroke="#172532" stroke-width="1"/>`; }
+  // X-axis grid + time labels
+  for(let k=0;k<6;k++){
+    const tx=left+((w-left-right)/5)*k;
+    const t=new Date(min+((max-min)/5)*k);
+    const label=t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
+    out+=`<line x1="${tx}" y1="${top-10}" x2="${tx}" y2="${h-bottom}" stroke="#172532" stroke-width="1"/>`;
+    out+=`<text x="${tx}" y="${h-bottom+16}" fill="#566d84" font-size="11" text-anchor="middle">${label}</text>`;
+  }
   points.forEach(p=>{ const cx=x(p.time), cy=y(tracks.findIndex(t=>t.camera_id===p.camera_id)); const fill=colors[p.top_label]||colors.unknown; const r=p.alarm_level==='alarm'?9:6; out+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" stroke="#fff" stroke-opacity=".35"/>`; });
   svg.innerHTML=out;
 }
@@ -125,6 +140,10 @@ const RTSP_PATH_OPTS=[
   {label:'Generic /live',    value:'/live'},
 ];
 
+// Encode only URL-reserved chars that break parsing (?=query, @=host, #=fragment)
+// ! is allowed unencoded in userinfo per RFC 3986
+function _rtspEnc(s){ return (s||'').replace(/%/g,'%25').replace(/\?/g,'%3F').replace(/@/g,'%40').replace(/#/g,'%23'); }
+
 function initRtspBuilder(){
   const sel=byId('rtspPathSelect');
   if(!sel.options.length) RTSP_PATH_OPTS.forEach(p=>{const o=document.createElement('option');o.value=p.value;o.textContent=p.label;sel.appendChild(o);});
@@ -136,12 +155,12 @@ function initRtspBuilder(){
     const port=(f['rtsp_port']?.value||'554').trim();
     const path=f['rtsp_path']?.value||'';
     if(!ip){f['rtsp_url'].value='';return;}
-    const auth=user?(encodeURIComponent(user)+(pass?':'+encodeURIComponent(pass):'')+'@'):'';
+    const auth=user?(user+(pass?':'+_rtspEnc(pass):'')+'@'):'';
     const portPart=port&&port!=='554'?':'+port:'';
     f['rtsp_url'].value=`rtsp://${auth}${ip}${portPart}${path}`;
     // auto-fill snapshot if empty
     if(!f['snapshot_url']?.value && user)
-      f['snapshot_url'].value=`http://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${ip}/cgi-bin/snapshot.cgi`;
+      f['snapshot_url'].value=`http://${user}:${_rtspEnc(pass)}@${ip}/cgi-bin/snapshot.cgi`;
   };
   ['rtsp_ip','rtsp_user','rtsp_pass','rtsp_port'].forEach(n=>f[n]?.addEventListener('input',rebuild));
   sel.addEventListener('change',rebuild);
@@ -155,32 +174,87 @@ function parseRtspUrl(url){
 }
 
 function renderCameraSettings(){
-  byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`<div class="item"><div class="item-head"><strong>${esc(c.name)}</strong><button class="action-btn" onclick="editCamera('${esc(c.id)}')">Bearbeiten</button></div><div class="small">${esc(c.location||'')} · ${esc(c.group_id||'—')} · ${c.armed?'scharf':'unscharf'}</div></div>`).join('');
+  byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`<div class="item" data-camid="${esc(c.id)}"><div class="item-head"><strong>${esc(c.name)}</strong><button class="action-btn" onclick="editCamera('${esc(c.id)}')">Bearbeiten</button></div><div class="small">${esc(c.location||'')} · ${esc(c.group_id||'—')} · ${c.armed?'scharf':'unscharf'}</div></div>`).join('');
+}
+
+// ── Whitelist chips ───────────────────────────────────────────────────────────
+let _whitelistState=[];
+function _renderWhitelistChips(profiles,selected){
+  _whitelistState=[...(selected||[])];
+  const el=byId('whitelistChipsContainer'); if(!el) return;
+  if(!profiles.length){el.innerHTML='<span class="small muted">Keine Profile vorhanden</span>'; _updateWhitelistHidden(); return;}
+  el.innerHTML=profiles.map(p=>`<span class="wl-chip ${_whitelistState.includes(p.name)?'selected':''}" onclick="toggleWlChip('${esc(p.name)}')">${esc(p.name)}</span>`).join('');
+  _updateWhitelistHidden();
+}
+window.toggleWlChip=function(name){
+  const idx=_whitelistState.indexOf(name);
+  if(idx>=0) _whitelistState.splice(idx,1); else _whitelistState.push(name);
+  document.querySelectorAll('.wl-chip').forEach(c=>c.classList.toggle('selected',_whitelistState.includes(c.textContent)));
+  _updateWhitelistHidden();
+};
+function _updateWhitelistHidden(){
+  const f=byId('cameraForm')?.elements;
+  if(f&&f['whitelist_names']) f['whitelist_names'].value=_whitelistState.join(',');
+}
+
+// ── Camera form one-time listeners ───────────────────────────────────────────
+let _camFormInited=false;
+function _initCameraFormListeners(){
+  if(_camFormInited) return; _camFormInited=true;
+  const f=byId('cameraForm').elements;
+  // Auto-generate ID from name (only for new cameras)
+  f['name']?.addEventListener('input',()=>{
+    if(f['id'].dataset.autoGen==='1')
+      f['id'].value='cam-'+f['name'].value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+  });
+  // Armed → show/hide schedule
+  f['armed']?.addEventListener('change',()=>{ byId('camScheduleSection')?.classList.toggle('hidden',!f['armed'].checked); });
+  // Timelapse toggle
+  f['timelapse_enabled']?.addEventListener('change',()=>{ byId('timelapseSettingsPanel')?.classList.toggle('hidden',!f['timelapse_enabled'].checked); });
+  // Timelapse sliders
+  f['tl_daily_seconds']?.addEventListener('input',()=>{ byId('tlDailyLabel').textContent=f['tl_daily_seconds'].value+'s'; });
+  f['tl_weekly_seconds']?.addEventListener('input',()=>{ byId('tlWeeklyLabel').textContent=f['tl_weekly_seconds'].value+'s'; });
 }
 
 function editCamera(camId){
-  const c=state.config.cameras.find(x=>x.id===camId)||state.cameras.find(x=>x.id===camId); if(!c) return;
+  const c=(state.config?.cameras||[]).find(x=>x.id===camId)||(state.cameras||[]).find(x=>x.id===camId); if(!c){console.error('editCamera: camera not found',camId); return;}
+  _initCameraFormListeners();
   initRtspBuilder();
   const f=byId('cameraForm').elements;
-  f['id'].value=c.id||''; f['name'].value=c.name||''; f['location'].value=c.location||'';
-  // parse RTSP URL into builder fields
+  f['id'].value=c.id||''; f['id'].dataset.autoGen='0';
+  f['name'].value=c.name||''; f['location'].value=c.location||'';
+  byId('cameraEditTitle').textContent=`Kamera bearbeiten · ${c.name||c.id}`;
   const p=parseRtspUrl(c.rtsp_url||'');
   f['rtsp_ip'].value=p.host||''; f['rtsp_user'].value=p.user||''; f['rtsp_pass'].value=p.pass||''; f['rtsp_port'].value=p.port||'554';
-  // pick closest path option or keep first
   const matchedPath=RTSP_PATH_OPTS.find(o=>o.value===p.path);
   if(f['rtsp_path']) f['rtsp_path'].value=matchedPath?matchedPath.value:RTSP_PATH_OPTS[0].value;
   f['rtsp_url'].value=c.rtsp_url||'';
   f['snapshot_url'].value=c.snapshot_url||''; f['group_id'].value=c.group_id||'';
-  f['object_filter'].value=(c.object_filter||[]).join(','); f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed; f['timelapse_enabled'].checked=!!(c.timelapse&&c.timelapse.enabled);
+  f['object_filter'].value=(c.object_filter||[]).join(',');
+  f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed;
+  byId('camScheduleSection')?.classList.toggle('hidden',!c.armed);
   f['schedule_start'].value=(c.schedule&&c.schedule.start)||''; f['schedule_end'].value=(c.schedule&&c.schedule.end)||''; f['schedule_enabled'].checked=!!(c.schedule&&c.schedule.enabled);
-  f['telegram_enabled'].checked=(c.telegram_enabled!==false); f['mqtt_enabled'].checked=(c.mqtt_enabled!==false); f['whitelist_names'].value=(c.whitelist_names||[]).join(',');
+  f['telegram_enabled'].checked=(c.telegram_enabled!==false); f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
+  // Timelapse
+  const tlOn=!!(c.timelapse&&c.timelapse.enabled);
+  f['timelapse_enabled'].checked=tlOn; byId('timelapseSettingsPanel')?.classList.toggle('hidden',!tlOn);
+  const tlDaily=(c.timelapse&&c.timelapse.daily_target_seconds)||60;
+  const tlWeekly=(c.timelapse&&c.timelapse.weekly_target_seconds)||180;
+  if(f['tl_daily_seconds']){f['tl_daily_seconds'].value=tlDaily; byId('tlDailyLabel').textContent=tlDaily+'s';}
+  if(f['tl_weekly_seconds']){f['tl_weekly_seconds'].value=tlWeekly; byId('tlWeeklyLabel').textContent=tlWeekly+'s';}
+  if(f['timelapse_telegram']) f['timelapse_telegram'].checked=!!(c.timelapse&&c.timelapse.telegram_send);
+  // Whitelist chips
+  j('/api/persons').then(r=>_renderWhitelistChips(r.profiles||[],c.whitelist_names||[])).catch(()=>_renderWhitelistChips([],c.whitelist_names||[]));
   shapeState.camera=camId; shapeState.zones=JSON.parse(JSON.stringify(c.zones||[])); shapeState.masks=JSON.parse(JSON.stringify(c.masks||[])); shapeState.points=[];
   f['zones_json'].value=JSON.stringify(shapeState.zones); f['masks_json'].value=JSON.stringify(shapeState.masks);
-  // update delete button state
   byId('deleteCameraBtn').dataset.camId=camId;
-  loadMaskSnapshot(camId);
-  drawShapes();
-  location.hash='#cameras';
+  loadMaskSnapshot(camId); drawShapes();
+  const wrapper=byId('cameraEditWrapper');
+  // Move wrapper directly after the clicked camera row (inline slide-in)
+  const camRow=byId('cameraSettingsList')?.querySelector(`[data-camid="${camId}"]`);
+  if(camRow) camRow.insertAdjacentElement('afterend',wrapper);
+  wrapper.classList.remove('hidden');
+  setTimeout(()=>wrapper.scrollIntoView({behavior:'smooth',block:'nearest'}),50);
 }
 window.editCamera=editCamera;
 
@@ -190,12 +264,55 @@ byId('deleteCameraBtn').onclick=async()=>{
   if(!confirm(`Kamera "${camId}" wirklich löschen?\n\nDieser Vorgang entfernt die Kamera aus der Konfiguration.\nEreignisse und Medien bleiben im Speicher erhalten.`)) return;
   const r=await j(`/api/settings/cameras/${encodeURIComponent(camId)}`,{method:'DELETE'});
   if(r.event_count>0) alert(`Hinweis: Für diese Kamera existieren noch ${r.event_count} gespeicherte Ereignisse im Storage. Sie wurden NICHT gelöscht.`);
+  // Clear form so deleted camera's data doesn't linger
+  byId('cameraForm').reset();
+  byId('deleteCameraBtn').dataset.camId='';
+  byId('maskSnapshot').src='';
+  shapeState.camera=null; shapeState.zones=[]; shapeState.masks=[]; shapeState.points=[];
+  const ctx=getCanvasCtx(); ctx.clearRect(0,0,byId('maskCanvas').width,byId('maskCanvas').height);
+  byId('cameraEditWrapper').classList.add('hidden');
   await loadAll();
 };
 
-function renderGroups(){ byId('groupList').innerHTML=state.groups.map(g=>`<div class="item"><div class="item-head"><strong>${esc(g.name)}</strong><button class="action-btn" onclick='fillGroupForm(${JSON.stringify(g).replace(/'/g,"&apos;")})'>Bearbeiten</button></div><div class="small">${esc(g.category)} · ${esc(g.alarm_profile)} · ${(g.fine_models||[]).join(', ')||'ohne Feinstufe'}</div></div>`).join(''); }
-function fillGroupForm(g){const f=byId('groupForm').elements; f['id'].value=g.id||''; f['name'].value=g.name||''; f['category'].value=g.category||''; f['alarm_profile'].value=g.alarm_profile||'soft'; f['coarse_objects'].value=(g.coarse_objects||[]).join(','); f['fine_models'].value=(g.fine_models||[]).join(','); f['schedule_start'].value=(g.schedule&&g.schedule.start)||''; f['schedule_end'].value=(g.schedule&&g.schedule.end)||''; f['schedule_enabled'].checked=!!(g.schedule&&g.schedule.enabled); }
-window.fillGroupForm=fillGroupForm;
+function renderGroups(){ byId('groupList').innerHTML=state.groups.map(g=>`<div class="item" data-gid="${esc(g.id)}"><div class="item-head"><strong>${esc(g.name)}</strong><button class="action-btn" onclick='toggleGroupEdit(${JSON.stringify(g).replace(/'/g,"&apos;")})'>Bearbeiten</button></div><div class="small">${esc(g.category)} · ${esc(g.alarm_profile)} · ${(g.fine_models||[]).join(', ')||'ohne Feinstufe'}</div></div>`).join(''); }
+
+function groupEditHTML(g){
+  const s=g.schedule||{};
+  return `<div class="group-inline"><form class="form" onsubmit="saveGroup(event)">
+    <div class="field-wrap"><input name="id" value="${esc(g.id)}" required /><span class="field-label">Eindeutige ID – keine Leerzeichen</span></div>
+    <div class="field-wrap"><input name="name" value="${esc(g.name||'')}" required /><span class="field-label">Anzeigename</span></div>
+    <div class="field-wrap"><input name="category" value="${esc(g.category||'')}" required /><span class="field-label">Kategorie</span></div>
+    <div class="field-wrap"><select name="alarm_profile">${['hard','medium','soft','info'].map(p=>`<option${g.alarm_profile===p?' selected':''}>${p}</option>`).join('')}</select><span class="field-label">Alarmprofil</span></div>
+    <div class="field-wrap"><input name="coarse_objects" value="${esc((g.coarse_objects||[]).join(', '))}" placeholder="person, cat, bird, car, motion" /><span class="field-label">Grob-Objekte – kommagetrennt</span></div>
+    <div class="field-wrap"><input name="fine_models" value="${esc((g.fine_models||[]).join(', '))}" placeholder="bird_species, cat_identity, person_identity" /><span class="field-label">Fine-Models – kommagetrennt</span></div>
+    <div class="settings-divider">Zeitplan</div>
+    <label class="toggle-row"><span>Zeitplan aktiv</span><label class="switch"><input type="checkbox" name="schedule_enabled"${s.enabled?' checked':''} /><span class="slider"></span></label></label>
+    <div class="row" style="grid-template-columns:1fr 1fr">
+      <div class="field-wrap"><input name="schedule_start" value="${esc(s.start||'')}" placeholder="22:00" /><span class="field-label">Von</span></div>
+      <div class="field-wrap"><input name="schedule_end" value="${esc(s.end||'')}" placeholder="06:00" /><span class="field-label">Bis</span></div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button style="flex:1">Gruppe speichern</button>
+      <button type="button" class="ghost" style="flex:0 0 auto" onclick="this.closest('.group-inline').remove()">Abbrechen</button>
+    </div>
+  </form></div>`;
+}
+function toggleGroupEdit(g){
+  document.querySelectorAll('.group-inline').forEach(el=>el.remove());
+  const item=document.querySelector('[data-gid="'+g.id+'"]');
+  if(!item) return;
+  item.insertAdjacentHTML('beforeend',groupEditHTML(g));
+  item.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+window.toggleGroupEdit=toggleGroupEdit;
+async function saveGroup(e){
+  e.preventDefault();
+  const f=e.target.elements;
+  const payload={id:f['id'].value,name:f['name'].value,category:f['category'].value,alarm_profile:f['alarm_profile'].value,coarse_objects:f['coarse_objects'].value.split(',').map(x=>x.trim()).filter(Boolean),fine_models:f['fine_models'].value.split(',').map(x=>x.trim()).filter(Boolean),schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'}};
+  await fetch('/api/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  await loadAll();
+}
+window.saveGroup=saveGroup;
 
 async function renderProfiles(){
   const cats=await j('/api/cats'); const persons=await j('/api/persons');
@@ -309,8 +426,8 @@ window.applyDiscoveryRtsp=(ip)=>{
   const user=byId(`disc_user_${uid}`)?.value||'admin';
   const pass=byId(`disc_pass_${uid}`)?.value||'';
   const path=byId(`disc_path_${uid}`)?.value||'/Streaming/Channels/101';
-  const rtsp=`rtsp://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${ip}:554${path}`;
-  const snap=`http://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${ip}/cgi-bin/snapshot.cgi`;
+  const rtsp=`rtsp://${user}:${_rtspEnc(pass)}@${ip}:554${path}`;
+  const snap=`http://${user}:${_rtspEnc(pass)}@${ip}/cgi-bin/snapshot.cgi`;
   const wizRtsp=byId('wiz_cam_rtsp'); if(wizRtsp) wizRtsp.value=rtsp;
   const wizSnap=byId('wiz_cam_snapshot'); if(wizSnap) wizSnap.value=snap;
   const form=byId('cameraForm');
@@ -331,13 +448,36 @@ byId('cameraForm').onsubmit=async(e)=>{
     object_filter:f['object_filter'].value.split(',').map(x=>x.trim()).filter(Boolean),
     enabled:f['enabled'].checked,armed:f['armed'].checked,
     telegram_enabled:f['telegram_enabled'].checked,mqtt_enabled:f['mqtt_enabled'].checked,
-    whitelist_names:f['whitelist_names'].value.split(',').map(x=>x.trim()).filter(Boolean),
-    timelapse:{enabled:f['timelapse_enabled'].checked,fps:12},
+    whitelist_names:_whitelistState.filter(Boolean),
+    timelapse:{enabled:f['timelapse_enabled'].checked,fps:12,daily_target_seconds:parseInt(f['tl_daily_seconds']?.value||'60'),weekly_target_seconds:parseInt(f['tl_weekly_seconds']?.value||'180'),telegram_send:!!(f['timelapse_telegram']?.checked)},
     schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},
     zones:JSON.parse(f['zones_json'].value||'[]'),masks:JSON.parse(f['masks_json'].value||'[]')};
   await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll(); editCamera(payload.id);
 };
-byId('groupForm').onsubmit=async(e)=>{e.preventDefault(); const f=e.target.elements; const payload={id:f['id'].value,name:f['name'].value,category:f['category'].value,alarm_profile:f['alarm_profile'].value,coarse_objects:f['coarse_objects'].value.split(',').map(x=>x.trim()).filter(Boolean),fine_models:f['fine_models'].value.split(',').map(x=>x.trim()).filter(Boolean),schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'}}; await fetch('/api/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll();};
+byId('closeCameraEdit').onclick=()=>{ byId('cameraEditWrapper').classList.add('hidden'); };
+byId('addCameraBtn').onclick=()=>{
+  _initCameraFormListeners();
+  byId('cameraForm').reset();
+  const f=byId('cameraForm').elements;
+  f['id'].value=''; f['id'].dataset.autoGen='1';
+  byId('cameraEditTitle').textContent='Neue Kamera';
+  if(state.groups[0]) f['group_id'].value=state.groups[0].id;
+  byId('camScheduleSection')?.classList.remove('hidden');
+  byId('timelapseSettingsPanel')?.classList.add('hidden');
+  byId('tlDailyLabel').textContent='60s'; byId('tlWeeklyLabel').textContent='180s';
+  j('/api/persons').then(r=>_renderWhitelistChips(r.profiles||[],[])).catch(()=>_renderWhitelistChips([],[]));
+  shapeState.camera=null; shapeState.zones=[]; shapeState.masks=[]; shapeState.points=[];
+  f['zones_json'].value='[]'; f['masks_json'].value='[]';
+  byId('deleteCameraBtn').dataset.camId='';
+  byId('maskSnapshot').src='';
+  byId('cameraEditWrapper').classList.remove('hidden');
+  byId('cameraEditWrapper').scrollIntoView({behavior:'smooth',block:'nearest'});
+};
+byId('addGroupBtn').onclick=()=>{
+  document.querySelectorAll('.group-inline').forEach(el=>el.remove());
+  byId('groupList').insertAdjacentHTML('beforeend',`<div class="item" data-gid="">${groupEditHTML({id:'',name:'',category:'',alarm_profile:'soft',coarse_objects:[],fine_models:[],schedule:{enabled:false,start:'22:00',end:'06:00'}})}</div>`);
+  byId('groupList').lastElementChild.scrollIntoView({behavior:'smooth',block:'nearest'});
+};
 byId('settingsForm').onsubmit=async(e)=>{e.preventDefault(); const f=e.target.elements; const payload={app:{name:f['app_name'].value||'TAM-spy',tagline:f['app_tagline'].value||'',logo:f['app_logo'].value||'🐈‍⬛'},server:{public_base_url:f['public_base_url'].value||'',default_discovery_subnet:f['discovery_subnet'].value||'192.168.1.0/24'},telegram:{enabled:f['telegram_enabled'].checked,token:f['telegram_token'].value||'',chat_id:f['telegram_chat_id'].value||''},mqtt:{enabled:f['mqtt_enabled'].checked,host:f['mqtt_host'].value||'',port:Number(f['mqtt_port'].value||1883),username:f['mqtt_username'].value||'',password:f['mqtt_password'].value||'',base_topic:f['mqtt_base_topic'].value||'tam-spy'},processing:{coral_enabled:f['coral_enabled'].checked,bird_species_enabled:f['bird_species_enabled'].checked}}; await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll();};
 
 byId('exportJsonBtn').onclick=()=>download('/api/settings/export?format=json');
@@ -364,4 +504,99 @@ byId('wizPrev').onclick=()=>{ wizStep=Math.max(1,wizStep-1); showWizardStep(wizS
 byId('wizNext').onclick=()=>{ wizStep=Math.min(4,wizStep+1); showWizardStep(wizStep); };
 byId('wizFinish').onclick=()=>finishWizard();
 
+// ── Sidebar ───────────────────────────────────────────────────���───────────────
+(function initSidebar(){
+  const sidebar=byId('sidebar');
+  const hamburger=byId('hamburgerBtn');
+  const overlay=byId('sidebarOverlay');
+  const STORAGE_KEY='tspy_sidebar_collapsed';
+
+  function setCollapsed(yes){
+    sidebar.classList.toggle('collapsed',yes);
+    try{localStorage.setItem(STORAGE_KEY,yes?'1':'0');}catch{}
+  }
+
+  // Initial state: desktop=restore from localStorage, tablet=collapsed, mobile=hidden
+  if(window.innerWidth>768){
+    const saved=localStorage.getItem(STORAGE_KEY);
+    // On tablet (<1024px) default to collapsed unless user explicitly pinned open
+    setCollapsed(window.innerWidth<=1024 ? saved!=='0' : saved==='1');
+  }
+
+  if(hamburger) hamburger.onclick=()=>{
+    sidebar.classList.add('mobile-open');
+    overlay.classList.add('visible');
+    document.body.style.overflow='hidden';
+  };
+
+  if(overlay) overlay.onclick=()=>{
+    sidebar.classList.remove('mobile-open');
+    overlay.classList.remove('visible');
+    document.body.style.overflow='';
+  };
+
+  document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>{
+    if(window.innerWidth<=768){
+      sidebar.classList.remove('mobile-open');
+      overlay.classList.remove('visible');
+      document.body.style.overflow='';
+    }
+  }));
+})();
+
+// ── Logs ─────────────────────────────────────────────────────────────────────
+async function loadLogs(){
+  const level=byId('logLevelFilter')?.value||'INFO';
+  try{
+    const r=await j(`/api/logs?level=${level}`);
+    renderLogs(r.logs||[]);
+  }catch(e){
+    byId('logOutput').innerHTML=`<div class="log-row ERROR"><span class="log-ts">--:--:--</span><span class="log-level">ERROR</span><span>${esc(String(e))}</span></div>`;
+  }
+}
+function renderLogs(logs){
+  const out=byId('logOutput');
+  if(!logs.length){out.innerHTML='<div class="log-row INFO"><span class="log-ts">—</span><span class="log-level">—</span><span>Keine Log-Einträge auf diesem Level.</span></div>'; return;}
+  out.innerHTML=logs.map(l=>`<div class="log-row ${esc(l.level)}"><span class="log-ts">${esc(l.ts||'')}</span><span class="log-level">${esc(l.level||'')}</span><span>${esc(l.msg||'')}</span></div>`).join('');
+  out.scrollTop=out.scrollHeight;
+}
+byId('logRefreshBtn').onclick=loadLogs;
+byId('logClearBtn').onclick=()=>{byId('logOutput').innerHTML='';};
+byId('logLevelFilter').onchange=loadLogs;
+
+// ── Lightbox / Media viewer ───────────────────────────────────────────────────
+let _lbItem=null;
+function openLightbox(item){
+  _lbItem=item;
+  const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
+  byId('lightboxImg').src=imgSrc;
+  byId('lightboxMeta').innerHTML=`
+    <span class="badge">${esc(item.camera_id||'')}</span>
+    <span class="badge">${esc(item.time||'')}</span>
+    ${(item.labels||[]).map(l=>`<span class="chip">${esc(l)}</span>`).join('')}`;
+  byId('lightboxModal').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function closeLightbox(){
+  byId('lightboxModal').classList.add('hidden');
+  document.body.style.overflow='';
+  _lbItem=null;
+}
+byId('lightboxClose').onclick=closeLightbox;
+byId('lightboxModal').onclick=(e)=>{if(e.target===byId('lightboxModal')) closeLightbox();};
+document.addEventListener('keydown',(e)=>{if(e.key==='Escape') closeLightbox();});
+byId('lightboxConfirm').onclick=()=>{closeLightbox();};
+byId('lightboxDelete').onclick=async()=>{
+  if(!_lbItem) return;
+  const{camera_id,event_id}=_lbItem;
+  if(!camera_id||!event_id) return;
+  try{
+    await j(`/api/camera/${encodeURIComponent(camera_id)}/events/${encodeURIComponent(event_id)}`,{method:'DELETE'});
+    const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(event_id)}"]`);
+    if(card) card.remove();
+    closeLightbox();
+  }catch(e){alert('Löschen fehlgeschlagen: '+e.message);}
+};
+
 loadAll();
+loadLogs();

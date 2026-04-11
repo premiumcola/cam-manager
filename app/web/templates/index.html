@@ -8,6 +8,11 @@
   <link rel="stylesheet" href="/static/app.css" />
 </head>
 <body>
+  <div class="topbar">
+    <button id="hamburgerBtn" class="hamburger-btn" type="button">☰</button>
+    <span class="topbar-title" id="topbarTitle">TAM-spy</span>
+  </div>
+  <div id="sidebarOverlay" class="sidebar-overlay"></div>
   <div id="wizard" class="wizard hidden">
     <div class="wizard-card panel">
       <div class="wizard-head">
@@ -80,25 +85,24 @@
   </div>
 
   <div class="shell">
-    <aside class="sidebar panel">
+    <aside class="sidebar panel" id="sidebar">
       <div class="brand">
-        <div class="logo">🐈‍⬛</div>
-        <div>
+        <div class="brand-text">
           <div class="eyebrow" id="sideAppName">TAM-spy</div>
-          <h1>Analyse & Sicherheit</h1>
-          <div class="muted">PoE · Coral · MQTT · Telegram</div>
+          <h1>Analyse &amp; Sicherheit</h1>
+          <div class="muted">PoE · Coral · MQTT</div>
         </div>
       </div>
       <nav class="nav">
-        <a href="#dashboard">Dashboard</a>
-        <a href="#timeline">Timeline</a>
-        <a href="#media">Mediathek</a>
-        <a href="#cameras">Kameras</a>
-        <a href="#groups">Kameragruppen</a>
-        <a href="#profiles">Profile</a>
-        <a href="#telegram">Telegram</a>
-        <a href="#settings">Einstellungen</a>
-        <a href="#logs">Logs</a>
+        <a href="#dashboard" title="Dashboard"><span class="nav-icon">📊</span><span class="nav-label">Dashboard</span></a>
+        <a href="#timeline" title="Timeline"><span class="nav-icon">⏱</span><span class="nav-label">Timeline</span></a>
+        <a href="#media" title="Mediathek"><span class="nav-icon">🎞</span><span class="nav-label">Mediathek</span></a>
+        <a href="#cameras" title="Kameras"><span class="nav-icon">📷</span><span class="nav-label">Kameras</span></a>
+        <a href="#groups" title="Kameragruppen"><span class="nav-icon">🗂</span><span class="nav-label">Kameragruppen</span></a>
+        <a href="#profiles" title="Profile"><span class="nav-icon">👤</span><span class="nav-label">Profile</span></a>
+        <a href="#telegram" title="Telegram"><span class="nav-icon">📨</span><span class="nav-label">Telegram</span></a>
+        <a href="#settings" title="Einstellungen"><span class="nav-icon">⚙️</span><span class="nav-label">Einstellungen</span></a>
+        <a href="#logs" title="Logs"><span class="nav-icon">📋</span><span class="nav-label">Logs</span></a>
       </nav>
     </aside>
     <main class="main">
@@ -128,6 +132,15 @@
       <section id="timeline" class="panel section">
         <div class="section-head"><h3>Timeline</h3><div class="muted">Zeitachse je Kamera + globaler Flow</div></div>
         <svg id="timelineSvg" viewBox="0 0 1200 340" preserveAspectRatio="none"></svg>
+        <div class="timeline-legend">
+          <span class="tl-leg-item"><span class="tl-dot" style="background:#7ee787"></span>motion</span>
+          <span class="tl-leg-item"><span class="tl-dot" style="background:#ffd166"></span>person</span>
+          <span class="tl-leg-item"><span class="tl-dot" style="background:#ff8cc6"></span>cat</span>
+          <span class="tl-leg-item"><span class="tl-dot" style="background:#70d6ff"></span>bird</span>
+          <span class="tl-leg-item"><span class="tl-dot" style="background:#9c89ff"></span>car</span>
+          <span class="tl-leg-item"><span class="tl-dot" style="background:#ff6b6b"></span>alarm</span>
+          <span class="tl-leg-item tl-leg-size">●&nbsp;groß = Alarm · klein = Info</span>
+        </div>
       </section>
 
       <section id="media" class="panel section">
@@ -135,79 +148,90 @@
         <div id="mediaGrid" class="media-grid"></div>
       </section>
 
-      <section id="cameras" class="panel section split two-thirds">
-        <div>
-          <div class="section-head"><h3>Kameras</h3><div class="muted">anlegen, bearbeiten, armed, Timelapse, RTSP</div></div>
-          <div id="cameraSettingsList" class="list"></div>
-        </div>
-        <div>
-          <div class="section-head"><h3>Kamera bearbeiten</h3><div class="muted">inkl. Masken- & Zonen-Editor</div></div>
-          <form id="cameraForm" class="form">
-            <div class="field-wrap">
-              <input name="id" placeholder="cam-werkstatt" required />
-              <span class="field-label">Eindeutige ID – keine Leerzeichen</span>
+      <section id="cameras" class="panel section">
+        <div class="section-head"><h3>Kameras</h3><button type="button" id="addCameraBtn" class="add-btn">+ Neue Kamera</button></div>
+        <div id="cameraSettingsList" class="list"></div>
+        <div id="cameraEditWrapper" class="cam-edit-wrapper hidden">
+          <div class="cam-edit-header">
+            <h3 id="cameraEditTitle">Kamera bearbeiten</h3>
+            <div class="cam-header-badges">
+              <label class="cam-badge-toggle" title="Telegram">
+                <span>📨</span><label class="switch switch-sm"><input type="checkbox" name="telegram_enabled" /><span class="slider"></span></label>
+              </label>
+              <label class="cam-badge-toggle" title="MQTT">
+                <span>🔌</span><label class="switch switch-sm"><input type="checkbox" name="mqtt_enabled" /><span class="slider"></span></label>
+              </label>
             </div>
-            <div class="field-wrap">
-              <input name="name" placeholder="Werkstatt" required />
-              <span class="field-label">Anzeigename</span>
-            </div>
-            <div class="field-wrap">
-              <input name="location" placeholder="Werkbank / Tor" />
-              <span class="field-label">Standortbeschreibung</span>
-            </div>
-
-            <div class="rtsp-builder">
-              <div class="row3">
-                <div class="field-wrap">
-                  <input name="rtsp_ip" placeholder="192.168.X.X" />
-                  <span class="field-label">IP-Adresse der Kamera</span>
-                </div>
-                <div class="field-wrap">
-                  <input name="rtsp_user" placeholder="admin" />
-                  <span class="field-label">Benutzername</span>
-                </div>
-                <div class="field-wrap">
-                  <input name="rtsp_pass" type="password" placeholder="Passwort" />
-                  <span class="field-label">Passwort</span>
+            <button type="button" id="closeCameraEdit" class="close-btn">✕</button>
+          </div>
+          <form id="cameraForm" class="cam-form-compact">
+            <input type="hidden" name="id" />
+            <div class="cam-2col">
+              <div style="display:grid;gap:8px">
+                <div class="field-wrap"><input name="name" placeholder="Werkstatt" required /><span class="field-label">Anzeigename</span></div>
+                <div class="field-wrap"><input name="location" placeholder="Werkbank / Tor" /><span class="field-label">Standort</span></div>
+              </div>
+              <div style="display:grid;gap:8px">
+                <div class="field-wrap"><input name="rtsp_ip" placeholder="192.168.X.X" /><span class="field-label">Kamera-IP</span></div>
+                <div class="cam-userpass">
+                  <div class="field-wrap"><input name="rtsp_user" placeholder="admin" /><span class="field-label">Benutzer</span></div>
+                  <div class="field-wrap"><input name="rtsp_pass" type="password" placeholder="Passwort" /><span class="field-label">Passwort</span></div>
                 </div>
               </div>
-              <div class="row" style="grid-template-columns:1fr 80px">
-                <div class="field-wrap">
-                  <select name="rtsp_path" id="rtspPathSelect"></select>
-                  <span class="field-label">RTSP-Pfad · Kameramodell wählen</span>
-                </div>
-                <div class="field-wrap">
-                  <input name="rtsp_port" placeholder="554" value="554" />
-                  <span class="field-label">Port</span>
+            </div>
+            <div class="row" style="grid-template-columns:1fr 70px">
+              <div class="field-wrap"><select name="rtsp_path" id="rtspPathSelect"></select><span class="field-label">RTSP-Pfad</span></div>
+              <div class="field-wrap"><input name="rtsp_port" placeholder="554" value="554" /><span class="field-label">Port</span></div>
+            </div>
+            <div class="field-wrap"><input name="rtsp_url" readonly style="color:var(--muted);font-size:11px" /><span class="field-label">RTSP-URL (automatisch)</span></div>
+            <div class="field-wrap"><input name="snapshot_url" placeholder="http://…" /><span class="field-label">Snapshot-URL – optional</span></div>
+            <div class="row" style="grid-template-columns:1fr 1fr">
+              <div class="field-wrap"><select name="group_id" id="groupSelect"></select><span class="field-label">Gruppe</span></div>
+              <div class="field-wrap"><input name="object_filter" placeholder="person,cat,bird" /><span class="field-label">Objektfilter</span></div>
+            </div>
+            <label class="toggle-row"><span>Aktiv</span><label class="switch"><input type="checkbox" name="enabled" checked /><span class="slider"></span></label></label>
+            <div class="settings-divider">Alarm &amp; Zeitplan</div>
+            <label class="toggle-row"><span>Armed – Alarmierung aktiv</span><label class="switch"><input type="checkbox" name="armed" checked /><span class="slider"></span></label></label>
+            <div id="camScheduleSection">
+              <label class="toggle-row" style="margin-top:8px"><span>Zeitplan aktiv</span><label class="switch"><input type="checkbox" name="schedule_enabled" /><span class="slider"></span></label></label>
+              <div class="row" style="grid-template-columns:1fr 1fr;margin-top:8px">
+                <div class="field-wrap"><input name="schedule_start" placeholder="22:00" /><span class="field-label">Von</span></div>
+                <div class="field-wrap"><input name="schedule_end" placeholder="06:00" /><span class="field-label">Bis</span></div>
+              </div>
+            </div>
+            <div class="settings-divider">Personen-Whitelist</div>
+            <div id="whitelistChipsContainer" class="wl-chips"></div>
+            <input type="hidden" name="whitelist_names" />
+            <div class="settings-divider">Timelapse</div>
+            <label class="toggle-row"><span>Timelapse aktiv</span><label class="switch"><input type="checkbox" name="timelapse_enabled" /><span class="slider"></span></label></label>
+            <div id="timelapseSettingsPanel" class="tl-panel hidden">
+              <div class="tl-preset">
+                <div class="tl-preset-head">Tages-Timelapse</div>
+                <div class="tl-slider-row">
+                  <span class="small">Zieldauer</span>
+                  <input type="range" name="tl_daily_seconds" min="30" max="300" step="10" value="60" class="tl-range" />
+                  <span id="tlDailyLabel" class="tl-val">60s</span>
                 </div>
               </div>
-              <div class="field-wrap">
-                <input name="rtsp_url" placeholder="wird automatisch zusammengesetzt …" readonly style="color:var(--muted);font-size:12px" />
-                <span class="field-label">Zusammengesetzte RTSP-URL (schreibgeschützt)</span>
+              <div class="tl-preset">
+                <div class="tl-preset-head">Wochen-Timelapse</div>
+                <div class="tl-slider-row">
+                  <span class="small">Zieldauer</span>
+                  <input type="range" name="tl_weekly_seconds" min="60" max="600" step="30" value="180" class="tl-range" />
+                  <span id="tlWeeklyLabel" class="tl-val">180s</span>
+                </div>
               </div>
+              <label class="toggle-row"><span>Täglich per Telegram senden</span><label class="switch"><input type="checkbox" name="timelapse_telegram" /><span class="slider"></span></label></label>
             </div>
-
-            <div class="field-wrap">
-              <input name="snapshot_url" placeholder="http://admin:pass@192.168.X.X/cgi-bin/snapshot.cgi" />
-              <span class="field-label">Snapshot-URL – optional, JPG-Standbild</span>
-            </div>
-            <select name="group_id" id="groupSelect"></select>
-            <div class="field-wrap">
-              <input name="object_filter" placeholder="person,cat,bird" />
-              <span class="field-label">Objektfilter – kommagetrennt</span>
-            </div>
-            <div class="row"><label><input type="checkbox" name="enabled" checked /> aktiv</label><label><input type="checkbox" name="armed" checked /> armed</label><label><input type="checkbox" name="timelapse_enabled" /> timelapse</label></div>
-            <div class="row3"><input name="schedule_start" placeholder="22:00" /><input name="schedule_end" placeholder="06:00" /><label><input type="checkbox" name="schedule_enabled" /> Zeitplan</label></div>
-            <div class="row"><label><input type="checkbox" name="telegram_enabled" checked /> Telegram</label><label><input type="checkbox" name="mqtt_enabled" checked /> MQTT</label><input name="whitelist_names" placeholder="Bruder,Ich" /></div>
             <input type="hidden" name="zones_json" />
             <input type="hidden" name="masks_json" />
-            <div style="display:flex;gap:10px">
-              <button style="flex:1">Speichern & Reload</button>
-              <button type="button" id="deleteCameraBtn" class="ghost danger-btn" style="flex:0 0 auto">Kamera löschen</button>
+            <div class="cam-form-actions">
+              <button class="cam-save-btn">Speichern &amp; Reload</button>
+              <button type="button" id="deleteCameraBtn" class="cam-delete-btn">Kamera löschen</button>
             </div>
           </form>
           <div class="mask-editor panel inset">
-            <div class="section-head"><h3>Masken & Zonen</h3><div class="muted" id="shapeStatus">Punktweise zeichnen auf dem Snapshot</div></div>
+            <div class="section-head"><h3>Masken &amp; Zonen</h3><div class="muted" id="shapeStatus">Punktweise zeichnen auf dem Snapshot</div></div>
             <div class="shape-toolbar">
               <button class="ghost small-btn" id="refreshMaskSnapshotBtn" type="button">Snapshot aktualisieren</button>
               <button class="ghost small-btn" id="editZoneBtn" type="button">Zone zeichnen</button>
@@ -225,24 +249,15 @@
         </div>
       </section>
 
-      <section id="groups" class="panel section split">
-        <div>
-          <div class="section-head"><h3>Kameragruppen</h3><div class="muted">Rollen, Alarmprofil, Modellstapel</div></div>
-          <div id="groupList" class="list"></div>
+      <section id="groups" class="panel section">
+        <div class="section-head">
+          <h3>Kameragruppen</h3>
+          <div style="display:flex;gap:12px;align-items:center">
+            <div class="muted">Rollen, Alarmprofil, Modellstapel</div>
+            <button type="button" id="addGroupBtn" class="add-btn">+ Neue Gruppe</button>
+          </div>
         </div>
-        <div>
-          <div class="section-head"><h3>Gruppe bearbeiten</h3></div>
-          <form id="groupForm" class="form">
-            <input name="id" placeholder="id" required />
-            <input name="name" placeholder="Name" required />
-            <input name="category" placeholder="Kategorie" required />
-            <select name="alarm_profile"><option>hard</option><option>medium</option><option>soft</option><option>info</option></select>
-            <input name="coarse_objects" placeholder="coarse_objects" />
-            <input name="fine_models" placeholder="fine_models" />
-            <div class="row3"><input name="schedule_start" placeholder="22:00" /><input name="schedule_end" placeholder="06:00" /><label><input type="checkbox" name="schedule_enabled" /> Zeitplan</label></div>
-            <button>Gruppe speichern</button>
-          </form>
-        </div>
+        <div id="groupList" class="list"></div>
       </section>
 
       <section id="profiles" class="panel section split">
@@ -277,10 +292,10 @@
             <input name="app_logo" placeholder="Logo Emoji" />
             <input name="public_base_url" placeholder="Public Base URL" />
             <input name="discovery_subnet" placeholder="Discovery Subnet" />
-            <label><input type="checkbox" name="telegram_enabled" /> Telegram aktiv</label>
+            <label class="toggle-row"><span>Telegram aktiv</span><label class="switch"><input type="checkbox" name="telegram_enabled" /><span class="slider"></span></label></label>
             <input name="telegram_token" placeholder="Telegram Token" />
             <input name="telegram_chat_id" placeholder="Telegram Chat ID" />
-            <label><input type="checkbox" name="mqtt_enabled" /> MQTT aktiv</label>
+            <label class="toggle-row"><span>MQTT aktiv</span><label class="switch"><input type="checkbox" name="mqtt_enabled" /><span class="slider"></span></label></label>
             <input name="mqtt_host" placeholder="MQTT Host" />
             <div class="row3"><input name="mqtt_port" placeholder="1883" /><input name="mqtt_username" placeholder="MQTT Benutzer" /><input name="mqtt_password" placeholder="MQTT Passwort" /></div>
             <input name="mqtt_base_topic" placeholder="Base Topic" />
@@ -326,8 +341,8 @@
               <option value="WARNING">WARNING</option>
               <option value="ERROR">ERROR</option>
             </select>
-            <button id="logRefreshBtn" class="ghost small-btn" type="button">Aktualisieren</button>
-            <button id="logClearBtn" class="ghost small-btn" type="button">Leeren</button>
+            <button id="logRefreshBtn" class="add-btn" type="button">Aktualisieren</button>
+            <button id="logClearBtn" class="add-btn" style="background:#374151" type="button">Leeren</button>
           </div>
         </div>
         <div id="logOutput" class="log-output"></div>
@@ -337,10 +352,26 @@
 
   <div id="discoveryModal" class="modal hidden">
     <div class="modal-card panel">
-      <div class="section-head"><h3>Netzwerk-Discovery</h3><button id="closeDiscoveryBtn" class="close-btn" type="button">✕ Schließen</button></div>
-      <div class="field-help">Gefundene Hosts mit typischen Kamera-Ports. Klick auf "Als RTSP-Beispiel übernehmen" trägt die IP direkt in die Form ein.</div>
+      <div class="modal-inner-head">
+        <h3>Netzwerk-Discovery</h3>
+        <button id="closeDiscoveryBtn" class="close-btn" type="button">✕</button>
+      </div>
+      <div class="field-help">Gefundene Hosts mit typischen Kamera-Ports. Klick auf "Als RTSP übernehmen" trägt die IP direkt in die Form ein.</div>
       <div id="discoveryStatus" class="small muted">Noch keine Suche gestartet.</div>
       <div id="discoveryResults" class="list" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- Lightbox modal for media viewer -->
+  <div id="lightboxModal" class="modal hidden" style="padding:0">
+    <div style="position:relative;max-width:96vw;max-height:96vh;display:flex;flex-direction:column;align-items:center">
+      <button id="lightboxClose" type="button" style="position:absolute;top:-14px;right:-14px;z-index:10;width:36px;height:36px;border-radius:50%;border:none;background:#1f3141;color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+      <img id="lightboxImg" src="" alt="Event" style="max-width:90vw;max-height:76vh;border-radius:18px;object-fit:contain;background:#081119" />
+      <div id="lightboxMeta" style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center"></div>
+      <div style="display:flex;gap:12px;margin-top:14px">
+        <button id="lightboxConfirm" type="button" style="padding:10px 24px;border-radius:12px;border:none;background:#16a34a;color:#fff;font-weight:700;font-size:14px;cursor:pointer">✓ Bestätigen</button>
+        <button id="lightboxDelete" type="button" style="padding:10px 24px;border-radius:12px;border:none;background:#dc2626;color:#fff;font-weight:700;font-size:14px;cursor:pointer">🗑 Löschen</button>
+      </div>
     </div>
   </div>
 
