@@ -71,3 +71,40 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .cam-sched{background:var(--surface);border-radius:14px;padding:10px 12px}.cam-sched summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:600}
 @media (max-width:1200px){.cam-2col{grid-template-columns:1fr}}
 .toggle-row{margin-bottom:0}
+
+/* ── Task 1: Live pulse indicator ───────────────────────────────────────────── */
+.live-dot{display:inline-flex;width:9px;height:9px;border-radius:50%;background:var(--good);animation:live-pulse 2s ease-in-out infinite;margin-left:6px;vertical-align:middle;flex-shrink:0}
+@keyframes live-pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(34,197,94,.5)}60%{opacity:.7;box-shadow:0 0 0 6px rgba(34,197,94,0)}}
+
+/* ── Task 2: Media storage bar ──────────────────────────────────────────────── */
+.media-storage-bar{margin-bottom:10px}
+.storage-bar-inner{display:flex;flex-wrap:wrap;gap:8px}
+.storage-cam-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:var(--surface);font-size:12px}
+.storage-cam-name{font-weight:600}
+.storage-cam-size{color:var(--accent);font-weight:700}
+
+/* ── Task 3: Password field with eye toggle ─────────────────────────────────── */
+.pw-wrap{position:relative}
+.pw-wrap input{padding-right:40px!important}
+.pw-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:15px;color:var(--muted);padding:4px;line-height:1;z-index:2;margin-top:-8px}
+.pw-eye:hover{color:var(--text)}
+
+/* ── Task 4: Collapsible settings sections ──────────────────────────────────── */
+.settings-form{display:grid;gap:6px}
+.set-section{border-radius:16px;background:var(--surface);overflow:hidden}
+.set-hd{width:100%;display:flex;align-items:center;gap:10px;padding:14px 16px;background:none;border:none;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;text-align:left}
+.set-hd:hover{background:rgba(255,255,255,.04)}
+.set-section.open .set-hd{background:rgba(59,130,246,.08)}
+.set-icon{font-size:16px;flex-shrink:0;width:22px;text-align:center}
+.set-chevron{margin-left:auto;font-size:11px;color:var(--muted);transition:transform .22s}
+.set-bd{display:grid;grid-template-rows:0fr;transition:grid-template-rows .33s cubic-bezier(.4,0,.2,1)}
+.set-section.open .set-bd{grid-template-rows:1fr}
+.set-inner{overflow:hidden;min-height:0;padding:0 16px}
+.set-section.open .set-inner{padding:0 16px 16px}
+.settings-save-btn{width:100%;min-height:46px;padding:13px 16px;background:var(--accent);color:#fff;font-weight:700;border:none;border-radius:14px;font-size:15px;cursor:pointer;margin-top:6px}
+.settings-save-btn:hover{background:#2563eb}
+
+/* Import/Export colored buttons */
+.ie-btn{padding:9px 10px;border:none;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;color:#fff;min-height:38px}
+.ie-blue{background:#2563eb}.ie-green{background:#16a34a}.ie-gray{background:#374151}
+.ie-btn:hover{filter:brightness(1.12)}

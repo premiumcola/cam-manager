@@ -145,8 +145,14 @@ def api_config():
             "mode": c.get("processing", {}).get("detection", {}).get("mode", "none"),
             "bird_species_enabled": bool(c.get("processing", {}).get("bird_species", {}).get("enabled")),
         },
-        "telegram": {"enabled": bool(c.get("telegram", {}).get("enabled")), "chat_id": c.get("telegram", {}).get("chat_id", "")},
-        "mqtt": {"enabled": bool(c.get("mqtt", {}).get("enabled")), "base_topic": c.get("mqtt", {}).get("base_topic", "tam-spy")},
+        "telegram": {"enabled": bool(c.get("telegram", {}).get("enabled")), "chat_id": c.get("telegram", {}).get("chat_id", ""), "token": c.get("telegram", {}).get("token", "")},
+        "mqtt": {"enabled": bool(c.get("mqtt", {}).get("enabled")), "base_topic": c.get("mqtt", {}).get("base_topic", "tam-spy"), "host": c.get("mqtt", {}).get("host", ""), "port": c.get("mqtt", {}).get("port", 1883), "username": c.get("mqtt", {}).get("username", ""), "password": c.get("mqtt", {}).get("password", "")},
+        "storage": {
+            "root": str(base_cfg.get("storage", {}).get("root", "/app/storage")),
+            "retention_days": settings.data.get("storage", {}).get("retention_days") or base_cfg.get("storage", {}).get("retention_days", 14),
+            "media_limit_default": settings.data.get("storage", {}).get("media_limit_default") or base_cfg.get("storage", {}).get("media_limit_default", 24),
+            "auto_cleanup_enabled": bool(settings.data.get("storage", {}).get("auto_cleanup_enabled", False)),
+        },
     })
 
 
@@ -246,7 +252,7 @@ def api_settings_app():
 @app.post('/api/settings/app')
 def api_settings_app_save():
     payload = request.get_json(force=True) or {}
-    for sec in ("app", "server", "telegram", "mqtt", "ui"):
+    for sec in ("app", "server", "telegram", "mqtt", "ui", "storage"):
         if sec in payload:
             settings.update_section(sec, payload.get(sec) or {})
     if "processing" in payload:
@@ -299,6 +305,45 @@ def api_wizard_complete():
     settings.update_section("ui", {"wizard_completed": True})
     rebuild_runtimes()
     return jsonify({"ok": True, "bootstrap": settings.bootstrap_state()})
+
+
+@app.get('/api/media/storage-stats')
+def api_media_storage_stats():
+    result = []
+    events_dir = storage_root / "events"
+    for cam in get_effective_config().get("cameras", []):
+        cam_dir = events_dir / cam["id"]
+        size_bytes = 0
+        jpg_count = 0
+        json_count = 0
+        if cam_dir.exists():
+            for p in cam_dir.rglob("*.jpg"):
+                try:
+                    size_bytes += p.stat().st_size
+                    jpg_count += 1
+                except Exception:
+                    pass
+            json_count = len(list(cam_dir.glob("*.json")))
+        result.append({
+            "id": cam["id"],
+            "name": cam.get("name", cam["id"]),
+            "size_mb": round(size_bytes / 1024 / 1024, 1),
+            "jpg_count": jpg_count,
+            "event_count": json_count,
+        })
+    return jsonify({"cameras": result})
+
+
+@app.post('/api/media/cleanup')
+def api_media_cleanup():
+    payload = request.get_json(force=True) or {}
+    storage_sec = settings.data.get("storage", {})
+    retention = int(payload.get("retention_days") or storage_sec.get("retention_days") or base_cfg.get("storage", {}).get("retention_days", 14))
+    try:
+        removed = store.cleanup_old(retention)
+        return jsonify({"ok": True, "removed": removed})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.post('/api/reload')

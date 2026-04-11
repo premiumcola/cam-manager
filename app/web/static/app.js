@@ -25,6 +25,44 @@ function _closeEditPanel(){
   _currentEditCamId=null;
 }
 
+// ── Live update ───────────────────────────────────────────────────────────────
+let _liveUpdateInterval=null;
+const _prevCamStatuses=new Map();
+function startLiveUpdate(){
+  if(_liveUpdateInterval) clearInterval(_liveUpdateInterval);
+  state.cameras.forEach(c=>_prevCamStatuses.set(c.id,c.status));
+  _liveUpdateInterval=setInterval(async()=>{
+    try{
+      const r=await j('/api/cameras');
+      (r.cameras||[]).forEach(c=>{
+        const prev=_prevCamStatuses.get(c.id);
+        if(prev===c.status) return;
+        _prevCamStatuses.set(c.id,c.status);
+        const wasOffline=prev==='starting'||prev==='disabled'||prev==null;
+        // Dashboard card badge
+        const card=byId('cameraCards')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
+        if(card){
+          const sb=card.querySelector('.status-badge');
+          if(sb){sb.className=`badge status-badge ${c.status==='ok'?'good':c.status==='error'?'danger':'warn'}`;sb.textContent=c.status||'—';}
+          if(wasOffline&&(c.status==='ok')){
+            const img=card.querySelector('.cam-snap');
+            if(img){const base=img.src.split('?')[0];img.src=base+'?t='+Date.now();}
+          }
+        }
+        // Camera settings list badge
+        const item=byId('cameraSettingsList')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
+        if(item){
+          const stCol=s=>s==='active'?'good':s==='error'?'danger':'warn';
+          const b=item.querySelector('.badge');
+          if(b){b.className=`badge ${stCol(c.status)}`;b.textContent=c.status||'—';}
+        }
+      });
+    }catch{/* silent */}
+  },3000);
+  const ind=byId('liveIndicator');
+  if(ind) ind.classList.remove('hidden');
+}
+
 async function loadAll(){
   _restoreEditWrapper();
   state.bootstrap=await j('/api/bootstrap');
@@ -34,6 +72,7 @@ async function loadAll(){
   if(!state.camera && state.cameras[0]) state.camera='';
   state.timeline=await j(`/api/timeline?period=${state.period}${state.camera?`&camera=${encodeURIComponent(state.camera)}`:''}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`);
   await loadMedia();
+  await loadMediaStorageStats();
   renderShell();
   renderDashboard();
   renderTimeline();
@@ -77,11 +116,11 @@ function cardStats(cam){
 function renderDashboard(){
   const coralActive=(state.config?.coral?.mode||'').toLowerCase()==='coral';
   const cams=(state.camera?state.cameras.filter(c=>c.id===state.camera):state.cameras);
-  byId('cameraCards').innerHTML=cams.map(c=>`<article class="camera-card">
+  byId('cameraCards').innerHTML=cams.map(c=>`<article class="camera-card" data-camid="${esc(c.id)}">
       <div class="stream">
-        <img src="${esc(c.snapshot_url)}?t=${Date.now()}" alt="${esc(c.name)}" />
+        <img class="cam-snap" src="${esc(c.snapshot_url)}?t=${Date.now()}" alt="${esc(c.name)}" />
         <div class="badges">
-          <span class="badge ${c.status==='ok'?'good':'warn'}">${esc(c.status||'—')}</span>
+          <span class="badge status-badge ${c.status==='ok'?'good':c.status==='error'?'danger':'warn'}">${esc(c.status||'—')}</span>
           <span class="badge">${esc(c.group_id||'ohne Gruppe')}</span>
           <span class="badge ${c.armed?'danger':'good'}">${c.armed?'scharf':'unscharf'}</span>
           <span class="badge">Heute ${c.today_events||0}</span>
@@ -372,6 +411,12 @@ function hydrateSettings(){
   const proc=state.config.processing||{}; const coral=state.config.coral||{};
   f['coral_enabled'].checked=!!(proc.coral_enabled ?? coral.mode==='coral');
   f['bird_species_enabled'].checked=!!(proc.bird_species_enabled ?? coral.bird_species_enabled);
+  // Storage section
+  const storageSec=state.config.storage||{};
+  if(f['retention_days']) f['retention_days'].value=storageSec.retention_days||14;
+  if(f['media_limit_default']) f['media_limit_default'].value=storageSec.media_limit_default||24;
+  if(f['auto_cleanup_enabled']) f['auto_cleanup_enabled'].checked=!!storageSec.auto_cleanup_enabled;
+  if(f['storage_root']) f['storage_root'].value=storageSec.root||'/app/storage';
   const hint=byId('coralStatusHint');
   if(hint){
     const cam=state.cameras[0];
@@ -380,6 +425,10 @@ function hydrateSettings(){
       ? '✅ Coral TPU erkannt und aktiv.'
       : `⚠️ Coral nicht verfügbar: <code>${esc(reason)}</code>`;
   }
+  // Hydrate media settings form
+  const mlEl=byId('ms_media_limit'); if(mlEl) mlEl.value=storageSec.media_limit_default||24;
+  const rdEl=byId('ms_retention_days'); if(rdEl) rdEl.value=storageSec.retention_days||14;
+  const acEl=byId('ms_auto_cleanup'); if(acEl) acEl.checked=!!storageSec.auto_cleanup_enabled;
 }
 
 function getCanvasCtx(){ return byId('maskCanvas').getContext('2d'); }
@@ -520,7 +569,24 @@ byId('addGroupBtn').onclick=()=>{
   byId('groupList').insertAdjacentHTML('beforeend',`<div class="item" data-gid="">${groupEditHTML({id:'',name:'',category:'',alarm_profile:'soft',coarse_objects:[],fine_models:[],schedule:{enabled:false,start:'22:00',end:'06:00'}})}</div>`);
   byId('groupList').lastElementChild.scrollIntoView({behavior:'smooth',block:'nearest'});
 };
-byId('settingsForm').onsubmit=async(e)=>{e.preventDefault(); const f=e.target.elements; const payload={app:{name:f['app_name'].value||'TAM-spy',tagline:f['app_tagline'].value||'',logo:f['app_logo'].value||'🐈‍⬛'},server:{public_base_url:f['public_base_url'].value||'',default_discovery_subnet:f['discovery_subnet'].value||'192.168.1.0/24'},telegram:{enabled:f['telegram_enabled'].checked,token:f['telegram_token'].value||'',chat_id:f['telegram_chat_id'].value||''},mqtt:{enabled:f['mqtt_enabled'].checked,host:f['mqtt_host'].value||'',port:Number(f['mqtt_port'].value||1883),username:f['mqtt_username'].value||'',password:f['mqtt_password'].value||'',base_topic:f['mqtt_base_topic'].value||'tam-spy'},processing:{coral_enabled:f['coral_enabled'].checked,bird_species_enabled:f['bird_species_enabled'].checked}}; await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll();};
+byId('settingsForm').onsubmit=async(e)=>{
+  e.preventDefault(); const f=e.target.elements;
+  // Preserve existing token if the field is still type=password and unchanged (value might be empty if browser masked it)
+  const existingToken=(state.config?.telegram?.token||'');
+  const token=f['telegram_token'].value||existingToken;
+  const existingMqttPass=(state.config?.mqtt?.password||'');
+  const mqttPass=f['mqtt_password'].value||existingMqttPass;
+  const payload={
+    app:{name:f['app_name'].value||'TAM-spy',tagline:f['app_tagline'].value||'',logo:f['app_logo'].value||'🐈‍⬛'},
+    server:{public_base_url:f['public_base_url'].value||'',default_discovery_subnet:f['discovery_subnet'].value||'192.168.1.0/24'},
+    telegram:{enabled:f['telegram_enabled'].checked,token,chat_id:f['telegram_chat_id'].value||''},
+    mqtt:{enabled:f['mqtt_enabled'].checked,host:f['mqtt_host'].value||'',port:Number(f['mqtt_port'].value||1883),username:f['mqtt_username'].value||'',password:mqttPass,base_topic:f['mqtt_base_topic'].value||'tam-spy'},
+    processing:{coral_enabled:f['coral_enabled'].checked,bird_species_enabled:f['bird_species_enabled'].checked},
+    storage:{retention_days:Number(f['retention_days']?.value||14),media_limit_default:Number(f['media_limit_default']?.value||24),auto_cleanup_enabled:!!(f['auto_cleanup_enabled']?.checked)}
+  };
+  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  await loadAll();
+};
 
 byId('exportJsonBtn').onclick=()=>download('/api/settings/export?format=json');
 byId('exportYamlBtn').onclick=()=>download('/api/settings/export?format=yaml');
@@ -528,6 +594,58 @@ byId('clearImportBtn').onclick=()=>{byId('importBox').value='';};
 byId('importJsonBtn').onclick=async()=>{await importConfig('json');};
 byId('importYamlBtn').onclick=async()=>{await importConfig('yaml');};
 async function importConfig(format){ const content=byId('importBox').value.trim(); if(!content) return alert('Bitte Inhalt einfügen.'); const r=await j('/api/settings/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({format,content})}); byId('importBox').value=''; await loadAll(); alert('Import erfolgreich.'); }
+
+// ── Settings collapsible sections ────────────────────────────────────────────
+window.toggleSetSection=function(id){
+  const el=byId(id); if(!el) return;
+  const opening=!el.classList.contains('open');
+  el.classList.toggle('open',opening);
+  const chevron=el.querySelector('.set-chevron');
+  if(chevron) chevron.textContent=opening?'▾':'▶';
+};
+
+// ── Password field visibility toggle ─────────────────────────────────────────
+window.togglePwField=function(btn,fieldName){
+  const f=btn.closest('form');
+  const input=f?.elements[fieldName]; if(!input) return;
+  input.type=input.type==='password'?'text':'password';
+  btn.textContent=input.type==='password'?'👁':'🙈';
+};
+
+// ── Media storage stats ───────────────────────────────────────────────────────
+async function loadMediaStorageStats(){
+  const bar=byId('mediaStorageBar'); if(!bar) return;
+  try{
+    const r=await j('/api/media/storage-stats');
+    const cams=r.cameras||[];
+    if(!cams.length){bar.innerHTML=''; return;}
+    bar.innerHTML=`<div class="storage-bar-inner">${cams.map(c=>`
+      <div class="storage-cam-item">
+        <span class="storage-cam-name">${esc(c.name)}</span>
+        <span class="storage-cam-size">${c.size_mb} MB</span>
+        <span class="small muted">${c.event_count} Events · ${c.jpg_count} Fotos</span>
+      </div>`).join('')}</div>`;
+  }catch{bar.innerHTML='';}
+}
+
+byId('cleanupNowBtn').onclick=async()=>{
+  if(!confirm('Jetzt bereinigen? Alle Dateien älter als die konfigurierte Aufbewahrungszeit werden gelöscht.')) return;
+  const rdEl=byId('ms_retention_days');
+  const payload=rdEl?.value?{retention_days:Number(rdEl.value)}:{};
+  try{
+    const r=await j('/api/media/cleanup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    alert(`Bereinigung abgeschlossen. ${r.removed||0} Dateien entfernt.`);
+    await loadMediaStorageStats();
+  }catch(e){alert('Fehler: '+e.message);}
+};
+
+byId('mediaSettingsForm').onsubmit=async(e)=>{
+  e.preventDefault();
+  const f=e.target.elements;
+  const payload={storage:{retention_days:Number(f['retention_days'].value||14),media_limit_default:Number(f['media_limit_default'].value||24),auto_cleanup_enabled:!!(f['auto_cleanup_enabled']?.checked)}};
+  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  await loadAll();
+};
 
 byId('maskCanvas').addEventListener('click',(evt)=>{ if(!shapeState.camera) return; shapeState.points.push(canvasPoint(evt)); drawShapes(); });
 byId('refreshMaskSnapshotBtn').onclick=()=>loadMaskSnapshot(shapeState.camera||byId('cameraForm').elements['id'].value);
@@ -640,5 +758,5 @@ byId('lightboxDelete').onclick=async()=>{
   }catch(e){alert('Löschen fehlgeschlagen: '+e.message);}
 };
 
-loadAll();
+loadAll().then(startLiveUpdate);
 loadLogs();

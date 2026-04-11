@@ -116,6 +116,7 @@
           <button id="reloadBtn">Neu laden</button>
           <button id="discoverBtn" class="ghost">Netzwerk-Discovery</button>
           <button id="openWizardBtn" class="ghost hidden">Setup-Wizard</button>
+          <span id="liveIndicator" class="live-dot hidden" title="Live-Update aktiv"></span>
         </div>
       </section>
 
@@ -145,7 +146,27 @@
 
       <section id="media" class="panel section">
         <div class="section-head"><h3>Mediathek</h3><div class="muted">Letzte Erkennungen, Clips, Reviews</div></div>
+        <div id="mediaStorageBar" class="media-storage-bar"></div>
         <div id="mediaGrid" class="media-grid"></div>
+
+        <div class="set-section" id="set-media-config" style="margin-top:14px">
+          <button type="button" class="set-hd" onclick="toggleSetSection('set-media-config')">
+            <span class="set-icon">⚙️</span><span>Mediathek-Einstellungen</span><span class="set-chevron">▶</span>
+          </button>
+          <div class="set-bd"><div class="set-inner">
+            <form id="mediaSettingsForm" class="form">
+              <div class="row" style="grid-template-columns:1fr 1fr">
+                <div class="field-wrap"><input id="ms_media_limit" name="media_limit_default" type="number" placeholder="24" /><span class="field-label">Anzeigelimit Mediathek</span></div>
+                <div class="field-wrap"><input id="ms_retention_days" name="retention_days" type="number" placeholder="14" /><span class="field-label">Aufbewahrung (Tage)</span></div>
+              </div>
+              <label class="toggle-row"><span>Auto-Cleanup aktiv</span><label class="switch"><input type="checkbox" id="ms_auto_cleanup" name="auto_cleanup_enabled" /><span class="slider"></span></label></label>
+              <div style="display:flex;gap:10px">
+                <button type="submit">Speichern</button>
+                <button type="button" id="cleanupNowBtn" class="ghost">🧹 Jetzt bereinigen</button>
+              </div>
+            </form>
+          </div></div>
+        </div>
       </section>
 
       <section id="cameras" class="panel section">
@@ -285,52 +306,126 @@
         </div>
       </section>
 
-      <section id="settings" class="panel section split">
-        <div>
-          <div class="section-head"><h3>Einstellungen</h3><div class="muted">GUI-first: App, Telegram, MQTT, Discovery</div></div>
-          <form id="settingsForm" class="form">
-            <input name="app_name" placeholder="App-Name" />
-            <input name="app_tagline" placeholder="Tagline" />
-            <input name="app_logo" placeholder="Logo Emoji" />
-            <input name="public_base_url" placeholder="Public Base URL" />
-            <input name="discovery_subnet" placeholder="Discovery Subnet" />
-            <label class="toggle-row"><span>Telegram aktiv</span><label class="switch"><input type="checkbox" name="telegram_enabled" /><span class="slider"></span></label></label>
-            <input name="telegram_token" placeholder="Telegram Token" />
-            <input name="telegram_chat_id" placeholder="Telegram Chat ID" />
-            <label class="toggle-row"><span>MQTT aktiv</span><label class="switch"><input type="checkbox" name="mqtt_enabled" /><span class="slider"></span></label></label>
-            <input name="mqtt_host" placeholder="MQTT Host" />
-            <div class="row3"><input name="mqtt_port" placeholder="1883" /><input name="mqtt_username" placeholder="MQTT Benutzer" /><input name="mqtt_password" placeholder="MQTT Passwort" /></div>
-            <input name="mqtt_base_topic" placeholder="Base Topic" />
-            <div class="settings-divider">Coral TPU · Objekterkennung</div>
-            <label class="toggle-row">
-              <span>Coral TPU aktivieren</span>
-              <label class="switch"><input type="checkbox" name="coral_enabled" /><span class="slider"></span></label>
-            </label>
-            <label class="toggle-row">
-              <span>Vogelarten-Klassifikation aktivieren</span>
-              <label class="switch"><input type="checkbox" name="bird_species_enabled" /><span class="slider"></span></label>
-            </label>
-            <div id="coralStatusHint" class="field-help"></div>
-            <button>Settings speichern & Reload</button>
-          </form>
-        </div>
-        <div>
-          <div class="section-head"><h3>Import / Export</h3></div>
-          <div class="audit import-export">
-            <div class="row">
-              <button id="exportJsonBtn" type="button" class="ghost">Export JSON</button>
-              <button id="exportYamlBtn" type="button" class="ghost">Export YAML</button>
-              <button id="reloadConfigBtn" type="button" class="ghost">Config neu laden</button>
-            </div>
-            <textarea id="importBox" rows="14" placeholder="Hier JSON oder YAML einfügen …"></textarea>
-            <div class="row">
-              <button id="importJsonBtn" type="button">Import JSON</button>
-              <button id="importYamlBtn" type="button">Import YAML</button>
-              <button id="clearImportBtn" type="button" class="ghost">Feld leeren</button>
-            </div>
-            <div class="audit-item"><strong>Hinweis</strong><div class="small">GUI bleibt die Hauptquelle. Import/Export dient als Backup, Restore und Massenpflege.</div></div>
+      <section id="settings" class="panel section">
+        <div class="section-head"><h3>Einstellungen</h3><div class="muted">App · Telegram · MQTT · Coral · Speicher · Import/Export</div></div>
+
+        <form id="settingsForm" class="settings-form">
+
+          <!-- 1. App & Allgemein (open by default) -->
+          <div class="set-section open" id="set-app">
+            <button type="button" class="set-hd" onclick="toggleSetSection('set-app')">
+              <span class="set-icon">⚙️</span><span>App &amp; Allgemein</span><span class="set-chevron">▾</span>
+            </button>
+            <div class="set-bd"><div class="set-inner">
+              <div style="display:grid;gap:10px;padding-top:4px">
+                <div class="row" style="grid-template-columns:1fr 80px">
+                  <div class="field-wrap"><input name="app_name" placeholder="TAM-spy" /><span class="field-label">App-Name</span></div>
+                  <div class="field-wrap"><input name="app_logo" placeholder="🐈‍⬛" /><span class="field-label">Logo</span></div>
+                </div>
+                <div class="field-wrap"><input name="app_tagline" placeholder="Analyse · Sicherheit · Tierbeobachtung" /><span class="field-label">Tagline</span></div>
+                <div class="field-wrap"><input name="public_base_url" placeholder="http://192.168.x.x:8099" /><span class="field-label">Public Base URL</span></div>
+                <div class="field-wrap"><input name="discovery_subnet" placeholder="192.168.1.0/24" /><span class="field-label">Discovery-Subnet</span></div>
+              </div>
+            </div></div>
           </div>
-        </div>
+
+          <!-- 2. Telegram -->
+          <div class="set-section" id="set-telegram">
+            <button type="button" class="set-hd" onclick="toggleSetSection('set-telegram')">
+              <span class="set-icon">📨</span><span>Telegram</span><span class="set-chevron">▶</span>
+            </button>
+            <div class="set-bd"><div class="set-inner">
+              <div style="display:grid;gap:10px;padding-top:4px">
+                <label class="toggle-row"><span>Telegram aktiv</span><label class="switch"><input type="checkbox" name="telegram_enabled" /><span class="slider"></span></label></label>
+                <div class="field-wrap pw-wrap">
+                  <input name="telegram_token" type="password" placeholder="Bot-Token · 123456789:AAE…" autocomplete="off" />
+                  <button type="button" class="pw-eye" onclick="togglePwField(this,'telegram_token')">👁</button>
+                  <span class="field-label">🔒 Bot-Token</span>
+                </div>
+                <div class="field-wrap"><input name="telegram_chat_id" placeholder="Chat ID · z.B. 123456789" /><span class="field-label">Chat ID</span></div>
+              </div>
+            </div></div>
+          </div>
+
+          <!-- 3. MQTT -->
+          <div class="set-section" id="set-mqtt">
+            <button type="button" class="set-hd" onclick="toggleSetSection('set-mqtt')">
+              <span class="set-icon">🔌</span><span>MQTT</span><span class="set-chevron">▶</span>
+            </button>
+            <div class="set-bd"><div class="set-inner">
+              <div style="display:grid;gap:10px;padding-top:4px">
+                <label class="toggle-row"><span>MQTT aktiv</span><label class="switch"><input type="checkbox" name="mqtt_enabled" /><span class="slider"></span></label></label>
+                <div class="field-wrap"><input name="mqtt_host" placeholder="homeassistant.local" /><span class="field-label">Host</span></div>
+                <div class="row3">
+                  <div class="field-wrap"><input name="mqtt_port" placeholder="1883" /><span class="field-label">Port</span></div>
+                  <div class="field-wrap"><input name="mqtt_username" placeholder="Benutzer" /><span class="field-label">Benutzer</span></div>
+                  <div class="field-wrap pw-wrap">
+                    <input name="mqtt_password" type="password" placeholder="Passwort" autocomplete="off" />
+                    <button type="button" class="pw-eye" onclick="togglePwField(this,'mqtt_password')">👁</button>
+                    <span class="field-label">🔒 Passwort</span>
+                  </div>
+                </div>
+                <div class="field-wrap"><input name="mqtt_base_topic" placeholder="tam-spy" /><span class="field-label">Base Topic</span></div>
+              </div>
+            </div></div>
+          </div>
+
+          <!-- 4. Coral TPU -->
+          <div class="set-section" id="set-coral">
+            <button type="button" class="set-hd" onclick="toggleSetSection('set-coral')">
+              <span class="set-icon">🧠</span><span>Coral TPU &amp; Objekterkennung</span><span class="set-chevron">▶</span>
+            </button>
+            <div class="set-bd"><div class="set-inner">
+              <div style="display:grid;gap:10px;padding-top:4px">
+                <label class="toggle-row"><span>Coral TPU aktivieren</span><label class="switch"><input type="checkbox" name="coral_enabled" /><span class="slider"></span></label></label>
+                <label class="toggle-row"><span>Vogelarten-Klassifikation aktivieren</span><label class="switch"><input type="checkbox" name="bird_species_enabled" /><span class="slider"></span></label></label>
+                <div id="coralStatusHint" class="field-help"></div>
+              </div>
+            </div></div>
+          </div>
+
+          <!-- 5. Speicher & Retention -->
+          <div class="set-section" id="set-storage">
+            <button type="button" class="set-hd" onclick="toggleSetSection('set-storage')">
+              <span class="set-icon">💾</span><span>Speicher &amp; Aufbewahrung</span><span class="set-chevron">▶</span>
+            </button>
+            <div class="set-bd"><div class="set-inner">
+              <div style="display:grid;gap:10px;padding-top:4px">
+                <div class="row" style="grid-template-columns:1fr 1fr">
+                  <div class="field-wrap"><input name="retention_days" type="number" placeholder="14" /><span class="field-label">Aufbewahrung (Tage)</span></div>
+                  <div class="field-wrap"><input name="media_limit_default" type="number" placeholder="24" /><span class="field-label">Max. Mediathek-Einträge</span></div>
+                </div>
+                <label class="toggle-row"><span>Auto-Cleanup aktiv</span><label class="switch"><input type="checkbox" name="auto_cleanup_enabled" /><span class="slider"></span></label></label>
+                <div class="field-wrap"><input name="storage_root" readonly style="color:var(--muted);font-size:11px" /><span class="field-label">Storage-Pfad (readonly)</span></div>
+              </div>
+            </div></div>
+          </div>
+
+          <!-- 6. Import / Export -->
+          <div class="set-section" id="set-importexport">
+            <button type="button" class="set-hd" onclick="toggleSetSection('set-importexport')">
+              <span class="set-icon">📦</span><span>Import / Export</span><span class="set-chevron">▶</span>
+            </button>
+            <div class="set-bd"><div class="set-inner">
+              <div style="display:grid;gap:10px;padding-top:4px">
+                <div class="audit-item small muted">GUI bleibt die Hauptquelle. Import/Export dient als Backup, Restore und Massenpflege.</div>
+                <div class="row3">
+                  <button id="exportJsonBtn" type="button" class="ie-btn ie-blue">Export JSON</button>
+                  <button id="exportYamlBtn" type="button" class="ie-btn ie-green">Export YAML</button>
+                  <button id="reloadConfigBtn" type="button" class="ie-btn ie-gray">Config neu laden</button>
+                </div>
+                <textarea id="importBox" rows="10" placeholder="Hier JSON oder YAML einfügen …" style="background:#131e2e;color:#cfe7ff"></textarea>
+                <div class="row3">
+                  <button id="importJsonBtn" type="button" class="ie-btn ie-blue">Import JSON</button>
+                  <button id="importYamlBtn" type="button" class="ie-btn ie-green">Import YAML</button>
+                  <button id="clearImportBtn" type="button" class="ie-btn ie-gray">Feld leeren</button>
+                </div>
+              </div>
+            </div></div>
+          </div>
+
+          <button type="submit" class="settings-save-btn">💾 Speichern &amp; Neu laden</button>
+        </form>
       </section>
 
       <section id="logs" class="panel section">
