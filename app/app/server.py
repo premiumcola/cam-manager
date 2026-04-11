@@ -4,6 +4,35 @@ from pathlib import Path
 from flask import Flask, jsonify, request, Response, send_from_directory, render_template
 from datetime import datetime, timedelta
 import cv2
+import logging
+from collections import deque
+
+class _LogBuffer(logging.Handler):
+    def __init__(self, maxlen: int = 400):
+        super().__init__()
+        self.setFormatter(logging.Formatter("%(message)s"))
+        self._records: deque = deque(maxlen=maxlen)
+
+    def emit(self, record: logging.LogRecord):
+        try:
+            self._records.append({
+                "ts": datetime.fromtimestamp(record.created).strftime("%H:%M:%S"),
+                "level": record.levelname,
+                "logger": record.name,
+                "msg": self.format(record),
+            })
+        except Exception:
+            pass
+
+    def get(self, min_level: int = logging.DEBUG) -> list:
+        return [r for r in self._records if logging.getLevelName(r["level"]) >= min_level]
+
+log_buffer = _LogBuffer()
+logging.getLogger().addHandler(log_buffer)
+logging.getLogger().setLevel(logging.DEBUG)
+# suppress noisy libraries
+for _noisy in ("urllib3", "werkzeug", "httpx", "httpcore", "telegram"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 from .config_loader import load_config
 from .storage import EventStore
@@ -74,6 +103,13 @@ def media_file(subpath):
     return send_from_directory(storage_root, subpath)
 
 
+@app.get('/api/logs')
+def api_logs():
+    level_name = request.args.get('level', 'DEBUG').upper()
+    min_level = getattr(logging, level_name, logging.DEBUG)
+    return jsonify({"logs": log_buffer.get(min_level)})
+
+
 @app.get('/api/bootstrap')
 def api_bootstrap():
     return jsonify(settings.bootstrap_state())
@@ -100,7 +136,8 @@ def api_config():
 @app.get('/api/discover')
 def api_discover():
     subnet = request.args.get('subnet') or get_effective_config().get("server", {}).get("default_discovery_subnet", "192.168.1.0/24")
-    return jsonify({"subnet": subnet, "results": discover_hosts(subnet)})
+    cameras, total_scanned = discover_hosts(subnet)
+    return jsonify({"subnet": subnet, "results": cameras, "total_scanned": total_scanned})
 
 
 @app.get('/api/cameras')
@@ -158,14 +195,34 @@ def api_settings_cameras_save():
     return jsonify({"ok": True, "camera": settings.get_camera(payload["id"])})
 
 
+@app.delete('/api/settings/cameras/<cam_id>')
+def api_settings_cameras_delete(cam_id):
+    # Count existing events so the frontend can warn the user
+    cam_dir = store.events_dir / cam_id
+    event_count = len(list(cam_dir.glob("*.json"))) if cam_dir.exists() else 0
+    deleted = settings.delete_camera(cam_id)
+    if not deleted:
+        return jsonify({"ok": False, "error": "Kamera nicht gefunden"}), 404
+    # Stop the running thread
+    rt = runtimes.pop(cam_id, None)
+    if rt:
+        rt.stop()
+    return jsonify({"ok": True, "event_count": event_count})
+
+
 @app.get('/api/settings/app')
 def api_settings_app():
+    proc = settings.data.get("processing", {})
     return jsonify({
         "app": settings.data.get("app", {}),
         "server": settings.data.get("server", {}),
         "telegram": settings.data.get("telegram", {}),
         "mqtt": settings.data.get("mqtt", {}),
         "ui": settings.data.get("ui", {}),
+        "processing": {
+            "coral_enabled": proc.get("detection", {}).get("mode", "none") == "coral",
+            "bird_species_enabled": bool(proc.get("bird_species", {}).get("enabled", False)),
+        },
     })
 
 
@@ -175,6 +232,12 @@ def api_settings_app_save():
     for sec in ("app", "server", "telegram", "mqtt", "ui"):
         if sec in payload:
             settings.update_section(sec, payload.get(sec) or {})
+    if "processing" in payload:
+        proc = payload["processing"]
+        settings.update_section("processing", {
+            "detection": {"mode": "coral" if proc.get("coral_enabled") else "none"},
+            "bird_species": {"enabled": bool(proc.get("bird_species_enabled"))},
+        })
     rebuild_runtimes()
     return jsonify({"ok": True, "saved": True})
 

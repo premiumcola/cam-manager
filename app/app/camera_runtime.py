@@ -2,12 +2,15 @@ from __future__ import annotations
 import cv2
 import time
 import threading
+import logging
 from datetime import datetime
 from pathlib import Path
 import requests
 import numpy as np
 from .detectors import CoralObjectDetector, BirdSpeciesClassifier, draw_detections
 from .event_logic import is_in_schedule, choose_alarm_level
+
+log = logging.getLogger(__name__)
 
 
 class CameraRuntime:
@@ -210,6 +213,7 @@ class CameraRuntime:
                 self.last_error = None
             except Exception as e:
                 self.last_error = str(e)
+                log.error("[%s] %s", self.camera_id, e)
                 try:
                     if self.capture is not None:
                         self.capture.release()

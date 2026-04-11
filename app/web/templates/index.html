@@ -98,6 +98,7 @@
         <a href="#profiles">Profile</a>
         <a href="#telegram">Telegram</a>
         <a href="#settings">Einstellungen</a>
+        <a href="#logs">Logs</a>
       </nav>
     </aside>
     <main class="main">
@@ -142,21 +143,68 @@
         <div>
           <div class="section-head"><h3>Kamera bearbeiten</h3><div class="muted">inkl. Masken- & Zonen-Editor</div></div>
           <form id="cameraForm" class="form">
-            <input name="id" placeholder="ID · Beispiel: cam-werkstatt" required />
-            <input name="name" placeholder="Name · Beispiel: Werkstatt" required />
-            <input name="location" placeholder="Ort · Beispiel: Werkbank / Tor" />
-            <div class="field-help">RTSP URL = Live-Video deiner Kamera. Hier kommt die IP rein, zusammen mit Benutzer, Passwort und Pfad.</div>
-            <input name="rtsp_url" placeholder="RTSP URL · Beispiel: rtsp://user:pass@192.168.X.X:554/Streaming/Channels/101" />
-            <div class="field-help">Snapshot URL = einzelnes JPG-Bild. Optional, aber oft hilfreich für Vorschaubilder.</div>
-            <input name="snapshot_url" placeholder="Snapshot URL · Beispiel: http://user:pass@192.168.X.X/cgi-bin/snapshot.cgi" />
+            <div class="field-wrap">
+              <input name="id" placeholder="cam-werkstatt" required />
+              <span class="field-label">Eindeutige ID – keine Leerzeichen</span>
+            </div>
+            <div class="field-wrap">
+              <input name="name" placeholder="Werkstatt" required />
+              <span class="field-label">Anzeigename</span>
+            </div>
+            <div class="field-wrap">
+              <input name="location" placeholder="Werkbank / Tor" />
+              <span class="field-label">Standortbeschreibung</span>
+            </div>
+
+            <div class="rtsp-builder">
+              <div class="row3">
+                <div class="field-wrap">
+                  <input name="rtsp_ip" placeholder="192.168.X.X" />
+                  <span class="field-label">IP-Adresse der Kamera</span>
+                </div>
+                <div class="field-wrap">
+                  <input name="rtsp_user" placeholder="admin" />
+                  <span class="field-label">Benutzername</span>
+                </div>
+                <div class="field-wrap">
+                  <input name="rtsp_pass" type="password" placeholder="Passwort" />
+                  <span class="field-label">Passwort</span>
+                </div>
+              </div>
+              <div class="row" style="grid-template-columns:1fr 80px">
+                <div class="field-wrap">
+                  <select name="rtsp_path" id="rtspPathSelect"></select>
+                  <span class="field-label">RTSP-Pfad · Kameramodell wählen</span>
+                </div>
+                <div class="field-wrap">
+                  <input name="rtsp_port" placeholder="554" value="554" />
+                  <span class="field-label">Port</span>
+                </div>
+              </div>
+              <div class="field-wrap">
+                <input name="rtsp_url" placeholder="wird automatisch zusammengesetzt …" readonly style="color:var(--muted);font-size:12px" />
+                <span class="field-label">Zusammengesetzte RTSP-URL (schreibgeschützt)</span>
+              </div>
+            </div>
+
+            <div class="field-wrap">
+              <input name="snapshot_url" placeholder="http://admin:pass@192.168.X.X/cgi-bin/snapshot.cgi" />
+              <span class="field-label">Snapshot-URL – optional, JPG-Standbild</span>
+            </div>
             <select name="group_id" id="groupSelect"></select>
-            <input name="object_filter" placeholder="Objektfilter · Beispiel: person,cat,bird" />
+            <div class="field-wrap">
+              <input name="object_filter" placeholder="person,cat,bird" />
+              <span class="field-label">Objektfilter – kommagetrennt</span>
+            </div>
             <div class="row"><label><input type="checkbox" name="enabled" checked /> aktiv</label><label><input type="checkbox" name="armed" checked /> armed</label><label><input type="checkbox" name="timelapse_enabled" /> timelapse</label></div>
             <div class="row3"><input name="schedule_start" placeholder="22:00" /><input name="schedule_end" placeholder="06:00" /><label><input type="checkbox" name="schedule_enabled" /> Zeitplan</label></div>
-            <div class="row"><label><input type="checkbox" name="telegram_enabled" checked /> Telegram</label><label><input type="checkbox" name="mqtt_enabled" checked /> MQTT</label><input name="whitelist_names" placeholder="Whitelist Namen · Beispiel: Bruder,Ich" /></div>
+            <div class="row"><label><input type="checkbox" name="telegram_enabled" checked /> Telegram</label><label><input type="checkbox" name="mqtt_enabled" checked /> MQTT</label><input name="whitelist_names" placeholder="Bruder,Ich" /></div>
             <input type="hidden" name="zones_json" />
             <input type="hidden" name="masks_json" />
-            <button>Speichern & Reload</button>
+            <div style="display:flex;gap:10px">
+              <button style="flex:1">Speichern & Reload</button>
+              <button type="button" id="deleteCameraBtn" class="ghost danger-btn" style="flex:0 0 auto">Kamera löschen</button>
+            </div>
           </form>
           <div class="mask-editor panel inset">
             <div class="section-head"><h3>Masken & Zonen</h3><div class="muted" id="shapeStatus">Punktweise zeichnen auf dem Snapshot</div></div>
@@ -236,6 +284,16 @@
             <input name="mqtt_host" placeholder="MQTT Host" />
             <div class="row3"><input name="mqtt_port" placeholder="1883" /><input name="mqtt_username" placeholder="MQTT Benutzer" /><input name="mqtt_password" placeholder="MQTT Passwort" /></div>
             <input name="mqtt_base_topic" placeholder="Base Topic" />
+            <div class="settings-divider">Coral TPU · Objekterkennung</div>
+            <label class="toggle-row">
+              <span>Coral TPU aktivieren</span>
+              <label class="switch"><input type="checkbox" name="coral_enabled" /><span class="slider"></span></label>
+            </label>
+            <label class="toggle-row">
+              <span>Vogelarten-Klassifikation aktivieren</span>
+              <label class="switch"><input type="checkbox" name="bird_species_enabled" /><span class="slider"></span></label>
+            </label>
+            <div id="coralStatusHint" class="field-help"></div>
             <button>Settings speichern & Reload</button>
           </form>
         </div>
@@ -257,18 +315,35 @@
           </div>
         </div>
       </section>
+
+      <section id="logs" class="panel section">
+        <div class="section-head">
+          <h3>System-Logs</h3>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="logLevelFilter" class="log-level-select">
+              <option value="DEBUG">DEBUG</option>
+              <option value="INFO" selected>INFO</option>
+              <option value="WARNING">WARNING</option>
+              <option value="ERROR">ERROR</option>
+            </select>
+            <button id="logRefreshBtn" class="ghost small-btn" type="button">Aktualisieren</button>
+            <button id="logClearBtn" class="ghost small-btn" type="button">Leeren</button>
+          </div>
+        </div>
+        <div id="logOutput" class="log-output"></div>
+      </section>
     </main>
   </div>
-  <script src="/static/app.js"></script>
 
   <div id="discoveryModal" class="modal hidden">
     <div class="modal-card panel">
-      <div class="section-head"><h3>Netzwerk-Discovery</h3><button id="closeDiscoveryBtn" class="ghost small-btn" type="button">Schließen</button></div>
+      <div class="section-head"><h3>Netzwerk-Discovery</h3><button id="closeDiscoveryBtn" class="close-btn" type="button">✕ Schließen</button></div>
       <div class="field-help">Gefundene Hosts mit typischen Kamera-Ports. Klick auf "Als RTSP-Beispiel übernehmen" trägt die IP direkt in die Form ein.</div>
       <div id="discoveryStatus" class="small muted">Noch keine Suche gestartet.</div>
       <div id="discoveryResults" class="list" style="margin-top:12px"></div>
     </div>
   </div>
 
+  <script src="/static/app.js"></script>
 </body>
 </html>

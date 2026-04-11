@@ -155,6 +155,15 @@ class SettingsStore:
         self.data.setdefault("ui", {})["wizard_completed"] = True
         self.save()
 
+    def delete_camera(self, cam_id: str) -> bool:
+        cameras = self.data.get("cameras", [])
+        before = len(cameras)
+        self.data["cameras"] = [c for c in cameras if c.get("id") != cam_id]
+        if len(self.data["cameras"]) < before:
+            self.save()
+            return True
+        return False
+
     def upsert_group(self, group: dict):
         existing = next((g for g in self.data.get("camera_groups", []) if g.get("id") == group.get("id")), None)
         if existing:

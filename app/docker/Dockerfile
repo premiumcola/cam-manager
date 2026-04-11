@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 COPY app/ /app/app/
+COPY web/ /app/web/
 COPY config/ /app/config/
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r /app/requirements.txt

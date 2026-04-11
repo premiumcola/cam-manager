@@ -112,24 +112,86 @@ function renderTimeline(){
   svg.innerHTML=out;
 }
 
+// ── RTSP path options (shared with discovery) ────────────────────────────────
+const RTSP_PATH_OPTS=[
+  {label:'Reolink – Main',   value:'/h264Preview_01_main'},
+  {label:'Reolink – Sub',    value:'/h264Preview_01_sub'},
+  {label:'Hikvision – Main', value:'/Streaming/Channels/101'},
+  {label:'Hikvision – Sub',  value:'/Streaming/Channels/102'},
+  {label:'Dahua – Main',     value:'/cam/realmonitor?channel=1&subtype=0'},
+  {label:'Dahua – Sub',      value:'/cam/realmonitor?channel=1&subtype=1'},
+  {label:'Generic stream0',  value:'/stream0'},
+  {label:'Generic stream1',  value:'/stream1'},
+  {label:'Generic /live',    value:'/live'},
+];
+
+function initRtspBuilder(){
+  const sel=byId('rtspPathSelect');
+  if(!sel.options.length) RTSP_PATH_OPTS.forEach(p=>{const o=document.createElement('option');o.value=p.value;o.textContent=p.label;sel.appendChild(o);});
+  const f=byId('cameraForm').elements;
+  const rebuild=()=>{
+    const ip=(f['rtsp_ip']?.value||'').trim();
+    const user=(f['rtsp_user']?.value||'').trim();
+    const pass=(f['rtsp_pass']?.value||'').trim();
+    const port=(f['rtsp_port']?.value||'554').trim();
+    const path=f['rtsp_path']?.value||'';
+    if(!ip){f['rtsp_url'].value='';return;}
+    const auth=user?(encodeURIComponent(user)+(pass?':'+encodeURIComponent(pass):'')+'@'):'';
+    const portPart=port&&port!=='554'?':'+port:'';
+    f['rtsp_url'].value=`rtsp://${auth}${ip}${portPart}${path}`;
+    // auto-fill snapshot if empty
+    if(!f['snapshot_url']?.value && user)
+      f['snapshot_url'].value=`http://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${ip}/cgi-bin/snapshot.cgi`;
+  };
+  ['rtsp_ip','rtsp_user','rtsp_pass','rtsp_port'].forEach(n=>f[n]?.addEventListener('input',rebuild));
+  sel.addEventListener('change',rebuild);
+}
+
+function parseRtspUrl(url){
+  try{
+    const u=new URL(url.replace(/^rtsp:\/\//,'http://'));
+    return{user:decodeURIComponent(u.username||''),pass:decodeURIComponent(u.password||''),host:u.hostname||'',port:u.port||'554',path:u.pathname+(u.search||'')||''};
+  }catch{return{};}
+}
+
 function renderCameraSettings(){
   byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`<div class="item"><div class="item-head"><strong>${esc(c.name)}</strong><button class="action-btn" onclick="editCamera('${esc(c.id)}')">Bearbeiten</button></div><div class="small">${esc(c.location||'')} · ${esc(c.group_id||'—')} · ${c.armed?'scharf':'unscharf'}</div></div>`).join('');
 }
 
 function editCamera(camId){
   const c=state.config.cameras.find(x=>x.id===camId)||state.cameras.find(x=>x.id===camId); if(!c) return;
+  initRtspBuilder();
   const f=byId('cameraForm').elements;
-  f['id'].value=c.id||''; f['name'].value=c.name||''; f['location'].value=c.location||''; f['rtsp_url'].value=c.rtsp_url||''; f['snapshot_url'].value=c.snapshot_url||''; f['group_id'].value=c.group_id||'';
+  f['id'].value=c.id||''; f['name'].value=c.name||''; f['location'].value=c.location||'';
+  // parse RTSP URL into builder fields
+  const p=parseRtspUrl(c.rtsp_url||'');
+  f['rtsp_ip'].value=p.host||''; f['rtsp_user'].value=p.user||''; f['rtsp_pass'].value=p.pass||''; f['rtsp_port'].value=p.port||'554';
+  // pick closest path option or keep first
+  const matchedPath=RTSP_PATH_OPTS.find(o=>o.value===p.path);
+  if(f['rtsp_path']) f['rtsp_path'].value=matchedPath?matchedPath.value:RTSP_PATH_OPTS[0].value;
+  f['rtsp_url'].value=c.rtsp_url||'';
+  f['snapshot_url'].value=c.snapshot_url||''; f['group_id'].value=c.group_id||'';
   f['object_filter'].value=(c.object_filter||[]).join(','); f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed; f['timelapse_enabled'].checked=!!(c.timelapse&&c.timelapse.enabled);
   f['schedule_start'].value=(c.schedule&&c.schedule.start)||''; f['schedule_end'].value=(c.schedule&&c.schedule.end)||''; f['schedule_enabled'].checked=!!(c.schedule&&c.schedule.enabled);
   f['telegram_enabled'].checked=(c.telegram_enabled!==false); f['mqtt_enabled'].checked=(c.mqtt_enabled!==false); f['whitelist_names'].value=(c.whitelist_names||[]).join(',');
   shapeState.camera=camId; shapeState.zones=JSON.parse(JSON.stringify(c.zones||[])); shapeState.masks=JSON.parse(JSON.stringify(c.masks||[])); shapeState.points=[];
   f['zones_json'].value=JSON.stringify(shapeState.zones); f['masks_json'].value=JSON.stringify(shapeState.masks);
+  // update delete button state
+  byId('deleteCameraBtn').dataset.camId=camId;
   loadMaskSnapshot(camId);
   drawShapes();
   location.hash='#cameras';
 }
 window.editCamera=editCamera;
+
+byId('deleteCameraBtn').onclick=async()=>{
+  const camId=byId('deleteCameraBtn').dataset.camId;
+  if(!camId) return;
+  if(!confirm(`Kamera "${camId}" wirklich löschen?\n\nDieser Vorgang entfernt die Kamera aus der Konfiguration.\nEreignisse und Medien bleiben im Speicher erhalten.`)) return;
+  const r=await j(`/api/settings/cameras/${encodeURIComponent(camId)}`,{method:'DELETE'});
+  if(r.event_count>0) alert(`Hinweis: Für diese Kamera existieren noch ${r.event_count} gespeicherte Ereignisse im Storage. Sie wurden NICHT gelöscht.`);
+  await loadAll();
+};
 
 function renderGroups(){ byId('groupList').innerHTML=state.groups.map(g=>`<div class="item"><div class="item-head"><strong>${esc(g.name)}</strong><button class="action-btn" onclick='fillGroupForm(${JSON.stringify(g).replace(/'/g,"&apos;")})'>Bearbeiten</button></div><div class="small">${esc(g.category)} · ${esc(g.alarm_profile)} · ${(g.fine_models||[]).join(', ')||'ohne Feinstufe'}</div></div>`).join(''); }
 function fillGroupForm(g){const f=byId('groupForm').elements; f['id'].value=g.id||''; f['name'].value=g.name||''; f['category'].value=g.category||''; f['alarm_profile'].value=g.alarm_profile||'soft'; f['coarse_objects'].value=(g.coarse_objects||[]).join(','); f['fine_models'].value=(g.fine_models||[]).join(','); f['schedule_start'].value=(g.schedule&&g.schedule.start)||''; f['schedule_end'].value=(g.schedule&&g.schedule.end)||''; f['schedule_enabled'].checked=!!(g.schedule&&g.schedule.enabled); }
@@ -152,6 +214,17 @@ function hydrateSettings(){
   f['app_name'].value=app.name||''; f['app_tagline'].value=app.tagline||''; f['app_logo'].value=app.logo||''; f['public_base_url'].value=server.public_base_url||''; f['discovery_subnet'].value=state.config.default_discovery_subnet||'';
   f['telegram_enabled'].checked=!!telegram.enabled; f['telegram_token'].value=telegram.token||''; f['telegram_chat_id'].value=telegram.chat_id||'';
   f['mqtt_enabled'].checked=!!mqtt.enabled; f['mqtt_host'].value=mqtt.host||''; f['mqtt_port'].value=mqtt.port||1883; f['mqtt_username'].value=mqtt.username||''; f['mqtt_password'].value=mqtt.password||''; f['mqtt_base_topic'].value=mqtt.base_topic||'tam-spy';
+  const proc=state.config.processing||{}; const coral=state.config.coral||{};
+  f['coral_enabled'].checked=!!(proc.coral_enabled ?? coral.mode==='coral');
+  f['bird_species_enabled'].checked=!!(proc.bird_species_enabled ?? coral.bird_species_enabled);
+  const hint=byId('coralStatusHint');
+  if(hint){
+    const cam=state.cameras[0];
+    const available=cam?.coral_available; const reason=cam?.coral_reason||'—';
+    hint.innerHTML=available
+      ? '✅ Coral TPU erkannt und aktiv.'
+      : `⚠️ Coral nicht verfügbar: <code>${esc(reason)}</code>`;
+  }
 }
 
 function getCanvasCtx(){ return byId('maskCanvas').getContext('2d'); }
@@ -189,37 +262,61 @@ async function finishWizard(){
 
 byId('reloadBtn').onclick=()=>loadAll();
 byId('reloadConfigBtn').onclick=()=>loadAll();
+// alias so discovery modal code still works
+const RTSP_PATHS=RTSP_PATH_OPTS;
+
+function closeDiscoveryModal(){
+  byId('discoveryModal').classList.add('hidden');
+  document.body.style.overflow='';
+}
 byId('discoverBtn').onclick=async()=>{
   byId('discoveryModal').classList.remove('hidden');
-  byId('discoveryStatus').textContent='Suche läuft ...';
+  document.body.style.overflow='hidden';
+  byId('discoveryStatus').textContent='Suche läuft …';
   byId('discoveryResults').innerHTML='';
   try{
     const r=await j('/api/discover');
     const items=r.results||[];
-    byId('discoveryStatus').textContent=`Subnetz ${r.subnet} · ${items.length} Kandidaten`;
+    const total=r.total_scanned||'?';
+    byId('discoveryStatus').innerHTML=`Subnetz <strong>${esc(r.subnet)}</strong> · ${total} Hosts gescannt · <strong>${items.length} Kamera-Kandidaten</strong> <span class="small muted">(nur Kamera-Kandidaten)</span>`;
+    const pathOpts=RTSP_PATHS.map(p=>`<option value="${esc(p.value)}">${esc(p.label)}</option>`).join('');
     byId('discoveryResults').innerHTML=items.map(x=>{
       const ports=(x.open_ports||[]).join(', ')||'—';
-      const rtspGuess=`rtsp://user:pass@${x.ip}:554/Streaming/Channels/101`;
-      return `<div class="item"><div class="item-head"><strong>${esc(x.ip)}</strong><span class="small">Ports: ${esc(ports)}</span></div><div class="small">${esc(x.guess||'Host')}</div><div class="chip-row" style="margin-top:8px"><button class="action-btn" onclick="applyDiscoveryIp('${esc(x.ip)}')">IP übernehmen</button><button class="action-btn" onclick="applyDiscoveryRtsp('${esc(rtspGuess)}')">Als RTSP-Beispiel übernehmen</button></div></div>`;
+      const uid=x.ip.replace(/\./g,'_');
+      return `<div class="item">
+        <div class="item-head"><strong>${esc(x.ip)}</strong><span class="small">Ports: ${esc(ports)}</span></div>
+        <div class="small muted">${esc(x.guess||'Host')}</div>
+        <div class="discovery-creds">
+          <input id="disc_user_${uid}" class="disc-input" placeholder="Benutzer" value="admin" />
+          <input id="disc_pass_${uid}" class="disc-input" type="password" placeholder="Passwort" />
+          <select id="disc_path_${uid}" class="disc-select">${pathOpts}</select>
+        </div>
+        <div class="chip-row" style="margin-top:8px">
+          <button class="action-btn" onclick="applyDiscoveryRtsp('${esc(x.ip)}')">Als RTSP übernehmen</button>
+        </div>
+      </div>`;
     }).join('') || '<div class="item">Keine Kamera-Kandidaten gefunden.</div>';
   }catch(err){
     byId('discoveryStatus').textContent='Discovery fehlgeschlagen';
     byId('discoveryResults').innerHTML=`<div class="item">${esc(err.message||err)}</div>`;
   }
 };
-byId('closeDiscoveryBtn').onclick=()=>byId('discoveryModal').classList.add('hidden');
+byId('closeDiscoveryBtn').onclick=()=>closeDiscoveryModal();
+byId('discoveryModal').onclick=(e)=>{if(e.target===byId('discoveryModal')) closeDiscoveryModal();};
 byId('openWizardBtn').onclick=()=>openWizard();
-window.applyDiscoveryIp=(ip)=>{
-  const rtsp=byId('wiz_cam_rtsp'); const snap=byId('wiz_cam_snapshot');
-  if(rtsp && !rtsp.value) rtsp.value=`rtsp://user:pass@${ip}:554/Streaming/Channels/101`;
-  if(snap && !snap.value) snap.value=`http://user:pass@${ip}/cgi-bin/snapshot.cgi`;
+window.applyDiscoveryRtsp=(ip)=>{
+  const uid=ip.replace(/\./g,'_');
+  const user=byId(`disc_user_${uid}`)?.value||'admin';
+  const pass=byId(`disc_pass_${uid}`)?.value||'';
+  const path=byId(`disc_path_${uid}`)?.value||'/Streaming/Channels/101';
+  const rtsp=`rtsp://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${ip}:554${path}`;
+  const snap=`http://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${ip}/cgi-bin/snapshot.cgi`;
+  const wizRtsp=byId('wiz_cam_rtsp'); if(wizRtsp) wizRtsp.value=rtsp;
+  const wizSnap=byId('wiz_cam_snapshot'); if(wizSnap) wizSnap.value=snap;
   const form=byId('cameraForm');
-  if(form?.elements['rtsp_url'] && !form.elements['rtsp_url'].value) form.elements['rtsp_url'].value=`rtsp://user:pass@${ip}:554/Streaming/Channels/101`;
-  if(form?.elements['snapshot_url'] && !form.elements['snapshot_url'].value) form.elements['snapshot_url'].value=`http://user:pass@${ip}/cgi-bin/snapshot.cgi`;
-};
-window.applyDiscoveryRtsp=(url)=>{
-  byId('wiz_cam_rtsp').value=url;
-  if(byId('cameraForm')?.elements['rtsp_url']) byId('cameraForm').elements['rtsp_url'].value=url;
+  if(form?.elements['rtsp_url']) form.elements['rtsp_url'].value=rtsp;
+  if(form?.elements['snapshot_url']) form.elements['snapshot_url'].value=snap;
+  closeDiscoveryModal();
 };
 byId('cameraFilter').onchange=e=>{state.camera=e.target.value; loadAll();};
 byId('labelFilter').onchange=e=>{state.label=e.target.value; loadAll();};
@@ -227,11 +324,21 @@ byId('periodFilter').onchange=e=>{state.period=e.target.value; loadAll();};
 
 byId('cameraForm').onsubmit=async(e)=>{
   e.preventDefault(); const f=e.target.elements;
-  const payload={id:f['id'].value,name:f['name'].value,location:f['location'].value,rtsp_url:f['rtsp_url'].value,snapshot_url:f['snapshot_url'].value,group_id:f['group_id'].value,role:f['group_id'].selectedOptions[0]?.textContent||f['group_id'].value,object_filter:f['object_filter'].value.split(',').map(x=>x.trim()).filter(Boolean),enabled:f['enabled'].checked,armed:f['armed'].checked,telegram_enabled:f['telegram_enabled'].checked,mqtt_enabled:f['mqtt_enabled'].checked,whitelist_names:f['whitelist_names'].value.split(',').map(x=>x.trim()).filter(Boolean),timelapse:{enabled:f['timelapse_enabled'].checked,fps:12},schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},zones:JSON.parse(f['zones_json'].value||'[]'),masks:JSON.parse(f['masks_json'].value||'[]')};
+  const payload={id:f['id'].value,name:f['name'].value,location:f['location'].value,
+    rtsp_url:f['rtsp_url'].value,snapshot_url:f['snapshot_url'].value,
+    username:f['rtsp_user']?.value||'',password:f['rtsp_pass']?.value||'',
+    group_id:f['group_id'].value,role:f['group_id'].selectedOptions[0]?.textContent||f['group_id'].value,
+    object_filter:f['object_filter'].value.split(',').map(x=>x.trim()).filter(Boolean),
+    enabled:f['enabled'].checked,armed:f['armed'].checked,
+    telegram_enabled:f['telegram_enabled'].checked,mqtt_enabled:f['mqtt_enabled'].checked,
+    whitelist_names:f['whitelist_names'].value.split(',').map(x=>x.trim()).filter(Boolean),
+    timelapse:{enabled:f['timelapse_enabled'].checked,fps:12},
+    schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},
+    zones:JSON.parse(f['zones_json'].value||'[]'),masks:JSON.parse(f['masks_json'].value||'[]')};
   await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll(); editCamera(payload.id);
 };
 byId('groupForm').onsubmit=async(e)=>{e.preventDefault(); const f=e.target.elements; const payload={id:f['id'].value,name:f['name'].value,category:f['category'].value,alarm_profile:f['alarm_profile'].value,coarse_objects:f['coarse_objects'].value.split(',').map(x=>x.trim()).filter(Boolean),fine_models:f['fine_models'].value.split(',').map(x=>x.trim()).filter(Boolean),schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'}}; await fetch('/api/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll();};
-byId('settingsForm').onsubmit=async(e)=>{e.preventDefault(); const f=e.target.elements; const payload={app:{name:f['app_name'].value||'TAM-spy',tagline:f['app_tagline'].value||'',logo:f['app_logo'].value||'🐈‍⬛'},server:{public_base_url:f['public_base_url'].value||'',default_discovery_subnet:f['discovery_subnet'].value||'192.168.1.0/24'},telegram:{enabled:f['telegram_enabled'].checked,token:f['telegram_token'].value||'',chat_id:f['telegram_chat_id'].value||''},mqtt:{enabled:f['mqtt_enabled'].checked,host:f['mqtt_host'].value||'',port:Number(f['mqtt_port'].value||1883),username:f['mqtt_username'].value||'',password:f['mqtt_password'].value||'',base_topic:f['mqtt_base_topic'].value||'tam-spy'}}; await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll();};
+byId('settingsForm').onsubmit=async(e)=>{e.preventDefault(); const f=e.target.elements; const payload={app:{name:f['app_name'].value||'TAM-spy',tagline:f['app_tagline'].value||'',logo:f['app_logo'].value||'🐈‍⬛'},server:{public_base_url:f['public_base_url'].value||'',default_discovery_subnet:f['discovery_subnet'].value||'192.168.1.0/24'},telegram:{enabled:f['telegram_enabled'].checked,token:f['telegram_token'].value||'',chat_id:f['telegram_chat_id'].value||''},mqtt:{enabled:f['mqtt_enabled'].checked,host:f['mqtt_host'].value||'',port:Number(f['mqtt_port'].value||1883),username:f['mqtt_username'].value||'',password:f['mqtt_password'].value||'',base_topic:f['mqtt_base_topic'].value||'tam-spy'},processing:{coral_enabled:f['coral_enabled'].checked,bird_species_enabled:f['bird_species_enabled'].checked}}; await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll();};
 
 byId('exportJsonBtn').onclick=()=>download('/api/settings/export?format=json');
 byId('exportYamlBtn').onclick=()=>download('/api/settings/export?format=yaml');
