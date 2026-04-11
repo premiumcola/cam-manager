@@ -1,0 +1,35 @@
+services:
+  tam-spy:
+    build:
+      context: ./app
+      dockerfile: docker/Dockerfile
+    image: tam-spy
+    container_name: tam-spy
+    restart: unless-stopped
+    ports:
+      - "8099:8099"
+    volumes:
+      - ./app/config:/app/config
+      - ./storage:/app/storage
+      - ./models:/app/models
+    environment:
+      - TZ=Europe/Berlin
+
+  # Coral TPU variant — uncomment and use instead of above if you have a Coral USB TPU
+  # tam-spy-coral:
+  #   build:
+  #     context: ./app
+  #     dockerfile: docker/Dockerfile.coral
+  #   image: tam-spy-coral
+  #   container_name: tam-spy
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8099:8099"
+  #   volumes:
+  #     - ./app/config:/app/config
+  #     - ./storage:/app/storage
+  #     - ./models:/app/models
+  #   devices:
+  #     - /dev/bus/usb:/dev/bus/usb
+  #   environment:
+  #     - TZ=Europe/Berlin

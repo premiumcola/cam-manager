@@ -198,6 +198,15 @@ class SettingsStore:
         cfg["mqtt"] = deepcopy(self.data.get("mqtt", {}))
         cfg["cameras"] = deepcopy(self.data.get("cameras", []))
         cfg["camera_groups"] = deepcopy(self.data.get("camera_groups", []))
+        # Merge processing overrides (e.g. coral_enabled, bird_species_enabled) from settings
+        if "processing" in self.data:
+            base_proc = deepcopy(base_cfg.get("processing", {}))
+            for key, val in deepcopy(self.data["processing"]).items():
+                if isinstance(val, dict) and isinstance(base_proc.get(key), dict):
+                    base_proc[key] = {**base_proc[key], **val}
+                else:
+                    base_proc[key] = val
+            cfg["processing"] = base_proc
         return cfg
 
     def export_serializable(self) -> dict:
@@ -224,7 +233,7 @@ class SettingsStore:
 
     def bootstrap_state(self) -> dict:
         ui = self.data.setdefault("ui", {})
-        needs_wizard = not ui.get("wizard_completed", False) or not self.data.get("cameras")
+        needs_wizard = not ui.get("wizard_completed", False)
         return {
             "wizard_completed": bool(ui.get("wizard_completed", False)),
             "needs_wizard": needs_wizard,
