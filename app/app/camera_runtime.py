@@ -31,6 +31,7 @@ class CameraRuntime:
         self.last_error = None
         self.event_counter_today = 0
         self.capture = None
+        self.connect_time = None
         self.prev_gray = None
         self.lock = threading.Lock()
         proc = self.global_cfg.get("processing", {})
@@ -63,6 +64,8 @@ class CameraRuntime:
             if not cap.isOpened():
                 raise RuntimeError(f"Kamera {self.camera_id}: RTSP konnte nicht geöffnet werden")
             self.capture = cap
+            self.connect_time = time.time()
+            self.prev_gray = None  # reset motion state on reconnect
         else:
             self.capture = None
 
@@ -85,10 +88,36 @@ class CameraRuntime:
             raise RuntimeError(f"Kamera {self.camera_id}: Snapshot lesen fehlgeschlagen")
         return frame
 
-    def _motion_labels(self, frame):
+    def _is_frame_valid(self, frame) -> bool:
+        """Reject corrupt, uniform-gray, white, or artifact frames."""
+        if frame is None or frame.size == 0:
+            return False
+        h, w = frame.shape[:2]
+        if w < 64 or h < 48:
+            return False
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        mean_val = float(np.mean(gray))
+        if mean_val < 20 or mean_val > 240:
+            return False
+        std_val = float(np.std(gray))
+        if std_val > 80:
+            return False
+        # Reject frames where >30% of pixels are R≈G≈B (uniform gray/white)
+        b_ch, g_ch, r_ch = cv2.split(frame)
+        uniform = np.sum(
+            (np.abs(r_ch.astype(np.int16) - g_ch.astype(np.int16)) < 10) &
+            (np.abs(r_ch.astype(np.int16) - b_ch.astype(np.int16)) < 10)
+        )
+        if uniform > 0.3 * h * w:
+            return False
+        return True
+
+    def _motion_detect(self, frame):
+        """Returns (labels: list[str], motion_bbox: tuple|None).
+        motion_bbox is (x, y, w, h) bounding rect of all motion combined."""
         proc = self.global_cfg.get("processing", {}).get("motion", {})
         if not proc.get("enabled", True):
-            return []
+            return [], None
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         blur_size = int(proc.get("blur_size", 21))
         if blur_size % 2 == 0:
@@ -96,14 +125,19 @@ class CameraRuntime:
         gray = cv2.GaussianBlur(gray, (blur_size, blur_size), 0)
         if self.prev_gray is None:
             self.prev_gray = gray
-            return []
+            return [], None
         diff = cv2.absdiff(self.prev_gray, gray)
         self.prev_gray = gray
         _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
         thresh = cv2.dilate(thresh, None, iterations=2)
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        min_area = int(proc.get("min_area", 1800))
-        return ["motion"] if any(cv2.contourArea(c) >= min_area for c in contours) else []
+        min_area = int(proc.get("min_area", 5000))
+        big = [c for c in contours if cv2.contourArea(c) >= min_area]
+        if not big:
+            return [], None
+        all_pts = np.concatenate(big)
+        bbox = cv2.boundingRect(all_pts)
+        return ["motion"], bbox
 
     def _crop(self, frame, bbox):
         x1, y1, x2, y2 = bbox
@@ -119,7 +153,19 @@ class CameraRuntime:
         while self.running:
             try:
                 frame = self._grab_frame()
-                motion_labels = self._motion_labels(frame)
+                # Always store raw frame so status → "active" and snapshots work
+                with self.lock:
+                    self.frame = frame
+                self.last_error = None  # clear on every successful frame read
+                # Quality gate: skip corrupt/uniform/artifact frames for events only
+                if not self._is_frame_valid(frame):
+                    time.sleep(interval)
+                    continue
+                # Stream warmup: ignore first 3 s after connect to skip transition frames
+                if self.connect_time and time.time() - self.connect_time < 3.0:
+                    time.sleep(interval)
+                    continue
+                motion_labels, motion_bbox = self._motion_detect(frame)
                 detections = self.detector.detect_frame(frame)
                 allowed = set(self.cfg.get("object_filter") or [])
                 if allowed:
@@ -148,7 +194,6 @@ class CameraRuntime:
                                 d.identity = m.get("name")
                 drawn = draw_detections(frame, detections)
                 with self.lock:
-                    self.frame = frame
                     self.preview = drawn
                 if labels and (datetime.now() - self.last_event_at).total_seconds() >= cooldown:
                     self.last_event_at = datetime.now()
@@ -158,7 +203,16 @@ class CameraRuntime:
                     day_dir = Path(self.global_cfg["storage"]["root"]) / "events" / self.camera_id / ts.strftime("%Y-%m-%d")
                     day_dir.mkdir(parents=True, exist_ok=True)
                     snap_path = day_dir / f"{event_id}.jpg"
-                    cv2.imwrite(str(snap_path), drawn)
+                    save_frame = drawn.copy()
+                    # Draw green motion bounding box if motion was detected
+                    if motion_bbox is not None:
+                        mx, my, mw, mh = motion_bbox
+                        cv2.rectangle(save_frame, (mx, my), (mx + mw, my + mh), (0, 220, 0), 2)
+                    h_px, w_px = save_frame.shape[:2]
+                    if w_px > 1280:
+                        scale = 1280 / w_px
+                        save_frame = cv2.resize(save_frame, (1280, int(h_px * scale)), interpolation=cv2.INTER_AREA)
+                    cv2.imwrite(str(snap_path), save_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
                     rel = snap_path.relative_to(Path(self.global_cfg["storage"]["root"]))
                     public_base = (self.global_cfg.get("server", {}).get("public_base_url") or "").rstrip("/")
                     snapshot_url = f"{public_base}/media/{rel.as_posix()}" if public_base else None
