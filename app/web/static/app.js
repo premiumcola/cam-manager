@@ -1009,11 +1009,17 @@ byId('wizFinish').onclick=()=>finishWizard();
     document.body.style.overflow='';
   };
 
-  document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>{
+  document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',e=>{
     if(window.innerWidth<=768){
       sidebar.classList.remove('mobile-open');
       overlay.classList.remove('visible');
       document.body.style.overflow='';
+    }
+    const href=a.getAttribute('href');
+    if(href&&href.startsWith('#')){
+      e.preventDefault();
+      const target=document.querySelector(href);
+      if(target) target.scrollIntoView({behavior:'smooth',block:'start'});
     }
   }));
 })();
