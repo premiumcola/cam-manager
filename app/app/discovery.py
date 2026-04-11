@@ -71,37 +71,45 @@ def _rtsp_banner(ip: str, port: int, timeout: float = 1.5) -> bool:
 
 
 def _guess(open_ports: list[int], banners: dict) -> str:
+    """Return human-readable vendor/type name without 'Kamera' prefix."""
     server = banners.get("server", "").lower()
     title = banners.get("title", "").lower()
     www_auth = banners.get("www_auth", "").lower()
 
     rtsp_open = any(p in open_ports for p in (554, 8554))
 
+    # Check banner content for vendor hints
+    for keyword, vendor in [
+        ("reolink", "Reolink"), ("hikvision", "Hikvision"), ("hik", "Hikvision"),
+        ("dahua", "Dahua"), ("amcrest", "Amcrest"), ("axis", "Axis"),
+        ("hanwha", "Hanwha"), ("uniview", "Uniview"), ("vivotek", "Vivotek"),
+        ("foscam", "Foscam"), ("tp-link", "TP-Link"), ("tapo", "TP-Link Tapo"),
+    ]:
+        if keyword in server or keyword in title or keyword in www_auth:
+            return vendor
+
     if rtsp_open:
         if 8000 in open_ports:
-            return "Kamera (Hikvision)"
+            return "Hikvision"
         if 37777 in open_ports:
-            return "Kamera (Dahua/Amcrest)"
+            return "Dahua / Amcrest"
         if 9000 in open_ports:
-            return "Kamera (Reolink)"
-        return "Kamera (RTSP)"
+            return "Reolink"
+        return "RTSP-Kamera"
 
     if 9000 in open_ports:
-        return "Kamera (Reolink – RTSP deaktiviert?)"
+        return "Reolink"
     if 37777 in open_ports:
-        return "Kamera (Dahua – RTSP deaktiviert?)"
+        return "Dahua / Amcrest"
     if 34567 in open_ports:
-        return "Kamera (Hikvision – RTSP deaktiviert?)"
+        return "Hikvision"
     if 2020 in open_ports:
-        return "Kamera (ONVIF)"
+        return "ONVIF-Kamera"
 
     if www_auth and "realm" in www_auth:
-        realm = www_auth.lower()
-        if any(k in realm for k in ("hikvision", "hik", "dvr", "nvr", "cam", "ipc", "ip camera")):
-            return "Kamera (HTTP-Auth)"
-        return f"Gerät mit HTTP-Auth ({www_auth[:40]})"
+        return "IP-Kamera (HTTP-Auth)"
 
-    return "Kamera-Kandidat"
+    return "Unbekannte Kamera"
 
 
 def discover_hosts(subnet: str, max_hosts: int = 254) -> tuple[list, int]:

@@ -132,7 +132,10 @@
 
       <section id="timeline" class="panel section">
         <div class="section-head"><h3>Timeline</h3><div class="muted">Zeitachse je Kamera + globaler Flow</div></div>
-        <svg id="timelineSvg" viewBox="0 0 1200 340" preserveAspectRatio="none"></svg>
+        <div style="position:relative">
+          <svg id="timelineSvg" viewBox="0 0 1200 340" preserveAspectRatio="none"></svg>
+          <div id="tlTooltip" class="tl-tooltip hidden"></div>
+        </div>
         <div class="timeline-legend">
           <span class="tl-leg-item"><span class="tl-dot" style="background:#7ee787"></span>motion</span>
           <span class="tl-leg-item"><span class="tl-dot" style="background:#ffd166"></span>person</span>
@@ -140,12 +143,18 @@
           <span class="tl-leg-item"><span class="tl-dot" style="background:#70d6ff"></span>bird</span>
           <span class="tl-leg-item"><span class="tl-dot" style="background:#9c89ff"></span>car</span>
           <span class="tl-leg-item"><span class="tl-dot" style="background:#ff6b6b"></span>alarm</span>
-          <span class="tl-leg-item tl-leg-size">●&nbsp;groß = Alarm · klein = Info</span>
+          <span class="tl-leg-item tl-leg-size">▬ Bewegungsbalken · ● Einzelereignis</span>
         </div>
       </section>
 
       <section id="media" class="panel section">
-        <div class="section-head"><h3>Mediathek</h3><div class="muted">Letzte Erkennungen, Clips, Reviews</div></div>
+        <div class="section-head">
+          <h3>Mediathek</h3>
+          <div style="display:flex;gap:10px;align-items:center">
+            <div class="muted">Letzte Erkennungen, Clips, Reviews</div>
+            <button type="button" id="rescanMediaBtn" class="add-btn">🔍 Neu scannen</button>
+          </div>
+        </div>
         <div id="mediaStorageBar" class="media-storage-bar"></div>
         <div id="mediaGrid" class="media-grid"></div>
 
@@ -343,6 +352,10 @@
                   <span class="field-label">🔒 Bot-Token</span>
                 </div>
                 <div class="field-wrap"><input name="telegram_chat_id" placeholder="Chat ID · z.B. 123456789" /><span class="field-label">Chat ID</span></div>
+                <div style="display:flex;gap:10px;align-items:center">
+                  <button type="button" id="telegramTestBtn" class="action-btn">📨 Testnachricht senden</button>
+                  <span id="telegramTestResult" class="small" style="display:none"></span>
+                </div>
               </div>
             </div></div>
           </div>
@@ -454,8 +467,14 @@
         <button id="closeDiscoveryBtn" class="close-btn" type="button">✕</button>
       </div>
       <div class="field-help">Gefundene Hosts mit typischen Kamera-Ports. Klick auf "Als RTSP übernehmen" trägt die IP direkt in die Form ein.</div>
-      <div id="discoveryStatus" class="small muted">Noch keine Suche gestartet.</div>
-      <div id="discoveryResults" class="list" style="margin-top:12px"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:4px">
+        <div id="discoveryStatus" class="small muted">Noch keine Suche gestartet.</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer;flex-shrink:0">
+          <input type="checkbox" id="discoveryHideConfigured" style="cursor:pointer" />
+          Bereits konfigurierte ausblenden
+        </label>
+      </div>
+      <div id="discoveryResults" class="list" style="margin-top:8px"></div>
     </div>
   </div>
 

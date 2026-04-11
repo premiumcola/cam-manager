@@ -93,6 +93,26 @@ def rebuild_runtimes():
 rebuild_runtimes()
 
 
+def _startup_media_scan():
+    """Scan existing media files on startup in background."""
+    import threading
+    def _do_scan():
+        try:
+            effective = settings.export_effective_config(base_cfg)
+            cam_ids = [c["id"] for c in effective.get("cameras", [])]
+            public_base = (effective.get("server", {}).get("public_base_url") or "").rstrip("/")
+            count = store.scan_media_files(cam_ids, public_base_url=public_base)
+            if count:
+                logging.getLogger(__name__).info("[startup] MediaScan: %d orphaned files registered", count)
+        except Exception as e:
+            logging.getLogger(__name__).warning("[startup] MediaScan failed: %s", e)
+    t = threading.Thread(target=_do_scan, daemon=True)
+    t.start()
+
+
+_startup_media_scan()
+
+
 def _run_daily_cleanup():
     import threading
     retention = int(base_cfg.get("storage", {}).get("retention_days", 14))
@@ -334,6 +354,18 @@ def api_media_storage_stats():
     return jsonify({"cameras": result})
 
 
+@app.post('/api/media/rescan')
+def api_media_rescan():
+    effective = get_effective_config()
+    cam_ids = [c["id"] for c in effective.get("cameras", [])]
+    public_base = (effective.get("server", {}).get("public_base_url") or "").rstrip("/")
+    try:
+        count = store.scan_media_files(cam_ids, public_base_url=public_base)
+        return jsonify({"ok": True, "registered": count})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.post('/api/media/cleanup')
 def api_media_cleanup():
     payload = request.get_json(force=True) or {}
@@ -536,6 +568,27 @@ def api_timeline():
 @app.get('/api/telegram/actions')
 def api_telegram_actions():
     return jsonify({"items": settings.data.get("telegram_actions", [])[:40]})
+
+
+@app.post('/api/telegram/test')
+def api_telegram_test():
+    import asyncio as _asyncio
+    tg_cfg = settings.export_effective_config(base_cfg).get("telegram", {})
+    logging.getLogger(__name__).info("[Telegram] Test: enabled=%s token_set=%s chat_id=%s",
+        tg_cfg.get("enabled"), bool(tg_cfg.get("token")), tg_cfg.get("chat_id"))
+    if not telegram_service or not telegram_service.enabled:
+        reasons = []
+        if not tg_cfg.get("enabled"): reasons.append("Telegram nicht aktiviert")
+        if not tg_cfg.get("token"): reasons.append("Token fehlt")
+        if not tg_cfg.get("chat_id"): reasons.append("Chat-ID fehlt")
+        return jsonify({"ok": False, "error": " · ".join(reasons) or "Telegram nicht konfiguriert"}), 400
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    msg = f"TAM-spy Test ✓ Verbindung funktioniert! {ts}"
+    try:
+        _asyncio.run(telegram_service.send_alert(caption=msg))
+        return jsonify({"ok": True, "message": msg})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.get('/api/camera/<cam_id>/timelapse')

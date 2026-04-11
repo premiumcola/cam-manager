@@ -35,8 +35,13 @@ def choose_alarm_level(group: dict, labels: list[str], after_hours: bool, whitel
         return "alarm", True
     if any(x in labels for x in ["person", "car"]) and profile == "hard":
         return "alarm", True
+    if any(x in labels for x in ["person", "car", "cat", "bird"]) and profile == "medium":
+        return "info", True
     if any(x in labels for x in ["cat", "bird"]) and profile == "info":
         return "info", True
     if profile == "soft":
+        return "info", True
+    # motion-only events still notify for hard/medium profiles
+    if "motion" in labels and profile in {"hard", "medium"}:
         return "info", True
     return "logged", False

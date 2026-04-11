@@ -104,6 +104,14 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .settings-save-btn{width:100%;min-height:46px;padding:13px 16px;background:var(--accent);color:#fff;font-weight:700;border:none;border-radius:14px;font-size:15px;cursor:pointer;margin-top:6px}
 .settings-save-btn:hover{background:#2563eb}
 
+/* ── Timeline tooltip / hover popup ─────────────────────────────────────────── */
+.tl-tooltip{position:absolute;z-index:200;width:230px;background:#111d2b;border:1px solid #2a3f56;border-radius:14px;padding:12px 14px;pointer-events:none;box-shadow:0 8px 32px rgba(0,0,0,.6);font-size:13px}
+.tl-tt-time{font-weight:700;color:#cfe7ff;margin-bottom:4px;font-size:12px}
+.tl-tt-dur{color:var(--muted);font-size:11px;margin-bottom:4px}
+.tl-tt-labels{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.tl-tt-media{width:100%;border-radius:8px;object-fit:cover;max-height:140px;background:#0a0e1a;display:block}
+.tl-shape:hover{filter:brightness(1.35)}
+
 /* Import/Export colored buttons */
 .ie-btn{padding:9px 10px;border:none;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;color:#fff;min-height:38px}
 .ie-blue{background:#2563eb}.ie-green{background:#16a34a}.ie-gray{background:#374151}

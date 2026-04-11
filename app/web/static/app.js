@@ -158,6 +158,67 @@ function renderDashboard(){
   window._openMediaItem=id=>{const item=_mediaItems.find(x=>x.event_id===id); if(item) openLightbox(item);};
 }
 
+// ── Timeline tooltip ─────────────────────────────────────────────────────────
+let _tlHoverTarget=null;
+function _tlShow(el,evt){
+  const tt=byId('tlTooltip'); if(!tt) return;
+  const time=el.dataset.time||'';
+  const dur=Number(el.dataset.dur||0);
+  const labels=(el.dataset.labels||'').split(',').filter(Boolean);
+  const snap=el.dataset.snap||'';
+  const vid=el.dataset.vid||'';
+  const count=Number(el.dataset.count||1);
+  let html=`<div class="tl-tt-time">${esc(time.replace('T',' '))}</div>`;
+  if(dur>1) html+=`<div class="tl-tt-dur">Dauer: ${dur < 60 ? dur+'s' : Math.round(dur/60)+'min'}</div>`;
+  if(count>1) html+=`<div class="tl-tt-dur">${count} Ereignisse</div>`;
+  html+=`<div class="tl-tt-labels">${labels.map(l=>`<span class="chip" style="background:${colors[l]||colors.unknown}20;color:${colors[l]||colors.unknown}">${esc(l)}</span>`).join('')}</div>`;
+  if(vid){
+    html+=`<video class="tl-tt-media" src="${esc(vid)}" autoplay muted loop playsinline></video>`;
+  } else if(snap){
+    html+=`<img class="tl-tt-media" src="${esc(snap)}" alt="snapshot" loading="lazy"/>`;
+  }
+  tt.innerHTML=html;
+  // Position popup near mouse, avoid overflow
+  const svgEl=byId('timelineSvg');
+  const svgRect=svgEl.getBoundingClientRect();
+  const mx=evt.clientX-svgRect.left, my=evt.clientY-svgRect.top;
+  const svgW=svgRect.width, svgH=svgRect.height;
+  const ttW=230,ttH=snap||vid?240:100;
+  let lx=mx+14, ly=my-20;
+  if(lx+ttW>svgW) lx=mx-ttW-14;
+  if(ly+ttH>svgH) ly=svgH-ttH-8;
+  if(ly<0) ly=4;
+  tt.style.left=lx+'px'; tt.style.top=ly+'px';
+  tt.classList.remove('hidden');
+  _tlHoverTarget=el;
+}
+function _tlHide(){ const tt=byId('tlTooltip'); if(tt) tt.classList.add('hidden'); _tlHoverTarget=null; }
+
+// ── Group timeline events within GAP_MS ──────────────────────────────────────
+function _groupTimelineEvents(points,GAP_MS=30000){
+  const groups=[];
+  let curr=null;
+  for(const p of points){
+    const t=new Date(p.time).getTime();
+    if(!t) continue;
+    if(!curr||t-curr.endTime>GAP_MS){
+      curr={startTime:t,endTime:t,events:[p],labels:[...(p.labels||[])],
+        top_label:p.top_label,alarm_level:p.alarm_level,
+        snapshot_url:p.snapshot_url||'',video_url:p.video_url||'',event_id:p.event_id};
+      groups.push(curr);
+    } else {
+      curr.endTime=t;
+      curr.events.push(p);
+      const merged=new Set([...curr.labels,...(p.labels||[])]);
+      curr.labels=[...merged];
+      if(p.alarm_level==='alarm') curr.alarm_level='alarm';
+      if(!curr.video_url&&p.video_url) curr.video_url=p.video_url;
+      if(!curr.snapshot_url&&p.snapshot_url) curr.snapshot_url=p.snapshot_url;
+    }
+  }
+  return groups;
+}
+
 function renderTimeline(){
   const svg=byId('timelineSvg');
   const w=1200,h=340,left=140,top=40,right=24,bottom=34;
@@ -165,24 +226,58 @@ function renderTimeline(){
   if(!tracks.length){ svg.innerHTML=''; return; }
   const points=(state.timeline.merged||[]);
   const times=points.map(p=>new Date(p.time).getTime()).filter(Boolean);
-  const min=Math.min(...times,Date.now()-3600_000), max=Math.max(...times,Date.now());
-  const x=t=> left + ((new Date(t).getTime()-min)/Math.max(1,max-min))*(w-left-right);
+  const tMin=Math.min(...times,Date.now()-3600_000), tMax=Math.max(...times,Date.now());
+  const xOf=t=>left+((new Date(t).getTime()-tMin)/Math.max(1,tMax-tMin))*(w-left-right);
   const rowH=(h-top-bottom)/Math.max(1,tracks.length);
-  const y=i=> top + rowH*i + rowH/2;
+  const yOf=i=>top+rowH*i+rowH/2;
   let out=`<rect x="0" y="0" width="${w}" height="${h}" fill="#0b131b" rx="18"/>`;
-  tracks.forEach((tr,i)=>{ out+=`<line x1="${left}" y1="${y(i)}" x2="${w-right}" y2="${y(i)}" stroke="#213241" stroke-width="1"/>`;
-    out+=`<text x="18" y="${y(i)+5}" fill="#91a4b8" font-size="14">${esc(tr.camera_id)}</text>`;
+  tracks.forEach((tr,i)=>{
+    out+=`<line x1="${left}" y1="${yOf(i)}" x2="${w-right}" y2="${yOf(i)}" stroke="#213241" stroke-width="1"/>`;
+    const label=tr.camera_id.length>16?tr.camera_id.slice(0,15)+'…':tr.camera_id;
+    out+=`<text x="18" y="${yOf(i)+5}" fill="#91a4b8" font-size="13">${esc(label)}</text>`;
   });
-  // X-axis grid + time labels
+  // X-axis time labels
   for(let k=0;k<6;k++){
     const tx=left+((w-left-right)/5)*k;
-    const t=new Date(min+((max-min)/5)*k);
-    const label=t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
+    const t=new Date(tMin+((tMax-tMin)/5)*k);
+    const lbl=t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
     out+=`<line x1="${tx}" y1="${top-10}" x2="${tx}" y2="${h-bottom}" stroke="#172532" stroke-width="1"/>`;
-    out+=`<text x="${tx}" y="${h-bottom+16}" fill="#566d84" font-size="11" text-anchor="middle">${label}</text>`;
+    out+=`<text x="${tx}" y="${h-bottom+16}" fill="#566d84" font-size="11" text-anchor="middle">${lbl}</text>`;
   }
-  points.forEach(p=>{ const cx=x(p.time), cy=y(tracks.findIndex(t=>t.camera_id===p.camera_id)); const fill=colors[p.top_label]||colors.unknown; const r=p.alarm_level==='alarm'?9:6; out+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" stroke="#fff" stroke-opacity=".35"/>`; });
+  // Draw bars and dots per track
+  tracks.forEach((tr,i)=>{
+    const groups=_groupTimelineEvents(tr.points||[]);
+    groups.forEach(g=>{
+      const cx=xOf(g.startTime), cy=yOf(i);
+      const topLabel=g.labels.find(l=>l!=='motion')||g.labels[0]||'motion';
+      const fill=colors[topLabel]||colors.unknown;
+      const durMs=g.endTime-g.startTime;
+      const barW=Math.max(8,xOf(g.endTime)-cx);
+      const isBar=g.events.length>1||durMs>2000;
+      const isAlarm=g.alarm_level==='alarm';
+      const barH=isAlarm?14:10;
+      const snapEnc=esc(g.snapshot_url||'');
+      const vidEnc=esc(g.video_url||'');
+      const labEnc=esc(g.labels.join(','));
+      const timeEnc=esc(g.events[0]?.time||'');
+      const durSec=Math.round(durMs/1000);
+      const da=`data-snap="${snapEnc}" data-vid="${vidEnc}" data-labels="${labEnc}" data-time="${timeEnc}" data-dur="${durSec}" data-count="${g.events.length}"`;
+      if(isBar){
+        out+=`<rect ${da} x="${cx}" y="${cy-barH/2}" width="${barW}" height="${barH}" rx="6" fill="${fill}" stroke="#fff" stroke-opacity=".25" class="tl-shape" style="cursor:pointer"/>`;
+      } else {
+        const r=isAlarm?9:6;
+        out+=`<circle ${da} cx="${cx+r}" cy="${cy}" r="${r}" fill="${fill}" stroke="#fff" stroke-opacity=".35" class="tl-shape" style="cursor:pointer"/>`;
+      }
+    });
+  });
   svg.innerHTML=out;
+  // Attach hover events via delegation
+  svg.onmousemove=evt=>{
+    const el=evt.target.closest('.tl-shape');
+    if(el&&el!==_tlHoverTarget) _tlShow(el,evt);
+    else if(!el) _tlHide();
+  };
+  svg.onmouseleave=_tlHide;
 }
 
 // ── RTSP path options (shared with discovery) ────────────────────────────────
@@ -473,38 +568,75 @@ function closeDiscoveryModal(){
   byId('discoveryModal').classList.add('hidden');
   document.body.style.overflow='';
 }
+let _discoveryItems=[];
+function _renderDiscoveryResults(){
+  const hideConfigured=byId('discoveryHideConfigured')?.checked;
+  const pathOpts=RTSP_PATHS.map(p=>`<option value="${esc(p.value)}">${esc(p.label)}</option>`).join('');
+  // Collect IPs from existing configured cameras
+  const configuredIPs=new Set((state.config?.cameras||[]).map(c=>{
+    try{ return new URL(c.rtsp_url||'http://x').hostname; }catch{ return ''; }
+  }).concat((state.cameras||[]).map(c=>c.id)).filter(Boolean));
+  // Also check rtsp_url/snapshot_url IPs
+  const configuredIPsFromUrl=new Set();
+  (state.config?.cameras||[]).forEach(c=>{
+    ['rtsp_url','snapshot_url'].forEach(k=>{
+      try{ const u=new URL((c[k]||'').replace(/^rtsp:/,'http:')); if(u.hostname) configuredIPsFromUrl.add(u.hostname); }catch{}
+    });
+  });
+  const allConfigured=new Set([...configuredIPs,...configuredIPsFromUrl]);
+
+  const visible=hideConfigured?_discoveryItems.filter(x=>!allConfigured.has(x.ip)):_discoveryItems;
+  const alreadyCount=_discoveryItems.filter(x=>allConfigured.has(x.ip)).length;
+
+  if(!visible.length){
+    byId('discoveryResults').innerHTML=`<div class="item">Keine Kamera-Kandidaten${hideConfigured&&alreadyCount?' ('+alreadyCount+' bereits konfiguriert ausgeblendet)':''}</div>`;
+    return;
+  }
+  byId('discoveryResults').innerHTML=visible.map(x=>{
+    const ports=(x.open_ports||[]).join(', ')||'—';
+    const uid=x.ip.replace(/\./g,'_');
+    const already=allConfigured.has(x.ip);
+    const vendor=x.guess==='Unbekannte Kamera'?`Unbekannte Kamera (${x.ip})`:esc(x.guess||'Unbekannte Kamera');
+    return `<div class="item" data-disc-ip="${esc(x.ip)}">
+      <div class="item-head">
+        <div>
+          <strong>${esc(x.ip)}</strong>
+          ${already?'<span class="badge good" style="margin-left:8px;font-size:11px">✓ Bereits konfiguriert</span>':''}
+        </div>
+        <span class="small muted">Ports: ${esc(ports)}</span>
+      </div>
+      <div class="small" style="color:${already?'var(--good)':'var(--muted)'};margin-bottom:6px">${vendor}</div>
+      ${already?'':(`<div class="discovery-creds">
+        <input id="disc_user_${uid}" class="disc-input" placeholder="Benutzer" value="admin" />
+        <input id="disc_pass_${uid}" class="disc-input" type="password" placeholder="Passwort" />
+        <select id="disc_path_${uid}" class="disc-select">${pathOpts}</select>
+      </div>
+      <div class="chip-row" style="margin-top:8px">
+        <button class="action-btn" onclick="applyDiscoveryRtsp('${esc(x.ip)}')">Als RTSP übernehmen</button>
+      </div>`)}
+    </div>`;
+  }).join('');
+}
+
 byId('discoverBtn').onclick=async()=>{
   byId('discoveryModal').classList.remove('hidden');
   document.body.style.overflow='hidden';
   byId('discoveryStatus').textContent='Suche läuft …';
   byId('discoveryResults').innerHTML='';
+  _discoveryItems=[];
   try{
     const r=await j('/api/discover');
-    const items=r.results||[];
+    _discoveryItems=r.results||[];
     const total=r.total_scanned||'?';
-    byId('discoveryStatus').innerHTML=`Subnetz <strong>${esc(r.subnet)}</strong> · ${total} Hosts gescannt · <strong>${items.length} Kamera-Kandidaten</strong> <span class="small muted">(nur Kamera-Kandidaten)</span>`;
-    const pathOpts=RTSP_PATHS.map(p=>`<option value="${esc(p.value)}">${esc(p.label)}</option>`).join('');
-    byId('discoveryResults').innerHTML=items.map(x=>{
-      const ports=(x.open_ports||[]).join(', ')||'—';
-      const uid=x.ip.replace(/\./g,'_');
-      return `<div class="item">
-        <div class="item-head"><strong>${esc(x.ip)}</strong><span class="small">Ports: ${esc(ports)}</span></div>
-        <div class="small muted">${esc(x.guess||'Host')}</div>
-        <div class="discovery-creds">
-          <input id="disc_user_${uid}" class="disc-input" placeholder="Benutzer" value="admin" />
-          <input id="disc_pass_${uid}" class="disc-input" type="password" placeholder="Passwort" />
-          <select id="disc_path_${uid}" class="disc-select">${pathOpts}</select>
-        </div>
-        <div class="chip-row" style="margin-top:8px">
-          <button class="action-btn" onclick="applyDiscoveryRtsp('${esc(x.ip)}')">Als RTSP übernehmen</button>
-        </div>
-      </div>`;
-    }).join('') || '<div class="item">Keine Kamera-Kandidaten gefunden.</div>';
+    const found=_discoveryItems.length;
+    byId('discoveryStatus').innerHTML=`Subnetz <strong>${esc(r.subnet)}</strong> · ${total} Hosts · <strong>Gefundene Geräte (${found})</strong>`;
+    _renderDiscoveryResults();
   }catch(err){
     byId('discoveryStatus').textContent='Discovery fehlgeschlagen';
     byId('discoveryResults').innerHTML=`<div class="item">${esc(err.message||err)}</div>`;
   }
 };
+byId('discoveryHideConfigured')?.addEventListener('change',_renderDiscoveryResults);
 byId('closeDiscoveryBtn').onclick=()=>closeDiscoveryModal();
 byId('discoveryModal').onclick=(e)=>{if(e.target===byId('discoveryModal')) closeDiscoveryModal();};
 byId('openWizardBtn').onclick=()=>openWizard();
@@ -723,6 +855,37 @@ function renderLogs(logs){
 byId('logRefreshBtn').onclick=loadLogs;
 byId('logClearBtn').onclick=()=>{byId('logOutput').innerHTML='';};
 byId('logLevelFilter').onchange=loadLogs;
+
+// ── Telegram test button ──────────────────────────────────────────────────────
+byId('telegramTestBtn')?.addEventListener('click',async()=>{
+  const btn=byId('telegramTestBtn');
+  const res=byId('telegramTestResult');
+  btn.disabled=true; btn.textContent='Sende …';
+  if(res){res.style.display='inline';res.style.color='var(--muted)';res.textContent='...';}
+  try{
+    const r=await j('/api/telegram/test',{method:'POST'});
+    if(res){res.style.color='var(--good)';res.textContent='✓ Gesendet';}
+  }catch(e){
+    let msg='Fehler';
+    try{msg=JSON.parse(e.message)?.error||e.message;}catch{}
+    if(res){res.style.color='var(--danger)';res.textContent='✗ '+msg;}
+  }finally{
+    btn.disabled=false; btn.textContent='📨 Testnachricht senden';
+    if(res) setTimeout(()=>{res.style.display='none';},6000);
+  }
+});
+
+// ── Media rescan button ───────────────────────────────────────────────────────
+byId('rescanMediaBtn')?.addEventListener('click',async()=>{
+  const btn=byId('rescanMediaBtn');
+  btn.disabled=true; btn.textContent='Scanne …';
+  try{
+    const r=await j('/api/media/rescan',{method:'POST'});
+    alert(`Scan abgeschlossen: ${r.registered||0} neue Medien registriert.`);
+    await loadAll();
+  }catch(e){alert('Fehler beim Scan: '+e.message);}
+  finally{btn.disabled=false;btn.textContent='🔍 Neu scannen';}
+});
 
 // ── Lightbox / Media viewer ───────────────────────────────────────────────────
 let _lbItem=null;

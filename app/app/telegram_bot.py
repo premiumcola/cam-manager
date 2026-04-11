@@ -3,8 +3,11 @@ from io import BytesIO
 from threading import Thread
 from datetime import datetime
 import asyncio
+import logging
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+
+log = logging.getLogger(__name__)
 
 
 class TelegramService:
@@ -14,6 +17,14 @@ class TelegramService:
         self.chat_id = str(self.cfg.get("chat_id", ""))
         self.token = self.cfg.get("token", "")
         self.bot = Bot(self.token) if self.enabled else None
+        if not self.enabled:
+            reasons = []
+            if not self.cfg.get("enabled"): reasons.append("enabled=false")
+            if not self.cfg.get("token"): reasons.append("token leer")
+            if not self.cfg.get("chat_id"): reasons.append("chat_id leer")
+            log.info("[Telegram] Deaktiviert: %s", ", ".join(reasons) if reasons else "unbekannt")
+        else:
+            log.info("[Telegram] Aktiv: chat_id=%s token=%s…", self.chat_id, self.token[:8] if self.token else "")
         self.store = store
         self.runtimes = runtimes or {}
         self.global_cfg = global_cfg
@@ -171,6 +182,7 @@ class TelegramService:
 
     async def send_alert(self, caption: str, jpeg_bytes: bytes | None = None, snapshot_url: str | None = None, dashboard_url: str | None = None, camera_id: str | None = None):
         if not self.enabled or not self.bot:
+            log.debug("[Telegram] send_alert übersprungen (enabled=%s, bot=%s)", self.enabled, self.bot is not None)
             return
         buttons = [[
             InlineKeyboardButton("📷 Live-Bild", callback_data=f"snapshot:{camera_id}" if camera_id else "menu:snapshot"),
@@ -183,12 +195,23 @@ class TelegramService:
             buttons.append([InlineKeyboardButton("🖥 Dashboard", url=dashboard_url)])
         markup = InlineKeyboardMarkup(buttons)
         self.log_action("alert_sent", camera_id)
-        if jpeg_bytes:
-            bio = BytesIO(jpeg_bytes); bio.name = "alert.jpg"
-            await self.bot.send_photo(chat_id=self.chat_id, photo=bio, caption=caption, reply_markup=markup)
-        else:
-            await self.bot.send_message(chat_id=self.chat_id, text=caption, reply_markup=markup)
+        log.info("[Telegram] Alert senden → chat_id=%s caption=%s…", self.chat_id, caption[:60])
+        try:
+            if jpeg_bytes:
+                bio = BytesIO(jpeg_bytes); bio.name = "alert.jpg"
+                await self.bot.send_photo(chat_id=self.chat_id, photo=bio, caption=caption, reply_markup=markup)
+            else:
+                await self.bot.send_message(chat_id=self.chat_id, text=caption, reply_markup=markup)
+            log.info("[Telegram] Alert erfolgreich gesendet (camera_id=%s)", camera_id)
+        except Exception as e:
+            log.error("[Telegram] Alert FEHLER (camera_id=%s): %s", camera_id, e)
+            raise
 
     def send_alert_sync(self, *args, **kwargs):
-        if self.enabled:
+        if not self.enabled:
+            log.debug("[Telegram] send_alert_sync übersprungen (nicht aktiv)")
+            return
+        try:
             asyncio.run(self.send_alert(*args, **kwargs))
+        except Exception as e:
+            log.error("[Telegram] send_alert_sync Fehler: %s", e)

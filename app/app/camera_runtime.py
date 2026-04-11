@@ -35,6 +35,10 @@ class CameraRuntime:
         self.prev_gray = None
         self._error_streak = 0
         self.lock = threading.Lock()
+        # Video recording state
+        self._motion_frames: list = []
+        self._motion_start_time: datetime | None = None
+        self._last_motion_time: datetime | None = None
         proc = self.global_cfg.get("processing", {})
         self.detector = CoralObjectDetector(proc.get("detection", {}))
         self.bird_classifier = BirdSpeciesClassifier(proc.get("bird_species", {}))
@@ -120,7 +124,7 @@ class CameraRuntime:
         if not proc.get("enabled", True):
             return [], None
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        blur_size = int(proc.get("blur_size", 21))
+        blur_size = int(proc.get("blur_size", 15))
         if blur_size % 2 == 0:
             blur_size += 1
         gray = cv2.GaussianBlur(gray, (blur_size, blur_size), 0)
@@ -132,7 +136,7 @@ class CameraRuntime:
         _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
         thresh = cv2.dilate(thresh, None, iterations=2)
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        min_area = int(proc.get("min_area", 5000))
+        min_area = int(proc.get("min_area", 3000))
         big = [c for c in contours if cv2.contourArea(c) >= min_area]
         if not big:
             return [], None
@@ -148,8 +152,30 @@ class CameraRuntime:
         groups = {g.get("id"): g for g in self.global_cfg.get("camera_groups", [])}
         return groups.get(self.cfg.get("group_id"), {})
 
+    def _save_motion_video(self, start_time: datetime, frames: list) -> str | None:
+        """Save buffered frames as MP4. Returns path or None."""
+        if not frames:
+            return None
+        try:
+            day_dir = Path(self.global_cfg["storage"]["root"]) / "events" / self.camera_id / start_time.strftime("%Y-%m-%d")
+            day_dir.mkdir(parents=True, exist_ok=True)
+            event_id = start_time.strftime("%Y%m%d-%H%M%S-vid")
+            vid_path = day_dir / f"{event_id}.mp4"
+            h, w = frames[0].shape[:2]
+            interval = max(0.05, float(self.global_cfg.get("processing", {}).get("motion", {}).get("frame_interval_ms", 150)) / 1000.0)
+            fps = max(5, min(25, int(1.0 / interval)))
+            writer = cv2.VideoWriter(str(vid_path), cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+            for f in frames:
+                writer.write(f)
+            writer.release()
+            log.info("[%s] Motion video saved: %s (%d frames, %.1fs)", self.camera_id, vid_path.name, len(frames), len(frames) / fps)
+            return str(vid_path)
+        except Exception as e:
+            log.error("[%s] Video save error: %s", self.camera_id, e)
+            return None
+
     def _loop(self):
-        interval = max(0.1, float(self.global_cfg.get("processing", {}).get("motion", {}).get("frame_interval_ms", 350)) / 1000.0)
+        interval = max(0.05, float(self.global_cfg.get("processing", {}).get("motion", {}).get("frame_interval_ms", 150)) / 1000.0)
         cooldown = int(self.global_cfg.get("processing", {}).get("event_cooldown_seconds", 25))
         while self.running:
             try:
@@ -197,7 +223,36 @@ class CameraRuntime:
                 drawn = draw_detections(frame, detections)
                 with self.lock:
                     self.preview = drawn
-                if labels and (datetime.now() - self.last_event_at).total_seconds() >= cooldown:
+                # ── Video recording: buffer frames during motion ──────────────
+                has_motion_now = bool(labels)
+                now_t = datetime.now()
+                if has_motion_now:
+                    if self._motion_start_time is None:
+                        self._motion_start_time = now_t
+                    self._last_motion_time = now_t
+                    if self.cfg.get("rtsp_url"):
+                        dur_so_far = (now_t - self._motion_start_time).total_seconds()
+                        if dur_so_far <= 30:
+                            self._motion_frames.append(frame.copy())
+                        elif len(self._motion_frames) >= 5:
+                            # > 30s segment – save and start fresh
+                            self._save_motion_video(self._motion_start_time, self._motion_frames)
+                            self._motion_frames = [frame.copy()]
+                            self._motion_start_time = now_t
+                elif self._last_motion_time is not None:
+                    since_last = (now_t - self._last_motion_time).total_seconds()
+                    if since_last >= 30:
+                        motion_total = (self._last_motion_time - self._motion_start_time).total_seconds() if self._motion_start_time else 0
+                        if motion_total >= 10 and len(self._motion_frames) >= 5:
+                            self._save_motion_video(self._motion_start_time, self._motion_frames)
+                        self._motion_frames = []
+                        self._motion_start_time = None
+                        self._last_motion_time = None
+
+                # ── Event trigger: person bypasses cooldown ──────────────────
+                has_person = "person" in labels
+                elapsed = (datetime.now() - self.last_event_at).total_seconds()
+                if labels and (has_person or elapsed >= cooldown):
                     self.last_event_at = datetime.now()
                     self.event_counter_today += 1
                     ts = datetime.now()
