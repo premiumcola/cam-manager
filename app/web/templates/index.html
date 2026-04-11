@@ -182,10 +182,9 @@
                 <span style="font-size:13px;white-space:nowrap;color:var(--muted)">Fotos pro Seite</span>
                 <input id="ms_media_limit" name="media_limit_default" type="range" min="12" max="200" step="4" style="flex:1;min-width:100px;accent-color:var(--accent)" oninput="byId('ms_media_limit_val').textContent=this.value+' Fotos'" />
                 <span id="ms_media_limit_val" style="min-width:64px;font-size:13px;font-weight:600;color:var(--text)">24 Fotos</span>
-                <div class="field-wrap" style="width:90px;flex-shrink:0;margin:0">
-                  <input id="ms_retention_days" name="retention_days" type="number" placeholder="14" style="width:100%;padding:10px 12px" />
-                  <span class="field-label">Aufbewahrung (Tage)</span>
-                </div>
+                <span style="font-size:13px;white-space:nowrap;color:var(--muted)">Aufbewahrung</span>
+                <input id="ms_retention_days" name="retention_days" type="range" min="1" max="90" step="1" value="14" style="flex:1;min-width:100px;accent-color:var(--accent)" oninput="byId('ms_retention_days_val').textContent=this.value+' Tage'" />
+                <span id="ms_retention_days_val" style="min-width:64px;font-size:13px;font-weight:600;color:var(--text)">14 Tage</span>
                 <label class="toggle-row" style="margin:0;white-space:nowrap;gap:8px">
                   <span style="font-size:13px">Auto-Cleanup</span>
                   <label class="switch"><input type="checkbox" id="ms_auto_cleanup" name="auto_cleanup_enabled" /><span class="slider"></span></label>

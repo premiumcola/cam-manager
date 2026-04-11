@@ -562,7 +562,9 @@ function hydrateSettings(){
   const mlVal=storageSec.media_limit_default||24;
   const mlEl=byId('ms_media_limit'); if(mlEl){ mlEl.value=mlVal; }
   const mlLbl=byId('ms_media_limit_val'); if(mlLbl) mlLbl.textContent=mlVal+' Fotos';
-  const rdEl=byId('ms_retention_days'); if(rdEl) rdEl.value=storageSec.retention_days||14;
+  const rdVal=storageSec.retention_days||14;
+  const rdEl=byId('ms_retention_days'); if(rdEl) rdEl.value=rdVal;
+  const rdLbl=byId('ms_retention_days_val'); if(rdLbl) rdLbl.textContent=rdVal+' Tage';
   const acEl=byId('ms_auto_cleanup'); if(acEl) acEl.checked=!!storageSec.auto_cleanup_enabled;
 }
 
