@@ -1,0 +1,38 @@
+# Sensitive config - NEVER commit these
+config/config.yaml
+app/config/config.yaml
+storage/settings.json
+app/storage/settings.json
+
+# Runtime storage - generated data
+storage/events/
+storage/timelapse/
+app/storage/events/
+app/storage/timelapse/
+app/storage/
+
+# ML models
+models/
+app/models/*.tflite
+*.tflite
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Environment
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Claude internal
+.claude/
