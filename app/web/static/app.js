@@ -387,6 +387,7 @@ function renderCameraSettings(){
           <span class="badge ${stCol(c.status)}">${esc(c.status||'—')}</span>
           <span class="badge ${c.armed?'danger':'good'}">${c.armed?'scharf':'unscharf'}</span>
           <button class="btn-action" onclick="editCamera('${esc(c.id)}')">✏️ Bearbeiten</button>
+          <button class="btn-action" style="font-size:12px;padding:5px 10px" title="Kamera neu verbinden" onclick="event.stopPropagation();reloadCamera('${esc(c.id)}')">🔄</button>
         </div>
       </div>
     </div>`).join('');
@@ -1057,8 +1058,13 @@ window.saveCoralSettings=async function(){
 };
 byId('reloadConnectionsBtn')?.addEventListener('click',async()=>{
   await fetch('/api/reload',{method:'POST'});
-  showToast('Kameraverbindungen werden neu aufgebaut.','success');
+  showReloadToast();
 });
+async function reloadCamera(camId){
+  await fetch(`/api/camera/${encodeURIComponent(camId)}/reload`,{method:'POST'}).catch(()=>{});
+  showReloadToast();
+}
+window.reloadCamera=reloadCamera;
 
 byId('exportJsonBtn').onclick=()=>download('/api/settings/export?format=json');
 byId('exportYamlBtn').onclick=()=>download('/api/settings/export?format=yaml');
