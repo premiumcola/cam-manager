@@ -83,7 +83,7 @@ function startLiveUpdate(){
         if(prev===c.status) return;
         _prevCamStatuses.set(c.id,c.status);
         // Show squirrel whenever camera starts reconnecting
-        if(c.status==='starting' && prev!=='starting') showCameraReloadAnimation(c.id);
+        if(c.status==='starting') showCameraReloadAnimation(c.id);
         const wasOffline=prev==='starting'||prev==='disabled'||prev==null;
         // Dashboard card: refresh snapshot image on status change
         const card=byId('cameraCards')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
@@ -195,7 +195,7 @@ function renderDashboard(){
     return `<article class="cv-card" data-camid="${esc(c.id)}" onclick="_cvCardClick(event,'${esc(c.id)}')">
   <div class="cv-frame">
     <div class="cv-img-wrap">
-      <div class="cv-loading-placeholder"><div class="cv-loading-icon">⟳</div><div class="cv-loading-text">Verbinde…</div></div>
+      <div class="cv-loading-placeholder">${c.status!=='active'?_makeSquirrelHTML():'<div class="cv-loading-icon">⟳</div><div class="cv-loading-text">Verbinde…</div>'}</div>
       <img class="cv-img cam-snap" src="${snapUrl}" alt="${esc(c.name)}"
         onload="this.classList.add('loaded');this.previousElementSibling.style.display='none'"
         onerror="this.style.display='none'" />
@@ -1126,7 +1126,10 @@ window.saveCoralSettings=async function(){
 function _makeSquirrelHTML(){
   const msg=_RELOAD_MSGS[Math.floor(Math.random()*_RELOAD_MSGS.length)];
   const bigSvg=_SQ_SVG.replace('width="40" height="32"','width="82" height="76"');
-  return `<div class="cv-sq-runner"><div class="cv-sq-sprite">${bigSvg}<span class="cv-sq-cam">📷</span></div></div><div class="cv-reload-msg">${esc(msg)}</div>`;
+  return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px">
+    <div class="cv-sq-runner"><div class="cv-sq-sprite">${bigSvg}<span class="cv-sq-cam">📷</span></div></div>
+    <div class="cv-reload-msg">${esc(msg)}</div>
+  </div>`;
 }
 function _restorePlaceholder(card){
   const placeholder=card.querySelector('.cv-loading-placeholder');
@@ -1142,7 +1145,8 @@ function showCameraReloadAnimation(camId){
   cards.filter(Boolean).forEach(card=>{
     const placeholder=card.querySelector('.cv-loading-placeholder');
     const img=card.querySelector('.cv-img');
-    if(placeholder) placeholder.innerHTML=_makeSquirrelHTML();
+    if(placeholder && !placeholder.querySelector('.cv-sq-runner'))
+      placeholder.innerHTML=_makeSquirrelHTML();
     if(img){img.classList.remove('loaded');img.style.opacity='0';}
     const targetCamId=card.dataset.camid;
     let attempts=0;
