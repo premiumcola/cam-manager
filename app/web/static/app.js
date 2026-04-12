@@ -31,7 +31,19 @@ function _resolveConfirm(val){
 }
 // Wire confirm buttons after DOM ready (done at bottom of file)
 const colors={person:'#7c4dff',cat:'#e91e8c',bird:'#0ea5e9',car:'#f59e0b',motion:'#22c55e',alarm:'#ef4444',unknown:'#4a6477'};
-const OBJ_ICONS={person:'🚶',cat:'🐾',bird:'🪶',car:'🚙',motion:'💨',alarm:'🔔'};
+const OBJ_LABEL={person:'Person',cat:'Katze',bird:'Vogel',car:'Auto',motion:'Bewegung',alarm:'Alarm'};
+const OBJ_SVG={
+  person:`<svg width="16" height="16" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="8" r="5" fill="#7c4dff"/><path d="M5 26c0-5 4-9 9-9s9 4 9 9" stroke="#7c4dff" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>`,
+  cat:`<svg width="16" height="16" viewBox="0 0 28 28" fill="none"><ellipse cx="14" cy="14" rx="8" ry="6" fill="#e91e8c"/><ellipse cx="8" cy="8" rx="3" ry="4" fill="#e91e8c"/><ellipse cx="20" cy="8" rx="3" ry="4" fill="#e91e8c"/><ellipse cx="9" cy="20" rx="2" ry="3" fill="#e91e8c"/><ellipse cx="19" cy="20" rx="2" ry="3" fill="#e91e8c"/><ellipse cx="5" cy="22" rx="2" ry="3" fill="#e91e8c"/><ellipse cx="23" cy="22" rx="2" ry="3" fill="#e91e8c"/></svg>`,
+  bird:`<svg width="16" height="16" viewBox="0 0 28 28" fill="none"><ellipse cx="14" cy="16" rx="9" ry="6" fill="#0ea5e9"/><path d="M14 16C10 10 4 9 6 6C10 4 14 10 14 16Z" fill="#0ea5e9"/><path d="M14 16C18 10 24 9 22 6C18 4 14 10 14 16Z" fill="#38bdf8"/><circle cx="8" cy="10" r="1.5" fill="#fff"/><path d="M14 16L14 24" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round"/></svg>`,
+  car:`<svg width="16" height="16" viewBox="0 0 28 28" fill="none"><rect x="3" y="12" width="22" height="10" rx="3" fill="#f59e0b"/><rect x="7" y="8" width="12" height="6" rx="2" fill="#fbbf24"/><circle cx="8" cy="23" r="3" fill="#92400e"/><circle cx="20" cy="23" r="3" fill="#92400e"/><circle cx="8" cy="23" r="1.5" fill="#f59e0b"/><circle cx="20" cy="23" r="1.5" fill="#f59e0b"/></svg>`,
+  motion:`<svg width="16" height="16" viewBox="0 0 28 28" fill="none"><path d="M4 12Q8 6 14 12Q20 18 24 12" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" fill="none"/><path d="M4 17Q8 11 14 17Q20 23 24 17" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>`,
+  alarm:`<svg width="16" height="16" viewBox="0 0 28 28" fill="none"><path d="M14 4C8 4 5 9 5 13C5 18 8 20 8 20H20C20 20 23 18 23 13C23 9 20 4 14 4Z" fill="#ef4444"/><rect x="12" y="20" width="4" height="3" rx="1" fill="#ef4444"/><rect x="10" y="23" width="8" height="2" rx="1" fill="#ef4444"/><rect x="13" y="9" width="2" height="6" rx="1" fill="#fff"/><circle cx="14" cy="17" r="1.2" fill="#fff"/></svg>`
+};
+function objBubble(label,size=22){
+  const svg=OBJ_SVG[label]||OBJ_SVG.alarm;
+  return `<span style="width:${size}px;height:${size}px;border-radius:50%;background:rgba(0,0,0,0.55);box-shadow:0 1px 6px rgba(0,0,0,0.6);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${svg}</span>`;
+}
 function getCameraIcon(name){const n=(name||'').toLowerCase();if(/werkstatt|garage|keller|labor/.test(n))return'🔧';if(/eingang|tor|tür|door/.test(n))return'🚪';if(/garten|garden|außen|outdoor/.test(n))return'🌿';if(/eichhörnchen|squirrel|tier|animal|natur/.test(n))return'🐿️';if(/vogel|bird|futter|feeder/.test(n))return'🐦';if(/parkplatz|auto|car/.test(n))return'🚗';if(/pool|wasser|water/.test(n))return'💧';return'📷';}
 const shapeState={mode:'zone',points:[],camera:null,zones:[],masks:[]};
 const byId=id=>document.getElementById(id);
@@ -506,7 +518,7 @@ function renderGroups(){
 }
 
 const _GRP_COARSE=['person','cat','bird','car','motion'];
-const _GRP_ICONS={person:'🚶',cat:'🐾',bird:'🪶',car:'🚙',motion:'💨'};
+// _GRP_ICONS replaced by OBJ_SVG + OBJ_LABEL
 const _GRP_CATS=['Sicherheit','Bereichsübersicht','Tierbeobachtung','Eingangskamera','Sonstiges'];
 function _groupGenId(name){
   return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
@@ -527,7 +539,7 @@ function groupEditHTML(g){
   const pills=_GRP_COARSE.map(obj=>{
     const on=active.has(obj);
     return `<button type="button" class="grp-obj-pill${on?' active':''}" data-obj="${obj}"
-      style="padding:7px 14px;border-radius:999px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;background:${on?'var(--accent)':'var(--surface)'};color:${on?'#fff':'var(--muted)'}">${_GRP_ICONS[obj]} ${obj}</button>`;
+      style="padding:7px 14px;border-radius:999px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;background:${on?'var(--accent)':'var(--surface)'};color:${on?'#fff':'var(--muted)'}">${objBubble(obj,18)} ${OBJ_LABEL[obj]||obj}</button>`;
   }).join('');
   return `<div class="group-inline"><form class="group-edit-grid" onsubmit="saveGroup(event)">
     <input type="hidden" name="id" value="${esc(g.id||'')}" />
@@ -745,7 +757,7 @@ function renderTgGroupRules(){
         <div class="tg-gr-objects">
           ${TG_OBJECTS.map(obj=>`<label class="tg-obj-chip${objList.includes(obj)?' active':''}">
             <input type="checkbox" ${objList.includes(obj)?'checked':''} data-obj="${esc(obj)}" />
-            <span>${esc(obj)}</span>
+            ${objBubble(obj,18)}<span>${OBJ_LABEL[obj]||esc(obj)}</span>
           </label>`).join('')}
         </div>
       </div>
@@ -1249,7 +1261,7 @@ function openLightbox(item){
   byId('lightboxMeta').innerHTML=`
     <span class="badge">${esc(_lbItem.camera_id||'')}</span>
     <span class="badge">${esc(_lbItem.time||'')}</span>
-    ${(_lbItem.labels||[]).map(l=>`<span class="chip">${esc(l)}</span>`).join('')}`;
+    <span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap">${(_lbItem.labels||[]).map(l=>objBubble(l,24)).join('')}</span>`;
   byId('lightboxPrev').style.display=_lbIndex>0?'flex':'none';
   byId('lightboxNext').style.display=_lbIndex<(state.media||[]).length-1?'flex':'none';
   byId('lightboxModal').classList.remove('hidden');
@@ -1334,10 +1346,7 @@ function mediaCardHTML(item){
   const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
   const color=camColor(item.camera_id);
   const confirmed=item.confirmed?'mmc-confirmed':'';
-  const labelBubbles=(item.labels||[]).slice(0,3).map(l=>{
-    const c=colors[l]||colors.unknown;
-    return `<span class="media-label-bubble" style="background:${c}22;border:1px solid ${c}66;color:${c}">${OBJ_ICONS[l]||'?'}</span>`;
-  }).join('');
+  const labelBubbles=(item.labels||[]).slice(0,3).map(l=>objBubble(l,26)).join('');
   return `<article class="media-card ${confirmed}" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
     <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
       <img src="${esc(imgSrc)}" alt="event" loading="lazy" />
