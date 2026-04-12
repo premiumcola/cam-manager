@@ -187,7 +187,7 @@ function renderDashboard(){
     <div class="cv-title-wrap">
       <div class="cv-name">${esc(c.name)}</div>
       ${c.location?`<div class="cv-loc">${esc(c.location)}</div>`:''}
-      <span class="cv-group-pill">${esc(c.group_id||'—')}</span>
+      <span class="cv-group-pill">${getCameraIcon(c.name)} ${esc(c.group_id||'—')}</span>
     </div>
 
     <!-- top-right: status icons -->
@@ -403,6 +403,7 @@ function renderCameraSettings(){
   byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`
     <div class="cam-item" data-camid="${esc(c.id)}">
       <div class="cam-item-head">
+        <span style="font-size:20px;line-height:1;flex-shrink:0">${getCameraIcon(c.name)}</span>
         <div>
           <div style="font-weight:700;font-size:15px">${esc(c.name)}</div>
           <div class="small">${esc(c.location||'—')} · ${esc(c.group_id||'—')}</div>
