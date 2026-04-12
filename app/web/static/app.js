@@ -169,7 +169,7 @@ async function loadMedia(){
 
 function renderShell(){
   byId('appName').textContent=state.config.app.name||'TAM-spy';
-  byId('sideAppName').textContent=state.config.app.name||'TAM-spy';
+  const _sideAppName=byId('sideAppName'); if(_sideAppName) _sideAppName.textContent=state.config.app.name||'TAM-spy';
   const tb=byId('topbarTitle'); if(tb) tb.textContent=state.config.app.name||'TAM-spy';
   byId('appTagline').textContent=state.config.app.tagline||'Schlicht, funktional, analytisch';
   byId('groupSelect').innerHTML=state.groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
@@ -1393,8 +1393,8 @@ function openLightbox(item){
     <span class="badge">${esc(_lbItem.time||'')}</span>
     ${confirmedBadge}
     <span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap">${(_lbItem.labels||[]).map(l=>objBubble(l,24)).join('')}</span>`;
-  byId('lightboxPrev').style.display=_lbIndex>0?'flex':'none';
-  byId('lightboxNext').style.display=_lbIndex<(state.media||[]).length-1?'flex':'none';
+  byId('lightboxPrev').style.opacity=_lbIndex>0?'1':'0.2';
+  byId('lightboxNext').style.opacity=_lbIndex<(state.media||[]).length-1?'1':'0.2';
   byId('lightboxModal').classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
@@ -1405,12 +1405,12 @@ function closeLightbox(){
 }
 byId('lightboxClose').onclick=closeLightbox;
 byId('lightboxModal').onclick=(e)=>{if(e.target===byId('lightboxModal')) closeLightbox();};
-byId('lightboxPrev').onclick=()=>{if(_lbIndex>0) openLightbox(state.media[_lbIndex-1]);};
-byId('lightboxNext').onclick=()=>{if(_lbIndex<(state.media||[]).length-1) openLightbox(state.media[_lbIndex+1]);};
+byId('lightboxPrev').onclick=()=>{const i=(state.media||[]).findIndex(x=>x.event_id===_lbItem?.event_id);if(i>0) openLightbox(state.media[i-1]);};
+byId('lightboxNext').onclick=()=>{const i=(state.media||[]).findIndex(x=>x.event_id===_lbItem?.event_id);if(i>=0&&i<(state.media||[]).length-1) openLightbox(state.media[i+1]);};
 document.addEventListener('keydown',(e)=>{
   if(byId('lightboxModal').classList.contains('hidden')) return;
-  if(e.key==='ArrowLeft'){e.preventDefault();if(_lbIndex>0) openLightbox(state.media[_lbIndex-1]);}
-  else if(e.key==='ArrowRight'){e.preventDefault();if(_lbIndex<(state.media||[]).length-1) openLightbox(state.media[_lbIndex+1]);}
+  if(e.key==='ArrowLeft'){e.preventDefault();const i=(state.media||[]).findIndex(x=>x.event_id===_lbItem?.event_id);if(i>0) openLightbox(state.media[i-1]);}
+  else if(e.key==='ArrowRight'){e.preventDefault();const i=(state.media||[]).findIndex(x=>x.event_id===_lbItem?.event_id);if(i>=0&&i<(state.media||[]).length-1) openLightbox(state.media[i+1]);}
   else if(e.key==='ArrowUp'){e.preventDefault();byId('lightboxConfirm').click();}
   else if(e.key==='ArrowDown'){e.preventDefault();_lbHandleDeleteKey();}
   else if(e.key==='Escape') closeLightbox();
