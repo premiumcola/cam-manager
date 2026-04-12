@@ -1157,8 +1157,6 @@ window.toggleSetSection=function(id){
   const el=byId(id); if(!el){console.warn('[toggleSetSection] not found:',id);return;}
   const opening=!el.classList.contains('open');
   el.classList.toggle('open',opening);
-  const chevron=el.querySelector('.set-chevron');
-  if(chevron) chevron.textContent=opening?'▾':'▶';
 };
 
 // ── Password field visibility toggle ─────────────────────────────────────────
