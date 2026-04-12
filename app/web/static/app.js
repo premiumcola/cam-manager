@@ -82,6 +82,8 @@ function startLiveUpdate(){
         const prev=_prevCamStatuses.get(c.id);
         if(prev===c.status) return;
         _prevCamStatuses.set(c.id,c.status);
+        // Show squirrel whenever camera starts reconnecting
+        if(c.status==='starting' && prev!=='starting') showCameraReloadAnimation(c.id);
         const wasOffline=prev==='starting'||prev==='disabled'||prev==null;
         // Dashboard card: refresh snapshot image on status change
         const card=byId('cameraCards')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
@@ -425,7 +427,7 @@ function renderCameraSettings(){
           <span class="badge ${stCol(c.status)}">${esc(c.status||'—')}</span>
           <span class="badge ${c.armed?'danger':'good'}">${c.armed?'scharf':'unscharf'}</span>
           <button class="btn-action" onclick="editCamera('${esc(c.id)}')">✏️ Bearbeiten</button>
-          <button class="btn-action" style="font-size:12px;padding:5px 10px" title="Kamera neu verbinden" onclick="event.stopPropagation();reloadCamera('${esc(c.id)}')">🔄</button>
+          <button class="btn-action" title="Kamera neu verbinden" onclick="event.stopPropagation();reloadCamera('${esc(c.id)}')">🔄 Neu verbinden</button>
         </div>
       </div>
     </div>`).join('');
@@ -1118,29 +1120,46 @@ window.saveCoralSettings=async function(){
   showToast('Coral-Einstellungen gespeichert · Kameras werden neu gestartet.','success');
   await loadAll();
 };
-function _showCamReloadOverlay(camId){
+function _makeSquirrelHTML(){
   const msg=_RELOAD_MSGS[Math.floor(Math.random()*_RELOAD_MSGS.length)];
+  const bigSvg=_SQ_SVG.replace('width="40" height="32"','width="72" height="68"');
+  return `<div class="cv-sq-runner"><div class="cv-sq-sprite">${bigSvg}<span class="cv-sq-cam">📷</span></div></div><div class="cv-reload-msg">${esc(msg)}</div>`;
+}
+function _restorePlaceholder(card){
+  const placeholder=card.querySelector('.cv-loading-placeholder');
+  if(placeholder) placeholder.innerHTML='<div class="cv-loading-icon">⟳</div><div class="cv-loading-text">Verbinde…</div>';
+  const img=card.querySelector('.cv-img');
+  if(img){const base=img.src.split('?')[0];img.src=base+'?t='+Date.now();}
+}
+function showCameraReloadAnimation(camId){
+  const cameraCards=byId('cameraCards');
   const cards=camId
-    ?[document.querySelector(`.cv-card[data-camid="${CSS.escape(camId)}"]`)]
-    :Array.from(document.querySelectorAll('.cv-card'));
-  cards.forEach(card=>{
-    if(!card) return;
-    const wrap=card.querySelector('.cv-img-wrap');
-    if(!wrap) return;
-    wrap.querySelector('.cv-reload-overlay')?.remove();
-    const ov=document.createElement('div');
-    ov.className='cv-reload-overlay';
-    ov.innerHTML=`<div class="cv-reload-sq">${_SQ_SVG}</div><div class="cv-reload-msg">${esc(msg)}</div>`;
-    wrap.appendChild(ov);
-    setTimeout(()=>{ov.style.transition='opacity .4s';ov.style.opacity='0';setTimeout(()=>ov.remove(),450);},2100);
+    ?[cameraCards?.querySelector(`[data-camid="${CSS.escape(camId)}"]`)]
+    :[...(cameraCards?.querySelectorAll('[data-camid]')||[])];
+  cards.filter(Boolean).forEach(card=>{
+    const placeholder=card.querySelector('.cv-loading-placeholder');
+    const img=card.querySelector('.cv-img');
+    if(placeholder) placeholder.innerHTML=_makeSquirrelHTML();
+    if(img){img.classList.remove('loaded');img.style.opacity='0';}
+    const targetCamId=card.dataset.camid;
+    let attempts=0;
+    const poll=setInterval(async()=>{
+      attempts++;
+      if(attempts>15){clearInterval(poll);_restorePlaceholder(card);return;}
+      try{
+        const r=await j('/api/cameras');
+        const cam=(r.cameras||[]).find(c=>c.id===targetCamId);
+        if(cam?.status==='active'){clearInterval(poll);_restorePlaceholder(card);}
+      }catch{}
+    },2000);
   });
 }
 byId('reloadConnectionsBtn')?.addEventListener('click',async()=>{
-  _showCamReloadOverlay(null);
+  showCameraReloadAnimation(null);
   await fetch('/api/reload',{method:'POST'});
 });
 async function reloadCamera(camId){
-  _showCamReloadOverlay(camId);
+  showCameraReloadAnimation(camId);
   await fetch(`/api/camera/${encodeURIComponent(camId)}/reload`,{method:'POST'}).catch(()=>{});
 }
 window.reloadCamera=reloadCamera;
