@@ -1375,7 +1375,7 @@ function mediaCardHTML(item){
   const labelBubbles=(item.labels||[]).slice(0,3).map(l=>objBubble(l,26)).join('');
   return `<article class="media-card ${confirmed}" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
     <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
-      <img src="${esc(imgSrc)}" alt="event" loading="lazy" />
+      <img src="${esc(imgSrc)}" alt="event" loading="lazy" onerror="this.closest('[data-event-id]')?.remove()" />
       <div class="mmc-meta-bar"><span>${fmtMediaTime(item.time||'')}</span></div>
       <div class="media-label-bubbles">${labelBubbles}</div>
       ${item.confirmed
@@ -1419,7 +1419,7 @@ function renderMediaGrid(){
   grid.innerHTML=items.map(mediaCardHTML).join('')||'<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
   const lmBtn=byId('mediaLoadMoreBtn');
   if(lmBtn) lmBtn.style.display=state.mediaHasMore?'':'none';
-  window._openMediaItem=id=>{const item=(state.media||[]).find(x=>x.event_id===id); if(item) openLightbox(item);};
+  window._openMediaItem=id=>{const item=(state.media||[]).find(x=>x.event_id===id&&x.snapshot_relpath); if(item) openLightbox(item);};
 }
 async function openMediaDrilldown(camId){
   state.mediaCamera=camId;
