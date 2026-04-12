@@ -1275,25 +1275,35 @@ byId('rescanMediaBtn')?.addEventListener('click',async()=>{
 
 // ── Lightbox / Media viewer ───────────────────────────────────────────────────
 let _lbItem=null;
+let _lbIndex=-1;
 function openLightbox(item){
   _lbItem=item;
+  _lbIndex=(state.media||[]).findIndex(x=>x.event_id===item.event_id);
   const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
   byId('lightboxImg').src=imgSrc;
   byId('lightboxMeta').innerHTML=`
     <span class="badge">${esc(item.camera_id||'')}</span>
     <span class="badge">${esc(item.time||'')}</span>
     ${(item.labels||[]).map(l=>`<span class="chip">${esc(l)}</span>`).join('')}`;
+  byId('lightboxPrev').style.display=_lbIndex>0?'flex':'none';
+  byId('lightboxNext').style.display=_lbIndex<(state.media||[]).length-1?'flex':'none';
   byId('lightboxModal').classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
 function closeLightbox(){
   byId('lightboxModal').classList.add('hidden');
   document.body.style.overflow='';
-  _lbItem=null;
+  _lbItem=null; _lbIndex=-1;
 }
 byId('lightboxClose').onclick=closeLightbox;
 byId('lightboxModal').onclick=(e)=>{if(e.target===byId('lightboxModal')) closeLightbox();};
-document.addEventListener('keydown',(e)=>{if(e.key==='Escape') closeLightbox();});
+byId('lightboxPrev').onclick=()=>{if(_lbIndex>0) openLightbox(state.media[--_lbIndex]);};
+byId('lightboxNext').onclick=()=>{if(_lbIndex<(state.media||[]).length-1) openLightbox(state.media[++_lbIndex]);};
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='Escape') closeLightbox();
+  if(e.key==='ArrowLeft') byId('lightboxPrev').click();
+  if(e.key==='ArrowRight') byId('lightboxNext').click();
+});
 byId('lightboxConfirm').onclick=()=>{closeLightbox();};
 byId('lightboxDelete').onclick=async()=>{
   if(!_lbItem) return;
@@ -1308,7 +1318,10 @@ byId('lightboxDelete').onclick=async()=>{
       byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
     }
     _decrementMediaOverviewCount(camera_id);
-    closeLightbox();
+    // Auto-advance
+    if(_lbIndex<(state.media||[]).length) openLightbox(state.media[_lbIndex]);
+    else if((state.media||[]).length>0) openLightbox(state.media[_lbIndex-1]);
+    else closeLightbox();
     await loadMediaStorageStats();
   }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
 };
@@ -1330,14 +1343,15 @@ function mediaCardHTML(item){
   const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
   const color=camColor(item.camera_id);
   const confirmed=item.confirmed?'mmc-confirmed':'';
-  const topLabel=(item.labels||[])[0]||'motion';
+  const labelBubbles=(item.labels||[]).slice(0,3).map(l=>{
+    const c=colors[l]||colors.unknown;
+    return `<span class="media-label-bubble" style="background:${c}22;border:1px solid ${c}66;color:${c}">${OBJ_ICONS[l]||'?'}</span>`;
+  }).join('');
   return `<article class="media-card ${confirmed}" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
     <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
       <img src="${esc(imgSrc)}" alt="event" loading="lazy" />
-      <div class="mmc-meta-bar">
-        <span>${fmtMediaTime(item.time||'')}</span>
-        <span>${esc(topLabel)}</span>
-      </div>
+      <div class="mmc-meta-bar"><span>${fmtMediaTime(item.time||'')}</span></div>
+      <div class="media-label-bubbles">${labelBubbles}</div>
       <div class="mmc-actions">
         <button class="mmc-btn mmc-confirm" title="Bestätigen" onclick="event.stopPropagation();window.confirmMediaCard('${esc(item.camera_id||'')}','${esc(item.event_id||'')}',this)">✓</button>
         <button class="mmc-btn mmc-delete" title="Löschen" onclick="event.stopPropagation();window.deleteMediaCard(this)">✕</button>
