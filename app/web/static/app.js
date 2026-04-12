@@ -1,5 +1,5 @@
 
-const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabel:'',mediaPeriod:'week',tlRangeIndex:2};
+const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabel:'',mediaPeriod:'week',tlRangeIndex:3};
 
 // ── Toast & Confirm helpers ───────────────────────────────────────────────────
 window.showToast=function(msg,type='info'){
@@ -31,7 +31,7 @@ function _resolveConfirm(val){
 }
 // Wire confirm buttons after DOM ready (done at bottom of file)
 const colors={person:'#7c4dff',cat:'#e91e8c',bird:'#0ea5e9',car:'#f59e0b',motion:'#22c55e',alarm:'#ef4444',unknown:'#4a6477'};
-const OBJ_ICONS={person:'👤',cat:'🐱',bird:'🐦',car:'🚗',motion:'〰️',alarm:'🚨'};
+const OBJ_ICONS={person:'🚶',cat:'🐾',bird:'🪶',car:'🚙',motion:'💨',alarm:'🔔'};
 function getCameraIcon(name){const n=(name||'').toLowerCase();if(/werkstatt|garage|keller|labor/.test(n))return'🔧';if(/eingang|tor|tür|door/.test(n))return'🚪';if(/garten|garden|außen|outdoor/.test(n))return'🌿';if(/eichhörnchen|squirrel|tier|animal|natur/.test(n))return'🐿️';if(/vogel|bird|futter|feeder/.test(n))return'🐦';if(/parkplatz|auto|car/.test(n))return'🚗';if(/pool|wasser|water/.test(n))return'💧';return'📷';}
 const shapeState={mode:'zone',points:[],camera:null,zones:[],masks:[]};
 const byId=id=>document.getElementById(id);
@@ -221,8 +221,19 @@ function renderDashboard(){
 }
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
-const TL_HOURS=[1,3,6,12,24,168];
-const TL_LABELS=['1h','3h','6h','12h','24h','7 Tage'];
+const TL_RANGES=[
+  {label:'1h',   hours:1},
+  {label:'2h',   hours:2},
+  {label:'4h',   hours:4},
+  {label:'8h',   hours:8},
+  {label:'12h',  hours:12},
+  {label:'24h',  hours:24},
+  {label:'3 Tage', hours:72},
+  {label:'7 Tage', hours:168},
+  {label:'30 Tage',hours:720},
+];
+const TL_HOURS=TL_RANGES.map(r=>r.hours);
+const TL_LABELS=TL_RANGES.map(r=>r.label);
 const TL_LANES=['person','cat','bird','car','motion'];
 const GAP_MS=2*60*1000;
 
@@ -269,9 +280,10 @@ function renderTimeline(){
     TL_LANES.forEach(label=>{
       const color=colors[label]||colors.unknown;
       const icon=OBJ_ICONS[label]||'?';
+      const labelName=label.charAt(0).toUpperCase()+label.slice(1);
       const groups=_tlGroupLane(tr.points||[], label, tMin, tMax);
       html+=`<div class="tl-lane-row">`;
-      html+=`<div class="tl-lane-label"><span class="tl-lane-dot" style="background:${color}"></span><span class="tl-lane-text">${icon}</span></div>`;
+      html+=`<div class="tl-lane-label"><div class="tl-lane-icon"><span style="font-size:14px">${icon}</span><span style="font-size:10px;color:var(--muted)">${labelName}</span></div></div>`;
       html+=`<div class="tl-track">`;
       groups.forEach(g=>{
         const leftPct=Math.max(0,(g.startTime-tMin)/span*100);
@@ -284,12 +296,16 @@ function renderTimeline(){
     html+=`</div>`;
   });
 
-  // X-axis
+  // X-axis — adaptive labels by selected range
+  const hours=TL_HOURS[idx];
+  const fmtTs=(ts,h)=>{
+    const d=new Date(ts);
+    if(h<=24) return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+    if(h<=168) return ['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.';
+    return d.getDate()+'.'+(d.getMonth()+1)+'.';
+  };
   html+=`<div class="tl-xaxis">`;
-  for(let k=0;k<5;k++){
-    const t=new Date(tMin+span*k/4);
-    html+=`<span>${t.getHours().toString().padStart(2,'0')}:${t.getMinutes().toString().padStart(2,'0')}</span>`;
-  }
+  for(let k=0;k<5;k++) html+=`<span>${fmtTs(tMin+span*k/4,hours)}</span>`;
   html+=`</div>`;
   container.innerHTML=html;
 
@@ -490,7 +506,7 @@ function renderGroups(){
 }
 
 const _GRP_COARSE=['person','cat','bird','car','motion'];
-const _GRP_ICONS={person:'👤',cat:'🐱',bird:'🐦',car:'🚗',motion:'〰️'};
+const _GRP_ICONS={person:'🚶',cat:'🐾',bird:'🪶',car:'🚙',motion:'💨'};
 const _GRP_CATS=['Sicherheit','Bereichsübersicht','Tierbeobachtung','Eingangskamera','Sonstiges'];
 function _groupGenId(name){
   return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
