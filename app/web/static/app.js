@@ -441,6 +441,8 @@ function _initCameraFormListeners(){
   // Timelapse sliders
   f['tl_daily_seconds']?.addEventListener('input',()=>{ byId('tlDailyLabel').textContent=f['tl_daily_seconds'].value+'s'; });
   f['tl_weekly_seconds']?.addEventListener('input',()=>{ byId('tlWeeklyLabel').textContent=f['tl_weekly_seconds'].value+'s'; });
+  // Motion sensitivity slider
+  f['motion_sensitivity']?.addEventListener('input',()=>{ byId('motionSensLabel').textContent=f['motion_sensitivity'].value; });
 }
 
 function editCamera(camId){
@@ -476,6 +478,8 @@ function editCamera(camId){
   if(f['tl_daily_seconds']){f['tl_daily_seconds'].value=tlDaily; byId('tlDailyLabel').textContent=tlDaily+'s';}
   if(f['tl_weekly_seconds']){f['tl_weekly_seconds'].value=tlWeekly; byId('tlWeeklyLabel').textContent=tlWeekly+'s';}
   if(f['timelapse_telegram']) f['timelapse_telegram'].checked=!!(c.timelapse&&c.timelapse.telegram_send);
+  if(f['bottom_crop_px']) f['bottom_crop_px'].value=c.bottom_crop_px||0;
+  if(f['motion_sensitivity']){const ms=c.motion_sensitivity!=null?c.motion_sensitivity:0.5; f['motion_sensitivity'].value=ms; byId('motionSensLabel').textContent=ms;}
   j('/api/persons').then(r=>_renderWhitelistChips(r.profiles||[],c.whitelist_names||[])).catch(()=>_renderWhitelistChips([],c.whitelist_names||[]));
   shapeState.camera=camId; shapeState.zones=JSON.parse(JSON.stringify(c.zones||[])); shapeState.masks=JSON.parse(JSON.stringify(c.masks||[])); shapeState.points=[];
   f['zones_json'].value=JSON.stringify(shapeState.zones); f['masks_json'].value=JSON.stringify(shapeState.masks);
@@ -933,6 +937,8 @@ byId('cameraForm').onsubmit=async(e)=>{
     whitelist_names:_whitelistState.filter(Boolean),
     timelapse:{enabled:f['timelapse_enabled'].checked,fps:12,daily_target_seconds:parseInt(f['tl_daily_seconds']?.value||'60'),weekly_target_seconds:parseInt(f['tl_weekly_seconds']?.value||'180'),telegram_send:!!(f['timelapse_telegram']?.checked)},
     schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},
+    bottom_crop_px:parseInt(f['bottom_crop_px']?.value||0),
+    motion_sensitivity:parseFloat(f['motion_sensitivity']?.value||0.5),
     zones:JSON.parse(f['zones_json'].value||'[]'),masks:JSON.parse(f['masks_json'].value||'[]')};
   const _savedId=payload.id; _restoreEditWrapper();
   await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll(); editCamera(_savedId);

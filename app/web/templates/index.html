@@ -290,6 +290,17 @@
               </div>
               <label class="toggle-row"><span>Täglich per Telegram senden</span><label class="switch"><input type="checkbox" name="timelapse_telegram" /><span class="slider"></span></label></label>
             </div>
+            <div class="settings-divider">Erkennung &amp; Qualität</div>
+            <div class="row" style="grid-template-columns:1fr 1fr">
+              <div class="field-wrap"><input type="number" name="bottom_crop_px" min="0" max="200" value="0" /><span class="field-label">Unterer Bildrand ausblenden (px)</span></div>
+              <div class="field-wrap">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="range" name="motion_sensitivity" min="0.1" max="1.0" step="0.1" value="0.5" style="flex:1" />
+                  <span id="motionSensLabel" style="font-size:12px;color:var(--muted);min-width:28px">0.5</span>
+                </div>
+                <span class="field-label">Bewegungsempfindlichkeit (0.3 = weniger, 0.7 = mehr)</span>
+              </div>
+            </div>
             <input type="hidden" name="zones_json" />
             <input type="hidden" name="masks_json" />
             <div class="cam-form-actions">
@@ -329,9 +340,24 @@
       </section>
 
       <section id="settings" class="panel section">
-        <div class="section-head"><h3>Einstellungen</h3><div class="muted">Gruppen · Profile · Telegram · App · MQTT · Coral · Import/Export</div></div>
+        <div class="section-head"><h3>Einstellungen</h3><div class="muted">App · Gruppen · Profile · Telegram · Coral · MQTT · Import/Export</div></div>
 
-        <!-- Kameragruppen (outside settingsForm) -->
+        <!-- 1. App & Allgemein -->
+        <div class="set-section" id="set-app">
+          <button type="button" class="set-hd" onclick="toggleSetSection('set-app')">
+            <span class="set-icon">⚙️</span><span>App &amp; Allgemein</span><span class="set-chevron">▶</span>
+          </button>
+          <div class="set-bd"><div class="set-inner">
+            <div style="display:grid;gap:10px;padding-top:4px">
+              <div id="appInfoPanel" class="app-info-grid"></div>
+              <div class="field-wrap"><input id="set_public_base_url" placeholder="http://192.168.x.x:8099" /><span class="field-label">Public Base URL</span></div>
+              <div class="field-wrap"><input id="set_discovery_subnet" placeholder="192.168.1.0/24" /><span class="field-label">Discovery-Subnet</span></div>
+              <button type="button" class="settings-save-btn" onclick="saveAppSettings()">💾 Einstellungen speichern</button>
+            </div>
+          </div></div>
+        </div>
+
+        <!-- 2. Kameragruppen -->
         <div class="set-section" id="set-groups">
           <div class="set-hd-row">
             <button type="button" class="set-hd" style="flex:1" onclick="toggleSetSection('set-groups')">
@@ -344,7 +370,7 @@
           </div></div>
         </div>
 
-        <!-- Profile (outside settingsForm) -->
+        <!-- 3. Katzen & Personen -->
         <div class="set-section" id="set-profiles">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-profiles')">
             <span class="set-icon">🐾</span><span>Katzen &amp; Personen</span><span class="set-chevron">▶</span>
@@ -367,233 +393,189 @@
           </div></div>
         </div>
 
-        <!-- Telegram (outside settingsForm — contains own form#telegramForm) -->
+        <!-- 4. Telegram (contains own form#telegramForm) -->
         <div class="set-section" id="set-telegram">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-telegram')">
             <span class="set-icon">📨</span><span>Telegram</span><span class="set-chevron">▶</span>
           </button>
-          <div class="set-bd"><div class="set-inner">
+          <div class="set-bd"><div class="set-inner" style="padding-top:10px">
 
-            <!-- Verbindung -->
-            <div class="set-section" id="tg-verbindung">
-              <button type="button" class="set-hd" onclick="toggleSetSection('tg-verbindung')">
-                <span class="set-icon">🔗</span><span>Verbindung</span><span class="set-chevron">▶</span>
-              </button>
-              <div class="set-bd"><div class="set-inner">
-                <form id="telegramForm" class="form" style="padding-top:6px">
-                  <label class="toggle-row" style="margin-bottom:0">
-                    <span style="font-weight:700;font-size:15px">Telegram aktiv</span>
-                    <label class="switch"><input type="checkbox" id="tg_enabled" /><span class="slider"></span></label>
-                  </label>
-                  <div class="field-wrap pw-wrap">
-                    <input id="tg_token" type="password" placeholder="Bot-Token · 123456789:AAExampleBotToken" autocomplete="off" />
-                    <button type="button" class="pw-eye" onclick="togglePwFieldById('tg_token')">👁</button>
-                    <span class="field-label">🔒 Bot-Token</span>
-                  </div>
-                  <div class="field-wrap">
-                    <input id="tg_chat_id" placeholder="Chat ID · z.B. 123456789 oder -1001234567890" />
-                    <span class="field-label">Chat ID</span>
-                  </div>
-                  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-                    <button type="submit" class="settings-save-btn" style="flex:1;min-width:160px;margin-top:0">💾 Verbindung speichern</button>
-                    <button type="button" id="telegramTestBtn" class="btn-action">📨 Testnachricht</button>
-                    <span id="telegramTestResult" class="small" style="display:none"></span>
-                  </div>
-                </form>
-              </div></div>
+            <div class="tg-tab-bar">
+              <button class="tg-tab-btn active" data-tab="tg-panel-verbindung">🔗 Verbindung</button>
+              <button class="tg-tab-btn" data-tab="tg-panel-wann">⏰ Wann senden</button>
+              <button class="tg-tab-btn" data-tab="tg-panel-was">📋 Was senden</button>
+              <button class="tg-tab-btn" data-tab="tg-panel-tree">🌳 Abhängigkeiten</button>
+              <button class="tg-tab-btn" data-tab="tg-panel-presets">🎛 Presets</button>
             </div>
 
-            <!-- Wann senden -->
-            <div class="set-section" id="tg-wann">
-              <button type="button" class="set-hd" onclick="toggleSetSection('tg-wann')">
-                <span class="set-icon">⏰</span><span>Wann senden</span><span class="set-chevron">▶</span>
-              </button>
-              <div class="set-bd"><div class="set-inner">
-                <p class="field-help" style="margin-top:8px">Pro Kameragruppe: ob, wann und bei welchen Objekten Nachrichten gesendet werden.</p>
-                <div id="tgGroupRules" style="margin-top:10px;display:grid;gap:10px"></div>
-                <button type="button" id="saveTgGroupRulesBtn" class="settings-save-btn" style="margin-top:12px">💾 Regeln speichern</button>
-              </div></div>
-            </div>
-
-            <!-- Was senden -->
-            <div class="set-section" id="tg-was">
-              <button type="button" class="set-hd" onclick="toggleSetSection('tg-was')">
-                <span class="set-icon">📋</span><span>Was senden</span><span class="set-chevron">▶</span>
-              </button>
-              <div class="set-bd"><div class="set-inner">
-                <div style="padding-top:8px;display:grid;gap:12px">
-                  <div class="field-help">Wähle das Format für Alarm-Nachrichten.</div>
-                  <div class="tg-format-opts">
-                    <label class="tg-fmt-opt"><input type="radio" name="tg_format" value="text" /><span>📝 Nur Text</span></label>
-                    <label class="tg-fmt-opt"><input type="radio" name="tg_format" value="photo" checked /><span>🖼 Text + Foto</span></label>
-                    <label class="tg-fmt-opt"><input type="radio" name="tg_format" value="video" /><span>🎬 Text + Foto + Video</span></label>
-                  </div>
-                  <div id="tgFormatPreview" class="tg-preview"></div>
-                  <button type="button" id="saveTgFormatBtn" class="settings-save-btn">💾 Format speichern</button>
+            <div id="tg-panel-verbindung" class="tg-tab-panel active">
+              <form id="telegramForm" class="form" style="padding-top:6px">
+                <label class="toggle-row" style="margin-bottom:0">
+                  <span style="font-weight:700;font-size:15px">Telegram aktiv</span>
+                  <label class="switch"><input type="checkbox" id="tg_enabled" /><span class="slider"></span></label>
+                </label>
+                <div class="field-wrap pw-wrap">
+                  <input id="tg_token" type="password" placeholder="Bot-Token · 123456789:AAExampleBotToken" autocomplete="off" />
+                  <button type="button" class="pw-eye" onclick="togglePwFieldById('tg_token')">👁</button>
+                  <span class="field-label">🔒 Bot-Token</span>
                 </div>
-              </div></div>
+                <div class="field-wrap">
+                  <input id="tg_chat_id" placeholder="Chat ID · z.B. 123456789 oder -1001234567890" />
+                  <span class="field-label">Chat ID</span>
+                </div>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                  <button type="submit" class="settings-save-btn" style="flex:1;min-width:160px;margin-top:0">💾 Verbindung speichern</button>
+                  <button type="button" id="telegramTestBtn" class="btn-action">📨 Testnachricht</button>
+                  <span id="telegramTestResult" class="small" style="display:none"></span>
+                </div>
+              </form>
             </div>
 
-            <!-- Abhängigkeits-Baum -->
-            <div class="set-section" id="tg-tree-sec">
-              <button type="button" class="set-hd" onclick="toggleSetSection('tg-tree-sec')">
-                <span class="set-icon">🌳</span><span>Abhängigkeits-Baum</span><span class="set-chevron">▶</span>
-              </button>
-              <div class="set-bd"><div class="set-inner">
-                <div class="tg-flow" style="padding-top:10px">
-                  <div class="tg-flow-node tgn-start">⚡ Bewegung erkannt</div>
-                  <div class="tg-flow-conn">↓</div>
-                  <div class="tg-flow-step">
-                    <div class="tg-flow-main">
-                      <div class="tg-flow-node tgn-decision">📷 Kamera aktiv?</div>
-                      <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
-                    </div>
-                    <div class="tg-flow-yes-label">↓ Ja</div>
-                  </div>
-                  <div class="tg-flow-step">
-                    <div class="tg-flow-main">
-                      <div class="tg-flow-node tgn-decision">📨 Telegram für Gruppe aktiv?</div>
-                      <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
-                    </div>
-                    <div class="tg-flow-yes-label">↓ Ja</div>
-                  </div>
-                  <div class="tg-flow-step">
-                    <div class="tg-flow-main">
-                      <div class="tg-flow-node tgn-decision">⏰ Im konfigurierten Zeitfenster?</div>
-                      <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
-                    </div>
-                    <div class="tg-flow-yes-label">↓ Ja</div>
-                  </div>
-                  <div class="tg-flow-step">
-                    <div class="tg-flow-main">
-                      <div class="tg-flow-node tgn-decision">🔍 Objekt-Typ in erlaubter Liste?</div>
-                      <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
-                    </div>
-                    <div class="tg-flow-yes-label">↓ Ja</div>
-                  </div>
-                  <div class="tg-flow-step">
-                    <div class="tg-flow-main">
-                      <div class="tg-flow-node tgn-decision">⏱ Cooldown abgelaufen?</div>
-                      <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
-                    </div>
-                    <div class="tg-flow-yes-label">↓ Ja</div>
-                  </div>
-                  <div class="tg-flow-node tgn-action">✓ Nachricht senden</div>
-                  <div class="tg-flow-conn">↓</div>
-                  <div class="tg-flow-outputs">
-                    <div class="tg-flow-out">📝 Text</div>
-                    <div class="tg-flow-out tgo-opt">🖼 Foto?</div>
-                    <div class="tg-flow-out tgo-opt">🎬 Video?</div>
-                  </div>
-                </div>
-              </div></div>
+            <div id="tg-panel-wann" class="tg-tab-panel">
+              <p class="field-help" style="margin-top:8px">Pro Kameragruppe: ob, wann und bei welchen Objekten Nachrichten gesendet werden.</p>
+              <div id="tgGroupRules" style="margin-top:10px;display:grid;gap:10px"></div>
+              <button type="button" id="saveTgGroupRulesBtn" class="settings-save-btn" style="margin-top:12px">💾 Regeln speichern</button>
             </div>
 
-            <!-- Schnell-Presets -->
-            <div class="set-section" id="tg-presets">
-              <button type="button" class="set-hd" onclick="toggleSetSection('tg-presets')">
-                <span class="set-icon">🎛</span><span>Schnell-Presets</span><span class="set-chevron">▶</span>
-              </button>
-              <div class="set-bd"><div class="set-inner">
-                <div class="field-help" style="margin-top:8px">Diese Bot-Befehle sind per Telegram-Menü abrufbar.</div>
-                <div class="tg-grid" style="margin-top:10px">
-                  <div class="tg-card">📷 Live-Bild</div>
-                  <div class="tg-card">🎥 Live 5s Clip</div>
-                  <div class="tg-card">⏱ Letzte 24h Zeitraffer</div>
-                  <div class="tg-card">🕘 Last detections</div>
-                  <div class="tg-card">📊 Statistiken</div>
-                  <div class="tg-card">🛡 Scharf / Unscharf</div>
+            <div id="tg-panel-was" class="tg-tab-panel">
+              <div style="padding-top:8px;display:grid;gap:12px">
+                <div class="field-help">Wähle das Format für Alarm-Nachrichten.</div>
+                <div class="tg-format-opts">
+                  <label class="tg-fmt-opt"><input type="radio" name="tg_format" value="text" /><span>📝 Nur Text</span></label>
+                  <label class="tg-fmt-opt"><input type="radio" name="tg_format" value="photo" checked /><span>🖼 Text + Foto</span></label>
+                  <label class="tg-fmt-opt"><input type="radio" name="tg_format" value="video" /><span>🎬 Text + Foto + Video</span></label>
                 </div>
-              </div></div>
+                <div id="tgFormatPreview" class="tg-preview"></div>
+                <button type="button" id="saveTgFormatBtn" class="settings-save-btn">💾 Format speichern</button>
+              </div>
+            </div>
+
+            <div id="tg-panel-tree" class="tg-tab-panel">
+              <div class="tg-flow" style="padding-top:10px">
+                <div class="tg-flow-node tgn-start">⚡ Bewegung erkannt</div>
+                <div class="tg-flow-conn">↓</div>
+                <div class="tg-flow-step">
+                  <div class="tg-flow-main">
+                    <div class="tg-flow-node tgn-decision">📷 Kamera aktiv?</div>
+                    <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
+                  </div>
+                  <div class="tg-flow-yes-label">↓ Ja</div>
+                </div>
+                <div class="tg-flow-step">
+                  <div class="tg-flow-main">
+                    <div class="tg-flow-node tgn-decision">📨 Telegram für Gruppe aktiv?</div>
+                    <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
+                  </div>
+                  <div class="tg-flow-yes-label">↓ Ja</div>
+                </div>
+                <div class="tg-flow-step">
+                  <div class="tg-flow-main">
+                    <div class="tg-flow-node tgn-decision">⏰ Im konfigurierten Zeitfenster?</div>
+                    <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
+                  </div>
+                  <div class="tg-flow-yes-label">↓ Ja</div>
+                </div>
+                <div class="tg-flow-step">
+                  <div class="tg-flow-main">
+                    <div class="tg-flow-node tgn-decision">🔍 Objekt-Typ in erlaubter Liste?</div>
+                    <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
+                  </div>
+                  <div class="tg-flow-yes-label">↓ Ja</div>
+                </div>
+                <div class="tg-flow-step">
+                  <div class="tg-flow-main">
+                    <div class="tg-flow-node tgn-decision">⏱ Cooldown abgelaufen?</div>
+                    <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
+                  </div>
+                  <div class="tg-flow-yes-label">↓ Ja</div>
+                </div>
+                <div class="tg-flow-node tgn-action">✓ Nachricht senden</div>
+                <div class="tg-flow-conn">↓</div>
+                <div class="tg-flow-outputs">
+                  <div class="tg-flow-out">📝 Text</div>
+                  <div class="tg-flow-out tgo-opt">🖼 Foto?</div>
+                  <div class="tg-flow-out tgo-opt">🎬 Video?</div>
+                </div>
+              </div>
+            </div>
+
+            <div id="tg-panel-presets" class="tg-tab-panel">
+              <div class="field-help" style="margin-top:8px">Diese Bot-Befehle sind per Telegram-Menü abrufbar.</div>
+              <div class="tg-grid" style="margin-top:10px">
+                <div class="tg-card">📷 Live-Bild</div>
+                <div class="tg-card">🎥 Live 5s Clip</div>
+                <div class="tg-card">⏱ Letzte 24h Zeitraffer</div>
+                <div class="tg-card">🕘 Last detections</div>
+                <div class="tg-card">📊 Statistiken</div>
+                <div class="tg-card">🛡 Scharf / Unscharf</div>
+              </div>
             </div>
 
           </div></div>
         </div>
 
-        <form id="settingsForm" class="settings-form">
+        <!-- 5. Coral & Objekterkennung -->
+        <div class="set-section" id="set-coral">
+          <button type="button" class="set-hd" onclick="toggleSetSection('set-coral')">
+            <span class="set-icon">🧠</span><span>Coral &amp; Objekterkennung</span><span class="set-chevron">▶</span>
+          </button>
+          <div class="set-bd"><div class="set-inner">
+            <div style="display:grid;gap:10px;padding-top:4px">
+              <label class="toggle-row"><span>Coral TPU aktivieren</span><label class="switch"><input type="checkbox" id="coral_enabled" /><span class="slider"></span></label></label>
+              <label class="toggle-row"><span>Vogelarten-Klassifikation aktivieren</span><label class="switch"><input type="checkbox" id="bird_species_enabled" /><span class="slider"></span></label></label>
+              <div id="coralStatusHint" class="field-help"></div>
+              <button type="button" class="settings-save-btn" onclick="saveCoralSettings()">💾 Coral speichern &amp; neu laden</button>
+            </div>
+          </div></div>
+        </div>
 
-          <!-- 1. App & Allgemein -->
-          <div class="set-section" id="set-app">
-            <button type="button" class="set-hd" onclick="toggleSetSection('set-app')">
-              <span class="set-icon">⚙️</span><span>App &amp; Allgemein</span><span class="set-chevron">▶</span>
-            </button>
-            <div class="set-bd"><div class="set-inner">
-              <div style="display:grid;gap:10px;padding-top:4px">
-                <div class="row" style="grid-template-columns:1fr 80px">
-                  <div class="field-wrap"><input name="app_name" placeholder="TAM-spy" /><span class="field-label">App-Name</span></div>
-                  <div class="field-wrap"><input name="app_logo" placeholder="🐈‍⬛" /><span class="field-label">Logo</span></div>
-                </div>
-                <div class="field-wrap"><input name="app_tagline" placeholder="Analyse · Sicherheit · Tierbeobachtung" /><span class="field-label">Tagline</span></div>
-                <div class="field-wrap"><input name="public_base_url" placeholder="http://192.168.x.x:8099" /><span class="field-label">Public Base URL</span></div>
-                <div class="field-wrap"><input name="discovery_subnet" placeholder="192.168.1.0/24" /><span class="field-label">Discovery-Subnet</span></div>
-                <button type="button" class="settings-save-btn" onclick="saveAppSettings()">💾 App-Einstellungen speichern</button>
-              </div>
-            </div></div>
-          </div>
-
-          <!-- 2. MQTT (was 3) -->
-          <div class="set-section" id="set-mqtt">
-            <button type="button" class="set-hd" onclick="toggleSetSection('set-mqtt')">
-              <span class="set-icon">🔌</span><span>MQTT</span><span class="set-chevron">▶</span>
-            </button>
-            <div class="set-bd"><div class="set-inner">
-              <div style="display:grid;gap:10px;padding-top:4px">
-                <label class="toggle-row"><span>MQTT aktiv</span><label class="switch"><input type="checkbox" name="mqtt_enabled" /><span class="slider"></span></label></label>
-                <div class="field-wrap"><input name="mqtt_host" placeholder="homeassistant.local" /><span class="field-label">Host</span></div>
-                <div class="row3">
-                  <div class="field-wrap"><input name="mqtt_port" placeholder="1883" /><span class="field-label">Port</span></div>
-                  <div class="field-wrap"><input name="mqtt_username" placeholder="Benutzer" /><span class="field-label">Benutzer</span></div>
-                  <div class="field-wrap pw-wrap">
-                    <input name="mqtt_password" type="password" placeholder="Passwort" autocomplete="off" />
-                    <button type="button" class="pw-eye" onclick="togglePwField(this,'mqtt_password')">👁</button>
-                    <span class="field-label">🔒 Passwort</span>
-                  </div>
-                </div>
-                <div class="field-wrap"><input name="mqtt_base_topic" placeholder="tam-spy" /><span class="field-label">Base Topic</span></div>
-                <button type="button" class="settings-save-btn" onclick="saveMqttSettings()">💾 MQTT speichern &amp; neu laden</button>
-              </div>
-            </div></div>
-          </div>
-
-          <!-- 4. Coral TPU -->
-          <div class="set-section" id="set-coral">
-            <button type="button" class="set-hd" onclick="toggleSetSection('set-coral')">
-              <span class="set-icon">🧠</span><span>Coral TPU &amp; Objekterkennung</span><span class="set-chevron">▶</span>
-            </button>
-            <div class="set-bd"><div class="set-inner">
-              <div style="display:grid;gap:10px;padding-top:4px">
-                <label class="toggle-row"><span>Coral TPU aktivieren</span><label class="switch"><input type="checkbox" name="coral_enabled" /><span class="slider"></span></label></label>
-                <label class="toggle-row"><span>Vogelarten-Klassifikation aktivieren</span><label class="switch"><input type="checkbox" name="bird_species_enabled" /><span class="slider"></span></label></label>
-                <div id="coralStatusHint" class="field-help"></div>
-                <button type="button" class="settings-save-btn" onclick="saveCoralSettings()">💾 Coral speichern &amp; neu laden</button>
-              </div>
-            </div></div>
-          </div>
-
-          <!-- 5. Import / Export -->
-          <div class="set-section" id="set-importexport">
-            <button type="button" class="set-hd" onclick="toggleSetSection('set-importexport')">
-              <span class="set-icon">📦</span><span>Import / Export</span><span class="set-chevron">▶</span>
-            </button>
-            <div class="set-bd"><div class="set-inner">
-              <div style="display:grid;gap:10px;padding-top:4px">
-                <div class="audit-item small muted">GUI bleibt die Hauptquelle. Import/Export dient als Backup, Restore und Massenpflege.</div>
-                <div class="row3">
-                  <button id="exportJsonBtn" type="button" class="ie-btn ie-blue">Export JSON</button>
-                  <button id="exportYamlBtn" type="button" class="ie-btn ie-green">Export YAML</button>
-                  <button id="reloadConfigBtn" type="button" class="ie-btn ie-gray">Config neu laden</button>
-                </div>
-                <textarea id="importBox" rows="10" placeholder="Hier JSON oder YAML einfügen …" style="background:#131e2e;color:#cfe7ff"></textarea>
-                <div class="row3">
-                  <button id="importJsonBtn" type="button" class="ie-btn ie-blue">Import JSON</button>
-                  <button id="importYamlBtn" type="button" class="ie-btn ie-green">Import YAML</button>
-                  <button id="clearImportBtn" type="button" class="ie-btn ie-gray">Feld leeren</button>
+        <!-- 6. MQTT -->
+        <div class="set-section" id="set-mqtt">
+          <button type="button" class="set-hd" onclick="toggleSetSection('set-mqtt')">
+            <span class="set-icon">🔌</span><span>MQTT</span><span class="set-chevron">▶</span>
+          </button>
+          <div class="set-bd"><div class="set-inner">
+            <div style="display:grid;gap:10px;padding-top:4px">
+              <label class="toggle-row"><span>MQTT aktiv</span><label class="switch"><input type="checkbox" id="mqtt_enabled" /><span class="slider"></span></label></label>
+              <div class="field-wrap"><input id="mqtt_host" placeholder="homeassistant.local" /><span class="field-label">Host</span></div>
+              <div class="row3">
+                <div class="field-wrap"><input id="mqtt_port" placeholder="1883" /><span class="field-label">Port</span></div>
+                <div class="field-wrap"><input id="mqtt_username" placeholder="Benutzer" /><span class="field-label">Benutzer</span></div>
+                <div class="field-wrap pw-wrap">
+                  <input id="mqtt_password" type="password" placeholder="Passwort" autocomplete="off" />
+                  <button type="button" class="pw-eye" onclick="togglePwFieldById('mqtt_password')">👁</button>
+                  <span class="field-label">🔒 Passwort</span>
                 </div>
               </div>
-            </div></div>
-          </div>
+              <div class="field-wrap"><input id="mqtt_base_topic" placeholder="tam-spy" /><span class="field-label">Base Topic</span></div>
+              <button type="button" class="settings-save-btn" onclick="saveMqttSettings()">💾 MQTT speichern &amp; neu laden</button>
+            </div>
+          </div></div>
+        </div>
 
-        </form>
+        <!-- 7. Import / Export -->
+        <div class="set-section" id="set-importexport">
+          <button type="button" class="set-hd" onclick="toggleSetSection('set-importexport')">
+            <span class="set-icon">📦</span><span>Import / Export</span><span class="set-chevron">▶</span>
+          </button>
+          <div class="set-bd"><div class="set-inner">
+            <div style="display:grid;gap:10px;padding-top:4px">
+              <div class="audit-item small muted">GUI bleibt die Hauptquelle. Import/Export dient als Backup, Restore und Massenpflege.</div>
+              <div class="row3">
+                <button id="exportJsonBtn" type="button" class="ie-btn ie-blue">Export JSON</button>
+                <button id="exportYamlBtn" type="button" class="ie-btn ie-green">Export YAML</button>
+                <button id="reloadConfigBtn" type="button" class="ie-btn ie-gray">Config neu laden</button>
+              </div>
+              <textarea id="importBox" rows="10" placeholder="Hier JSON oder YAML einfügen …" style="background:#131e2e;color:#cfe7ff"></textarea>
+              <div class="row3">
+                <button id="importJsonBtn" type="button" class="ie-btn ie-blue">Import JSON</button>
+                <button id="importYamlBtn" type="button" class="ie-btn ie-green">Import YAML</button>
+                <button id="clearImportBtn" type="button" class="ie-btn ie-gray">Feld leeren</button>
+              </div>
+            </div>
+          </div></div>
+        </div>
+
       </section>
 
       <section id="logs" class="panel section">

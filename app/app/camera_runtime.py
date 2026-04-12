@@ -4,6 +4,7 @@ import time
 import threading
 import logging
 import json as _json_mod
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 import requests
@@ -75,6 +76,7 @@ class CameraRuntime:
         self._ach_lock = threading.Lock()
         self._ach_path = Path(self.global_cfg["storage"]["root"]) / "achievements.json"
         self.preview_cap = None   # sub-stream capture (H.264, no pink)
+        self._motion_confirm: deque = deque(maxlen=3)  # multi-frame confirmation
 
     @property
     def cfg(self):
@@ -196,9 +198,20 @@ class CameraRuntime:
             return False
         return True
 
+    @staticmethod
+    def _has_corrupt_strip(frame, strip_height: int = 60) -> bool:
+        """Detect H.264 corrupt bottom strip (pink/rainbow codec artifact)."""
+        if frame is None or frame.shape[0] < strip_height * 2:
+            return False
+        strip = frame[-strip_height:, :, :]
+        hsv = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV)
+        sat = hsv[:, :, 1].astype(np.float32)
+        return float(sat.mean()) > 120 and float(sat.std()) > 60
+
     def _motion_detect(self, frame):
         """Returns (labels: list[str], motion_bbox: tuple|None).
-        motion_bbox is (x, y, w, h) bounding rect of all motion combined."""
+        motion_bbox is (x, y, w, h) bounding rect of all motion combined.
+        Applies per-camera exclusion masks and motion_sensitivity threshold."""
         proc = self.global_cfg.get("processing", {}).get("motion", {})
         if not proc.get("enabled", True):
             return [], None
@@ -207,6 +220,9 @@ class CameraRuntime:
         if blur_size % 2 == 0:
             blur_size += 1
         gray = cv2.GaussianBlur(gray, (blur_size, blur_size), 0)
+        # Reset if frame dimensions changed (e.g. bottom_crop_px config change)
+        if self.prev_gray is not None and self.prev_gray.shape != gray.shape:
+            self.prev_gray = None
         if self.prev_gray is None:
             self.prev_gray = gray
             return [], None
@@ -214,8 +230,29 @@ class CameraRuntime:
         self.prev_gray = gray
         _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
         thresh = cv2.dilate(thresh, None, iterations=2)
+        # Apply camera exclusion masks: zero out masked regions
+        cam_masks = self.cfg.get("masks", [])
+        if cam_masks:
+            h_f, w_f = thresh.shape[:2]
+            excl = np.ones(thresh.shape, dtype=np.uint8) * 255
+            for poly in cam_masks:
+                if len(poly) >= 3:
+                    pts = np.array([[int(p['x']), int(p['y'])] for p in poly], dtype=np.int32)
+                    pts[:, 0] = np.clip(pts[:, 0], 0, w_f - 1)
+                    pts[:, 1] = np.clip(pts[:, 1], 0, h_f - 1)
+                    cv2.fillPoly(excl, [pts], 0)
+            thresh = cv2.bitwise_and(thresh, excl)
+        # Per-camera sensitivity → scales minimum contour area
+        sensitivity = self.cfg.get("motion_sensitivity")
+        if sensitivity is not None:
+            sensitivity = float(sensitivity)
+            h_f, w_f = frame.shape[:2]
+            frame_area = h_f * w_f
+            base_min_area = frame_area * 0.005
+            min_area = int(base_min_area / max(0.1, sensitivity))
+        else:
+            min_area = int(proc.get("min_area", 3000))
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        min_area = int(proc.get("min_area", 3000))
         big = [c for c in contours if cv2.contourArea(c) >= min_area]
         if not big:
             return [], None
@@ -293,42 +330,58 @@ class CameraRuntime:
                     log.info("[%s] Stream wiederhergestellt nach %d Fehlern", self.camera_id, self._error_streak)
                 self.last_error = None
                 self._error_streak = 0
+                # Apply bottom crop before processing (removes corrupt H.264 bottom strip)
+                bottom_crop_px = int(self.cfg.get("bottom_crop_px", 0))
+                if bottom_crop_px > 0 and frame.shape[0] > bottom_crop_px:
+                    proc_frame = frame[:-bottom_crop_px, :, :]
+                else:
+                    proc_frame = frame
+                # Skip frames with corrupt bottom strip (high-saturation codec artifact)
+                if self._has_corrupt_strip(proc_frame):
+                    log.debug("[%s] corrupt strip detected, frame skipped", self.camera_id)
+                    time.sleep(interval)
+                    continue
                 # Quality gate: skip corrupt/uniform/artifact frames for events only
-                if not self._is_frame_valid(frame):
+                if not self._is_frame_valid(proc_frame):
                     time.sleep(interval)
                     continue
                 # Stream warmup: ignore first 3 s after connect to skip transition frames
                 if self.connect_time and time.time() - self.connect_time < 3.0:
                     time.sleep(interval)
                     continue
-                motion_labels, motion_bbox = self._motion_detect(frame)
-                detections = self.detector.detect_frame(frame)
+                motion_labels, motion_bbox = self._motion_detect(proc_frame)
+                # Multi-frame confirmation: only trigger on motion in ≥2 of last 3 frames
+                self._motion_confirm.append(1 if motion_labels else 0)
+                motion_confirmed = sum(self._motion_confirm) >= 2
+                effective_motion = motion_labels if motion_confirmed else []
+                effective_bbox = motion_bbox if motion_confirmed else None
+                detections = self.detector.detect_frame(proc_frame)
                 allowed = set(self.cfg.get("object_filter") or [])
                 if allowed:
                     detections = [d for d in detections if d.label in allowed]
-                labels = motion_labels + [d.label for d in detections]
+                labels = effective_motion + [d.label for d in detections]
                 if self.bird_classifier.available:
                     for d in detections:
                         if d.label == "bird":
-                            crop = self._crop(frame, d.bbox)
+                            crop = self._crop(proc_frame, d.bbox)
                             species, _ = self.bird_classifier.classify_crop(crop)
                             if species:
                                 d.species = species
                 if self.cat_registry:
                     for d in detections:
                         if d.label == "cat":
-                            crop = self._crop(frame, d.bbox)
+                            crop = self._crop(proc_frame, d.bbox)
                             m = self.cat_registry.match_details(crop)
                             if m:
                                 d.identity = m.get("name")
                 if self.person_registry:
                     for d in detections:
                         if d.label == "person":
-                            crop = self._crop(frame, d.bbox)
+                            crop = self._crop(proc_frame, d.bbox)
                             m = self.person_registry.match_details(crop)
                             if m:
                                 d.identity = m.get("name")
-                drawn = draw_detections(frame, detections)
+                drawn = draw_detections(proc_frame, detections)
                 with self.lock:
                     self.preview = drawn
                 # ── Video recording: buffer frames during motion ──────────────
@@ -341,11 +394,11 @@ class CameraRuntime:
                     if self.cfg.get("rtsp_url"):
                         dur_so_far = (now_t - self._motion_start_time).total_seconds()
                         if dur_so_far <= 30:
-                            self._motion_frames.append(frame.copy())
+                            self._motion_frames.append(proc_frame.copy())
                         elif len(self._motion_frames) >= 5:
                             # > 30s segment – save and start fresh
                             self._save_motion_video(self._motion_start_time, self._motion_frames)
-                            self._motion_frames = [frame.copy()]
+                            self._motion_frames = [proc_frame.copy()]
                             self._motion_start_time = now_t
                 elif self._last_motion_time is not None:
                     since_last = (now_t - self._last_motion_time).total_seconds()
@@ -368,10 +421,11 @@ class CameraRuntime:
                     day_dir = Path(self.global_cfg["storage"]["root"]) / "events" / self.camera_id / ts.strftime("%Y-%m-%d")
                     day_dir.mkdir(parents=True, exist_ok=True)
                     snap_path = day_dir / f"{event_id}.jpg"
+                    # drawn is already based on proc_frame (bottom-cropped), so saved snapshot is clean
                     save_frame = drawn.copy()
-                    # Draw green motion bounding box if motion was detected
-                    if motion_bbox is not None:
-                        mx, my, mw, mh = motion_bbox
+                    # Draw green motion bounding box if motion was detected (coords match proc_frame)
+                    if effective_bbox is not None:
+                        mx, my, mw, mh = effective_bbox
                         cv2.rectangle(save_frame, (mx, my), (mx + mw, my + mh), (0, 220, 0), 2)
                     h_px, w_px = save_frame.shape[:2]
                     if w_px > 1280:
