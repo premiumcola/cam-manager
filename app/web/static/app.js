@@ -277,24 +277,31 @@ function _groupTimelineEvents(points,GAP_MS=30000){
 
 function renderTimeline(){
   const svg=byId('timelineSvg');
-  const w=1200,h=340,left=140,top=40,right=24,bottom=34;
+  const w=1200,h=340,left=160,top=40,right=24,bottom=34;
   const tracks=state.timeline?.tracks||[];
   if(!tracks.length){ svg.innerHTML=''; return; }
   const points=(state.timeline.merged||[]);
   const times=points.map(p=>new Date(p.time).getTime()).filter(Boolean);
   const tMin=Math.min(...times,Date.now()-3600_000), tMax=Math.max(...times,Date.now());
   const xOf=t=>left+((new Date(t).getTime()-tMin)/Math.max(1,tMax-tMin))*(w-left-right);
-  const rowH=(h-top-bottom)/Math.max(1,tracks.length);
+  const rowH=Math.max(52,(h-top-bottom)/Math.max(1,tracks.length));
   const yOf=i=>top+rowH*i+rowH/2;
   let out=`<rect x="0" y="0" width="${w}" height="${h}" fill="#0b131b" rx="18"/>`;
   tracks.forEach((tr,i)=>{
     out+=`<line x1="${left}" y1="${yOf(i)}" x2="${w-right}" y2="${yOf(i)}" stroke="#213241" stroke-width="1"/>`;
     const _cam=(state.config?.cameras||[]).find(c=>c.id===tr.camera_id)||{};
     const _icon=_cam.icon||getCameraIcon(_cam.name||tr.camera_id);
-    const _sname=(_cam.name||tr.camera_id);
-    const _shortName=_sname.length>10?_sname.slice(0,10)+'…':_sname;
-    out+=`<text x="8" y="${yOf(i)+6}" font-size="16" dominant-baseline="middle">${_icon}</text>`;
-    out+=`<text x="30" y="${yOf(i)+5}" fill="#91a4b8" font-size="11">${esc(_shortName)}</text>`;
+    const _name=(_cam.name||tr.camera_id);
+    // Two-line label: icon + name (split long names at space/hyphen)
+    out+=`<text x="8" y="${yOf(i)-6}" font-size="14">${_icon}</text>`;
+    if(_name.length<=18){
+      out+=`<text x="8" y="${yOf(i)+9}" fill="#cfe7ff" font-size="12" font-weight="600">${esc(_name)}</text>`;
+    } else {
+      const splitIdx=_name.slice(0,18).lastIndexOf(' ')>0?_name.slice(0,18).lastIndexOf(' '):_name.slice(0,18).lastIndexOf('-');
+      const cut=splitIdx>0?splitIdx:17;
+      out+=`<text x="8" y="${yOf(i)-2}" fill="#cfe7ff" font-size="11" font-weight="600">${esc(_name.slice(0,cut))}</text>`;
+      out+=`<text x="8" y="${yOf(i)+12}" fill="#cfe7ff" font-size="11" font-weight="600">${esc(_name.slice(cut+1)||_name.slice(cut))}</text>`;
+    }
   });
   // X-axis time labels
   for(let k=0;k<6;k++){
