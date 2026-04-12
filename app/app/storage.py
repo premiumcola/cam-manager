@@ -44,7 +44,7 @@ class EventStore:
     def list_events(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None, limit: int = 24, offset: int = 0):
         items = []
         cam_dir = self._cam_dir(camera_id)
-        for file in sorted(cam_dir.rglob("*.json"), reverse=True):
+        for file in cam_dir.rglob("*.json"):
             try:
                 obj = json.loads(file.read_text(encoding="utf-8"))
             except Exception:
@@ -58,9 +58,8 @@ class EventStore:
             if label and label not in labels and obj.get("cat_name") != label and obj.get("bird_species") != label:
                 continue
             items.append(obj)
-            if len(items) >= offset + limit:
-                break
-        return items[offset:]
+        items.sort(key=lambda x: x.get("time", ""), reverse=True)
+        return items[offset:offset + limit]
 
     def stats_range(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None):
         from collections import Counter, defaultdict

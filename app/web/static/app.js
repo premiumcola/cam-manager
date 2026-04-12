@@ -120,11 +120,12 @@ async function loadAll(){
 function _mediaPeriodParams(){
   const p=state.mediaPeriod||'week';
   const now=new Date();
-  const end=now.toISOString().slice(0,10);
+  const today=now.toISOString().slice(0,10);
+  const end=today+'T23:59:59';
   let start;
-  if(p==='day') start=end;
-  else if(p==='month'){const d=new Date(now);d.setDate(d.getDate()-30);start=d.toISOString().slice(0,10);}
-  else{const d=new Date(now);d.setDate(d.getDate()-7);start=d.toISOString().slice(0,10);}
+  if(p==='day') start=today+'T00:00:00';
+  else if(p==='month'){const d=new Date(now);d.setDate(d.getDate()-30);start=d.toISOString().slice(0,10)+'T00:00:00';}
+  else{const d=new Date(now);d.setDate(d.getDate()-7);start=d.toISOString().slice(0,10)+'T00:00:00';}
   return `&start=${start}&end=${end}`;
 }
 async function loadMedia(append=false){
