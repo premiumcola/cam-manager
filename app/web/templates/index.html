@@ -629,12 +629,10 @@
       <button id="lightboxClose" type="button" style="position:absolute;top:-14px;right:-14px;z-index:10;width:36px;height:36px;border-radius:50%;border:none;background:#1f3141;color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
       <button id="lightboxPrev" type="button">‹</button>
       <button id="lightboxNext" type="button">›</button>
-      <div style="position:relative;display:inline-block">
+      <div style="position:relative;display:inline-block;min-height:200px;min-width:300px">
         <img id="lightboxImg" src="" alt="Event" style="max-width:90vw;max-height:76vh;border-radius:18px;object-fit:contain;background:#081119;display:block" />
-        <div id="lightboxActions" style="position:absolute;bottom:14px;right:14px;display:flex;gap:8px;z-index:5">
-          <button id="lightboxConfirm" type="button">✓</button>
-          <button id="lightboxDelete" type="button">🗑</button>
-        </div>
+        <button id="lightboxConfirm" type="button" style="position:absolute;top:16px;right:16px">✓</button>
+        <button id="lightboxDelete" type="button" style="position:absolute;bottom:16px;right:16px">🗑</button>
       </div>
       <div id="lightboxMeta" style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center"></div>
     </div>
