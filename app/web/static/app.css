@@ -278,3 +278,11 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 
 /* Discovery add-camera form */
 .disc-add-form{background:#131e2e;border-radius:12px;padding:12px;margin-top:8px}
+.sq-hop-anim{animation:sq-hop-logo 1.8s ease-in-out infinite}
+.cam-wobble-anim{animation:cam-wobble-logo 1.8s ease-in-out infinite}
+.leg-l-anim{animation:leg-l-logo .9s ease-in-out infinite alternate;transform-origin:16px 43px}
+.leg-r-anim{animation:leg-r-logo .9s ease-in-out infinite alternate;transform-origin:28px 43px}
+@keyframes sq-hop-logo{0%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}60%{transform:translateY(-3px)}}
+@keyframes cam-wobble-logo{0%,100%{transform:rotate(-4deg)}50%{transform:rotate(4deg)}}
+@keyframes leg-l-logo{from{transform:rotate(-12deg)}to{transform:rotate(12deg)}}
+@keyframes leg-r-logo{from{transform:rotate(12deg)}to{transform:rotate(-12deg)}}

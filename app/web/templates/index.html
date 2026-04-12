@@ -87,20 +87,15 @@
 
   <div class="shell">
     <aside class="sidebar panel" id="sidebar">
-      <div class="brand">
-        <div class="brand-text">
-          <div class="eyebrow" id="sideAppName">TAM-spy</div>
-          <h1>Analyse &amp; Sicherheit</h1>
-          <div class="muted">PoE · Coral · MQTT</div>
-        </div>
+      <div class="brand" style="padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.05)">
         <span id="liveIndicatorDesktop" class="live-pill hidden" title="Snapshots werden alle 3 Sekunden automatisch aktualisiert">Live</span>
       </div>
       <nav class="nav">
         <a href="#dashboard" title="Kameraübersicht"><span class="nav-icon">📊</span><span class="nav-label">Kameraübersicht</span></a>
-        <a href="#timeline" title="Detections"><span class="nav-icon">⏱</span><span class="nav-label">Detections</span></a>
+        <a href="#timeline" title="Timeline"><span class="nav-icon">⏱</span><span class="nav-label">Timeline</span></a>
         <a href="#statistik" title="Statistik"><span class="nav-icon">📈</span><span class="nav-label">Statistik</span></a>
         <a href="#media" title="Mediathek"><span class="nav-icon">🎞</span><span class="nav-label">Mediathek</span></a>
-        <a href="#achievements" title="Achievements"><span class="nav-icon">🏆</span><span class="nav-label">Achievements</span></a>
+        <a href="#achievements" title="Trophäen"><span class="nav-icon">🏆</span><span class="nav-label">Trophäen</span></a>
         <a href="#cameras" title="Kameras"><span class="nav-icon">📷</span><span class="nav-label">Kameras</span></a>
         <a href="#settings" title="Einstellungen"><span class="nav-icon">⚙️</span><span class="nav-label">Einstellungen</span></a>
         <a href="#logs" title="Logs"><span class="nav-icon">📋</span><span class="nav-label">Logs</span></a>
@@ -108,10 +103,33 @@
     </aside>
     <main class="main">
       <section class="hero panel">
-        <div>
-          <div class="eyebrow" id="appName">TAM-spy</div>
-          <h2 id="appTagline">Schlicht, funktional, analytisch</h2>
-          <p class="muted">Desktop-first, iOS-tauglich, mit Timeline, Mediathek, Kameragruppen, Preset-Telegram-Menü und MQTT-Basis für Home Assistant.</p>
+        <div style="display:flex;align-items:center;gap:16px">
+          <div class="hero-logo" style="flex-shrink:0">
+            <svg viewBox="0 0 52 52" width="52" height="52" xmlns="http://www.w3.org/2000/svg">
+              <g class="sq-hop-anim" style="transform-origin:26px 40px">
+                <path d="M36 42 Q48 32 46 18 Q44 8 34 10 Q24 12 28 26 Q32 38 36 42Z"
+                  fill="none" stroke="#cfe7ff" stroke-width="2" stroke-linecap="round"/>
+                <ellipse cx="22" cy="36" rx="10" ry="8" fill="none" stroke="#cfe7ff" stroke-width="2"/>
+                <circle cx="22" cy="24" r="8" fill="none" stroke="#cfe7ff" stroke-width="2"/>
+                <path d="M16 18 L14 12 L20 16Z" fill="none" stroke="#cfe7ff" stroke-width="1.5" stroke-linejoin="round"/>
+                <path d="M26 18 L28 12 L22 16Z" fill="none" stroke="#cfe7ff" stroke-width="1.5" stroke-linejoin="round"/>
+                <circle cx="25" cy="23" r="1.8" fill="#cfe7ff"/>
+                <ellipse cx="28" cy="26" rx="2.5" ry="1.5" fill="none" stroke="#cfe7ff" stroke-width="1.5"/>
+                <g class="cam-wobble-anim" style="transform-origin:22px 33px">
+                  <rect x="14" y="30" width="16" height="11" rx="2.5" fill="none" stroke="#cfe7ff" stroke-width="1.8"/>
+                  <circle cx="22" cy="35.5" r="3" fill="none" stroke="#cfe7ff" stroke-width="1.5"/>
+                  <rect x="25" y="28.5" width="4" height="3" rx="1" fill="none" stroke="#cfe7ff" stroke-width="1.5"/>
+                </g>
+                <line x1="16" y1="43" x2="14" y2="50" stroke="#cfe7ff" stroke-width="2" stroke-linecap="round" class="leg-l-anim"/>
+                <line x1="28" y1="43" x2="30" y2="50" stroke="#cfe7ff" stroke-width="2" stroke-linecap="round" class="leg-r-anim"/>
+              </g>
+            </svg>
+          </div>
+          <div>
+            <div class="eyebrow" id="appName">TAM-spy</div>
+            <h2 id="appTagline">Schlicht, funktional, analytisch</h2>
+            <p class="muted" style="margin-top:4px">PoE · Coral · MQTT</p>
+          </div>
         </div>
         <button id="openWizardBtn" class="btn-action ghost hidden">⚙️ Setup-Wizard</button>
       </section>
@@ -123,7 +141,7 @@
 
       <section id="timeline" class="panel section">
         <div class="section-head" style="flex-wrap:wrap;gap:8px;align-items:center">
-          <h3>Detections</h3>
+          <h3>Timeline</h3>
           <div id="tlLegend" class="timeline-legend" style="flex:1;margin:0;padding:0;min-height:0;border:none"></div>
           <div class="tl-range-wrap">
             <span id="tlRangeLabel" class="tl-range-label">letzte 12h</span>
