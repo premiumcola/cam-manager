@@ -1,6 +1,6 @@
 :root{--bg:#111827;--panel:#1e2235;--surface:#29304a;--line:transparent;--text:#edf4fb;--muted:#8b9ab5;--accent:#3b82f6;--good:#22c55e;--warn:#f59e0b;--danger:#ef4444}
 *{box-sizing:border-box}html{scroll-behavior:smooth}html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}button,input,select{font:inherit}button{cursor:pointer}a{color:inherit;text-decoration:none}
-@media (min-width:769px){html{scroll-padding-top:18px}.section,[id]{scroll-margin-top:18px}}
+@media (min-width:769px){html{scroll-padding-top:36px}.section,.panel.section,[id]{scroll-margin-top:36px}}@media (max-width:768px){html{scroll-padding-top:88px}.section,.panel.section,[id]{scroll-margin-top:88px}}
 .shell{display:flex;gap:18px;max-width:1900px;margin:0 auto;padding:18px}
 .panel{background:var(--panel);border-radius:24px;box-shadow:0 8px 32px rgba(0,0,0,.35)}
 .sidebar{padding:18px;position:sticky;top:18px;height:max-content;flex-shrink:0;width:260px;transition:width .35s cubic-bezier(0.4,0,0.2,1),padding .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}
