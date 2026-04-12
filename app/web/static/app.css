@@ -6,7 +6,6 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 .sidebar{padding:18px;position:sticky;top:18px;height:max-content;flex-shrink:0;width:260px;transition:width .35s cubic-bezier(0.4,0,0.2,1),padding .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}
 .sidebar.collapsed{width:52px;padding:10px 6px}
 .sidebar.collapsed .brand{height:0;margin-bottom:0;overflow:hidden;opacity:0}
-.sidebar.collapsed #liveIndicatorDesktop{display:none}
 .sidebar.collapsed .nav a{padding:10px 0;justify-content:center;gap:0}
 .sidebar.collapsed .nav-label{opacity:0;width:0;overflow:hidden;pointer-events:none}
 .brand{display:flex;gap:10px;align-items:center;margin-bottom:24px;transition:height .35s cubic-bezier(0.4,0,0.2,1),margin .35s cubic-bezier(0.4,0,0.2,1),opacity .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}.brand-text{flex:1;min-width:0;transition:opacity .35s cubic-bezier(0.4,0,0.2,1),width .35s cubic-bezier(0.4,0,0.2,1)}
@@ -48,6 +47,7 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 
 /* Status icons — top right */
 .cv-icons{position:absolute;top:8px;right:10px;display:flex;gap:6px;align-items:center}
+.cv-offline{font-size:10px;font-weight:700;color:rgba(255,255,255,.35);text-transform:uppercase;letter-spacing:.06em;padding:3px 8px;border-radius:999px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.1)}
 .cv-icon{width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;font-size:14px;border:none;color:#fff;cursor:default;flex-shrink:0;line-height:1}
 button.cv-icon{cursor:pointer;transition:background .15s}
 button.cv-icon:hover{background:rgba(0,0,0,.75)}

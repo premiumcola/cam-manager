@@ -142,7 +142,7 @@ function startLiveUpdate(){
       });
     }catch{/* silent */}
   },3000);
-  ['liveIndicator','liveIndicatorDesktop'].forEach(id=>{const el=byId(id);if(el)el.classList.remove('hidden');});
+  ['liveIndicator'].forEach(id=>{const el=byId(id);if(el)el.classList.remove('hidden');});
 }
 
 async function loadAll(){
@@ -239,28 +239,23 @@ function renderDashboard(){
     <div class="cv-title-wrap">
       <div class="cv-name">${esc(c.name)}</div>
       ${c.location?`<div class="cv-loc">${esc(c.location)}</div>`:''}
-      <span class="cv-group-pill">${getCameraIcon(c.name)} ${esc(c.group_id||'—')}</span>
+      <span class="cv-group-pill">${esc(c.group_id||'—')}</span>
     </div>
 
-    <!-- top-right: status icons -->
-    <div class="cv-live-dot cv-live-${c.status==='active'?'green':c.status==='error'?'red':'amber'}"></div>
+    <!-- top-right: live pill or offline badge -->
     <div class="cv-icons">
-      <button class="cv-icon ${armedCls}" title="${c.armed?'Scharf – klicken zum Unscharf':'Unscharf – klicken zum Scharf'}"
-        onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})">
-        ${c.armed?'🔴':'🟢'}
-      </button>
-      <span class="cv-icon ${stCls}" title="Stream: ${esc(c.status||'—')}">📹</span>
-      <span class="cv-icon" title="Heute: ${c.today_events||0} Erkennungen">
-        <span class="cv-count">${c.today_events||0}</span>
-      </span>
+      ${c.status==='active'?'<span class="live-pill">Live</span>':'<span class="cv-offline">offline</span>'}
     </div>
 
-    <!-- bottom: hover actions -->
+    <!-- bottom: hover actions + arm toggle + event count -->
     <div class="cv-actions">
       <button class="cv-act-btn" title="Bearbeiten" onclick="event.stopPropagation();editCamera('${esc(c.id)}')">⚙️</button>
       <button class="cv-act-btn" title="Timelapse" onclick="event.stopPropagation();loadTimelapse('${esc(c.id)}')">⏱️</button>
-      <button class="cv-act-btn" title="${c.armed?'Unscharf schalten':'Scharf schalten'}"
+      <button class="cv-act-btn ${armedCls}" title="${c.armed?'Unscharf schalten':'Scharf schalten'}"
         onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})">${c.armed?'🔕':'🔔'}</button>
+      <span class="cv-act-btn" style="cursor:default" title="Heute: ${c.today_events||0} Erkennungen">
+        <span class="cv-count">${c.today_events||0}</span>
+      </span>
     </div>
   </div>
 </article>`;
@@ -1306,9 +1301,13 @@ byId('wizFinish').onclick=()=>finishWizard();
   }
 
   if(hamburger) hamburger.onclick=()=>{
-    sidebar.classList.add('mobile-open');
-    overlay.classList.add('visible');
-    document.body.style.overflow='hidden';
+    if(window.innerWidth<=768){
+      sidebar.classList.add('mobile-open');
+      overlay.classList.add('visible');
+      document.body.style.overflow='hidden';
+    } else {
+      setCollapsed(!sidebar.classList.contains('collapsed'));
+    }
   };
 
   if(overlay) overlay.onclick=()=>{
