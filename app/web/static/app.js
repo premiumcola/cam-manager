@@ -94,6 +94,8 @@ function startLiveUpdate(){
             stIcon.classList.remove('cv-st-active','cv-st-error','cv-st-warn');
             stIcon.classList.add(c.status==='active'?'cv-st-active':c.status==='error'?'cv-st-error':'cv-st-warn');
           }
+          const dot=card.querySelector('.cv-live-dot');
+          if(dot){dot.className='cv-live-dot cv-live-'+(c.status==='active'?'green':c.status==='error'?'red':'amber');}
           // Always refresh snapshot periodically (every cycle when image is visible)
           const img=card.querySelector('.cv-img');
           if(img){const base=img.src.split('?')[0];img.src=base+'?t='+Date.now();}
@@ -209,6 +211,7 @@ function renderDashboard(){
     </div>
 
     <!-- top-right: status icons -->
+    <div class="cv-live-dot cv-live-${c.status==='active'?'green':c.status==='error'?'red':'amber'}"></div>
     <div class="cv-icons">
       <button class="cv-icon ${armedCls}" title="${c.armed?'Scharf – klicken zum Unscharf':'Unscharf – klicken zum Scharf'}"
         onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})">
