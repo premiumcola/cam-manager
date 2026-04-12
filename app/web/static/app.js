@@ -44,6 +44,35 @@ function objBubble(label,size=22){
   const svg=OBJ_SVG[label]||OBJ_SVG.alarm;
   return `<span style="width:${size}px;height:${size}px;border-radius:50%;background:rgba(0,0,0,0.55);box-shadow:0 1px 6px rgba(0,0,0,0.6);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${svg}</span>`;
 }
+const TL_LABELS=['person','cat','bird','car','motion','alarm'];
+function _renderLbLabels(){
+  const el=byId('lightboxLabels');
+  if(!el||!_lbItem) return;
+  const active=new Set(_lbItem.labels||[]);
+  el.innerHTML=TL_LABELS.map(l=>{
+    const isActive=active.has(l);
+    const svg=OBJ_SVG[l]||OBJ_SVG.alarm;
+    const title=OBJ_LABEL[l]||l;
+    return `<span data-label="${l}" title="${title}" style="width:44px;height:44px;border-radius:50%;background:${isActive?'rgba(0,0,0,0.75)':'rgba(0,0,0,0.25)'};box-shadow:0 1px 6px rgba(0,0,0,0.5);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .15s,opacity .15s;opacity:${isActive?'1':'0.35'};border:2px solid ${isActive?'rgba(255,255,255,0.35)':'transparent'}">${svg}</span>`;
+  }).join('');
+  el.querySelectorAll('[data-label]').forEach(btn=>{
+    btn.onclick=async()=>{
+      const lbl=btn.dataset.label;
+      const cur=new Set(_lbItem.labels||[]);
+      if(cur.has(lbl)) cur.delete(lbl); else cur.add(lbl);
+      const newLabels=[...cur];
+      try{
+        const res=await j(`/api/camera/${_lbItem.camera_id}/events/${_lbItem.event_id}/labels`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({labels:newLabels})});
+        if(res.ok){
+          _lbItem.labels=res.labels;
+          const idx=(state.media||[]).findIndex(x=>x.event_id===_lbItem.event_id);
+          if(idx>=0) state.media[idx].labels=res.labels;
+          _renderLbLabels();
+        }
+      }catch(e){console.error('label update failed',e);}
+    };
+  });
+}
 function getCameraIcon(name){const n=(name||'').toLowerCase();if(/werkstatt|garage|keller|labor/.test(n))return'🔧';if(/eingang|tor|tür|door/.test(n))return'🚪';if(/garten|garden|außen|outdoor/.test(n))return'🌿';if(/eichhörnchen|squirrel|tier|animal|natur/.test(n))return'🐿️';if(/vogel|bird|futter|feeder/.test(n))return'🐦';if(/parkplatz|auto|car/.test(n))return'🚗';if(/pool|wasser|water/.test(n))return'💧';return'📷';}
 const shapeState={mode:'zone',points:[],camera:null,zones:[],masks:[]};
 const byId=id=>document.getElementById(id);
@@ -1392,8 +1421,7 @@ function openLightbox(item){
     <span class="badge">${esc(_lbItem.camera_id||'')}</span>
     <span class="badge">${esc(_lbItem.time||'')}</span>
     ${confirmedBadge}`;
-  const labelsEl=byId('lightboxLabels');
-  if(labelsEl) labelsEl.innerHTML=(_lbItem.labels||[]).map(l=>objBubble(l,36)).join('');
+  _renderLbLabels();
   byId('lightboxPrev').style.opacity=_lbIndex>0?'1':'0.2';
   byId('lightboxNext').style.opacity=_lbIndex<(state.media||[]).length-1?'1':'0.2';
   byId('lightboxModal').classList.remove('hidden');
