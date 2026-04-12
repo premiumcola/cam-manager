@@ -1293,11 +1293,10 @@ byId('wizFinish').onclick=()=>finishWizard();
     try{localStorage.setItem(STORAGE_KEY,yes?'1':'0');}catch{}
   }
 
-  // Initial state: desktop=restore from localStorage, tablet=collapsed, mobile=hidden
+  // Initial state: collapsed on all non-mobile widths; only expand if user explicitly pinned open (saved==='0')
   if(window.innerWidth>768){
     const saved=localStorage.getItem(STORAGE_KEY);
-    // On tablet (<1024px) default to collapsed unless user explicitly pinned open
-    setCollapsed(window.innerWidth<=1024 ? saved!=='0' : saved==='1');
+    setCollapsed(saved!=='0');
   }
 
   if(hamburger) hamburger.onclick=()=>{
