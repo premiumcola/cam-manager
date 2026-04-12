@@ -1241,14 +1241,15 @@ byId('rescanMediaBtn')?.addEventListener('click',async()=>{
 let _lbItem=null;
 let _lbIndex=-1;
 function openLightbox(item){
-  _lbItem=item;
   _lbIndex=(state.media||[]).findIndex(x=>x.event_id===item.event_id);
-  const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
+  if(_lbIndex===-1) return;
+  _lbItem=state.media[_lbIndex];
+  const imgSrc=_lbItem.snapshot_relpath?`/media/${_lbItem.snapshot_relpath}`:(_lbItem.snapshot_url||'');
   byId('lightboxImg').src=imgSrc;
   byId('lightboxMeta').innerHTML=`
-    <span class="badge">${esc(item.camera_id||'')}</span>
-    <span class="badge">${esc(item.time||'')}</span>
-    ${(item.labels||[]).map(l=>`<span class="chip">${esc(l)}</span>`).join('')}`;
+    <span class="badge">${esc(_lbItem.camera_id||'')}</span>
+    <span class="badge">${esc(_lbItem.time||'')}</span>
+    ${(_lbItem.labels||[]).map(l=>`<span class="chip">${esc(l)}</span>`).join('')}`;
   byId('lightboxPrev').style.display=_lbIndex>0?'flex':'none';
   byId('lightboxNext').style.display=_lbIndex<(state.media||[]).length-1?'flex':'none';
   byId('lightboxModal').classList.remove('hidden');
@@ -1261,15 +1262,15 @@ function closeLightbox(){
 }
 byId('lightboxClose').onclick=closeLightbox;
 byId('lightboxModal').onclick=(e)=>{if(e.target===byId('lightboxModal')) closeLightbox();};
-byId('lightboxPrev').onclick=()=>{if(_lbIndex>0) openLightbox(state.media[--_lbIndex]);};
-byId('lightboxNext').onclick=()=>{if(_lbIndex<(state.media||[]).length-1) openLightbox(state.media[++_lbIndex]);};
+byId('lightboxPrev').onclick=()=>{if(_lbIndex>0){_lbIndex--;openLightbox(state.media[_lbIndex]);}};
+byId('lightboxNext').onclick=()=>{if(_lbIndex<(state.media||[]).length-1){_lbIndex++;openLightbox(state.media[_lbIndex]);}};
 document.addEventListener('keydown',(e)=>{
   if(byId('lightboxModal').classList.contains('hidden')) return;
-  if(e.key==='Escape') closeLightbox();
-  if(e.key==='ArrowLeft') byId('lightboxPrev').click();
-  if(e.key==='ArrowRight') byId('lightboxNext').click();
-  if(e.key==='ArrowUp'){e.preventDefault();byId('lightboxConfirm').click();}
-  if(e.key==='ArrowDown'){e.preventDefault();byId('lightboxDelete').click();}
+  if(e.key==='ArrowLeft'){e.preventDefault();if(_lbIndex>0){_lbIndex--;openLightbox(state.media[_lbIndex]);}}
+  else if(e.key==='ArrowRight'){e.preventDefault();if(_lbIndex<(state.media||[]).length-1){_lbIndex++;openLightbox(state.media[_lbIndex]);}}
+  else if(e.key==='ArrowUp'){e.preventDefault();byId('lightboxConfirm').click();}
+  else if(e.key==='ArrowDown'){e.preventDefault();byId('lightboxDelete').click();}
+  else if(e.key==='Escape') closeLightbox();
 });
 byId('lightboxConfirm').innerHTML='<span>✓</span><span style="font-size:9px;opacity:.8">↑</span>';
 byId('lightboxDelete').innerHTML='<span>🗑</span><span style="font-size:9px;opacity:.8">↓</span>';
@@ -1279,14 +1280,17 @@ byId('lightboxConfirm').onclick=async()=>{
   if(!camera_id||!event_id) return;
   try{
     await j(`/api/camera/${encodeURIComponent(camera_id)}/events/${encodeURIComponent(event_id)}/confirm`,{method:'POST'});
+    // update state.media in place
+    const sIdx=(state.media||[]).findIndex(x=>x.event_id===event_id);
+    if(sIdx>=0) state.media[sIdx].confirmed=true;
+    // update card DOM
     const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(event_id)}"]`);
     if(card){
       card.classList.add('mmc-confirmed');
       const actions=card.querySelector('.mmc-actions');
       if(actions) actions.outerHTML='<span class="media-confirmed-badge">✓</span>';
     }
-    if(_lbItem) _lbItem.confirmed=true;
-    // auto-advance to next image
+    // auto-advance to next item
     const nextIdx=_lbIndex+1;
     if(nextIdx<(state.media||[]).length) openLightbox(state.media[nextIdx]);
     else closeLightbox();
@@ -1305,10 +1309,10 @@ byId('lightboxDelete').onclick=async()=>{
       byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
     }
     _decrementMediaOverviewCount(camera_id);
-    // Auto-advance
-    if(_lbIndex<(state.media||[]).length) openLightbox(state.media[_lbIndex]);
-    else if((state.media||[]).length>0) openLightbox(state.media[_lbIndex-1]);
-    else closeLightbox();
+    // Auto-advance: clamp index to new array bounds
+    _lbIndex=Math.min(_lbIndex,(state.media||[]).length-1);
+    if(_lbIndex<0) closeLightbox();
+    else openLightbox(state.media[_lbIndex]);
     await loadMediaStorageStats();
   }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
 };
@@ -1435,9 +1439,15 @@ window.deleteMediaCard=async(btn)=>{
 window.confirmMediaCard=async(camId,eventId,btn)=>{
   try{
     await j(`/api/camera/${encodeURIComponent(camId)}/events/${encodeURIComponent(eventId)}/confirm`,{method:'POST'});
+    // update state.media in place so lightbox nav stays in sync
+    const sIdx=(state.media||[]).findIndex(x=>x.event_id===eventId);
+    if(sIdx>=0) state.media[sIdx].confirmed=true;
     const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(eventId)}"]`);
-    if(card) card.classList.add('mmc-confirmed');
-    if(btn){btn.classList.remove('mmc-confirm');btn.style.opacity='0.4';}
+    if(card){
+      card.classList.add('mmc-confirmed');
+      const actions=card.querySelector('.mmc-actions');
+      if(actions) actions.outerHTML='<span class="media-confirmed-badge">✓</span>';
+    }
   }catch(e){showToast('Bestätigen fehlgeschlagen: '+e.message,'error');}
 };
 function _decrementMediaOverviewCount(camId){
