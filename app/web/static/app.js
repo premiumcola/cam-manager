@@ -1425,6 +1425,15 @@ const BIRD_SVGS={
 'turmfalke':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M14 54 L6 57 L8 63 L16 60Z" fill="#cc6030"/><ellipse cx="36" cy="50" rx="20" ry="12" fill="#f0d8a8"/><circle cx="28" cy="50" r="2" fill="#8b5030" opacity="0.6"/><circle cx="36" cy="53" r="2" fill="#8b5030" opacity="0.6"/><circle cx="44" cy="50" r="2" fill="#8b5030" opacity="0.6"/><ellipse cx="26" cy="43" rx="18" ry="9" fill="#cc6030"/><circle cx="52" cy="36" r="11" fill="#7090c0"/><path d="M46 40 L58 38" stroke="#111" stroke-width="2" stroke-linecap="round"/><circle cx="57" cy="32" r="1.8" fill="#111"/><path d="M62 34 L72 32 L70 38 L62 37Z" fill="#807060"/></svg>`
 };
 
+// ── Mammal SVG icons ─────────────────────────────────────────────────────────
+const MAMMAL_SVGS={
+'eichhoernchen':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><path d="M 52 70 Q 72 58 70 34 Q 68 18 54 20 Q 40 22 44 40 Q 48 56 52 70Z" fill="#d4752a"/><path d="M 52 70 Q 66 56 64 36 Q 62 24 54 26 Q 46 28 48 42 Q 50 58 52 70Z" fill="#c8651a"/><ellipse cx="36" cy="60" rx="15" ry="11" fill="#c8651a"/><circle cx="38" cy="42" r="14" fill="#c8651a"/><circle cx="28" cy="29" r="7" fill="#c8651a"/><circle cx="28" cy="29" r="4" fill="#e07820"/><circle cx="44" cy="27" r="7" fill="#c8651a"/><circle cx="44" cy="27" r="4" fill="#e07820"/><circle cx="44" cy="39" r="3.5" fill="#111"/><circle cx="43" cy="38" r="1.2" fill="#fff"/><ellipse cx="48" cy="45" rx="5" ry="3.5" fill="#d4752a"/><circle cx="50" cy="44" r="1.5" fill="#333"/><ellipse cx="28" cy="68" rx="4" ry="7" fill="#a05018"/><ellipse cx="38" cy="69" rx="4" ry="6" fill="#a05018"/></svg>`,
+'igel':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="55" rx="26" ry="16" fill="#8b6340"/><ellipse cx="40" cy="47" rx="22" ry="12" fill="#4a3020"/><line x1="40" y1="35" x2="37" y2="19" stroke="#4a3020" stroke-width="2.5" stroke-linecap="round"/><line x1="52" y1="38" x2="56" y2="23" stroke="#4a3020" stroke-width="2.5" stroke-linecap="round"/><line x1="28" y1="38" x2="24" y2="23" stroke="#4a3020" stroke-width="2.5" stroke-linecap="round"/><line x1="62" y1="46" x2="70" y2="36" stroke="#4a3020" stroke-width="2.5" stroke-linecap="round"/><line x1="18" y1="46" x2="10" y2="36" stroke="#4a3020" stroke-width="2.5" stroke-linecap="round"/><ellipse cx="62" cy="57" rx="13" ry="9" fill="#a07850"/><circle cx="66" cy="53" r="2.5" fill="#111"/><circle cx="65.5" cy="52.5" r="1" fill="#fff"/><circle cx="72" cy="57" r="2" fill="#333"/><ellipse cx="28" cy="69" rx="5" ry="3.5" fill="#7a5530"/><ellipse cx="50" cy="70" rx="5" ry="3.5" fill="#7a5530"/></svg>`,
+'feldhase':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><ellipse cx="34" cy="17" rx="6" ry="21" fill="#9e8060"/><ellipse cx="34" cy="17" rx="3.5" ry="18" fill="#e8e0d0"/><ellipse cx="47" cy="14" rx="6" ry="23" fill="#9e8060"/><ellipse cx="47" cy="14" rx="3.5" ry="20" fill="#e8e0d0"/><ellipse cx="38" cy="59" rx="20" ry="14" fill="#9e8060"/><ellipse cx="38" cy="64" rx="13" ry="9" fill="#e8e0d0"/><circle cx="50" cy="44" r="14" fill="#9e8060"/><circle cx="56" cy="39" r="3.5" fill="#111"/><circle cx="55" cy="38" r="1.2" fill="#fff"/><ellipse cx="58" cy="47" rx="6" ry="4" fill="#b09070"/><circle cx="61" cy="46" r="1.8" fill="#333"/><ellipse cx="20" cy="65" rx="8" ry="5" fill="#9e8060"/><ellipse cx="56" cy="70" rx="10" ry="4" fill="#9e8060"/></svg>`,
+'reh':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><path d="M 36 20 Q 30 12 26 14 Q 22 16 24 20" stroke="#8b6040" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M 36 20 Q 34 10 39 9" stroke="#8b6040" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M 44 20 Q 50 12 54 14 Q 58 16 56 20" stroke="#8b6040" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M 44 20 Q 46 10 41 9" stroke="#8b6040" stroke-width="2.5" fill="none" stroke-linecap="round"/><rect x="36" y="24" width="12" height="22" rx="6" fill="#c8a870"/><circle cx="42" cy="23" r="12" fill="#c8a870"/><ellipse cx="48" cy="26" rx="7" ry="5" fill="#e8d8b0"/><ellipse cx="30" cy="19" rx="4" ry="8" fill="#c8a870" transform="rotate(-15 30 19)"/><circle cx="37" cy="20" r="3" fill="#111"/><circle cx="36" cy="19" r="1" fill="#fff"/><ellipse cx="40" cy="61" rx="24" ry="15" fill="#c8a870"/><ellipse cx="18" cy="58" rx="6" ry="7" fill="#f0e8d0"/><rect x="28" y="72" width="5" height="8" rx="2.5" fill="#a08050"/><rect x="36" y="72" width="5" height="8" rx="2.5" fill="#a08050"/><rect x="46" y="72" width="5" height="8" rx="2.5" fill="#a08050"/></svg>`,
+'fuchs':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><polygon points="22,36 28,16 34,36" fill="#d4521a"/><polygon points="24,34 28,20 32,34" fill="#f0c0a0"/><polygon points="46,36 52,16 58,36" fill="#d4521a"/><polygon points="48,34 52,20 56,34" fill="#f0c0a0"/><ellipse cx="40" cy="46" rx="18" ry="16" fill="#d4521a"/><path d="M 32 50 Q 40 47 48 50 Q 52 55 50 60 Q 44 65 36 63 Q 30 59 32 53Z" fill="#e8e0d0"/><circle cx="32" cy="40" r="3.5" fill="#111"/><circle cx="31" cy="39" r="1.2" fill="#fff"/><circle cx="48" cy="40" r="3.5" fill="#111"/><circle cx="47" cy="39" r="1.2" fill="#fff"/><ellipse cx="40" cy="55" rx="4" ry="3" fill="#333"/><ellipse cx="40" cy="70" rx="20" ry="11" fill="#d4521a"/><ellipse cx="40" cy="69" rx="12" ry="7" fill="#e8e0d0"/><rect x="26" y="73" width="6" height="7" rx="3" fill="#2a1a0a"/><rect x="48" y="73" width="6" height="7" rx="3" fill="#2a1a0a"/></svg>`
+};
+
 // ── Achievement drill-down (placeholder) ─────────────────────────────────────
 function openAchievementDrilldown(id, name){
   // navigate to media filtered by species
@@ -1459,7 +1468,6 @@ const ACH_DEFS=[
   {id:'fuchs',        name:'Fuchs',         icon:'🦊', cat:'mammals'},
 ];
 
-let _achTab='all';
 let _achData={};
 
 async function loadAchievements(){
@@ -1528,29 +1536,26 @@ function renderAchievements(){
     <div class="ach-progress-track"><div class="ach-progress-fill" style="width:${pct}%"></div></div>
     <span class="ach-progress-pct">${pct}%</span>`;
 
-  const visible=_achTab==='all'?ACH_DEFS:ACH_DEFS.filter(a=>a.cat===_achTab);
-
   const legend=`<div class="ach-legend">
     <span><span class="ach-leg-dot" style="background:#c87840"></span>Bronze 1–4×</span>
     <span><span class="ach-leg-dot" style="background:#a0b4c4"></span>Silber 5–19×</span>
     <span><span class="ach-leg-dot" style="background:#e0c050"></span>Gold 20×+</span>
   </div>`;
 
-  const cards=visible.map(a=>{
+  const cards=ACH_DEFS.map(a=>{
     const info=_achData[a.id];
     const isUnlocked=!!info;
     const count=isUnlocked?(info.count||1):0;
     const tier=_achTier(count);
-    const birdSvg=a.cat==='birds'?BIRD_SVGS[a.id]:null;
-    const medalHtml=_medalSVG(a.id,tier,birdSvg,isUnlocked);
-    // emoji overlay for mammals (no SVG)
-    const emojiOverlay=(!birdSvg)
+    const iconSvg=a.cat==='birds'?(BIRD_SVGS[a.id]||null):(MAMMAL_SVGS[a.id]||null);
+    const medalHtml=_medalSVG(a.id,tier,iconSvg,isUnlocked);
+    // emoji overlay only when no hand-crafted SVG available
+    const emojiOverlay=!iconSvg
       ?`<span class="medal-emoji${isUnlocked?'':' medal-emoji-locked'}">${isUnlocked?a.icon:'🔒'}</span>`
       :'';
-    // badge — lock badge only for birds (mammals use emoji overlay for lock)
     const badge=isUnlocked
       ?`<span class="medal-count-badge ${tier}">${count}×</span>`
-      :(birdSvg?`<span class="medal-lock-badge">🔒</span>`:'');
+      :(iconSvg?`<span class="medal-lock-badge">🔒</span>`:'');
     // count label
     const countColors={bronze:'#d4894a',silver:'#90a8be',gold:'#d4a820'};
     const countLabel=isUnlocked
@@ -1570,14 +1575,6 @@ function renderAchievements(){
 
   byId('achievementsGrid').innerHTML=legend+`<div class="ach-cards-grid">${cards}</div>`;
 }
-
-document.querySelectorAll('.ach-tab').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    _achTab=btn.dataset.tab;
-    document.querySelectorAll('.ach-tab').forEach(b=>b.classList.toggle('active',b===btn));
-    renderAchievements();
-  });
-});
 
 // Wire confirm modal
 byId('confirmOk')?.addEventListener('click',()=>_resolveConfirm(true));
