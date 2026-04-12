@@ -1293,8 +1293,12 @@ byId('wizFinish').onclick=()=>finishWizard();
     try{localStorage.setItem(STORAGE_KEY,yes?'1':'0');}catch{}
   }
 
-  // Initial state: collapsed on all non-mobile widths; only expand if user explicitly pinned open (saved==='0')
-  if(window.innerWidth>768){
+  // Desktop (>1024px): always collapsed; CSS hover expands — no localStorage interaction
+  // Tablet (768-1024px): collapsed by default, hamburger toggles + saves to localStorage
+  // Mobile (≤768px): hidden, hamburger slides in as overlay
+  if(window.innerWidth>1024){
+    sidebar.classList.add('collapsed');
+  } else if(window.innerWidth>768){
     const saved=localStorage.getItem(STORAGE_KEY);
     setCollapsed(saved!=='0');
   }
@@ -1304,9 +1308,10 @@ byId('wizFinish').onclick=()=>finishWizard();
       sidebar.classList.add('mobile-open');
       overlay.classList.add('visible');
       document.body.style.overflow='hidden';
-    } else {
+    } else if(window.innerWidth<=1024){
       setCollapsed(!sidebar.classList.contains('collapsed'));
     }
+    // Desktop: hamburger does nothing — hover handles expand/collapse
   };
 
   if(overlay) overlay.onclick=()=>{
