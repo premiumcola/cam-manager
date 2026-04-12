@@ -224,98 +224,122 @@
           </div>
           <form id="cameraForm" class="cam-form-compact">
             <input type="hidden" name="id" />
-            <div class="cam-2col">
-              <div style="display:grid;gap:8px">
-                <div class="field-wrap"><input name="name" placeholder="Werkstatt" required /><span class="field-label">Anzeigename</span></div>
-                <div class="field-wrap"><input name="icon" placeholder="🔧" maxlength="4" /><span class="field-label">Kamera-Icon (Emoji)</span></div>
-                <div class="field-wrap"><input name="location" placeholder="Werkbank / Tor" /><span class="field-label">Standort</span></div>
-              </div>
-              <div style="display:grid;gap:8px">
-                <div class="field-wrap"><input name="rtsp_ip" placeholder="192.168.X.X" /><span class="field-label">Kamera-IP</span></div>
-                <div class="cam-userpass">
-                  <div class="field-wrap"><input name="rtsp_user" placeholder="admin" /><span class="field-label">Benutzer</span></div>
-                  <div class="field-wrap"><input name="rtsp_pass" type="password" placeholder="Passwort" /><span class="field-label">Passwort</span></div>
-                </div>
-              </div>
-            </div>
-            <div class="row" style="grid-template-columns:1fr 70px">
-              <div class="field-wrap"><select name="rtsp_path" id="rtspPathSelect"></select><span class="field-label">RTSP-Pfad</span></div>
-              <div class="field-wrap"><input name="rtsp_port" placeholder="554" value="554" /><span class="field-label">Port</span></div>
-            </div>
-            <div class="field-wrap"><input name="rtsp_url" readonly style="color:var(--muted);font-size:11px" /><span class="field-label">RTSP-URL (automatisch)</span></div>
-            <div class="field-wrap"><input name="snapshot_url" placeholder="http://…" /><span class="field-label">Snapshot-URL – optional</span></div>
-            <div class="row" style="grid-template-columns:1fr 1fr">
-              <div class="field-wrap"><select name="group_id" id="groupSelect"></select><span class="field-label">Gruppe</span></div>
-              <div class="field-wrap"><input name="object_filter" placeholder="person,cat,bird" /><span class="field-label">Objektfilter</span></div>
-            </div>
-            <label class="toggle-row"><span>Aktiv</span><label class="switch"><input type="checkbox" name="enabled" checked /><span class="slider"></span></label></label>
-            <div class="settings-divider">Alarm &amp; Zeitplan</div>
-            <label class="toggle-row"><span>Armed – Alarmierung aktiv</span><label class="switch"><input type="checkbox" name="armed" checked /><span class="slider"></span></label></label>
-            <div id="camScheduleSection">
-              <label class="toggle-row" style="margin-top:8px"><span>Zeitplan aktiv</span><label class="switch"><input type="checkbox" name="schedule_enabled" /><span class="slider"></span></label></label>
-              <div class="row" style="grid-template-columns:1fr 1fr;margin-top:8px">
-                <div class="field-wrap"><input name="schedule_start" placeholder="22:00" /><span class="field-label">Von</span></div>
-                <div class="field-wrap"><input name="schedule_end" placeholder="06:00" /><span class="field-label">Bis</span></div>
-              </div>
-            </div>
-            <div class="settings-divider">Personen-Whitelist</div>
-            <div id="whitelistChipsContainer" class="wl-chips"></div>
-            <input type="hidden" name="whitelist_names" />
-            <div class="settings-divider">Timelapse</div>
-            <label class="toggle-row"><span>Timelapse aktiv</span><label class="switch"><input type="checkbox" name="timelapse_enabled" /><span class="slider"></span></label></label>
-            <div id="timelapseSettingsPanel" class="tl-panel hidden">
-              <div class="tl-preset">
-                <div class="tl-preset-head">Tages-Timelapse</div>
-                <div class="tl-slider-row">
-                  <span class="small">Zieldauer</span>
-                  <input type="range" name="tl_daily_seconds" min="30" max="300" step="10" value="60" class="tl-range" />
-                  <span id="tlDailyLabel" class="tl-val">60s</span>
-                </div>
-              </div>
-              <div class="tl-preset">
-                <div class="tl-preset-head">Wochen-Timelapse</div>
-                <div class="tl-slider-row">
-                  <span class="small">Zieldauer</span>
-                  <input type="range" name="tl_weekly_seconds" min="60" max="600" step="30" value="180" class="tl-range" />
-                  <span id="tlWeeklyLabel" class="tl-val">180s</span>
-                </div>
-              </div>
-              <label class="toggle-row"><span>Täglich per Telegram senden</span><label class="switch"><input type="checkbox" name="timelapse_telegram" /><span class="slider"></span></label></label>
-            </div>
-            <div class="settings-divider">Erkennung &amp; Qualität</div>
-            <div class="row" style="grid-template-columns:1fr 1fr">
-              <div class="field-wrap"><input type="number" name="bottom_crop_px" min="0" max="200" value="0" /><span class="field-label">Unterer Bildrand ausblenden (px)</span></div>
-              <div class="field-wrap">
-                <div style="display:flex;align-items:center;gap:8px">
-                  <input type="range" name="motion_sensitivity" min="0.1" max="1.0" step="0.1" value="0.5" style="flex:1" />
-                  <span id="motionSensLabel" style="font-size:12px;color:var(--muted);min-width:28px">0.5</span>
-                </div>
-                <span class="field-label">Bewegungsempfindlichkeit (0.3 = weniger, 0.7 = mehr)</span>
-              </div>
-            </div>
             <input type="hidden" name="zones_json" />
             <input type="hidden" name="masks_json" />
+            <input type="hidden" name="whitelist_names" />
+
+            <!-- Tab bar -->
+            <div class="cam-tab-bar">
+              <button type="button" class="cam-tab-btn active" data-tab="cam-tab-verbindung">📡 Verbindung</button>
+              <button type="button" class="cam-tab-btn" data-tab="cam-tab-einstellungen">⚙️ Einstellungen</button>
+              <button type="button" class="cam-tab-btn" data-tab="cam-tab-zeitplan">⏰ Zeitplan</button>
+              <button type="button" class="cam-tab-btn" data-tab="cam-tab-zonen">🗺 Zonen</button>
+            </div>
+
+            <!-- Panel: Verbindung -->
+            <div class="cam-tab-panel active" id="cam-tab-verbindung">
+              <div class="cam-2col">
+                <div style="display:grid;gap:8px">
+                  <div class="field-wrap"><input name="name" placeholder="Werkstatt" required /><span class="field-label">Anzeigename</span></div>
+                  <div class="field-wrap"><input name="icon" placeholder="🔧" maxlength="4" /><span class="field-label">Kamera-Icon (Emoji)</span></div>
+                  <div class="field-wrap"><input name="location" placeholder="Werkbank / Tor" /><span class="field-label">Standort</span></div>
+                </div>
+                <div style="display:grid;gap:8px">
+                  <div class="field-wrap"><input name="rtsp_ip" placeholder="192.168.X.X" /><span class="field-label">Kamera-IP</span></div>
+                  <div class="cam-userpass">
+                    <div class="field-wrap"><input name="rtsp_user" placeholder="admin" /><span class="field-label">Benutzer</span></div>
+                    <div class="field-wrap"><input name="rtsp_pass" type="password" placeholder="Passwort" /><span class="field-label">Passwort</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="row" style="grid-template-columns:1fr 70px">
+                <div class="field-wrap"><select name="rtsp_path" id="rtspPathSelect"></select><span class="field-label">RTSP-Pfad</span></div>
+                <div class="field-wrap"><input name="rtsp_port" placeholder="554" value="554" /><span class="field-label">Port</span></div>
+              </div>
+              <div class="field-wrap"><input name="rtsp_url" readonly style="color:var(--muted);font-size:11px" /><span class="field-label">RTSP-URL (automatisch)</span></div>
+              <div class="field-wrap"><input name="snapshot_url" placeholder="http://…" /><span class="field-label">Snapshot-URL – optional</span></div>
+              <div class="row" style="grid-template-columns:1fr 1fr">
+                <div class="field-wrap"><select name="group_id" id="groupSelect"></select><span class="field-label">Gruppe</span></div>
+                <div class="field-wrap"><input name="object_filter" placeholder="person,cat,bird" /><span class="field-label">Objektfilter</span></div>
+              </div>
+              <label class="toggle-row"><span>Aktiv</span><label class="switch"><input type="checkbox" name="enabled" checked /><span class="slider"></span></label></label>
+            </div>
+
+            <!-- Panel: Einstellungen -->
+            <div class="cam-tab-panel" id="cam-tab-einstellungen">
+              <label class="toggle-row"><span>Armed – Alarmierung aktiv</span><label class="switch"><input type="checkbox" name="armed" checked /><span class="slider"></span></label></label>
+              <div class="settings-divider">Personen-Whitelist</div>
+              <div id="whitelistChipsContainer" class="wl-chips"></div>
+              <div class="settings-divider">Timelapse</div>
+              <label class="toggle-row"><span>Timelapse aktiv</span><label class="switch"><input type="checkbox" name="timelapse_enabled" /><span class="slider"></span></label></label>
+              <div id="timelapseSettingsPanel" class="tl-panel hidden">
+                <div class="tl-preset">
+                  <div class="tl-preset-head">Tages-Timelapse</div>
+                  <div class="tl-slider-row">
+                    <span class="small">Zieldauer</span>
+                    <input type="range" name="tl_daily_seconds" min="30" max="300" step="10" value="60" class="tl-range" />
+                    <span id="tlDailyLabel" class="tl-val">60s</span>
+                  </div>
+                </div>
+                <div class="tl-preset">
+                  <div class="tl-preset-head">Wochen-Timelapse</div>
+                  <div class="tl-slider-row">
+                    <span class="small">Zieldauer</span>
+                    <input type="range" name="tl_weekly_seconds" min="60" max="600" step="30" value="180" class="tl-range" />
+                    <span id="tlWeeklyLabel" class="tl-val">180s</span>
+                  </div>
+                </div>
+                <label class="toggle-row"><span>Täglich per Telegram senden</span><label class="switch"><input type="checkbox" name="timelapse_telegram" /><span class="slider"></span></label></label>
+              </div>
+              <div class="settings-divider">Erkennung &amp; Qualität</div>
+              <div class="row" style="grid-template-columns:1fr 1fr">
+                <div class="field-wrap"><input type="number" name="bottom_crop_px" min="0" max="200" value="0" /><span class="field-label">Unterer Bildrand ausblenden (px)</span></div>
+                <div class="field-wrap">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <input type="range" name="motion_sensitivity" min="0.1" max="1.0" step="0.1" value="0.5" style="flex:1" />
+                    <span id="motionSensLabel" style="font-size:12px;color:var(--muted);min-width:28px">0.5</span>
+                  </div>
+                  <span class="field-label">Bewegungsempfindlichkeit (0.3 = weniger, 0.7 = mehr)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel: Zeitplan -->
+            <div class="cam-tab-panel" id="cam-tab-zeitplan">
+              <div id="camScheduleSection">
+                <label class="toggle-row"><span>Zeitplan aktiv</span><label class="switch"><input type="checkbox" name="schedule_enabled" /><span class="slider"></span></label></label>
+                <div class="row" style="grid-template-columns:1fr 1fr;margin-top:8px">
+                  <div class="field-wrap"><input name="schedule_start" placeholder="22:00" /><span class="field-label">Von</span></div>
+                  <div class="field-wrap"><input name="schedule_end" placeholder="06:00" /><span class="field-label">Bis</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel: Zonen -->
+            <div class="cam-tab-panel" id="cam-tab-zonen">
+              <div class="mask-editor panel inset">
+                <div class="section-head"><h3>Masken &amp; Zonen</h3><div class="muted" id="shapeStatus">Punktweise zeichnen auf dem Snapshot</div></div>
+                <div class="shape-toolbar">
+                  <button class="ghost small-btn" id="refreshMaskSnapshotBtn" type="button">Snapshot aktualisieren</button>
+                  <button class="ghost small-btn" id="editZoneBtn" type="button">Zone zeichnen</button>
+                  <button class="ghost small-btn" id="editMaskBtn" type="button">Maske zeichnen</button>
+                  <button class="ghost small-btn" id="undoShapeBtn" type="button">Letzten Punkt löschen</button>
+                  <button class="ghost small-btn" id="saveShapeBtn" type="button">Polygon übernehmen</button>
+                  <button class="ghost small-btn danger-btn" id="clearShapesBtn" type="button">Alle löschen</button>
+                </div>
+                <div class="canvas-wrap">
+                  <img id="maskSnapshot" src="" alt="Snapshot" />
+                  <canvas id="maskCanvas" width="1280" height="720"></canvas>
+                </div>
+                <div class="small muted">Zonen = aktiv relevanter Bereich. Masken = Bereich ignorieren.</div>
+              </div>
+            </div>
+
             <div class="cam-form-actions">
               <button class="cam-save-btn">Speichern &amp; Reload</button>
               <button type="button" id="deleteCameraBtn" class="cam-delete-btn">Kamera löschen</button>
             </div>
           </form>
-          <div class="mask-editor panel inset">
-            <div class="section-head"><h3>Masken &amp; Zonen</h3><div class="muted" id="shapeStatus">Punktweise zeichnen auf dem Snapshot</div></div>
-            <div class="shape-toolbar">
-              <button class="ghost small-btn" id="refreshMaskSnapshotBtn" type="button">Snapshot aktualisieren</button>
-              <button class="ghost small-btn" id="editZoneBtn" type="button">Zone zeichnen</button>
-              <button class="ghost small-btn" id="editMaskBtn" type="button">Maske zeichnen</button>
-              <button class="ghost small-btn" id="undoShapeBtn" type="button">Letzten Punkt löschen</button>
-              <button class="ghost small-btn" id="saveShapeBtn" type="button">Polygon übernehmen</button>
-              <button class="ghost small-btn danger-btn" id="clearShapesBtn" type="button">Alle löschen</button>
-            </div>
-            <div class="canvas-wrap">
-              <img id="maskSnapshot" src="" alt="Snapshot" />
-              <canvas id="maskCanvas" width="1280" height="720"></canvas>
-            </div>
-            <div class="small muted">Zonen = aktiv relevanter Bereich. Masken = Bereich ignorieren.</div>
-          </div>
           </div><!-- /.cam-edit-inner -->
         </div>
       </section>

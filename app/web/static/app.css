@@ -187,7 +187,7 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .tg-obj-chip.active{background:rgba(59,130,246,.18);border-color:var(--accent);color:#93c5fd}
 
 /* Telegram tabs */
-.tg-tab-bar{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 12px}
+.cam-tab-bar{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 12px}.cam-tab-btn{padding:7px 14px;border:1.5px solid rgba(255,255,255,.1);border-radius:999px;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}.cam-tab-btn:hover{border-color:var(--accent);color:var(--text)}.cam-tab-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}.cam-tab-panel{display:none}.cam-tab-panel.active{display:block}.tg-tab-bar{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 12px}
 .tg-tab-btn{padding:7px 14px;border:1.5px solid rgba(255,255,255,.1);border-radius:999px;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
 .tg-tab-btn:hover{border-color:var(--accent);color:var(--text)}
 .tg-tab-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}

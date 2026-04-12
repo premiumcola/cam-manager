@@ -473,6 +473,7 @@ function editCamera(camId){
   // Switch camera: restore immediately then open new
   _restoreEditWrapper();
   _initCameraFormListeners();
+  initCameraEditTabs();
   initRtspBuilder();
   const f=byId('cameraForm').elements;
   f['id'].value=c.id||''; f['id'].dataset.autoGen='0';
@@ -726,6 +727,23 @@ function hydrateTelegram(){
   renderTgGroupRules();
 }
 
+function initCameraEditTabs(){
+  const bar=document.querySelector('.cam-tab-bar'); if(!bar) return;
+  // Reset to first tab
+  bar.querySelectorAll('.cam-tab-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.cam-tab-panel').forEach(p=>p.classList.remove('active'));
+  const first=bar.querySelector('.cam-tab-btn[data-tab="cam-tab-verbindung"]');
+  if(first) first.classList.add('active');
+  const firstPanel=byId('cam-tab-verbindung'); if(firstPanel) firstPanel.classList.add('active');
+  bar.querySelectorAll('.cam-tab-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      bar.querySelectorAll('.cam-tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.cam-tab-panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      const panel=byId(btn.dataset.tab); if(panel) panel.classList.add('active');
+    });
+  });
+}
 function initTelegramTabs(){
   const bar=document.querySelector('.tg-tab-bar'); if(!bar) return;
   bar.querySelectorAll('.tg-tab-btn').forEach(btn=>{
