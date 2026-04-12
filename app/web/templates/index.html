@@ -114,18 +114,21 @@
           <p class="muted">Desktop-first, iOS-tauglich, mit Timeline, Mediathek, Kameragruppen, Preset-Telegram-Menü und MQTT-Basis für Home Assistant.</p>
         </div>
         <div class="hero-actions">
-          <button id="discoverBtn" class="btn-action ghost">🔍 Netzwerk-Discovery</button>
-          <button id="openWizardBtn" class="btn-action ghost hidden">⚙️ Setup-Wizard</button>
+          <div class="btn-with-label">
+            <span class="btn-context-label">Kameras über Netzwerk-Discovery hinzufügen</span>
+            <button id="discoverBtn" class="btn-action"><span class="btn-icon">🔍</span>Netzwerk-Discovery</button>
+          </div>
+          <button id="openWizardBtn" class="btn-action hidden">⚙️ Setup-Wizard</button>
         </div>
       </section>
 
       <section id="dashboard" class="panel section">
-        <div class="section-head"><h3>Kameraübersicht</h3><div id="globalSummary" class="muted"></div></div>
+        <div class="section-head"><h3>Kameraübersicht</h3></div>
         <div id="cameraCards" class="camera-grid"></div>
       </section>
 
       <section id="timeline" class="panel section">
-        <div class="section-head"><h3>Timeline</h3><div class="muted">Zeitachse je Kamera + globaler Flow</div></div>
+        <div class="section-head"><h3>Timeline</h3><span class="section-subtitle">Zeitachse je Kamera</span></div>
         <div style="position:relative">
           <svg id="timelineSvg" viewBox="0 0 1200 340" preserveAspectRatio="none"></svg>
           <div id="tlTooltip" class="tl-tooltip hidden"></div>
@@ -147,9 +150,9 @@
       <section id="media" class="panel section">
         <div class="section-head">
           <h3>Mediathek</h3>
-          <div style="display:flex;gap:10px;align-items:center">
-            <div class="muted">Letzte Erkennungen, Clips, Reviews</div>
-            <button type="button" id="rescanMediaBtn" class="btn-action">🔄 Neu scannen</button>
+          <div class="btn-with-label">
+            <span class="btn-context-label">Letzte Erkennungen, Clips, Reviews</span>
+            <button type="button" id="rescanMediaBtn" class="btn-action"><span class="btn-icon">🔄</span>Neu scannen</button>
           </div>
         </div>
         <div id="mediaStorageBar" class="media-storage-bar"></div>
@@ -199,8 +202,11 @@
                 </label>
               </div>
               <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-                <button type="button" id="purgeOrphansBtn" class="btn-action ghost">🗑 Verwaiste Events</button>
-                <button type="button" id="cleanupNowBtn" class="btn-action ghost">🧹 Jetzt bereinigen</button>
+                <button type="button" id="purgeOrphansBtn" class="btn-action"><span class="btn-icon">🗑</span>Verwaiste Events</button>
+                <div class="btn-with-label">
+                  <span class="btn-context-label">Alte Medien löschen</span>
+                  <button type="button" id="cleanupNowBtn" class="btn-action"><span class="btn-icon">🧹</span>Jetzt bereinigen</button>
+                </div>
                 <button type="submit" style="margin-left:auto">Speichern</button>
               </div>
             </form>
@@ -209,7 +215,7 @@
       </section>
 
       <section id="cameras" class="panel section">
-        <div class="section-head"><h3>Kameras</h3><div style="display:flex;align-items:center;gap:10px"><span class="muted" style="font-size:13px">Kameras über Netzwerk-Discovery hinzufügen ↑</span><button type="button" id="reloadConnectionsBtn" class="btn-action ghost">🔄 Verbindungen neu laden</button></div></div>
+        <div class="section-head"><h3>Kameras</h3><span class="section-subtitle">Kameras über Netzwerk-Discovery hinzufügen ↑</span><button type="button" id="reloadConnectionsBtn" class="btn-action"><span class="btn-icon">🔄</span>Verbindungen neu laden</button></div>
         <div id="cameraSettingsList" class="list"></div>
         <div id="cameraEditWrapper" class="cam-edit-wrapper">
           <div class="cam-edit-inner">
@@ -324,13 +330,13 @@
       </section>
 
       <section id="achievements" class="panel section">
-        <div class="section-head"><h3>🏆 Trophäen</h3><div class="muted">Erkannte Tierarten · Entdeckungstagebuch</div></div>
+        <div class="section-head"><h3>🏆 Trophäen</h3><span class="section-subtitle">Erkannte Tierarten · Entdeckungstagebuch</span></div>
         <div id="achievementsProgress" class="ach-progress-bar"></div>
         <div id="achievementsGrid" class="ach-grid"></div>
       </section>
 
       <section id="settings" class="panel section">
-        <div class="section-head"><h3>Einstellungen</h3><div class="muted">App · Gruppen · Profile · Telegram · Coral · MQTT · Import/Export</div></div>
+        <div class="section-head"><h3>Einstellungen</h3><span class="section-subtitle">Gruppen · Telegram · App · MQTT · Coral</span></div>
 
         <!-- 1. App & Allgemein -->
         <div class="set-section" id="set-app">
@@ -351,9 +357,9 @@
         <div class="set-section" id="set-groups">
           <div class="set-hd-row">
             <button type="button" class="set-hd" style="flex:1" onclick="toggleSetSection('set-groups')">
-              <span class="set-icon">📁</span><span>Kameragruppen</span><span class="set-chevron">▶</span>
+              <span class="set-icon">📁</span><span>Kameragruppen</span><span style="font-size:12px;font-style:italic;color:var(--muted);padding-left:8px;font-weight:400">Rollen, Alarmprofil, Modellstapel</span><span class="set-chevron">▶</span>
             </button>
-            <button type="button" id="addGroupBtn" class="btn-action" style="background:var(--accent);color:#fff;flex-shrink:0;margin-right:4px">+ Neue Gruppe</button>
+            <button type="button" id="addGroupBtn" class="btn-action" style="background:var(--accent);color:#fff;flex-shrink:0;margin-right:4px"><span class="btn-icon">+</span>Neue Gruppe</button>
           </div>
           <div class="set-bd"><div class="set-inner">
             <div id="groupList"></div>
@@ -415,7 +421,10 @@
                 </div>
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
                   <button type="submit" class="settings-save-btn" style="flex:1;min-width:160px;margin-top:0">💾 Verbindung speichern</button>
-                  <button type="button" id="telegramTestBtn" class="btn-action">📨 Testnachricht</button>
+                  <div class="btn-with-label">
+                    <span class="btn-context-label">Verbindung prüfen</span>
+                    <button type="button" id="telegramTestBtn" class="btn-action"><span class="btn-icon">📨</span>Testnachricht</button>
+                  </div>
                   <span id="telegramTestResult" class="small" style="display:none"></span>
                 </div>
               </form>
@@ -554,7 +563,7 @@
               <div class="row3">
                 <button id="exportJsonBtn" type="button" class="ie-btn ie-blue">Export JSON</button>
                 <button id="exportYamlBtn" type="button" class="ie-btn ie-green">Export YAML</button>
-                <button id="reloadConfigBtn" type="button" class="ie-btn ie-gray">Config neu laden</button>
+                <button id="reloadConfigBtn" type="button" class="btn-action"><span class="btn-icon">🔄</span>Config neu laden</button>
               </div>
               <textarea id="importBox" rows="10" placeholder="Hier JSON oder YAML einfügen …" style="background:#131e2e;color:#cfe7ff"></textarea>
               <div class="row3">
@@ -578,8 +587,11 @@
               <option value="WARNING">WARNING</option>
               <option value="ERROR">ERROR</option>
             </select>
-            <button id="logRefreshBtn" class="btn-action" type="button">🔄 Aktualisieren</button>
-            <button id="logClearBtn" class="btn-action" type="button">🗑 Leeren</button>
+            <div class="btn-with-label">
+              <span class="btn-context-label">System-Logs</span>
+              <button id="logRefreshBtn" class="btn-action" type="button"><span class="btn-icon">🔄</span>Aktualisieren</button>
+            </div>
+            <button id="logClearBtn" class="btn-action" type="button"><span class="btn-icon">🗑</span>Leeren</button>
           </div>
         </div>
         <div id="logOutput" class="log-output"></div>
