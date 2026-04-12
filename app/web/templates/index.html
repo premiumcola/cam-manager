@@ -114,7 +114,7 @@
           <p class="muted">Desktop-first, iOS-tauglich, mit Timeline, Mediathek, Kameragruppen, Preset-Telegram-Menü und MQTT-Basis für Home Assistant.</p>
         </div>
         <div class="hero-actions">
-          <button id="discoverBtn" class="btn-action ghost">🔍 Netzwerk-Discovery</button>
+          <button id="discoverBtn" class="btn-action action-green">🔍 Netzwerk-Discovery</button>
           <button id="openWizardBtn" class="btn-action ghost hidden">⚙️ Setup-Wizard</button>
         </div>
       </section>
@@ -147,7 +147,7 @@
       <section id="media" class="panel section">
         <div class="section-head">
           <h3>Mediathek</h3>
-          <button type="button" id="rescanMediaBtn" class="btn-action">🔄 Neu scannen</button>
+          <button type="button" id="rescanMediaBtn" class="btn-action action-green">🔄 Neu scannen</button>
         </div>
         <div id="mediaStorageBar" class="media-storage-bar"></div>
         <!-- Filter bar: object pills + divider + period pills in one row -->
@@ -197,7 +197,7 @@
               </div>
               <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
                 <button type="button" id="purgeOrphansBtn" class="btn-action ghost">🗑 Verwaiste Events</button>
-                <button type="button" id="cleanupNowBtn" class="btn-action ghost">🧹 Jetzt bereinigen</button>
+                <button type="button" id="cleanupNowBtn" class="btn-action">🧹 Jetzt bereinigen</button>
                 <button type="submit" style="margin-left:auto">Speichern</button>
               </div>
             </form>
@@ -206,7 +206,7 @@
       </section>
 
       <section id="cameras" class="panel section">
-        <div class="section-head"><h3>Kameras</h3><span class="section-subtitle">Netzwerk-Discovery ↑</span><button type="button" id="reloadConnectionsBtn" class="btn-action ghost" style="margin-left:12px">🔄 Verbindungen neu laden</button></div>
+        <div class="section-head"><h3>Kameras</h3><span class="section-subtitle">Netzwerk-Discovery ↑</span><button type="button" id="reloadConnectionsBtn" class="btn-action action-green" style="margin-left:12px">🔄 Verbindungen neu laden</button></div>
         <div id="cameraSettingsList" class="list"></div>
         <div id="cameraEditWrapper" class="cam-edit-wrapper">
           <div class="cam-edit-inner">
@@ -350,7 +350,7 @@
             <button type="button" class="set-hd" style="flex:1" onclick="toggleSetSection('set-groups')">
               <span class="set-icon">📁</span><span>Kameragruppen</span><span style="font-size:11px;font-style:italic;color:#4e7c62;font-weight:400;margin-left:10px">Rollen · Alarmprofil · Modellstapel</span><span class="set-chevron">▶</span>
             </button>
-            <button type="button" id="addGroupBtn" class="btn-action" style="background:var(--accent);color:#fff;flex-shrink:0;margin-right:4px">+ Neue Gruppe</button>
+            <button type="button" id="addGroupBtn" class="btn-action accent" style="flex-shrink:0;margin-right:4px">+ Neue Gruppe</button>
           </div>
           <div class="set-bd"><div class="set-inner">
             <div id="groupList"></div>
@@ -575,7 +575,7 @@
               <option value="WARNING">WARNING</option>
               <option value="ERROR">ERROR</option>
             </select>
-            <button id="logRefreshBtn" class="btn-action" type="button">🔄 Aktualisieren</button>
+            <button id="logRefreshBtn" class="btn-action action-green" type="button">🔄 Aktualisieren</button>
             <button id="logClearBtn" class="btn-action" type="button">🗑 Leeren</button>
           </div>
         </div>
