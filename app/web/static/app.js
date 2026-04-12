@@ -1,5 +1,5 @@
 
-const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabel:'',mediaPeriod:'week',tlHours:12,mediaPage:0,mediaTotalPages:1};
+const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabel:'',mediaPeriod:'week',tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false};
 
 // ── Toast & Confirm helpers ───────────────────────────────────────────────────
 window.showToast=function(msg,type='info'){
@@ -115,7 +115,7 @@ async function loadAll(){
   state.config=await j('/api/config');
   state.groups=(await j('/api/groups')).groups||[];
   state.cameras=(await j('/api/cameras')).cameras||[];
-  state.timeline=await j(`/api/timeline?period=${state.period}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`);
+  state.timeline=await j(`/api/timeline?hours=${state.tlHours||168}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`);
   await loadMediaStorageStats();
   renderShell();
   renderDashboard();
@@ -282,7 +282,14 @@ function renderTimeline(){
   if(slider&&earliestMs){
     const dataHours=Math.max(1,Math.ceil((now-earliestMs)/3600000));
     slider.max=dataHours;
-    if(state.tlHours>dataHours){state.tlHours=dataHours;slider.value=dataHours;}
+    if(!state._tlInitialized){
+      state.tlHours=dataHours;
+      state._tlInitialized=true;
+      slider.value=dataHours;
+    } else if(state.tlHours>dataHours){
+      state.tlHours=dataHours;
+      slider.value=dataHours;
+    }
   }
 
   const hours=state.tlHours||12;
@@ -916,7 +923,10 @@ function showReloadToast(){
   document.body.appendChild(t);
   setTimeout(()=>{t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(()=>t.remove(),450);},1900);
 }
-byId('tlRangeSlider').addEventListener('input',e=>{state.tlHours=parseInt(e.target.value); renderTimeline();});
+byId('tlRangeSlider').addEventListener('input',e=>{
+  state.tlHours=parseInt(e.target.value);
+  j(`/api/timeline?hours=${state.tlHours}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`).then(data=>{state.timeline=data;renderTimeline();});
+});
 // alias so discovery modal code still works
 const RTSP_PATHS=RTSP_PATH_OPTS;
 

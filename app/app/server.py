@@ -596,16 +596,17 @@ def api_camera_stats(cam_id):
 
 @app.get('/api/timeline')
 def api_timeline():
-    period = request.args.get('period', 'week')
     label = request.args.get('label')
     cam_id = request.args.get('camera')
     now = datetime.now()
-    if period == 'day':
-        start = (now - timedelta(days=1)).isoformat(timespec='seconds')
-    elif period == 'month':
-        start = (now - timedelta(days=30)).isoformat(timespec='seconds')
+    if request.args.get('hours'):
+        hours = request.args.get('hours', type=int, default=168)
+        start = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
+        period = f'{hours}h'
     else:
-        start = (now - timedelta(days=7)).isoformat(timespec='seconds')
+        period = request.args.get('period', 'week')
+        hours = {'day': 24, 'week': 168, 'month': 720}.get(period, 168)
+        start = (now - timedelta(hours=hours)).isoformat(timespec='seconds')
     cameras = [cam_id] if cam_id else [c["id"] for c in settings.data.get("cameras", [])]
     tracks = []
     merged = []
