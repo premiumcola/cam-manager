@@ -407,7 +407,7 @@ function renderCameraSettings(){
   const stCol=s=>s==='active'?'good':s==='error'?'danger':'warn';
   byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`
     <div class="cam-item" data-camid="${esc(c.id)}">
-      <div class="cam-item-head">
+      <div class="cam-item-head" style="cursor:pointer" onclick="editCamera('${esc(c.id)}')">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:22px;line-height:1;flex-shrink:0">${getCameraIcon(c.name)}</span>
           <div>
@@ -415,7 +415,7 @@ function renderCameraSettings(){
             <div class="small">${esc(c.location||'—')} · ${esc(c.group_id||'—')}</div>
           </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap" onclick="event.stopPropagation()">
           <span class="badge ${stCol(c.status)}">${esc(c.status||'—')}</span>
           <span class="badge ${c.armed?'danger':'good'}">${c.armed?'scharf':'unscharf'}</span>
           <button class="btn-action" onclick="editCamera('${esc(c.id)}')">✏️ Bearbeiten</button>
