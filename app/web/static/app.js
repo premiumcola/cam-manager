@@ -1,5 +1,5 @@
 
-const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabel:'',mediaPeriod:'week',tlHours:12};
+const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabel:'',mediaPeriod:'week',tlHours:12,mediaPage:0,mediaTotalPages:1};
 
 // ── Toast & Confirm helpers ───────────────────────────────────────────────────
 window.showToast=function(msg,type='info'){
@@ -142,27 +142,25 @@ function _mediaPeriodParams(){
   else{const d=new Date(now);d.setDate(d.getDate()-7);start=d.toISOString().slice(0,10)+'T00:00:00';}
   return `&start=${start}&end=${end}`;
 }
-async function loadMedia(append=false){
-  const LIMIT=Number(byId('ms_media_limit')?.value)||24;
-  if(!append){ state.media=[]; state.mediaOffset=0; }
-  const cams = state.mediaCamera ? [state.mediaCamera] : state.cameras.map(c=>c.id);
-  const page=[];
-  let hasMore=false;
+const MEDIA_PAGE_SIZE=48;
+async function loadMedia(){
+  const page=state.mediaPage||0;
+  const offset=page*MEDIA_PAGE_SIZE;
+  state.media=[];
+  const cams=state.mediaCamera?[state.mediaCamera]:state.cameras.map(c=>c.id);
   const periodParams=_mediaPeriodParams();
+  let totalCount=0;
+  const allItems=[];
   for(const camId of cams){
-    const data=await j(`/api/camera/${camId}/media?limit=${LIMIT}&offset=${state.mediaOffset||0}${state.mediaLabel?`&label=${encodeURIComponent(state.mediaLabel)}`:''}${periodParams}`);
+    const data=await j(`/api/camera/${camId}/media?limit=${MEDIA_PAGE_SIZE}&offset=${offset}${state.mediaLabel?`&label=${encodeURIComponent(state.mediaLabel)}`:''}${periodParams}`);
     const items=data.items||[];
-    if(items.length>=LIMIT) hasMore=true;
-    for(const item of items) page.push({...item,camera_id:camId});
+    totalCount+=data.total_count||items.length;
+    for(const item of items) allItems.push({...item,camera_id:camId});
   }
-  page.sort((a,b)=>(b.time||'').localeCompare(a.time||''));
-  state.media=[...(state.media||[]),...page];
-  state.mediaHasMore=hasMore;
-  state.mediaOffset=(state.mediaOffset||0)+LIMIT;
-}
-async function loadMoreMedia(){
-  await loadMedia(true);
-  renderMediaGrid();
+  allItems.sort((a,b)=>(b.time||'').localeCompare(a.time||''));
+  state.media=allItems;
+  state.mediaTotalPages=Math.max(1,Math.ceil(totalCount/MEDIA_PAGE_SIZE));
+  state.mediaHasMore=false;
 }
 
 function renderShell(){
@@ -1413,17 +1411,35 @@ function renderMediaOverview(){
     </div>`;
   }).join('');
 }
+function renderMediaPagination(){
+  const pg=byId('mediaPagination'); if(!pg) return;
+  const total=state.mediaTotalPages||1;
+  const cur=state.mediaPage||0;
+  if(total<=1){pg.innerHTML='';return;}
+  const pills=[];
+  const mkPill=(n,label,active,disabled)=>`<button class="page-pill${active?' active':''}" ${disabled?'disabled':''} onclick="state.mediaPage=${n};loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();})">${label}</button>`;
+  pills.push(mkPill(cur-1,'‹',false,cur===0));
+  // window of pages around current
+  const maxPills=7;
+  let start=Math.max(0,cur-3);
+  let end=Math.min(total-1,start+maxPills-3);
+  start=Math.max(0,end-(maxPills-3));
+  if(start>0){pills.push(mkPill(0,'1',false,false));if(start>1) pills.push(`<span class="page-pill" style="cursor:default;opacity:.4">…</span>`);}
+  for(let i=start;i<=end;i++) pills.push(mkPill(i,i+1,i===cur,false));
+  if(end<total-1){if(end<total-2) pills.push(`<span class="page-pill" style="cursor:default;opacity:.4">…</span>`);pills.push(mkPill(total-1,total,false,false));}
+  pills.push(mkPill(cur+1,'›',false,cur>=total-1));
+  pg.innerHTML=pills.join('');
+}
 function renderMediaGrid(){
   const grid=byId('mediaGrid'); if(!grid) return;
   const items=state.media||[];
   grid.innerHTML=items.map(mediaCardHTML).join('')||'<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
-  const lmBtn=byId('mediaLoadMoreBtn');
-  if(lmBtn) lmBtn.style.display=state.mediaHasMore?'':'none';
+  renderMediaPagination();
   window._openMediaItem=id=>{const item=(state.media||[]).find(x=>x.event_id===id&&x.snapshot_relpath); if(item) openLightbox(item);};
 }
 async function openMediaDrilldown(camId){
   state.mediaCamera=camId;
-  state.mediaLabel=''; state.mediaPeriod='week';
+  state.mediaLabel=''; state.mediaPeriod='week'; state.mediaPage=0;
   syncMediaPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
@@ -1456,8 +1472,9 @@ function syncMediaPills(){
     p.addEventListener('click',()=>{
       if(p.dataset.type==='label') state.mediaLabel=p.dataset.val;
       else state.mediaPeriod=p.dataset.val;
+      state.mediaPage=0;
       syncMediaPills();
-      if(state.mediaCamera) loadMedia().then(()=>renderMediaGrid());
+      if(state.mediaCamera) loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();});
     });
   });
   syncMediaPills();

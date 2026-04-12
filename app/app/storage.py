@@ -41,7 +41,7 @@ class EventStore:
         matches[0].write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return True
 
-    def list_events(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None, limit: int = 24, offset: int = 0):
+    def _filter_events(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None):
         items = []
         cam_dir = self._cam_dir(camera_id)
         for file in cam_dir.rglob("*.json"):
@@ -59,7 +59,14 @@ class EventStore:
                 continue
             items.append(obj)
         items.sort(key=lambda x: x.get("time", ""), reverse=True)
+        return items
+
+    def list_events(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None, limit: int = 24, offset: int = 0):
+        items = self._filter_events(camera_id, label=label, start=start, end=end)
         return items[offset:offset + limit]
+
+    def count_events(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None) -> int:
+        return len(self._filter_events(camera_id, label=label, start=start, end=end))
 
     def stats_range(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None):
         from collections import Counter, defaultdict

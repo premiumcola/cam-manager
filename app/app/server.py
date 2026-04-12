@@ -552,11 +552,12 @@ def api_camera_media(cam_id):
     limit = int(request.args.get('limit') or get_effective_config().get("storage", {}).get("media_limit_default", 24))
     offset = int(request.args.get('offset') or 0)
     items = store.list_events(cam_id, label=label, start=start, end=end, limit=limit, offset=offset)
+    total_count = store.count_events(cam_id, label=label, start=start, end=end)
     for item in items:
         review = settings.get_review(f"{cam_id}:{item['event_id']}")
         if review:
             item["review"] = review
-    return jsonify({"items": items})
+    return jsonify({"items": items, "total_count": total_count})
 
 
 @app.delete('/api/camera/<cam_id>/events/<event_id>')
