@@ -1,5 +1,5 @@
 
-const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabel:'',mediaPeriod:'week'};
+const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabel:'',mediaPeriod:'week',tlRangeIndex:2};
 
 // ── Toast & Confirm helpers ───────────────────────────────────────────────────
 window.showToast=function(msg,type='info'){
@@ -30,7 +30,8 @@ function _resolveConfirm(val){
   if(_confirmResolve){_confirmResolve(val);_confirmResolve=null;}
 }
 // Wire confirm buttons after DOM ready (done at bottom of file)
-const colors={bird:'#70d6ff',cat:'#ff8cc6',person:'#ffd166',car:'#9c89ff',motion:'#7ee787',alarm:'#ff6b6b',unknown:'#91a4b8'};
+const colors={person:'#7c4dff',cat:'#e91e8c',bird:'#0ea5e9',car:'#f59e0b',motion:'#22c55e',alarm:'#ef4444',unknown:'#4a6477'};
+const OBJ_ICONS={person:'👤',cat:'🐱',bird:'🐦',car:'🚗',motion:'〰️',alarm:'🚨'};
 function getCameraIcon(name){const n=(name||'').toLowerCase();if(/werkstatt|garage|keller|labor/.test(n))return'🔧';if(/eingang|tor|tür|door/.test(n))return'🚪';if(/garten|garden|außen|outdoor/.test(n))return'🌿';if(/eichhörnchen|squirrel|tier|animal|natur/.test(n))return'🐿️';if(/vogel|bird|futter|feeder/.test(n))return'🐦';if(/parkplatz|auto|car/.test(n))return'🚗';if(/pool|wasser|water/.test(n))return'💧';return'📷';}
 const shapeState={mode:'zone',points:[],camera:null,zones:[],masks:[]};
 const byId=id=>document.getElementById(id);
@@ -219,143 +220,89 @@ function renderDashboard(){
   }).join('');
 }
 
-// ── Timeline tooltip ─────────────────────────────────────────────────────────
-let _tlHoverTarget=null;
-function _tlShow(el,evt){
-  const tt=byId('tlTooltip'); if(!tt) return;
-  const time=el.dataset.time||'';
-  const dur=Number(el.dataset.dur||0);
-  const labels=(el.dataset.labels||'').split(',').filter(Boolean);
-  const snap=el.dataset.snap||'';
-  const vid=el.dataset.vid||'';
-  const count=Number(el.dataset.count||1);
-  let html=`<div class="tl-tt-time">${esc(time.replace('T',' '))}</div>`;
-  if(dur>1) html+=`<div class="tl-tt-dur">Dauer: ${dur < 60 ? dur+'s' : Math.round(dur/60)+'min'}</div>`;
-  if(count>1) html+=`<div class="tl-tt-dur">${count} Ereignisse</div>`;
-  html+=`<div class="tl-tt-labels">${labels.map(l=>`<span class="chip" style="background:${colors[l]||colors.unknown}20;color:${colors[l]||colors.unknown}">${esc(l)}</span>`).join('')}</div>`;
-  if(vid){
-    html+=`<video class="tl-tt-media" src="${esc(vid)}" autoplay muted loop playsinline></video>`;
-  } else if(snap){
-    html+=`<img class="tl-tt-media" src="${esc(snap)}" alt="snapshot" loading="lazy"/>`;
-  }
-  tt.innerHTML=html;
-  // Position popup near mouse, avoid overflow
-  const svgEl=byId('timelineSvg');
-  const svgRect=svgEl.getBoundingClientRect();
-  const mx=evt.clientX-svgRect.left, my=evt.clientY-svgRect.top;
-  const svgW=svgRect.width, svgH=svgRect.height;
-  const ttW=230,ttH=snap||vid?240:100;
-  let lx=mx+14, ly=my-20;
-  if(lx+ttW>svgW) lx=mx-ttW-14;
-  if(ly+ttH>svgH) ly=svgH-ttH-8;
-  if(ly<0) ly=4;
-  tt.style.left=lx+'px'; tt.style.top=ly+'px';
-  tt.classList.remove('hidden');
-  _tlHoverTarget=el;
-}
-function _tlHide(){ const tt=byId('tlTooltip'); if(tt) tt.classList.add('hidden'); _tlHoverTarget=null; }
+// ── Timeline ─────────────────────────────────────────────────────────────────
+const TL_HOURS=[1,3,6,12,24,168];
+const TL_LABELS=['1h','3h','6h','12h','24h','7 Tage'];
+const TL_LANES=['person','cat','bird','car','motion'];
+const GAP_MS=2*60*1000;
 
-// ── Group timeline events within GAP_MS ──────────────────────────────────────
-function _groupTimelineEvents(points,GAP_MS=30000){
+function _tlGroupLane(points, label, tMin, tMax){
+  const filtered=points
+    .filter(p=>{
+      const t=new Date(p.time).getTime();
+      if(!t||t<tMin||t>tMax) return false;
+      const labs=p.labels||[];
+      if(label==='motion') return labs.length===0||labs.every(l=>l==='motion');
+      return labs.includes(label);
+    })
+    .sort((a,b)=>new Date(a.time)-new Date(b.time));
   const groups=[];
   let curr=null;
-  for(const p of points){
+  for(const p of filtered){
     const t=new Date(p.time).getTime();
-    if(!t) continue;
-    if(!curr||t-curr.endTime>GAP_MS){
-      curr={startTime:t,endTime:t,events:[p],labels:[...(p.labels||[])],
-        top_label:p.top_label,alarm_level:p.alarm_level,
-        snapshot_url:p.snapshot_url||'',video_url:p.video_url||'',event_id:p.event_id};
-      groups.push(curr);
-    } else {
-      curr.endTime=t;
-      curr.events.push(p);
-      const merged=new Set([...curr.labels,...(p.labels||[])]);
-      curr.labels=[...merged];
-      if(p.alarm_level==='alarm') curr.alarm_level='alarm';
-      if(!curr.video_url&&p.video_url) curr.video_url=p.video_url;
-      if(!curr.snapshot_url&&p.snapshot_url) curr.snapshot_url=p.snapshot_url;
-    }
+    if(!curr||t-curr.endTime>GAP_MS){ curr={startTime:t,endTime:t,count:1}; groups.push(curr); }
+    else { curr.endTime=t; curr.count++; }
   }
   return groups;
 }
 
 function renderTimeline(){
-  const svg=byId('timelineSvg');
-  const w=1200,h=340,left=160,top=40,right=24,bottom=34;
+  const container=byId('timelineContainer'); if(!container) return;
   const tracks=state.timeline?.tracks||[];
-  if(!tracks.length){ svg.innerHTML=''; return; }
-  const points=(state.timeline.merged||[]);
-  const times=points.map(p=>new Date(p.time).getTime()).filter(Boolean);
-  const tMin=Math.min(...times,Date.now()-3600_000), tMax=Math.max(...times,Date.now());
-  const xOf=t=>left+((new Date(t).getTime()-tMin)/Math.max(1,tMax-tMin))*(w-left-right);
-  const rowH=Math.max(52,(h-top-bottom)/Math.max(1,tracks.length));
-  const yOf=i=>top+rowH*i+rowH/2;
-  let out=`<rect x="0" y="0" width="${w}" height="${h}" fill="#0b131b" rx="18"/>`;
-  tracks.forEach((tr,i)=>{
-    out+=`<line x1="${left}" y1="${yOf(i)}" x2="${w-right}" y2="${yOf(i)}" stroke="#213241" stroke-width="1"/>`;
-    const _cam=(state.config?.cameras||[]).find(c=>c.id===tr.camera_id)||{};
-    const _icon=_cam.icon||getCameraIcon(_cam.name||tr.camera_id);
-    const _name=(_cam.name||tr.camera_id);
-    // Two-line label: icon + name (split long names at space/hyphen)
-    out+=`<text x="8" y="${yOf(i)-6}" font-size="14">${_icon}</text>`;
-    if(_name.length<=18){
-      out+=`<text x="8" y="${yOf(i)+9}" fill="#cfe7ff" font-size="12" font-weight="600">${esc(_name)}</text>`;
-    } else {
-      const splitIdx=_name.slice(0,18).lastIndexOf(' ')>0?_name.slice(0,18).lastIndexOf(' '):_name.slice(0,18).lastIndexOf('-');
-      const cut=splitIdx>0?splitIdx:17;
-      out+=`<text x="8" y="${yOf(i)-2}" fill="#cfe7ff" font-size="11" font-weight="600">${esc(_name.slice(0,cut))}</text>`;
-      out+=`<text x="8" y="${yOf(i)+12}" fill="#cfe7ff" font-size="11" font-weight="600">${esc(_name.slice(cut+1)||_name.slice(cut))}</text>`;
-    }
-  });
-  // X-axis time labels
-  for(let k=0;k<6;k++){
-    const tx=left+((w-left-right)/5)*k;
-    const t=new Date(tMin+((tMax-tMin)/5)*k);
-    const lbl=t.getHours().toString().padStart(2,'0')+':'+t.getMinutes().toString().padStart(2,'0');
-    out+=`<line x1="${tx}" y1="${top-10}" x2="${tx}" y2="${h-bottom}" stroke="#172532" stroke-width="1"/>`;
-    out+=`<text x="${tx}" y="${h-bottom+16}" fill="#566d84" font-size="11" text-anchor="middle">${lbl}</text>`;
-  }
-  // Draw bars and dots per track
-  tracks.forEach((tr,i)=>{
-    const groups=_groupTimelineEvents(tr.points||[]);
-    groups.forEach(g=>{
-      const cx=xOf(g.startTime), cy=yOf(i);
-      const topLabel=g.labels.find(l=>l!=='motion')||g.labels[0]||'motion';
-      const fill=colors[topLabel]||colors.unknown;
-      const durMs=g.endTime-g.startTime;
-      const barW=Math.max(8,xOf(g.endTime)-cx);
-      const isBar=g.events.length>1||durMs>2000;
-      const isAlarm=g.alarm_level==='alarm';
-      const barH=isAlarm?14:10;
-      const snapEnc=esc(g.snapshot_url||'');
-      const vidEnc=esc(g.video_url||'');
-      const labEnc=esc(g.labels.join(','));
-      const timeEnc=esc(g.events[0]?.time||'');
-      const durSec=Math.round(durMs/1000);
-      const da=`data-snap="${snapEnc}" data-vid="${vidEnc}" data-labels="${labEnc}" data-time="${timeEnc}" data-dur="${durSec}" data-count="${g.events.length}"`;
-      const icon=OBJ_ICONS[isAlarm?'alarm':topLabel]||OBJ_ICONS.unknown;
-      if(isBar){
-        const iconSize=Math.min(barH*0.9,13);
-        out+=`<rect ${da} x="${cx}" y="${cy-barH/2}" width="${barW}" height="${barH}" rx="6" fill="${fill}" fill-opacity="0.4" stroke="#fff" stroke-opacity=".25" class="tl-shape" style="cursor:pointer"/>`;
-        if(barW>20) out+=`<text x="${cx+barW/2}" y="${cy+5}" text-anchor="middle" font-size="${iconSize}px" style="pointer-events:none;user-select:none">${icon}</text>`;
-      } else {
-        const r=isAlarm?9:6;
-        out+=`<text ${da} x="${cx+r}" y="${cy+5}" text-anchor="middle" font-size="14px" class="tl-shape" style="cursor:pointer;user-select:none">${icon}</text>`;
-      }
-    });
-  });
-  svg.innerHTML=out;
-  // Attach hover events via delegation
-  svg.onmousemove=evt=>{
-    const el=evt.target.closest('.tl-shape');
-    if(el&&el!==_tlHoverTarget) _tlShow(el,evt);
-    else if(!el) _tlHide();
-  };
-  svg.onmouseleave=_tlHide;
-}
+  if(!tracks.length){ container.innerHTML='<div class="tl-empty">Keine Ereignisse im gewählten Zeitraum.</div>'; return; }
 
-const OBJ_ICONS={person:'👤',cat:'🐱',bird:'🐦',car:'🚗',motion:'〰️',alarm:'🚨',unknown:'❓'};
+  const idx=state.tlRangeIndex??2;
+  const lbl=byId('tlRangeLabel'); if(lbl) lbl.textContent=TL_LABELS[idx];
+  const now=Date.now();
+  const tMin=now-TL_HOURS[idx]*3600000;
+  const tMax=now;
+  const span=tMax-tMin;
+
+  let html='';
+  tracks.forEach((tr,ti)=>{
+    const cam=(state.config?.cameras||[]).find(c=>c.id===tr.camera_id)||{};
+    const camIcon=cam.icon||getCameraIcon(cam.name||tr.camera_id);
+    const camName=cam.name||tr.camera_id;
+    if(ti>0) html+=`<div class="tl-separator"></div>`;
+    html+=`<div class="tl-camera-block">`;
+    html+=`<div class="tl-cam-name"><span style="font-size:15px">${camIcon}</span><span>${esc(camName)}</span></div>`;
+    TL_LANES.forEach(label=>{
+      const color=colors[label]||colors.unknown;
+      const icon=OBJ_ICONS[label]||'?';
+      const groups=_tlGroupLane(tr.points||[], label, tMin, tMax);
+      html+=`<div class="tl-lane-row">`;
+      html+=`<div class="tl-lane-label"><span class="tl-lane-dot" style="background:${color}"></span><span class="tl-lane-text">${icon}</span></div>`;
+      html+=`<div class="tl-track">`;
+      groups.forEach(g=>{
+        const leftPct=Math.max(0,(g.startTime-tMin)/span*100);
+        const widthPct=Math.max(1.5,Math.min((g.endTime-g.startTime)/span*100, 100-leftPct));
+        if(leftPct>=100) return;
+        html+=`<div class="tl-bar" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;background:${color}" data-camid="${esc(tr.camera_id)}" data-label="${esc(label)}" title="${g.count} Events · ${label}"></div>`;
+      });
+      html+=`</div></div>`;
+    });
+    html+=`</div>`;
+  });
+
+  // X-axis
+  html+=`<div class="tl-xaxis">`;
+  for(let k=0;k<5;k++){
+    const t=new Date(tMin+span*k/4);
+    html+=`<span>${t.getHours().toString().padStart(2,'0')}:${t.getMinutes().toString().padStart(2,'0')}</span>`;
+  }
+  html+=`</div>`;
+  container.innerHTML=html;
+
+  // Bar click → navigate to Mediathek
+  container.querySelectorAll('.tl-bar').forEach(bar=>{
+    bar.onclick=()=>{
+      state.mediaCamera=bar.dataset.camid;
+      state.mediaLabel=bar.dataset.label;
+      document.querySelector('#media').scrollIntoView({behavior:'smooth',block:'start'});
+      loadMedia().then(()=>renderMediaGrid());
+    };
+  });
+}
 
 // ── RTSP path options (shared with discovery) ────────────────────────────────
 const RTSP_PATH_OPTS=[
@@ -895,6 +842,7 @@ async function finishWizard(){
 }
 
 byId('reloadConfigBtn').onclick=()=>loadAll();
+byId('tlRangeSlider').addEventListener('input',e=>{state.tlRangeIndex=Number(e.target.value); renderTimeline();});
 // alias so discovery modal code still works
 const RTSP_PATHS=RTSP_PATH_OPTS;
 

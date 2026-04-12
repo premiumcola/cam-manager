@@ -125,11 +125,15 @@
       </section>
 
       <section id="timeline" class="panel section">
-        <div class="section-head"><h3>Timeline</h3><span class="section-subtitle">Zeitachse je Kamera</span></div>
-        <div style="position:relative">
-          <svg id="timelineSvg" viewBox="0 0 1200 340" preserveAspectRatio="none"></svg>
-          <div id="tlTooltip" class="tl-tooltip hidden"></div>
+        <div class="section-head">
+          <h3>Timeline</h3>
+          <div class="tl-range-wrap">
+            <span id="tlRangeLabel" class="tl-range-label">6h</span>
+            <input type="range" id="tlRangeSlider" min="0" max="5" value="2" step="1" class="tl-range-slider" />
+          </div>
+          <span class="section-subtitle">Zeitachse je Kamera</span>
         </div>
+        <div id="timelineContainer" class="tl-container"></div>
         <div class="timeline-legend">
           <span class="tl-leg-item">👤 Person</span>
           <span class="tl-leg-item">🐱 Katze</span>
