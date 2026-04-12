@@ -97,11 +97,11 @@
       </div>
       <nav class="nav">
         <a href="#dashboard" title="Kameraübersicht"><span class="nav-icon">📊</span><span class="nav-label">Kameraübersicht</span></a>
-        <a href="#timeline" title="Timeline"><span class="nav-icon">⏱</span><span class="nav-label">Timeline</span></a>
+        <a href="#timeline" title="Detections"><span class="nav-icon">⏱</span><span class="nav-label">Detections</span></a>
         <a href="#statistik" title="Statistik"><span class="nav-icon">📈</span><span class="nav-label">Statistik</span></a>
         <a href="#media" title="Mediathek"><span class="nav-icon">🎞</span><span class="nav-label">Mediathek</span></a>
+        <a href="#achievements" title="Achievements"><span class="nav-icon">🏆</span><span class="nav-label">Achievements</span></a>
         <a href="#cameras" title="Kameras"><span class="nav-icon">📷</span><span class="nav-label">Kameras</span></a>
-        <a href="#achievements" title="Trophäen"><span class="nav-icon">🏆</span><span class="nav-label">Trophäen</span></a>
         <a href="#settings" title="Einstellungen"><span class="nav-icon">⚙️</span><span class="nav-label">Einstellungen</span></a>
         <a href="#logs" title="Logs"><span class="nav-icon">📋</span><span class="nav-label">Logs</span></a>
       </nav>
@@ -200,8 +200,14 @@
         </div>
       </section>
 
+      <section id="achievements" class="panel section">
+        <div class="section-head"><h3>🏆 Trophäen</h3><span class="section-subtitle">Erkannte Tierarten · Entdeckungstagebuch</span></div>
+        <div id="achievementsProgress" class="ach-progress-bar"></div>
+        <div id="achievementsGrid" class="ach-grid"></div>
+      </section>
+
       <section id="cameras" class="panel section">
-        <div class="section-head"><h3>Kameras</h3><span class="section-subtitle">Neue Kameras über Netzwerk-Discovery hinzufügen ↑</span><button type="button" id="reloadConnectionsBtn" class="btn-action action-green" style="margin-left:12px">🔄 Verbindungen neu laden</button></div>
+        <div class="section-head"><h3>Kameras</h3><button type="button" onclick="byId('discoveryModal').classList.remove('hidden');document.body.style.overflow='hidden'" class="btn-action action-green">🔍 Netzwerk-Discovery</button><button type="button" id="reloadConnectionsBtn" class="btn-action action-green">🔄 Verbindungen neu laden</button></div>
         <div id="cameraSettingsList" class="list"></div>
         <div id="cameraEditWrapper" class="cam-edit-wrapper">
           <div class="cam-edit-inner">
@@ -337,12 +343,6 @@
           </form>
           </div><!-- /.cam-edit-inner -->
         </div>
-      </section>
-
-      <section id="achievements" class="panel section">
-        <div class="section-head"><h3>🏆 Trophäen</h3><span class="section-subtitle">Erkannte Tierarten · Entdeckungstagebuch</span></div>
-        <div id="achievementsProgress" class="ach-progress-bar"></div>
-        <div id="achievementsGrid" class="ach-grid"></div>
       </section>
 
       <section id="settings" class="panel section">
