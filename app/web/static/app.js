@@ -113,6 +113,7 @@ async function loadAll(){
   await renderAudit();
   hydrateSettings();
   hydrateTelegram();
+  initTelegramTabs();
   if(state.bootstrap.needs_wizard) openWizard();
   byId('openWizardBtn').classList.toggle('hidden', !!state.bootstrap?.wizard_completed || !state.bootstrap?.needs_wizard);
 }
@@ -512,7 +513,7 @@ function renderGroups(){
       <strong style="font-size:13px">${esc(g.name)}</strong>
       <span class="small muted">${esc(g.category)} · ${esc(g.alarm_profile)} · ${(g.fine_models||[]).join(', ')||'ohne Feinstufe'}</span>
     </div>
-    <button class="btn-action" onclick='toggleGroupEdit(${JSON.stringify(g).replace(/'/g,"&apos;")})'>✏️ Bearbeiten</button>
+    <button style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer" onclick='toggleGroupEdit(${JSON.stringify(g).replace(/'/g,"&apos;")})'>✏️ Bearbeiten</button>
   </div>`).join('');
 }
 
@@ -569,13 +570,22 @@ async function loadTimelapse(camId){ try{ const r=await j(`/api/camera/${camId}/
 window.loadTimelapse=loadTimelapse;
 
 function hydrateSettings(){
-  const app=state.config.app||{}, server=state.config.server||{}, mqtt=state.config.mqtt||{};
-  const f=byId('settingsForm').elements;
-  f['app_name'].value=app.name||''; f['app_tagline'].value=app.tagline||''; f['app_logo'].value=app.logo||''; f['public_base_url'].value=server.public_base_url||''; f['discovery_subnet'].value=state.config.default_discovery_subnet||'';
-  f['mqtt_enabled'].checked=!!mqtt.enabled; f['mqtt_host'].value=mqtt.host||''; f['mqtt_port'].value=mqtt.port||1883; f['mqtt_username'].value=mqtt.username||''; f['mqtt_password'].value=mqtt.password||''; f['mqtt_base_topic'].value=mqtt.base_topic||'tam-spy';
-  const proc=state.config.processing||{}; const coral=state.config.coral||{};
-  f['coral_enabled'].checked=!!(proc.coral_enabled ?? coral.mode==='coral');
-  f['bird_species_enabled'].checked=!!(proc.bird_species_enabled ?? coral.bird_species_enabled);
+  const server=state.config.server||{}, mqtt=state.config.mqtt||{};
+  const proc=state.config.processing||{}, coral=state.config.coral||{};
+  // App section
+  const pubEl=byId('set_public_base_url'); if(pubEl) pubEl.value=server.public_base_url||'';
+  const subEl=byId('set_discovery_subnet'); if(subEl) subEl.value=state.config.default_discovery_subnet||'';
+  updateAppInfoPanel();
+  // MQTT section
+  const mqttEn=byId('mqtt_enabled'); if(mqttEn) mqttEn.checked=!!mqtt.enabled;
+  const mqttH=byId('mqtt_host'); if(mqttH) mqttH.value=mqtt.host||'';
+  const mqttP=byId('mqtt_port'); if(mqttP) mqttP.value=mqtt.port||1883;
+  const mqttU=byId('mqtt_username'); if(mqttU) mqttU.value=mqtt.username||'';
+  const mqttPw=byId('mqtt_password'); if(mqttPw) mqttPw.value=mqtt.password||'';
+  const mqttT=byId('mqtt_base_topic'); if(mqttT) mqttT.value=mqtt.base_topic||'tam-spy';
+  // Coral section
+  const coralEn=byId('coral_enabled'); if(coralEn) coralEn.checked=!!(proc.coral_enabled ?? coral.mode==='coral');
+  const birdEn=byId('bird_species_enabled'); if(birdEn) birdEn.checked=!!(proc.bird_species_enabled ?? coral.bird_species_enabled);
   const hint=byId('coralStatusHint');
   if(hint){
     const cam=state.cameras[0];
@@ -595,6 +605,24 @@ function hydrateSettings(){
   const acEl=byId('ms_auto_cleanup'); if(acEl) acEl.checked=!!storageSec.auto_cleanup_enabled;
 }
 
+function updateAppInfoPanel(){
+  const panel=byId('appInfoPanel'); if(!panel) return;
+  const proc=state.config?.processing||{}, coral=state.config?.coral||{};
+  const stor=state.config?.storage||{};
+  const bs=state.bootstrap||{};
+  const coralActive=!!(proc.coral_enabled ?? coral.mode==='coral');
+  const coralModeStr=coralActive?'✅ Coral TPU':'⬜ Software only';
+  const storagePath=stor.root||bs.storage_root||'storage/';
+  const mediaLimit=stor.media_limit_default||24;
+  const version=bs.version||'—';
+  panel.innerHTML=`
+    <div class="app-info-item"><span class="app-info-label">Version</span><span class="app-info-val">${esc(version)}</span></div>
+    <div class="app-info-item"><span class="app-info-label">Coral-Modus</span><span class="app-info-val">${coralModeStr}</span></div>
+    <div class="app-info-item"><span class="app-info-label">Storage-Pfad</span><span class="app-info-val"><code>${esc(storagePath)}</code></span></div>
+    <div class="app-info-item"><span class="app-info-label">Medien-Limit</span><span class="app-info-val">${esc(mediaLimit)} Fotos/Kamera</span></div>
+  `;
+}
+
 // ── Telegram page hydrate & logic ─────────────────────────────────────────────
 const TG_OBJECTS=['person','cat','bird','car','motion'];
 
@@ -609,6 +637,18 @@ function hydrateTelegram(){
   renderTgFormatPreview(fmt);
   // Group rules
   renderTgGroupRules();
+}
+
+function initTelegramTabs(){
+  const bar=document.querySelector('.tg-tab-bar'); if(!bar) return;
+  bar.querySelectorAll('.tg-tab-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      bar.querySelectorAll('.tg-tab-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.tg-tab-panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');
+      const panel=byId(btn.dataset.tab); if(panel) panel.classList.add('active');
+    });
+  });
 }
 
 function renderTgGroupRules(){
@@ -689,8 +729,8 @@ byId('telegramForm')?.addEventListener('submit',async e=>{
     groups:(state.config?.telegram||{}).groups||{}
   }};
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  showToast('Telegram-Verbindung gespeichert.','success');
   await loadAll();
-  const sec=byId('tg-verbindung'); if(sec?.classList.contains('open')) toggleSetSection('tg-verbindung');
 });
 
 document.querySelectorAll('[name="tg_format"]').forEach(r=>{
@@ -702,8 +742,8 @@ byId('saveTgFormatBtn')?.addEventListener('click',async()=>{
   const existing=state.config?.telegram||{};
   const payload={telegram:{...existing,format:fmt}};
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  showToast('Format gespeichert.','success');
   await loadAll();
-  const sec=byId('tg-was'); if(sec?.classList.contains('open')) toggleSetSection('tg-was');
 });
 
 byId('saveTgGroupRulesBtn')?.addEventListener('click',async()=>{
@@ -714,7 +754,6 @@ byId('saveTgGroupRulesBtn')?.addEventListener('click',async()=>{
   await loadAll();
   const btn=byId('saveTgGroupRulesBtn');
   if(btn){const orig=btn.textContent;btn.textContent='✓ Gespeichert';setTimeout(()=>btn.textContent=orig,2000);}
-  const sec=byId('tg-wann'); if(sec?.classList.contains('open')) toggleSetSection('tg-wann');
 });
 
 function getCanvasCtx(){ return byId('maskCanvas').getContext('2d'); }
@@ -907,28 +946,31 @@ byId('addGroupBtn').onclick=(e)=>{
 };
 // ── Section-level save functions ──────────────────────────────────────────────
 window.saveAppSettings=async function(){
-  const f=byId('settingsForm').elements;
   const payload={
-    app:{name:f['app_name'].value||'TAM-spy',tagline:f['app_tagline'].value||'',logo:f['app_logo'].value||'🐈‍⬛'},
-    server:{public_base_url:f['public_base_url'].value||'',default_discovery_subnet:f['discovery_subnet'].value||'192.168.1.0/24'}
+    server:{public_base_url:byId('set_public_base_url')?.value||'',default_discovery_subnet:byId('set_discovery_subnet')?.value||'192.168.1.0/24'}
   };
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   showToast('App-Einstellungen gespeichert.','success');
   await loadAll();
 };
 window.saveMqttSettings=async function(){
-  const f=byId('settingsForm').elements;
   const existingPass=(state.config?.mqtt?.password||'');
   const payload={
-    mqtt:{enabled:f['mqtt_enabled'].checked,host:f['mqtt_host'].value||'',port:Number(f['mqtt_port'].value||1883),username:f['mqtt_username'].value||'',password:f['mqtt_password'].value||existingPass,base_topic:f['mqtt_base_topic'].value||'tam-spy'}
+    mqtt:{
+      enabled:byId('mqtt_enabled')?.checked||false,
+      host:byId('mqtt_host')?.value||'',
+      port:Number(byId('mqtt_port')?.value||1883),
+      username:byId('mqtt_username')?.value||'',
+      password:byId('mqtt_password')?.value||existingPass,
+      base_topic:byId('mqtt_base_topic')?.value||'tam-spy'
+    }
   };
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   showToast('MQTT gespeichert · Verbindungen werden neu gestartet.','success');
   await loadAll();
 };
 window.saveCoralSettings=async function(){
-  const f=byId('settingsForm').elements;
-  const payload={processing:{coral_enabled:f['coral_enabled'].checked,bird_species_enabled:f['bird_species_enabled'].checked}};
+  const payload={processing:{coral_enabled:byId('coral_enabled')?.checked||false,bird_species_enabled:byId('bird_species_enabled')?.checked||false}};
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   showToast('Coral-Einstellungen gespeichert · Kameras werden neu gestartet.','success');
   await loadAll();
@@ -947,7 +989,7 @@ async function importConfig(format){ const content=byId('importBox').value.trim(
 
 // ── Settings collapsible sections ────────────────────────────────────────────
 window.toggleSetSection=function(id){
-  const el=byId(id); if(!el) return;
+  const el=byId(id); if(!el){console.warn('[toggleSetSection] not found:',id);return;}
   const opening=!el.classList.contains('open');
   el.classList.toggle('open',opening);
   const chevron=el.querySelector('.set-chevron');
