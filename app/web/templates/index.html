@@ -214,7 +214,7 @@
       </section>
 
       <section id="cameras" class="panel section">
-        <div class="section-head"><h3>Kameras</h3><span class="muted" style="font-size:13px">Kameras über Netzwerk-Discovery hinzufügen ↑</span></div>
+        <div class="section-head"><h3>Kameras</h3><div style="display:flex;align-items:center;gap:10px"><span class="muted" style="font-size:13px">Kameras über Netzwerk-Discovery hinzufügen ↑</span><button type="button" id="reloadConnectionsBtn" class="btn-action ghost">🔄 Verbindungen neu laden</button></div></div>
         <div id="cameraSettingsList" class="list"></div>
         <div id="cameraEditWrapper" class="cam-edit-wrapper">
           <div class="cam-edit-inner">
@@ -333,10 +333,12 @@
 
         <!-- Kameragruppen (outside settingsForm) -->
         <div class="set-section" id="set-groups">
-          <button type="button" class="set-hd" onclick="toggleSetSection('set-groups')">
-            <span class="set-icon">📁</span><span>Kameragruppen</span>
-            <button type="button" id="addGroupBtn" class="btn-action" style="margin-left:auto;background:var(--accent);color:#fff;padding:4px 12px;font-size:12px;min-height:28px">+ Neue Gruppe</button>
-          </button>
+          <div class="set-hd-row">
+            <button type="button" class="set-hd" style="flex:1" onclick="toggleSetSection('set-groups')">
+              <span class="set-icon">📁</span><span>Kameragruppen</span><span class="set-chevron">▶</span>
+            </button>
+            <button type="button" id="addGroupBtn" class="btn-action" style="background:var(--accent);color:#fff;flex-shrink:0;margin-right:4px">+ Neue Gruppe</button>
+          </div>
           <div class="set-bd"><div class="set-inner">
             <div id="groupList"></div>
           </div></div>
@@ -524,6 +526,7 @@
                 <div class="field-wrap"><input name="app_tagline" placeholder="Analyse · Sicherheit · Tierbeobachtung" /><span class="field-label">Tagline</span></div>
                 <div class="field-wrap"><input name="public_base_url" placeholder="http://192.168.x.x:8099" /><span class="field-label">Public Base URL</span></div>
                 <div class="field-wrap"><input name="discovery_subnet" placeholder="192.168.1.0/24" /><span class="field-label">Discovery-Subnet</span></div>
+                <button type="button" class="settings-save-btn" onclick="saveAppSettings()">💾 App-Einstellungen speichern</button>
               </div>
             </div></div>
           </div>
@@ -547,6 +550,7 @@
                   </div>
                 </div>
                 <div class="field-wrap"><input name="mqtt_base_topic" placeholder="tam-spy" /><span class="field-label">Base Topic</span></div>
+                <button type="button" class="settings-save-btn" onclick="saveMqttSettings()">💾 MQTT speichern &amp; neu laden</button>
               </div>
             </div></div>
           </div>
@@ -561,6 +565,7 @@
                 <label class="toggle-row"><span>Coral TPU aktivieren</span><label class="switch"><input type="checkbox" name="coral_enabled" /><span class="slider"></span></label></label>
                 <label class="toggle-row"><span>Vogelarten-Klassifikation aktivieren</span><label class="switch"><input type="checkbox" name="bird_species_enabled" /><span class="slider"></span></label></label>
                 <div id="coralStatusHint" class="field-help"></div>
+                <button type="button" class="settings-save-btn" onclick="saveCoralSettings()">💾 Coral speichern &amp; neu laden</button>
               </div>
             </div></div>
           </div>
@@ -588,7 +593,6 @@
             </div></div>
           </div>
 
-          <button type="submit" class="settings-save-btn">💾 Speichern &amp; Neu laden</button>
         </form>
       </section>
 

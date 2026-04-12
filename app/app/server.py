@@ -272,16 +272,22 @@ def api_settings_app():
 @app.post('/api/settings/app')
 def api_settings_app_save():
     payload = request.get_json(force=True) or {}
-    for sec in ("app", "server", "telegram", "mqtt", "ui", "storage"):
+    needs_rebuild = False
+    for sec in ("app", "server", "telegram", "ui", "storage"):
         if sec in payload:
             settings.update_section(sec, payload.get(sec) or {})
+    if "mqtt" in payload:
+        settings.update_section("mqtt", payload.get("mqtt") or {})
+        needs_rebuild = True
     if "processing" in payload:
         proc = payload["processing"]
         settings.update_section("processing", {
             "detection": {"mode": "coral" if proc.get("coral_enabled") else "none"},
             "bird_species": {"enabled": bool(proc.get("bird_species_enabled"))},
         })
-    rebuild_runtimes()
+        needs_rebuild = True
+    if needs_rebuild:
+        rebuild_runtimes()
     return jsonify({"ok": True, "saved": True})
 
 

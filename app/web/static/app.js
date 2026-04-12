@@ -905,19 +905,38 @@ byId('addGroupBtn').onclick=(e)=>{
   byId('groupList').insertAdjacentHTML('beforeend',groupEditHTML({id:'',name:'',category:'',alarm_profile:'soft',coarse_objects:[],fine_models:[],schedule:{enabled:false,start:'22:00',end:'06:00'}}));
   byId('groupList').lastElementChild.scrollIntoView({behavior:'smooth',block:'nearest'});
 };
-byId('settingsForm').onsubmit=async(e)=>{
-  e.preventDefault(); const f=e.target.elements;
-  const existingMqttPass=(state.config?.mqtt?.password||'');
-  const mqttPass=f['mqtt_password'].value||existingMqttPass;
+// ── Section-level save functions ──────────────────────────────────────────────
+window.saveAppSettings=async function(){
+  const f=byId('settingsForm').elements;
   const payload={
     app:{name:f['app_name'].value||'TAM-spy',tagline:f['app_tagline'].value||'',logo:f['app_logo'].value||'🐈‍⬛'},
-    server:{public_base_url:f['public_base_url'].value||'',default_discovery_subnet:f['discovery_subnet'].value||'192.168.1.0/24'},
-    mqtt:{enabled:f['mqtt_enabled'].checked,host:f['mqtt_host'].value||'',port:Number(f['mqtt_port'].value||1883),username:f['mqtt_username'].value||'',password:mqttPass,base_topic:f['mqtt_base_topic'].value||'tam-spy'},
-    processing:{coral_enabled:f['coral_enabled'].checked,bird_species_enabled:f['bird_species_enabled'].checked}
+    server:{public_base_url:f['public_base_url'].value||'',default_discovery_subnet:f['discovery_subnet'].value||'192.168.1.0/24'}
   };
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  showToast('App-Einstellungen gespeichert.','success');
   await loadAll();
 };
+window.saveMqttSettings=async function(){
+  const f=byId('settingsForm').elements;
+  const existingPass=(state.config?.mqtt?.password||'');
+  const payload={
+    mqtt:{enabled:f['mqtt_enabled'].checked,host:f['mqtt_host'].value||'',port:Number(f['mqtt_port'].value||1883),username:f['mqtt_username'].value||'',password:f['mqtt_password'].value||existingPass,base_topic:f['mqtt_base_topic'].value||'tam-spy'}
+  };
+  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  showToast('MQTT gespeichert · Verbindungen werden neu gestartet.','success');
+  await loadAll();
+};
+window.saveCoralSettings=async function(){
+  const f=byId('settingsForm').elements;
+  const payload={processing:{coral_enabled:f['coral_enabled'].checked,bird_species_enabled:f['bird_species_enabled'].checked}};
+  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  showToast('Coral-Einstellungen gespeichert · Kameras werden neu gestartet.','success');
+  await loadAll();
+};
+byId('reloadConnectionsBtn')?.addEventListener('click',async()=>{
+  await fetch('/api/reload',{method:'POST'});
+  showToast('Kameraverbindungen werden neu aufgebaut.','success');
+});
 
 byId('exportJsonBtn').onclick=()=>download('/api/settings/export?format=json');
 byId('exportYamlBtn').onclick=()=>download('/api/settings/export?format=yaml');
