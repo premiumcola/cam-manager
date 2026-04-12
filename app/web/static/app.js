@@ -1391,8 +1391,9 @@ function openLightbox(item){
   byId('lightboxMeta').innerHTML=`
     <span class="badge">${esc(_lbItem.camera_id||'')}</span>
     <span class="badge">${esc(_lbItem.time||'')}</span>
-    ${confirmedBadge}
-    <span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap">${(_lbItem.labels||[]).map(l=>objBubble(l,24)).join('')}</span>`;
+    ${confirmedBadge}`;
+  const labelsEl=byId('lightboxLabels');
+  if(labelsEl) labelsEl.innerHTML=(_lbItem.labels||[]).map(l=>objBubble(l,36)).join('');
   byId('lightboxPrev').style.opacity=_lbIndex>0?'1':'0.2';
   byId('lightboxNext').style.opacity=_lbIndex<(state.media||[]).length-1?'1':'0.2';
   byId('lightboxModal').classList.remove('hidden');
@@ -1435,9 +1436,10 @@ byId('lightboxConfirm').onclick=async()=>{
       const actions=card.querySelector('.mmc-actions');
       if(actions) actions.outerHTML='<span class="media-confirmed-badge">✓</span>';
     }
-    // auto-advance to next item
-    const nextIdx=_lbIndex+1;
-    if(nextIdx<(state.media||[]).length) openLightbox(state.media[nextIdx]);
+    // auto-advance to next item (use fresh index)
+    const ci=(state.media||[]).findIndex(x=>x.event_id===event_id);
+    const nextIdx=ci+1;
+    if(nextIdx>0&&nextIdx<(state.media||[]).length) openLightbox(state.media[nextIdx]);
     else closeLightbox();
   }catch(e){showToast('Bestätigen fehlgeschlagen: '+e.message,'error');}
 };
@@ -1446,6 +1448,10 @@ byId('lightboxDelete').onclick=async()=>{
   const{camera_id,event_id}=_lbItem;
   if(!camera_id||!event_id) return;
   try{
+    const imgEl=byId('lightboxImg');
+    if(imgEl){imgEl.style.transform='scale(0.88)';imgEl.style.opacity='0';}
+    await new Promise(r=>setTimeout(r,200));
+    if(imgEl){imgEl.style.transform='';imgEl.style.opacity='';}
     await j(`/api/camera/${encodeURIComponent(camera_id)}/events/${encodeURIComponent(event_id)}`,{method:'DELETE'});
     const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(event_id)}"]`);
     if(card) card.remove();
