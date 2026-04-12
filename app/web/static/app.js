@@ -1130,7 +1130,7 @@ function mediaCardHTML(item){
   const color=camColor(item.camera_id);
   const confirmed=item.confirmed?'mmc-confirmed':'';
   const topLabel=(item.labels||[])[0]||'motion';
-  return `<article class="media-card ${confirmed}" data-event-id="${esc(item.event_id||'')}" data-cam="${esc(item.camera_id||'')}">
+  return `<article class="media-card ${confirmed}" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
     <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
       <img src="${esc(imgSrc)}" alt="event" loading="lazy" />
       <div class="mmc-meta-bar">
@@ -1139,7 +1139,7 @@ function mediaCardHTML(item){
       </div>
       <div class="mmc-actions">
         <button class="mmc-btn mmc-confirm" title="Bestätigen" onclick="event.stopPropagation();window.confirmMediaCard('${esc(item.camera_id||'')}','${esc(item.event_id||'')}',this)">✓</button>
-        <button class="mmc-btn mmc-delete" title="Löschen" onclick="event.stopPropagation();window.deleteMediaCard('${esc(item.camera_id||'')}','${esc(item.event_id||'')}',this)">✕</button>
+        <button class="mmc-btn mmc-delete" title="Löschen" onclick="event.stopPropagation();window.deleteMediaCard(this)">✕</button>
       </div>
     </div>
   </article>`;
@@ -1188,10 +1188,13 @@ function closeMediaDrilldown(){
   byId('mediaDrilldown').style.display='none';
   byId('mediaOverview').style.display='';
 }
-window.deleteMediaCard=async(camId,eventId,btn)=>{
+window.deleteMediaCard=async(btn)=>{
+  const card=btn.closest('.media-card');
+  const eventId=card?.dataset.eventId;
+  const camId=card?.dataset.cameraId;
+  if(!eventId||!camId) return;
   try{
     await j(`/api/camera/${encodeURIComponent(camId)}/events/${encodeURIComponent(eventId)}`,{method:'DELETE'});
-    const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(eventId)}"]`);
     if(card) card.remove();
     state.media=(state.media||[]).filter(x=>x.event_id!==eventId);
     _decrementMediaOverviewCount(camId);
