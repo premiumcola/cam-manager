@@ -997,7 +997,7 @@ function _renderDiscoveryResults(){
   }).join('');
 }
 
-byId('discoverBtn').onclick=async()=>{
+byId('discoverBtn')?.addEventListener('click',async()=>{
   byId('discoveryModal').classList.remove('hidden');
   document.body.style.overflow='hidden';
   byId('discoveryStatus').textContent='Suche läuft …';
@@ -1014,7 +1014,7 @@ byId('discoverBtn').onclick=async()=>{
     byId('discoveryStatus').textContent='Discovery fehlgeschlagen';
     byId('discoveryResults').innerHTML=`<div class="item">${esc(err.message||err)}</div>`;
   }
-};
+});
 byId('discoveryHideConfigured')?.addEventListener('change',_renderDiscoveryResults);
 byId('closeDiscoveryBtn').onclick=()=>closeDiscoveryModal();
 byId('discoveryModal').onclick=(e)=>{if(e.target===byId('discoveryModal')) closeDiscoveryModal();};
