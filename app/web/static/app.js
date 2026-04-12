@@ -1108,13 +1108,30 @@ window.saveCoralSettings=async function(){
   showToast('Coral-Einstellungen gespeichert · Kameras werden neu gestartet.','success');
   await loadAll();
 };
+function _showCamReloadOverlay(camId){
+  const msg=_RELOAD_MSGS[Math.floor(Math.random()*_RELOAD_MSGS.length)];
+  const cards=camId
+    ?[document.querySelector(`.cv-card[data-camid="${CSS.escape(camId)}"]`)]
+    :Array.from(document.querySelectorAll('.cv-card'));
+  cards.forEach(card=>{
+    if(!card) return;
+    const wrap=card.querySelector('.cv-img-wrap');
+    if(!wrap) return;
+    wrap.querySelector('.cv-reload-overlay')?.remove();
+    const ov=document.createElement('div');
+    ov.className='cv-reload-overlay';
+    ov.innerHTML=`<div class="cv-reload-sq">${_SQ_SVG}</div><div class="cv-reload-msg">${esc(msg)}</div>`;
+    wrap.appendChild(ov);
+    setTimeout(()=>{ov.style.transition='opacity .4s';ov.style.opacity='0';setTimeout(()=>ov.remove(),450);},2100);
+  });
+}
 byId('reloadConnectionsBtn')?.addEventListener('click',async()=>{
+  _showCamReloadOverlay(null);
   await fetch('/api/reload',{method:'POST'});
-  showReloadToast();
 });
 async function reloadCamera(camId){
+  _showCamReloadOverlay(camId);
   await fetch(`/api/camera/${encodeURIComponent(camId)}/reload`,{method:'POST'}).catch(()=>{});
-  showReloadToast();
 }
 window.reloadCamera=reloadCamera;
 
