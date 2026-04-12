@@ -1248,11 +1248,34 @@ byId('lightboxModal').onclick=(e)=>{if(e.target===byId('lightboxModal')) closeLi
 byId('lightboxPrev').onclick=()=>{if(_lbIndex>0) openLightbox(state.media[--_lbIndex]);};
 byId('lightboxNext').onclick=()=>{if(_lbIndex<(state.media||[]).length-1) openLightbox(state.media[++_lbIndex]);};
 document.addEventListener('keydown',(e)=>{
+  if(byId('lightboxModal').classList.contains('hidden')) return;
   if(e.key==='Escape') closeLightbox();
   if(e.key==='ArrowLeft') byId('lightboxPrev').click();
   if(e.key==='ArrowRight') byId('lightboxNext').click();
+  if(e.key==='ArrowUp'){e.preventDefault();byId('lightboxConfirm').click();}
+  if(e.key==='ArrowDown'){e.preventDefault();byId('lightboxDelete').click();}
 });
-byId('lightboxConfirm').onclick=()=>{closeLightbox();};
+byId('lightboxConfirm').innerHTML='<span>✓</span><span style="font-size:9px;opacity:.8">↑</span>';
+byId('lightboxDelete').innerHTML='<span>🗑</span><span style="font-size:9px;opacity:.8">↓</span>';
+byId('lightboxConfirm').onclick=async()=>{
+  if(!_lbItem) return;
+  const{camera_id,event_id}=_lbItem;
+  if(!camera_id||!event_id) return;
+  try{
+    await j(`/api/camera/${encodeURIComponent(camera_id)}/events/${encodeURIComponent(event_id)}/confirm`,{method:'POST'});
+    const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(event_id)}"]`);
+    if(card){
+      card.classList.add('mmc-confirmed');
+      const actions=card.querySelector('.mmc-actions');
+      if(actions) actions.outerHTML='<span class="media-confirmed-badge">✓</span>';
+    }
+    if(_lbItem) _lbItem.confirmed=true;
+    // auto-advance to next image
+    const nextIdx=_lbIndex+1;
+    if(nextIdx<(state.media||[]).length) openLightbox(state.media[nextIdx]);
+    else closeLightbox();
+  }catch(e){showToast('Bestätigen fehlgeschlagen: '+e.message,'error');}
+};
 byId('lightboxDelete').onclick=async()=>{
   if(!_lbItem) return;
   const{camera_id,event_id}=_lbItem;
@@ -1300,10 +1323,12 @@ function mediaCardHTML(item){
       <img src="${esc(imgSrc)}" alt="event" loading="lazy" />
       <div class="mmc-meta-bar"><span>${fmtMediaTime(item.time||'')}</span></div>
       <div class="media-label-bubbles">${labelBubbles}</div>
-      <div class="mmc-actions">
+      ${item.confirmed
+        ? `<span class="media-confirmed-badge">✓</span>`
+        : `<div class="mmc-actions">
         <button class="mmc-btn mmc-confirm" title="Bestätigen" onclick="event.stopPropagation();window.confirmMediaCard('${esc(item.camera_id||'')}','${esc(item.event_id||'')}',this)">✓</button>
         <button class="mmc-btn mmc-delete" title="Löschen" onclick="event.stopPropagation();window.deleteMediaCard(this)">✕</button>
-      </div>
+      </div>`}
     </div>
   </article>`;
 }
