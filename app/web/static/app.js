@@ -68,6 +68,9 @@ function _renderLbLabels(){
           const idx=(state.media||[]).findIndex(x=>x.event_id===_lbItem.event_id);
           if(idx>=0) state.media[idx].labels=res.labels;
           _renderLbLabels();
+          // sync thumbnail in media grid
+          const thumbCard=byId('mediaGrid')?.querySelector(`[data-event-id="${CSS.escape(_lbItem.event_id)}"]`);
+          if(thumbCard){const bubblesEl=thumbCard.querySelector('.media-label-bubbles');if(bubblesEl) bubblesEl.innerHTML=res.labels.slice(0,3).map(l=>objBubble(l,26)).join('');}
         }
       }catch(e){console.error('label update failed',e);}
     };
@@ -1399,10 +1402,10 @@ function _updateLbConfirmBtn(confirmed){
   if(!btn) return;
   if(confirmed){
     btn.style.background='#166534';btn.style.color='#4ade80';
-    btn.innerHTML='<span>✓✓</span><span style="font-size:9px;opacity:.9">Behalten</span>';
+    btn.innerHTML='<span style="font-size:26px;line-height:1">✓✓</span><span style="font-size:10px;font-weight:700;opacity:.95">Behalten</span>';
   } else {
     btn.style.background='';btn.style.color='';
-    btn.innerHTML='<span>✓</span><span style="font-size:9px;opacity:.8">↑</span>';
+    btn.innerHTML='<span style="font-size:26px;line-height:1">✓</span><span style="font-size:10px;font-weight:700;opacity:.8">Behalten</span>';
   }
 }
 function openLightbox(item){
@@ -1412,7 +1415,7 @@ function openLightbox(item){
   _lbDeletePending=false;
   // reset delete button
   const delBtn=byId('lightboxDelete');
-  if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML='<span>🗑</span><span style="font-size:9px;opacity:.8">↓</span>';delBtn.title=_lbItem.confirmed?'Bestätigt — trotzdem löschen?':'Löschen';}
+  if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML='<span style="font-size:26px;line-height:1">🗑</span><span style="font-size:10px;font-weight:700;opacity:.8">Löschen</span>';delBtn.title=_lbItem.confirmed?'Bestätigt — trotzdem löschen?':'Löschen';}
   _updateLbConfirmBtn(_lbItem.confirmed);
   const imgSrc=_lbItem.snapshot_relpath?`/media/${_lbItem.snapshot_relpath}`:(_lbItem.snapshot_url||'');
   byId('lightboxImg').src=imgSrc;
@@ -1444,8 +1447,8 @@ document.addEventListener('keydown',(e)=>{
   else if(e.key==='ArrowDown'){e.preventDefault();_lbHandleDeleteKey();}
   else if(e.key==='Escape') closeLightbox();
 });
-byId('lightboxConfirm').innerHTML='<span>✓</span><span style="font-size:9px;opacity:.8">↑</span>';
-byId('lightboxDelete').innerHTML='<span>🗑</span><span style="font-size:9px;opacity:.8">↓</span>';
+byId('lightboxConfirm').innerHTML='<span style="font-size:26px;line-height:1">✓</span><span style="font-size:10px;font-weight:700;opacity:.8">Behalten</span>';
+byId('lightboxDelete').innerHTML='<span style="font-size:26px;line-height:1">🗑</span><span style="font-size:10px;font-weight:700;opacity:.8">Löschen</span>';
 byId('lightboxConfirm').onclick=async()=>{
   if(!_lbItem) return;
   const{camera_id,event_id}=_lbItem;

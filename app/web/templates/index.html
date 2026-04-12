@@ -642,9 +642,10 @@
         <img id="lightboxImg" src="" alt="Event" style="max-width:90vw;max-height:76vh;border-radius:18px;object-fit:contain;background:#081119;display:block;transition:transform .18s ease-in,opacity .18s ease-in" />
         <button id="lightboxPrev" type="button">‹</button>
         <button id="lightboxNext" type="button">›</button>
-        <div id="lightboxLabels" style="position:absolute;bottom:12px;left:12px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:auto;z-index:4"></div>
+        <div id="lightboxLabelsGrad" style="position:absolute;bottom:0;left:0;width:220px;height:130px;background:radial-gradient(ellipse at bottom left,rgba(0,0,0,0.72) 0%,transparent 70%);border-radius:0 0 0 18px;pointer-events:none;z-index:3"></div>
+        <div id="lightboxLabels" style="position:absolute;bottom:14px;left:14px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:auto;z-index:4"></div>
         <button id="lightboxConfirm" type="button" style="position:absolute;top:16px;right:16px">✓</button>
-        <button id="lightboxDelete" type="button" style="position:absolute;bottom:74px;right:16px">🗑</button>
+        <button id="lightboxDelete" type="button" style="position:absolute;bottom:94px;right:16px">🗑</button>
       </div>
       <div id="lightboxMeta" style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center"></div>
     </div>
