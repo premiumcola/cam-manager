@@ -191,6 +191,7 @@ class EventStore:
         scanned = 0
         for cam_id in camera_ids:
             cam_dir = self.events_dir / cam_id
+            log.info("[MediaScan] checking cam_dir: %s exists=%s", cam_dir, cam_dir.exists())
             if not cam_dir.exists():
                 continue
             # Collect existing event IDs from all JSON files in the entire tree

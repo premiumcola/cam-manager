@@ -360,12 +360,14 @@ def api_media_storage_stats():
 def api_media_rescan():
     effective = get_effective_config()
     cam_ids = [c["id"] for c in effective.get("cameras", [])]
+    logging.getLogger(__name__).info("[MediaRescan] scanning cam_ids: %s", cam_ids)
     public_base = (effective.get("server", {}).get("public_base_url") or "").rstrip("/")
     try:
         count = store.scan_media_files(cam_ids, public_base_url=public_base)
         return jsonify({"ok": True, "registered": count})
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
+        import traceback
+        return jsonify({"ok": False, "error": traceback.format_exc()}), 500
 
 
 @app.post('/api/media/purge-orphans')
