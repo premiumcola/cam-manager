@@ -27,11 +27,12 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 .cv-card{border-radius:18px;overflow:hidden;cursor:pointer;background:#0a0e1a;transition:transform .18s,box-shadow .18s}
 .cv-card:hover{transform:scale(1.012);box-shadow:0 12px 40px rgba(0,0,0,.55)}
 .cv-frame{position:relative;aspect-ratio:16/9;overflow:hidden}
-.cv-sq-runner{position:relative;width:100%;height:80px;overflow:hidden}
-.cv-sq-sprite{position:absolute;top:50%;transform:translateY(-50%) scaleX(1);display:inline-flex;align-items:center;gap:8px;animation:sq-run 5s linear infinite}
-.cv-sq-cam{font-size:36px;line-height:1}
-.cv-reload-msg{font-size:11px;color:var(--muted);text-align:center;padding:0 10px}
-@keyframes sq-run{0%{left:-90px;transform:translateY(-50%) scaleX(1)}45%{left:calc(100% + 20px);transform:translateY(-50%) scaleX(1)}50%{left:calc(100% + 20px);transform:translateY(-50%) scaleX(-1)}95%{left:-90px;transform:translateY(-50%) scaleX(-1)}100%{left:-90px;transform:translateY(-50%) scaleX(1)}}
+.cv-sq-runner{position:relative;width:100%;height:90px;overflow:hidden;background:rgba(0,0,0,0.2);border-radius:12px}
+.cv-sq-sprite{position:absolute;bottom:8px;display:inline-flex;align-items:flex-end;gap:10px;animation:sq-run 6s ease-in-out infinite}
+.cv-sq-cam{font-size:40px;line-height:1}
+.cv-reload-msg{font-size:11px;color:#4a7a9a;text-align:center;padding:4px 10px;font-weight:600;letter-spacing:.04em}
+@keyframes sq-run{0%{left:-100px;transform:scaleX(1)}42%{left:calc(100% + 30px);transform:scaleX(1)}50%{left:calc(100% + 30px);transform:scaleX(-1)}92%{left:-100px;transform:scaleX(-1)}100%{left:-100px;transform:scaleX(1)}}
+@keyframes sq-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 .cv-img-wrap{position:relative;width:100%;height:100%}.cv-img{width:100%;height:100%;object-fit:cover;display:block;background:#0a0e1a;opacity:0;transition:opacity .4s;position:absolute;inset:0}.cv-img.loaded{opacity:1}.cv-loading-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:#0a0e1a}.cv-loading-icon{font-size:28px;color:#2a4a6a;animation:spin 2s linear infinite}.cv-loading-text{font-size:12px;color:#2a4a6a;font-weight:600;letter-spacing:.08em}@keyframes spin{to{transform:rotate(360deg)}}
 
 /* Gradient overlays */

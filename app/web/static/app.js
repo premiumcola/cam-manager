@@ -1125,7 +1125,7 @@ window.saveCoralSettings=async function(){
 };
 function _makeSquirrelHTML(){
   const msg=_RELOAD_MSGS[Math.floor(Math.random()*_RELOAD_MSGS.length)];
-  const bigSvg=_SQ_SVG.replace('width="40" height="32"','width="72" height="68"');
+  const bigSvg=_SQ_SVG.replace('width="40" height="32"','width="82" height="76"');
   return `<div class="cv-sq-runner"><div class="cv-sq-sprite">${bigSvg}<span class="cv-sq-cam">📷</span></div></div><div class="cv-reload-msg">${esc(msg)}</div>`;
 }
 function _restorePlaceholder(card){
