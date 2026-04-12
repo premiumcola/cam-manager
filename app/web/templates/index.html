@@ -11,6 +11,7 @@
   <div class="topbar">
     <button id="hamburgerBtn" class="hamburger-btn" type="button">☰</button>
     <span class="topbar-title" id="topbarTitle">TAM-spy</span>
+    <span id="liveIndicator" class="live-pill hidden" title="Snapshots werden alle 3 Sekunden automatisch aktualisiert">Live</span>
   </div>
   <div id="sidebarOverlay" class="sidebar-overlay"></div>
   <div id="wizard" class="wizard hidden">
@@ -92,6 +93,7 @@
           <h1>Analyse &amp; Sicherheit</h1>
           <div class="muted">PoE · Coral · MQTT</div>
         </div>
+        <span id="liveIndicatorDesktop" class="live-pill hidden" title="Snapshots werden alle 3 Sekunden automatisch aktualisiert">Live</span>
       </div>
       <nav class="nav">
         <a href="#dashboard" title="Kameraübersicht"><span class="nav-icon">📊</span><span class="nav-label">Kameraübersicht</span></a>
@@ -116,7 +118,6 @@
         <div class="hero-actions">
           <button id="discoverBtn" class="btn-action ghost">🔍 Netzwerk-Discovery</button>
           <button id="openWizardBtn" class="btn-action ghost hidden">⚙️ Setup-Wizard</button>
-          <span id="liveIndicator" class="live-dot hidden" title="Live-Update aktiv"></span>
         </div>
       </section>
 

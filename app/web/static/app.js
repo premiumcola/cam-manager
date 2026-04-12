@@ -93,8 +93,7 @@ function startLiveUpdate(){
       });
     }catch{/* silent */}
   },3000);
-  const ind=byId('liveIndicator');
-  if(ind) ind.classList.remove('hidden');
+  ['liveIndicator','liveIndicatorDesktop'].forEach(id=>{const el=byId(id);if(el)el.classList.remove('hidden');});
 }
 
 async function loadAll(){
