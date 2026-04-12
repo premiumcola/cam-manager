@@ -1269,14 +1269,14 @@ function closeLightbox(){
 }
 byId('lightboxClose').onclick=closeLightbox;
 byId('lightboxModal').onclick=(e)=>{if(e.target===byId('lightboxModal')) closeLightbox();};
-byId('lightboxPrev').onclick=()=>{if(_lbIndex>0){_lbIndex--;openLightbox(state.media[_lbIndex]);}};
-byId('lightboxNext').onclick=()=>{if(_lbIndex<(state.media||[]).length-1){_lbIndex++;openLightbox(state.media[_lbIndex]);}};
+byId('lightboxPrev').onclick=()=>{if(_lbIndex>0) openLightbox(state.media[_lbIndex-1]);};
+byId('lightboxNext').onclick=()=>{if(_lbIndex<(state.media||[]).length-1) openLightbox(state.media[_lbIndex+1]);};
 document.addEventListener('keydown',(e)=>{
   if(byId('lightboxModal').classList.contains('hidden')) return;
-  if(e.key==='ArrowLeft'){e.preventDefault();if(_lbIndex>0){_lbIndex--;openLightbox(state.media[_lbIndex]);}}
-  else if(e.key==='ArrowRight'){e.preventDefault();if(_lbIndex<(state.media||[]).length-1){_lbIndex++;openLightbox(state.media[_lbIndex]);}}
+  if(e.key==='ArrowLeft'){e.preventDefault();if(_lbIndex>0) openLightbox(state.media[_lbIndex-1]);}
+  else if(e.key==='ArrowRight'){e.preventDefault();if(_lbIndex<(state.media||[]).length-1) openLightbox(state.media[_lbIndex+1]);}
   else if(e.key==='ArrowUp'){e.preventDefault();byId('lightboxConfirm').click();}
-  else if(e.key==='ArrowDown'){e.preventDefault();byId('lightboxDelete').click();}
+  else if(e.key==='ArrowDown'){e.preventDefault();_lbHandleDeleteKey();}
   else if(e.key==='Escape') closeLightbox();
 });
 byId('lightboxConfirm').innerHTML='<span>✓</span><span style="font-size:9px;opacity:.8">↑</span>';
