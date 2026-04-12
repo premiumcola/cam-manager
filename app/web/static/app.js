@@ -233,6 +233,7 @@ function renderDashboard(){
 // ── Timeline ─────────────────────────────────────────────────────────────────
 const TL_LANES=['person','cat','bird','car','motion'];
 const GAP_MS=2*60*1000;
+let _tlActiveLanes=new Set(TL_LANES);
 
 function _tlGroupLane(points, label, tMin, tMax){
   const filtered=points
@@ -266,41 +267,76 @@ function renderTimeline(){
   const container=byId('timelineContainer'); if(!container) return;
   const tracks=state.timeline?.tracks||[];
 
-  // Update slider label
+  // Find earliest event timestamp across all tracks (TASK 2)
+  let earliestMs=null;
+  tracks.forEach(tr=>{
+    (tr.points||[]).forEach(p=>{
+      const t=new Date(p.time).getTime();
+      if(t&&(!earliestMs||t<earliestMs)) earliestMs=t;
+    });
+  });
+  const now=Date.now();
+
+  // Set slider max to actual data range so user can't scroll past available data
+  const slider=byId('tlRangeSlider');
+  if(slider&&earliestMs){
+    const dataHours=Math.max(1,Math.ceil((now-earliestMs)/3600000));
+    slider.max=dataHours;
+    if(state.tlHours>dataHours){state.tlHours=dataHours;slider.value=dataHours;}
+  }
+
   const hours=state.tlHours||12;
   const lbl=byId('tlRangeLabel');
   if(lbl) lbl.textContent=hours<24?`letzte ${hours}h`:`${Math.round(hours/24)} Tage`;
 
-  if(!tracks.length){ container.innerHTML='<div class="tl-empty">Keine Ereignisse im gewählten Zeitraum.</div>'; return; }
+  // Legend as filter pills (TASK 5) — render before tracks so pills are always visible
+  const leg=byId('tlLegend');
+  if(leg){
+    leg.innerHTML=`<span class="tl-leg-prefix">Filter:</span>`+
+      TL_LANES.map(l=>`<button class="tl-legend-pill${_tlActiveLanes.has(l)?' tl-legend-pill--active':''}" data-lane="${l}">${objBubble(l,18)}<span>${OBJ_LABEL[l]||l}</span></button>`).join('');
+    leg.querySelectorAll('.tl-legend-pill').forEach(btn=>{
+      btn.onclick=()=>{
+        const lane=btn.dataset.lane;
+        if(_tlActiveLanes.has(lane)) _tlActiveLanes.delete(lane); else _tlActiveLanes.add(lane);
+        renderTimeline();
+      };
+    });
+  }
 
-  const now=Date.now();
-  const tMin=now-hours*3600000;
+  if(!tracks.length){container.innerHTML='<div class="tl-empty">Keine Ereignisse im gewählten Zeitraum.</div>';return;}
+
   const tMax=now;
-  const span=tMax-tMin;
+  let tMin=now-hours*3600000;
+  // Clamp tMin to earliest event — no point showing empty space before first data point
+  if(earliestMs&&earliestMs>tMin) tMin=earliestMs;
+  const span=tMax-tMin||1;
 
   let html='';
   tracks.forEach((tr,ti)=>{
     const cam=(state.config?.cameras||[]).find(c=>c.id===tr.camera_id)||{};
-    const camIcon=cam.icon||getCameraIcon(cam.name||tr.camera_id);
     const camName=cam.name||tr.camera_id;
-    if(ti>0) html+=`<div class="tl-sep"></div>`;
-    html+=`<div class="tl-cam-block">`;
-    html+=`<div class="tl-cam-header"><span style="font-size:20px">${camIcon}</span><span style="font-size:16px;font-weight:800;color:#e0f0ff">${esc(camName)}</span></div>`;
+    const camIcon=getCameraIcon(camName);
+    // TASK 3: camera label with icon, 15px bold, extra margin for 2nd+ block
+    html+=`<div class="tl-cam-block${ti>0?' tl-cam-block--notfirst':''}">`;
+    html+=`<div class="tl-cam-header"><span class="tl-cam-icon">${camIcon}</span><span class="tl-cam-name">${esc(camName)}</span></div>`;
+    // TASK 4: sunken pool wrapper with vertical grid lines
+    html+=`<div class="tl-lanes-wrap">`;
+    for(let k=1;k<5;k++) html+=`<div class="tl-vgrid" style="left:calc(36px + (100% - 36px)*${k}/5)"></div>`;
     TL_LANES.forEach(label=>{
       const color=colors[label]||colors.unknown;
       const groups=_tlGroupLane(tr.points||[], label, tMin, tMax);
-      html+=`<div class="tl-lane">`;
+      html+=`<div class="tl-lane${_tlActiveLanes.has(label)?'':' tl-lane--hidden'}">`;
       html+=`<div class="tl-lane-icon">${OBJ_SVG[label]||''}</div>`;
       html+=`<div class="tl-track">`;
       groups.forEach(g=>{
         const leftPct=Math.max(0,(g.startTime-tMin)/span*100);
-        const widthPct=Math.max(0.8,Math.min((g.endTime-g.startTime)/span*100, 100-leftPct));
+        const widthPct=Math.max(0.8,Math.min((g.endTime-g.startTime)/span*100,100-leftPct));
         if(leftPct>=100) return;
         html+=`<div class="tl-bar" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;background:${color};opacity:0.85" data-camid="${esc(tr.camera_id)}" data-label="${esc(label)}" title="${g.count} Events · ${OBJ_LABEL[label]||label}"></div>`;
       });
       html+=`</div></div>`;
     });
-    html+=`</div>`;
+    html+=`</div></div>`;
   });
 
   // X-axis — 6 evenly spaced labels
@@ -308,11 +344,6 @@ function renderTimeline(){
   for(let k=0;k<6;k++) html+=`<span class="tl-xlabel">${_tlFmtTs(tMin+span*k/5,hours)}</span>`;
   html+=`</div>`;
   container.innerHTML=html;
-
-  // Timeline legend
-  const leg=byId('tlLegend');
-  if(leg) leg.innerHTML=`<span style="font-size:11px;color:var(--muted);margin-right:4px">Objekte:</span>`+
-    TL_LANES.map(l=>`<span style="display:inline-flex;align-items:center;gap:5px">${objBubble(l,20)}</span>`).join('');
 
   // Bar click → navigate to Mediathek
   container.querySelectorAll('.tl-bar').forEach(bar=>{
