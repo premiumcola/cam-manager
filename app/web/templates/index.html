@@ -147,25 +147,24 @@
           <button type="button" id="rescanMediaBtn" class="btn-action action-green">🔄 Neu scannen</button>
         </div>
         <div id="mediaStorageBar" class="media-storage-bar"></div>
-        <!-- Filter bar: object pills + divider + period pills in one row -->
-        <div class="media-filter-bar">
-          <button class="media-pill" data-type="label" data-val="">Alle</button>
-          <button class="media-pill" data-type="label" data-val="person" data-label-key="person">Person</button>
-          <button class="media-pill" data-type="label" data-val="cat" data-label-key="cat">Katze</button>
-          <button class="media-pill" data-type="label" data-val="bird" data-label-key="bird">Vogel</button>
-          <button class="media-pill" data-type="label" data-val="car" data-label-key="car">Auto</button>
-          <button class="media-pill" data-type="label" data-val="motion" data-label-key="motion">Bewegung</button>
-          <span class="filter-divider"></span>
-          <button class="media-pill" data-type="period" data-val="day">Heute</button>
-          <button class="media-pill" data-type="period" data-val="week">7 Tage</button>
-          <button class="media-pill" data-type="period" data-val="month">Monat</button>
-        </div>
         <!-- Level 1: Camera overview cards -->
         <div id="mediaOverview" class="media-overview-grid"></div>
-        <!-- Level 2: Per-camera drill-down -->
+        <!-- Level 2: Per-camera drill-down (filter bar lives here, hidden until camera selected) -->
         <div id="mediaDrilldown" style="display:none">
           <div class="media-drill-head">
             <button type="button" class="media-drill-back" onclick="closeMediaDrilldown()">← Alle Kameras</button>
+            <div class="media-filter-bar">
+              <button class="media-pill" data-type="label" data-val="">Alle</button>
+              <button class="media-pill" data-type="label" data-val="person" data-label-key="person">Person</button>
+              <button class="media-pill" data-type="label" data-val="cat" data-label-key="cat">Katze</button>
+              <button class="media-pill" data-type="label" data-val="bird" data-label-key="bird">Vogel</button>
+              <button class="media-pill" data-type="label" data-val="car" data-label-key="car">Auto</button>
+              <button class="media-pill" data-type="label" data-val="motion" data-label-key="motion">Bewegung</button>
+              <span class="filter-divider"></span>
+              <button class="media-pill" data-type="period" data-val="day">Heute</button>
+              <button class="media-pill" data-type="period" data-val="week">7 Tage</button>
+              <button class="media-pill" data-type="period" data-val="month">Monat</button>
+            </div>
           </div>
           <div id="mediaGrid" class="media-grid"></div>
           <div id="mediaPagination" class="media-pagination"></div>
