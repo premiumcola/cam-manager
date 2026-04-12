@@ -53,7 +53,7 @@ function _renderLbLabels(){
     const isActive=active.has(l);
     const svg=OBJ_SVG[l]||OBJ_SVG.alarm;
     const title=OBJ_LABEL[l]||l;
-    return `<span data-label="${l}" title="${title}" style="width:44px;height:44px;border-radius:50%;background:${isActive?'rgba(0,0,0,0.75)':'rgba(0,0,0,0.25)'};box-shadow:0 1px 6px rgba(0,0,0,0.5);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .15s,opacity .15s;opacity:${isActive?'1':'0.35'};border:2px solid ${isActive?'rgba(255,255,255,0.35)':'transparent'}">${svg}</span>`;
+    return `<span data-label="${l}" title="${title}" style="width:44px;height:44px;border-radius:50%;background:${isActive?'rgba(0,0,0,0.75)':'rgba(0,0,0,0.45)'};box-shadow:0 1px 6px rgba(0,0,0,0.5);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .15s,opacity .15s;opacity:${isActive?'1':'0.4'};border:2px solid ${isActive?'rgba(255,255,255,0.35)':'transparent'}">${svg}</span>`;
   }).join('');
   el.querySelectorAll('[data-label]').forEach(btn=>{
     btn.onclick=async()=>{
@@ -1402,10 +1402,10 @@ function _updateLbConfirmBtn(confirmed){
   if(!btn) return;
   if(confirmed){
     btn.style.background='#166534';btn.style.color='#4ade80';
-    btn.innerHTML='<span style="font-size:26px;line-height:1">✓✓</span><span style="font-size:10px;font-weight:700;opacity:.95">Behalten</span>';
+    btn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.85">↑</span><span style="font-size:22px;line-height:1">✓✓</span>';
   } else {
     btn.style.background='';btn.style.color='';
-    btn.innerHTML='<span style="font-size:26px;line-height:1">✓</span><span style="font-size:10px;font-weight:700;opacity:.8">Behalten</span>';
+    btn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↑</span><span style="font-size:22px;line-height:1">✓</span>';
   }
 }
 function openLightbox(item){
@@ -1415,7 +1415,7 @@ function openLightbox(item){
   _lbDeletePending=false;
   // reset delete button
   const delBtn=byId('lightboxDelete');
-  if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML='<span style="font-size:26px;line-height:1">🗑</span><span style="font-size:10px;font-weight:700;opacity:.8">Löschen</span>';delBtn.title=_lbItem.confirmed?'Bestätigt — trotzdem löschen?':'Löschen';}
+  if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↓</span><span style="font-size:22px;line-height:1">🗑</span>';delBtn.title=_lbItem.confirmed?'Bestätigt — trotzdem löschen?':'Löschen';}
   _updateLbConfirmBtn(_lbItem.confirmed);
   const imgSrc=_lbItem.snapshot_relpath?`/media/${_lbItem.snapshot_relpath}`:(_lbItem.snapshot_url||'');
   byId('lightboxImg').src=imgSrc;
@@ -1447,8 +1447,8 @@ document.addEventListener('keydown',(e)=>{
   else if(e.key==='ArrowDown'){e.preventDefault();_lbHandleDeleteKey();}
   else if(e.key==='Escape') closeLightbox();
 });
-byId('lightboxConfirm').innerHTML='<span style="font-size:26px;line-height:1">✓</span><span style="font-size:10px;font-weight:700;opacity:.8">Behalten</span>';
-byId('lightboxDelete').innerHTML='<span style="font-size:26px;line-height:1">🗑</span><span style="font-size:10px;font-weight:700;opacity:.8">Löschen</span>';
+byId('lightboxConfirm').innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↑</span><span style="font-size:22px;line-height:1">✓</span>';
+byId('lightboxDelete').innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↓</span><span style="font-size:22px;line-height:1">🗑</span>';
 byId('lightboxConfirm').onclick=async()=>{
   if(!_lbItem) return;
   const{camera_id,event_id}=_lbItem;
