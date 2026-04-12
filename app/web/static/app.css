@@ -245,7 +245,7 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .ach-card.unlocked{background:linear-gradient(160deg,#1a2a0d,#2a3a1a);border:1.5px solid #4a7a20;box-shadow:0 4px 16px rgba(74,122,32,.2)}
 .ach-card.locked{filter:grayscale(.7);opacity:.55}
 .ach-card.unlocked:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(74,122,32,.35)}
-.ach-icon{font-size:38px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}
+.ach-icon{font-size:38px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}.ach-icon svg{width:56px;height:56px;display:block}
 .ach-card.locked .ach-icon{filter:grayscale(1) brightness(.6)}
 .ach-name{font-weight:700;font-size:14px;color:var(--text)}
 .ach-card.locked .ach-name{color:var(--muted)}
