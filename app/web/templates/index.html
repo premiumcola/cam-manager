@@ -98,11 +98,9 @@
       <nav class="nav">
         <a href="#dashboard" title="Kameraübersicht"><span class="nav-icon">📊</span><span class="nav-label">Kameraübersicht</span></a>
         <a href="#timeline" title="Timeline"><span class="nav-icon">⏱</span><span class="nav-label">Timeline</span></a>
+        <a href="#statistik" title="Statistik"><span class="nav-icon">📈</span><span class="nav-label">Statistik</span></a>
         <a href="#media" title="Mediathek"><span class="nav-icon">🎞</span><span class="nav-label">Mediathek</span></a>
         <a href="#cameras" title="Kameras"><span class="nav-icon">📷</span><span class="nav-label">Kameras</span></a>
-        <a href="#groups" title="Kameragruppen"><span class="nav-icon">🗂</span><span class="nav-label">Kameragruppen</span></a>
-        <a href="#profiles" title="Profile"><span class="nav-icon">👤</span><span class="nav-label">Profile</span></a>
-        <a href="#telegram" title="Telegram"><span class="nav-icon">📨</span><span class="nav-label">Telegram</span></a>
         <a href="#achievements" title="Trophäen"><span class="nav-icon">🏆</span><span class="nav-label">Trophäen</span></a>
         <a href="#settings" title="Einstellungen"><span class="nav-icon">⚙️</span><span class="nav-label">Einstellungen</span></a>
         <a href="#logs" title="Logs"><span class="nav-icon">📋</span><span class="nav-label">Logs</span></a>
@@ -486,6 +484,17 @@
         </div>
       </section>
 
+      <section id="achievements" class="panel section">
+        <div class="section-head"><h3>🏆 Trophäen</h3><div class="muted">Erkannte Tierarten · Entdeckungstagebuch</div></div>
+        <div id="achievementsProgress" class="ach-progress-bar"></div>
+        <div class="ach-tabs">
+          <button class="ach-tab active" data-tab="all">Alle</button>
+          <button class="ach-tab" data-tab="birds">Vögel</button>
+          <button class="ach-tab" data-tab="mammals">Säugetiere</button>
+        </div>
+        <div id="achievementsGrid" class="ach-grid"></div>
+      </section>
+
       <section id="settings" class="panel section">
         <div class="section-head"><h3>Einstellungen</h3><div class="muted">App · Telegram · MQTT · Coral · Speicher · Import/Export</div></div>
 
@@ -578,17 +587,6 @@
 
           <button type="submit" class="settings-save-btn">💾 Speichern &amp; Neu laden</button>
         </form>
-      </section>
-
-      <section id="achievements" class="panel section">
-        <div class="section-head"><h3>🏆 Trophäen</h3><div class="muted">Erkannte Tierarten · Entdeckungstagebuch</div></div>
-        <div id="achievementsProgress" class="ach-progress-bar"></div>
-        <div class="ach-tabs">
-          <button class="ach-tab active" data-tab="all">Alle</button>
-          <button class="ach-tab" data-tab="birds">Vögel</button>
-          <button class="ach-tab" data-tab="mammals">Säugetiere</button>
-        </div>
-        <div id="achievementsGrid" class="ach-grid"></div>
       </section>
 
       <section id="logs" class="panel section">
