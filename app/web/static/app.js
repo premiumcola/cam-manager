@@ -31,6 +31,7 @@ function _resolveConfirm(val){
 }
 // Wire confirm buttons after DOM ready (done at bottom of file)
 const colors={bird:'#70d6ff',cat:'#ff8cc6',person:'#ffd166',car:'#9c89ff',motion:'#7ee787',alarm:'#ff6b6b',unknown:'#91a4b8'};
+function getCameraIcon(name){const n=(name||'').toLowerCase();if(/werkstatt|garage|keller|labor/.test(n))return'🔧';if(/eingang|tor|tür|door/.test(n))return'🚪';if(/garten|garden|außen|outdoor/.test(n))return'🌿';if(/eichhörnchen|squirrel|tier|animal|natur/.test(n))return'🐿️';if(/vogel|bird|futter|feeder/.test(n))return'🐦';if(/parkplatz|auto|car/.test(n))return'🚗';if(/pool|wasser|water/.test(n))return'💧';return'📷';}
 const shapeState={mode:'zone',points:[],camera:null,zones:[],masks:[]};
 const byId=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
@@ -287,8 +288,12 @@ function renderTimeline(){
   let out=`<rect x="0" y="0" width="${w}" height="${h}" fill="#0b131b" rx="18"/>`;
   tracks.forEach((tr,i)=>{
     out+=`<line x1="${left}" y1="${yOf(i)}" x2="${w-right}" y2="${yOf(i)}" stroke="#213241" stroke-width="1"/>`;
-    const label=tr.camera_id.length>16?tr.camera_id.slice(0,15)+'…':tr.camera_id;
-    out+=`<text x="18" y="${yOf(i)+5}" fill="#91a4b8" font-size="13">${esc(label)}</text>`;
+    const _cam=(state.config?.cameras||[]).find(c=>c.id===tr.camera_id)||{};
+    const _icon=_cam.icon||getCameraIcon(_cam.name||tr.camera_id);
+    const _sname=(_cam.name||tr.camera_id);
+    const _shortName=_sname.length>10?_sname.slice(0,10)+'…':_sname;
+    out+=`<text x="8" y="${yOf(i)+6}" font-size="16" dominant-baseline="middle">${_icon}</text>`;
+    out+=`<text x="30" y="${yOf(i)+5}" fill="#91a4b8" font-size="11">${esc(_shortName)}</text>`;
   });
   // X-axis time labels
   for(let k=0;k<6;k++){
@@ -449,6 +454,7 @@ function editCamera(camId){
   const f=byId('cameraForm').elements;
   f['id'].value=c.id||''; f['id'].dataset.autoGen='0';
   f['name'].value=c.name||''; f['location'].value=c.location||'';
+  if(f['icon']) f['icon'].value=c.icon||getCameraIcon(c.name||c.id);
   byId('cameraEditTitle').textContent=`Kamera bearbeiten · ${c.name||c.id}`;
   const p=parseRtspUrl(c.rtsp_url||'');
   f['rtsp_ip'].value=p.host||''; f['rtsp_user'].value=p.user||''; f['rtsp_pass'].value=p.pass||''; f['rtsp_port'].value=p.port||'554';
@@ -868,6 +874,7 @@ window.applyDiscoveryRtsp=(ip)=>{
 byId('cameraForm').onsubmit=async(e)=>{
   e.preventDefault(); const f=e.target.elements;
   const payload={id:f['id'].value,name:f['name'].value,location:f['location'].value,
+    icon:f['icon']?.value||getCameraIcon(f['name'].value),
     rtsp_url:f['rtsp_url'].value,snapshot_url:f['snapshot_url'].value,
     username:f['rtsp_user']?.value||'',password:f['rtsp_pass']?.value||'',
     group_id:f['group_id'].value,role:f['group_id'].selectedOptions[0]?.textContent||f['group_id'].value,
