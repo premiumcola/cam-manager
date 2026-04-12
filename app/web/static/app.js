@@ -521,39 +521,102 @@ function renderGroups(){
   </div>`).join('');
 }
 
+const _GRP_COARSE=['person','cat','bird','car','motion'];
+const _GRP_ICONS={person:'👤',cat:'🐱',bird:'🐦',car:'🚗',motion:'〰️'};
+const _GRP_CATS=['Sicherheit','Bereichsübersicht','Tierbeobachtung','Eingangskamera','Sonstiges'];
+function _groupGenId(name){
+  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+}
+function _groupTimeOpts(sel){
+  let s='';for(let h=0;h<24;h++)for(let m of[0,30]){const v=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');s+=`<option${v===sel?' selected':''}>${v}</option>`;}return s;
+}
+function _groupTimeSelect(name,val){
+  return `<select name="${name}" style="background:var(--surface);color:var(--text);border:none;border-radius:10px;padding:7px 10px;font:inherit;font-size:13px">${_groupTimeOpts(val)}</select>`;
+}
+const _GRP_INPUT='background:var(--surface);color:var(--text);border:none;border-radius:10px;padding:9px 12px;width:100%;font:inherit;box-sizing:border-box';
+const _GRP_SELECT='background:var(--surface);color:var(--text);border:none;border-radius:10px;padding:9px 12px;width:100%;font:inherit';
 function groupEditHTML(g){
   const s=g.schedule||{};
-  return `<div class="group-inline"><form class="form" onsubmit="saveGroup(event)">
-    <div class="field-wrap"><input name="id" value="${esc(g.id)}" required /><span class="field-label">Eindeutige ID – keine Leerzeichen</span></div>
-    <div class="field-wrap"><input name="name" value="${esc(g.name||'')}" required /><span class="field-label">Anzeigename</span></div>
-    <div class="field-wrap"><input name="category" value="${esc(g.category||'')}" required /><span class="field-label">Kategorie</span></div>
-    <div class="field-wrap"><select name="alarm_profile">${['hard','medium','soft','info'].map(p=>`<option${g.alarm_profile===p?' selected':''}>${p}</option>`).join('')}</select><span class="field-label">Alarmprofil</span></div>
-    <div class="field-wrap"><input name="coarse_objects" value="${esc((g.coarse_objects||[]).join(', '))}" placeholder="person, cat, bird, car, motion" /><span class="field-label">Grob-Objekte – kommagetrennt</span></div>
-    <div class="field-wrap"><input name="fine_models" value="${esc((g.fine_models||[]).join(', '))}" placeholder="bird_species, cat_identity, person_identity" /><span class="field-label">Fine-Models – kommagetrennt</span></div>
-    <div class="settings-divider">Zeitplan</div>
-    <label class="toggle-row"><span>Zeitplan aktiv</span><label class="switch"><input type="checkbox" name="schedule_enabled"${s.enabled?' checked':''} /><span class="slider"></span></label></label>
-    <div class="row" style="grid-template-columns:1fr 1fr">
-      <div class="field-wrap"><input name="schedule_start" value="${esc(s.start||'')}" placeholder="22:00" /><span class="field-label">Von</span></div>
-      <div class="field-wrap"><input name="schedule_end" value="${esc(s.end||'')}" placeholder="06:00" /><span class="field-label">Bis</span></div>
+  const isNew=!g.id;
+  const active=new Set(g.coarse_objects||[]);
+  const fm=new Set(g.fine_models||[]);
+  const pills=_GRP_COARSE.map(obj=>{
+    const on=active.has(obj);
+    return `<button type="button" class="grp-obj-pill${on?' active':''}" data-obj="${obj}"
+      style="padding:7px 14px;border-radius:999px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;background:${on?'var(--accent)':'var(--surface)'};color:${on?'#fff':'var(--muted)'}">${_GRP_ICONS[obj]} ${obj}</button>`;
+  }).join('');
+  return `<div class="group-inline"><form class="group-edit-grid" onsubmit="saveGroup(event)">
+    <input type="hidden" name="id" value="${esc(g.id||'')}" />
+    <div style="grid-column:1/-1">
+      <input name="name" value="${esc(g.name||'')}" placeholder="Anzeigename" required style="${_GRP_INPUT}"
+        oninput="(()=>{const f=this.closest('form');const el=f.querySelector('.grp-gen-id');if(el&&!f.elements['id'].value)el.textContent='ID: '+_groupGenId(this.value);})()"/>
+      <div class="grp-gen-id small muted" style="margin-top:4px;padding-left:4px">${isNew?'ID: auto':'ID: '+esc(g.id)}</div>
     </div>
-    <div style="display:flex;gap:10px;margin-top:8px">
-      <button style="flex:1">Gruppe speichern</button>
-      <button type="button" class="ghost" style="flex:0 0 auto" onclick="this.closest('.group-inline').remove()">Abbrechen</button>
+    <div><select name="category" style="${_GRP_SELECT}">${_GRP_CATS.map(c=>`<option${g.category===c?' selected':''}>${esc(c)}</option>`).join('')}</select><span class="field-label">Kategorie</span></div>
+    <div><select name="alarm_profile" style="${_GRP_SELECT}">${['hard','medium','soft','info'].map(p=>`<option${g.alarm_profile===p?' selected':''}>${p}</option>`).join('')}</select><span class="field-label">Alarmprofil</span></div>
+    <div style="grid-column:1/-1">
+      <div class="grp-obj-pills" style="display:flex;gap:8px;flex-wrap:wrap">${pills}</div>
+      <input type="hidden" name="coarse_objects" value="${esc((g.coarse_objects||[]).join(','))}" />
+      <span class="field-label" style="margin-top:6px;display:block">Grob-Objekte</span>
+    </div>
+    <div style="grid-column:1/-1;display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding:4px 0">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="fm_bird"${fm.has('bird_species')?' checked':''} style="width:auto;accent-color:var(--accent)" /> Vogelarten</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="fm_cat"${fm.has('cat_identity')?' checked':''} style="width:auto;accent-color:var(--accent)" /> Katzen-ID</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="fm_person"${fm.has('person_identity')?' checked':''} style="width:auto;accent-color:var(--accent)" /> Personen-ID</label>
+      <span class="field-label" style="margin-left:auto">Fine-Models</span>
+    </div>
+    <div style="grid-column:1/-1;display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-height:44px">
+      <label class="switch"><input type="checkbox" name="schedule_enabled"${s.enabled?' checked':''}
+        onchange="this.closest('form').querySelector('.grp-sched-times').style.display=this.checked?'flex':'none'" /><span class="slider"></span></label>
+      <span style="font-size:13px;font-weight:600">Zeitplan</span>
+      <div class="grp-sched-times" style="display:${s.enabled?'flex':'none'};align-items:center;gap:8px">
+        ${_groupTimeSelect('schedule_start',s.start||'22:00')}
+        <span class="muted" style="font-size:13px">→</span>
+        ${_groupTimeSelect('schedule_end',s.end||'06:00')}
+      </div>
+    </div>
+    <div style="grid-column:1/-1;display:flex;gap:10px;margin-top:4px">
+      <button type="button" style="background:var(--surface);color:var(--text);border:none;border-radius:12px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer" onclick="this.closest('.group-inline').remove()">Abbrechen</button>
+      <button type="submit" style="flex:1;min-height:42px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer">Gruppe speichern</button>
     </div>
   </form></div>`;
+}
+function _wireGroupPills(form){
+  form.querySelectorAll('.grp-obj-pill').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      btn.classList.toggle('active');
+      const on=btn.classList.contains('active');
+      btn.style.background=on?'var(--accent)':'var(--surface)';
+      btn.style.color=on?'#fff':'var(--muted)';
+      const h=form.querySelector('[name="coarse_objects"]');
+      if(h) h.value=[...form.querySelectorAll('.grp-obj-pill.active')].map(b=>b.dataset.obj).join(',');
+    });
+  });
 }
 function toggleGroupEdit(g){
   document.querySelectorAll('.group-inline').forEach(el=>el.remove());
   const item=document.querySelector('[data-gid="'+g.id+'"]');
   if(!item) return;
   item.insertAdjacentHTML('afterend',groupEditHTML(g));
+  const form=item.nextElementSibling?.querySelector('form');
+  if(form) _wireGroupPills(form);
   item.nextElementSibling?.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 window.toggleGroupEdit=toggleGroupEdit;
 async function saveGroup(e){
   e.preventDefault();
   const f=e.target.elements;
-  const payload={id:f['id'].value,name:f['name'].value,category:f['category'].value,alarm_profile:f['alarm_profile'].value,coarse_objects:f['coarse_objects'].value.split(',').map(x=>x.trim()).filter(Boolean),fine_models:f['fine_models'].value.split(',').map(x=>x.trim()).filter(Boolean),schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'}};
+  const name=f['name'].value;
+  const id=f['id'].value||_groupGenId(name);
+  const fine_models=[
+    ...(f['fm_bird']?.checked?['bird_species']:[]),
+    ...(f['fm_cat']?.checked?['cat_identity']:[]),
+    ...(f['fm_person']?.checked?['person_identity']:[]),
+  ];
+  const payload={id,name,category:f['category'].value,alarm_profile:f['alarm_profile'].value,
+    coarse_objects:f['coarse_objects'].value.split(',').map(x=>x.trim()).filter(Boolean),
+    fine_models,
+    schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'}};
   await fetch('/api/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   await loadAll();
 }
@@ -947,7 +1010,9 @@ byId('closeCameraEdit').onclick=()=>_closeEditPanel();
 byId('addGroupBtn').onclick=(e)=>{
   e.stopPropagation();
   document.querySelectorAll('.group-inline').forEach(el=>el.remove());
-  byId('groupList').insertAdjacentHTML('beforeend',groupEditHTML({id:'',name:'',category:'',alarm_profile:'soft',coarse_objects:[],fine_models:[],schedule:{enabled:false,start:'22:00',end:'06:00'}}));
+  byId('groupList').insertAdjacentHTML('beforeend',groupEditHTML({id:'',name:'',category:'Sonstiges',alarm_profile:'soft',coarse_objects:[],fine_models:[],schedule:{enabled:false,start:'22:00',end:'06:00'}}));
+  const form=byId('groupList').lastElementChild?.querySelector('form');
+  if(form) _wireGroupPills(form);
   byId('groupList').lastElementChild.scrollIntoView({behavior:'smooth',block:'nearest'});
 };
 // ── Section-level save functions ──────────────────────────────────────────────
