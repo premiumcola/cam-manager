@@ -238,6 +238,23 @@ def api_settings_cameras_save():
     return jsonify({"ok": True, "camera": settings.get_camera(payload["id"])})
 
 
+@app.post('/api/camera/<cam_id>/reload')
+def api_camera_reload(cam_id: str):
+    global cfg
+    # Stop existing runtime for this camera only
+    existing = runtimes.pop(cam_id, None)
+    if existing:
+        existing.stop()
+    # Reload config and start fresh runtime for this camera
+    cfg = get_effective_config()
+    cam_cfg = settings.get_camera(cam_id)
+    if cam_cfg and cam_cfg.get("enabled", True):
+        rt = CameraRuntime(cam_id, get_camera_cfg, cfg, store, telegram_service, mqtt=mqtt_service, cat_registry=cat_registry, person_registry=person_registry)
+        runtimes[cam_id] = rt
+        rt.start()
+    return jsonify({"ok": True, "cam_id": cam_id})
+
+
 @app.delete('/api/settings/cameras/<cam_id>')
 def api_settings_cameras_delete(cam_id):
     # Count existing events so the frontend can warn the user

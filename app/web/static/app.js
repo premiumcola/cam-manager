@@ -1017,7 +1017,9 @@ byId('cameraForm').onsubmit=async(e)=>{
     motion_sensitivity:parseFloat(f['motion_sensitivity']?.value||0.5),
     zones:JSON.parse(f['zones_json'].value||'[]'),masks:JSON.parse(f['masks_json'].value||'[]')};
   const _savedId=payload.id; _restoreEditWrapper();
-  await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll(); editCamera(_savedId);
+  await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  await fetch(`/api/camera/${encodeURIComponent(_savedId)}/reload`,{method:'POST'});
+  await loadAll(); editCamera(_savedId);
 };
 byId('closeCameraEdit').onclick=()=>_closeEditPanel();
 byId('addGroupBtn').onclick=(e)=>{
