@@ -151,19 +151,41 @@
           </div>
         </div>
         <div id="mediaStorageBar" class="media-storage-bar"></div>
+        <!-- Filter pills (always visible) -->
+        <div class="media-filter-bar">
+          <div class="pill-group">
+            <button class="media-pill" data-type="label" data-val="">Alle</button>
+            <button class="media-pill" data-type="label" data-val="person">👤 Person</button>
+            <button class="media-pill" data-type="label" data-val="cat">🐱 Katze</button>
+            <button class="media-pill" data-type="label" data-val="bird">🐦 Vogel</button>
+            <button class="media-pill" data-type="label" data-val="car">🚗 Auto</button>
+            <button class="media-pill" data-type="label" data-val="motion">〰️ Motion</button>
+          </div>
+          <div class="pill-group">
+            <button class="media-pill" data-type="period" data-val="day">Heute</button>
+            <button class="media-pill" data-type="period" data-val="week">7 Tage</button>
+            <button class="media-pill" data-type="period" data-val="month">Monat</button>
+          </div>
+        </div>
         <!-- Level 1: Camera overview cards -->
         <div id="mediaOverview" class="media-overview-grid"></div>
         <!-- Level 2: Per-camera drill-down -->
         <div id="mediaDrilldown" style="display:none">
           <div class="media-drill-head">
             <button type="button" class="media-drill-back" onclick="closeMediaDrilldown()">← Alle Kameras</button>
-            <select id="mediaDrillLabel" onchange="state.mediaLabel=this.value;loadMedia().then(()=>renderMediaGrid())">
-              <option value="">Alle Objekte</option>
-              <option>person</option><option>cat</option><option>bird</option><option>car</option><option>motion</option>
-            </select>
-            <select id="mediaDrillPeriod" onchange="state.mediaPeriod=this.value;loadMedia().then(()=>renderMediaGrid())">
-              <option value="day">Tag</option><option value="week" selected>Woche</option><option value="month">Monat</option>
-            </select>
+            <div class="pill-group">
+              <button class="media-pill" data-type="label" data-val="">Alle</button>
+              <button class="media-pill" data-type="label" data-val="person">👤 Person</button>
+              <button class="media-pill" data-type="label" data-val="cat">🐱 Katze</button>
+              <button class="media-pill" data-type="label" data-val="bird">🐦 Vogel</button>
+              <button class="media-pill" data-type="label" data-val="car">🚗 Auto</button>
+              <button class="media-pill" data-type="label" data-val="motion">〰️ Motion</button>
+            </div>
+            <div class="pill-group">
+              <button class="media-pill" data-type="period" data-val="day">Heute</button>
+              <button class="media-pill" data-type="period" data-val="week">7 Tage</button>
+              <button class="media-pill" data-type="period" data-val="month">Monat</button>
+            </div>
           </div>
           <div id="mediaGrid" class="media-grid"></div>
           <div id="mediaLoadMoreBtn" style="text-align:center;margin-top:10px;display:none">

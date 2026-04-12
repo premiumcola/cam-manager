@@ -117,14 +117,25 @@ async function loadAll(){
   byId('openWizardBtn').classList.toggle('hidden', !!state.bootstrap?.wizard_completed || !state.bootstrap?.needs_wizard);
 }
 
+function _mediaPeriodParams(){
+  const p=state.mediaPeriod||'week';
+  const now=new Date();
+  const end=now.toISOString().slice(0,10);
+  let start;
+  if(p==='day') start=end;
+  else if(p==='month'){const d=new Date(now);d.setDate(d.getDate()-30);start=d.toISOString().slice(0,10);}
+  else{const d=new Date(now);d.setDate(d.getDate()-7);start=d.toISOString().slice(0,10);}
+  return `&start=${start}&end=${end}`;
+}
 async function loadMedia(append=false){
   const LIMIT=Number(byId('ms_media_limit')?.value)||24;
   if(!append){ state.media=[]; state.mediaOffset=0; }
   const cams = state.mediaCamera ? [state.mediaCamera] : state.cameras.map(c=>c.id);
   const page=[];
   let hasMore=false;
+  const periodParams=_mediaPeriodParams();
   for(const camId of cams){
-    const data=await j(`/api/camera/${camId}/media?limit=${LIMIT}&offset=${state.mediaOffset||0}${state.mediaLabel?`&label=${encodeURIComponent(state.mediaLabel)}`:''}`);
+    const data=await j(`/api/camera/${camId}/media?limit=${LIMIT}&offset=${state.mediaOffset||0}${state.mediaLabel?`&label=${encodeURIComponent(state.mediaLabel)}`:''}${periodParams}`);
     const items=data.items||[];
     if(items.length>=LIMIT) hasMore=true;
     for(const item of items) page.push({...item,camera_id:camId});
@@ -1174,8 +1185,7 @@ function renderMediaGrid(){
 async function openMediaDrilldown(camId){
   state.mediaCamera=camId;
   state.mediaLabel=''; state.mediaPeriod='week';
-  const dl=byId('mediaDrillLabel'); if(dl) dl.value='';
-  const dp=byId('mediaDrillPeriod'); if(dp) dp.value='week';
+  syncMediaPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
   // highlight active card
@@ -1188,6 +1198,25 @@ function closeMediaDrilldown(){
   byId('mediaDrilldown').style.display='none';
   byId('mediaOverview').style.display='';
 }
+function syncMediaPills(){
+  document.querySelectorAll('.media-pill[data-type="label"]').forEach(p=>{
+    p.classList.toggle('active',p.dataset.val===state.mediaLabel);
+  });
+  document.querySelectorAll('.media-pill[data-type="period"]').forEach(p=>{
+    p.classList.toggle('active',p.dataset.val===state.mediaPeriod);
+  });
+}
+(function initMediaPills(){
+  document.querySelectorAll('.media-pill').forEach(p=>{
+    p.addEventListener('click',()=>{
+      if(p.dataset.type==='label') state.mediaLabel=p.dataset.val;
+      else state.mediaPeriod=p.dataset.val;
+      syncMediaPills();
+      if(state.mediaCamera) loadMedia().then(()=>renderMediaGrid());
+    });
+  });
+  syncMediaPills();
+})();
 window.deleteMediaCard=async(btn)=>{
   const card=btn.closest('.media-card');
   const eventId=card?.dataset.eventId;
