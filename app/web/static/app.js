@@ -1,5 +1,5 @@
 
-const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabel:'',mediaPeriod:'week',tlRangeIndex:3};
+const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabel:'',mediaPeriod:'week',tlHours:12};
 
 // ── Toast & Confirm helpers ───────────────────────────────────────────────────
 window.showToast=function(msg,type='info'){
@@ -233,19 +233,6 @@ function renderDashboard(){
 }
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
-const TL_RANGES=[
-  {label:'1h',   hours:1},
-  {label:'2h',   hours:2},
-  {label:'4h',   hours:4},
-  {label:'8h',   hours:8},
-  {label:'12h',  hours:12},
-  {label:'24h',  hours:24},
-  {label:'3 Tage', hours:72},
-  {label:'7 Tage', hours:168},
-  {label:'30 Tage',hours:720},
-];
-const TL_HOURS=TL_RANGES.map(r=>r.hours);
-const TL_LABELS=TL_RANGES.map(r=>r.label);
 const TL_LANES=['person','cat','bird','car','motion'];
 const GAP_MS=2*60*1000;
 
@@ -269,15 +256,27 @@ function _tlGroupLane(points, label, tMin, tMax){
   return groups;
 }
 
+function _tlFmtTs(ts, hours){
+  const d=new Date(ts);
+  if(hours<=3) return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+  if(hours<=24) return d.getHours().toString().padStart(2,'0')+':00';
+  if(hours<=168) return ['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1);
+  return d.getDate()+'.'+(d.getMonth()+1)+'.';
+}
+
 function renderTimeline(){
   const container=byId('timelineContainer'); if(!container) return;
   const tracks=state.timeline?.tracks||[];
+
+  // Update slider label
+  const hours=state.tlHours||12;
+  const lbl=byId('tlRangeLabel');
+  if(lbl) lbl.textContent=hours<24?`letzte ${hours}h`:`${Math.round(hours/24)} Tage`;
+
   if(!tracks.length){ container.innerHTML='<div class="tl-empty">Keine Ereignisse im gewählten Zeitraum.</div>'; return; }
 
-  const idx=state.tlRangeIndex??2;
-  const lbl=byId('tlRangeLabel'); if(lbl) lbl.textContent=TL_LABELS[idx];
   const now=Date.now();
-  const tMin=now-TL_HOURS[idx]*3600000;
+  const tMin=now-hours*3600000;
   const tMax=now;
   const span=tMax-tMin;
 
@@ -286,40 +285,36 @@ function renderTimeline(){
     const cam=(state.config?.cameras||[]).find(c=>c.id===tr.camera_id)||{};
     const camIcon=cam.icon||getCameraIcon(cam.name||tr.camera_id);
     const camName=cam.name||tr.camera_id;
-    if(ti>0) html+=`<div class="tl-separator"></div>`;
-    html+=`<div class="tl-camera-block">`;
-    html+=`<div class="tl-cam-name"><span style="font-size:15px">${camIcon}</span><span>${esc(camName)}</span></div>`;
+    if(ti>0) html+=`<div class="tl-sep"></div>`;
+    html+=`<div class="tl-cam-block">`;
+    html+=`<div class="tl-cam-header"><span style="font-size:20px">${camIcon}</span><span style="font-size:16px;font-weight:800;color:#e0f0ff">${esc(camName)}</span></div>`;
     TL_LANES.forEach(label=>{
       const color=colors[label]||colors.unknown;
-      const icon=OBJ_ICONS[label]||'?';
-      const labelName=label.charAt(0).toUpperCase()+label.slice(1);
       const groups=_tlGroupLane(tr.points||[], label, tMin, tMax);
-      html+=`<div class="tl-lane-row">`;
-      html+=`<div class="tl-lane-label"><div class="tl-lane-icon"><span style="font-size:14px">${icon}</span><span style="font-size:10px;color:var(--muted)">${labelName}</span></div></div>`;
+      html+=`<div class="tl-lane">`;
+      html+=`<div class="tl-lane-icon">${OBJ_SVG[label]||''}</div>`;
       html+=`<div class="tl-track">`;
       groups.forEach(g=>{
         const leftPct=Math.max(0,(g.startTime-tMin)/span*100);
-        const widthPct=Math.max(1.5,Math.min((g.endTime-g.startTime)/span*100, 100-leftPct));
+        const widthPct=Math.max(0.8,Math.min((g.endTime-g.startTime)/span*100, 100-leftPct));
         if(leftPct>=100) return;
-        html+=`<div class="tl-bar" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;background:${color}" data-camid="${esc(tr.camera_id)}" data-label="${esc(label)}" title="${g.count} Events · ${label}"></div>`;
+        html+=`<div class="tl-bar" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;background:${color};opacity:0.85" data-camid="${esc(tr.camera_id)}" data-label="${esc(label)}" title="${g.count} Events · ${OBJ_LABEL[label]||label}"></div>`;
       });
       html+=`</div></div>`;
     });
     html+=`</div>`;
   });
 
-  // X-axis — adaptive labels by selected range
-  const hours=TL_HOURS[idx];
-  const fmtTs=(ts,h)=>{
-    const d=new Date(ts);
-    if(h<=24) return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
-    if(h<=168) return ['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1)+'.';
-    return d.getDate()+'.'+(d.getMonth()+1)+'.';
-  };
+  // X-axis — 6 evenly spaced labels
   html+=`<div class="tl-xaxis">`;
-  for(let k=0;k<5;k++) html+=`<span>${fmtTs(tMin+span*k/4,hours)}</span>`;
+  for(let k=0;k<6;k++) html+=`<span class="tl-xlabel">${_tlFmtTs(tMin+span*k/5,hours)}</span>`;
   html+=`</div>`;
   container.innerHTML=html;
+
+  // Timeline legend
+  const leg=byId('tlLegend');
+  if(leg) leg.innerHTML=`<span style="font-size:11px;color:var(--muted);margin-right:4px">Objekte:</span>`+
+    TL_LANES.map(l=>`<span style="display:inline-flex;align-items:center;gap:5px">${objBubble(l,20)}</span>`).join('');
 
   // Bar click → navigate to Mediathek
   container.querySelectorAll('.tl-bar').forEach(bar=>{
@@ -870,7 +865,7 @@ async function finishWizard(){
 }
 
 byId('reloadConfigBtn').onclick=()=>loadAll();
-byId('tlRangeSlider').addEventListener('input',e=>{state.tlRangeIndex=Number(e.target.value); renderTimeline();});
+byId('tlRangeSlider').addEventListener('input',e=>{state.tlHours=parseInt(e.target.value); renderTimeline();});
 // alias so discovery modal code still works
 const RTSP_PATHS=RTSP_PATH_OPTS;
 
@@ -1420,6 +1415,12 @@ function syncMediaPills(){
   });
 }
 (function initMediaPills(){
+  document.querySelectorAll('.media-pill[data-label-key]').forEach(p=>{
+    const key=p.dataset.labelKey;
+    if(key&&OBJ_SVG[key]){
+      p.innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px;pointer-events:none">${objBubble(key,18)}<span>${OBJ_LABEL[key]||key}</span></span>`;
+    }
+  });
   document.querySelectorAll('.media-pill').forEach(p=>{
     p.addEventListener('click',()=>{
       if(p.dataset.type==='label') state.mediaLabel=p.dataset.val;

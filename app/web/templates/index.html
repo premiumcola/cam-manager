@@ -128,20 +128,13 @@
         <div class="section-head">
           <h3>Timeline</h3>
           <div class="tl-range-wrap">
-            <span id="tlRangeLabel" class="tl-range-label">8h</span>
-            <input type="range" id="tlRangeSlider" min="0" max="8" value="3" step="1" class="tl-range-slider" />
+            <span id="tlRangeLabel" class="tl-range-label">letzte 12h</span>
+            <input type="range" id="tlRangeSlider" min="1" max="720" value="12" step="1" style="width:180px;accent-color:var(--accent);cursor:pointer" />
           </div>
           <span class="section-subtitle">Zeitachse je Kamera</span>
         </div>
         <div id="timelineContainer" class="tl-container"></div>
-        <div class="timeline-legend">
-          <span class="tl-leg-item">👤 Person</span>
-          <span class="tl-leg-item">🐱 Katze</span>
-          <span class="tl-leg-item">🐦 Vogel</span>
-          <span class="tl-leg-item">🚗 Auto</span>
-          <span class="tl-leg-item">〰️ Motion</span>
-          <span class="tl-leg-item">🚨 Alarm</span>
-        </div>
+        <div id="tlLegend" class="timeline-legend"></div>
       </section>
 
       <section id="statistik" class="panel section">
@@ -157,11 +150,11 @@
         <!-- Filter bar: object pills + divider + period pills in one row -->
         <div class="media-filter-bar">
           <button class="media-pill" data-type="label" data-val="">Alle</button>
-          <button class="media-pill" data-type="label" data-val="person">👤 Person</button>
-          <button class="media-pill" data-type="label" data-val="cat">🐱 Katze</button>
-          <button class="media-pill" data-type="label" data-val="bird">🐦 Vogel</button>
-          <button class="media-pill" data-type="label" data-val="car">🚗 Auto</button>
-          <button class="media-pill" data-type="label" data-val="motion">〰️ Motion</button>
+          <button class="media-pill" data-type="label" data-val="person" data-label-key="person">Person</button>
+          <button class="media-pill" data-type="label" data-val="cat" data-label-key="cat">Katze</button>
+          <button class="media-pill" data-type="label" data-val="bird" data-label-key="bird">Vogel</button>
+          <button class="media-pill" data-type="label" data-val="car" data-label-key="car">Auto</button>
+          <button class="media-pill" data-type="label" data-val="motion" data-label-key="motion">Bewegung</button>
           <span class="filter-divider"></span>
           <button class="media-pill" data-type="period" data-val="day">Heute</button>
           <button class="media-pill" data-type="period" data-val="week">7 Tage</button>
