@@ -397,7 +397,7 @@ function renderCameraSettings(){
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <span class="badge ${stCol(c.status)}">${esc(c.status||'—')}</span>
           <span class="badge ${c.armed?'danger':'good'}">${c.armed?'scharf':'unscharf'}</span>
-          <button class="cam-edit-toggle" onclick="editCamera('${esc(c.id)}')">✏️ Bearbeiten</button>
+          <button class="btn-action" onclick="editCamera('${esc(c.id)}')">✏️ Bearbeiten</button>
         </div>
       </div>
     </div>`).join('');
@@ -506,7 +506,7 @@ byId('deleteCameraBtn').onclick=async()=>{
   await loadAll();
 };
 
-function renderGroups(){ byId('groupList').innerHTML=state.groups.map(g=>`<div class="item" data-gid="${esc(g.id)}"><div class="item-head"><strong>${esc(g.name)}</strong><button class="action-btn" onclick='toggleGroupEdit(${JSON.stringify(g).replace(/'/g,"&apos;")})'>Bearbeiten</button></div><div class="small">${esc(g.category)} · ${esc(g.alarm_profile)} · ${(g.fine_models||[]).join(', ')||'ohne Feinstufe'}</div></div>`).join(''); }
+function renderGroups(){ byId('groupList').innerHTML=state.groups.map(g=>`<div class="item" data-gid="${esc(g.id)}"><div class="item-head"><strong>${esc(g.name)}</strong><button class="btn-action" onclick='toggleGroupEdit(${JSON.stringify(g).replace(/'/g,"&apos;")})'>✏️ Bearbeiten</button></div><div class="small">${esc(g.category)} · ${esc(g.alarm_profile)} · ${(g.fine_models||[]).join(', ')||'ohne Feinstufe'}</div></div>`).join(''); }
 
 function groupEditHTML(g){
   const s=g.schedule||{};

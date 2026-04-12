@@ -114,8 +114,8 @@
           <p class="muted">Desktop-first, iOS-tauglich, mit Timeline, Mediathek, Kameragruppen, Preset-Telegram-Menü und MQTT-Basis für Home Assistant.</p>
         </div>
         <div class="hero-actions">
-          <button id="discoverBtn" class="ghost">Netzwerk-Discovery</button>
-          <button id="openWizardBtn" class="ghost hidden">Setup-Wizard</button>
+          <button id="discoverBtn" class="btn-action ghost">🔍 Netzwerk-Discovery</button>
+          <button id="openWizardBtn" class="btn-action ghost hidden">⚙️ Setup-Wizard</button>
           <span id="liveIndicator" class="live-dot hidden" title="Live-Update aktiv"></span>
         </div>
       </section>
@@ -147,7 +147,7 @@
           <h3>Mediathek</h3>
           <div style="display:flex;gap:10px;align-items:center">
             <div class="muted">Letzte Erkennungen, Clips, Reviews</div>
-            <button type="button" id="rescanMediaBtn" class="add-btn">🔍 Neu scannen</button>
+            <button type="button" id="rescanMediaBtn" class="btn-action">🔄 Neu scannen</button>
           </div>
         </div>
         <div id="mediaStorageBar" class="media-storage-bar"></div>
@@ -213,8 +213,8 @@
                 </label>
               </div>
               <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-                <button type="button" id="purgeOrphansBtn" class="ghost">🗑 Verwaiste Events</button>
-                <button type="button" id="cleanupNowBtn" class="ghost">🧹 Jetzt bereinigen</button>
+                <button type="button" id="purgeOrphansBtn" class="btn-action ghost">🗑 Verwaiste Events</button>
+                <button type="button" id="cleanupNowBtn" class="btn-action ghost">🧹 Jetzt bereinigen</button>
                 <button type="submit" style="margin-left:auto">Speichern</button>
               </div>
             </form>
@@ -331,7 +331,7 @@
           <h3>Kameragruppen</h3>
           <div style="display:flex;gap:12px;align-items:center">
             <div class="muted">Rollen, Alarmprofil, Modellstapel</div>
-            <button type="button" id="addGroupBtn" class="add-btn">+ Neue Gruppe</button>
+            <button type="button" id="addGroupBtn" class="btn-action">+ Neue Gruppe</button>
           </div>
         </div>
         <div id="groupList" class="list"></div>
@@ -373,7 +373,7 @@
               </div>
               <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
                 <button type="submit" class="settings-save-btn" style="flex:1;min-width:160px;margin-top:0">💾 Verbindung speichern</button>
-                <button type="button" id="telegramTestBtn" class="action-btn" style="flex:0 0 auto;min-height:44px">📨 Testnachricht</button>
+                <button type="button" id="telegramTestBtn" class="btn-action">📨 Testnachricht</button>
                 <span id="telegramTestResult" class="small" style="display:none"></span>
               </div>
             </form>
@@ -600,8 +600,8 @@
               <option value="WARNING">WARNING</option>
               <option value="ERROR">ERROR</option>
             </select>
-            <button id="logRefreshBtn" class="add-btn" type="button">Aktualisieren</button>
-            <button id="logClearBtn" class="add-btn" style="background:#374151" type="button">Leeren</button>
+            <button id="logRefreshBtn" class="btn-action" type="button">🔄 Aktualisieren</button>
+            <button id="logClearBtn" class="btn-action" type="button">🗑 Leeren</button>
           </div>
         </div>
         <div id="logOutput" class="log-output"></div>
