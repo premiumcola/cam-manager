@@ -506,7 +506,15 @@ byId('deleteCameraBtn').onclick=async()=>{
   await loadAll();
 };
 
-function renderGroups(){ byId('groupList').innerHTML=state.groups.map(g=>`<div class="item" data-gid="${esc(g.id)}"><div class="item-head"><strong>${esc(g.name)}</strong><button class="btn-action" onclick='toggleGroupEdit(${JSON.stringify(g).replace(/'/g,"&apos;")})'>✏️ Bearbeiten</button></div><div class="small">${esc(g.category)} · ${esc(g.alarm_profile)} · ${(g.fine_models||[]).join(', ')||'ohne Feinstufe'}</div></div>`).join(''); }
+function renderGroups(){
+  byId('groupList').innerHTML=state.groups.map(g=>`<div class="group-row" data-gid="${esc(g.id)}">
+    <div class="group-row-info">
+      <strong style="font-size:13px">${esc(g.name)}</strong>
+      <span class="small muted">${esc(g.category)} · ${esc(g.alarm_profile)} · ${(g.fine_models||[]).join(', ')||'ohne Feinstufe'}</span>
+    </div>
+    <button class="btn-action" onclick='toggleGroupEdit(${JSON.stringify(g).replace(/'/g,"&apos;")})'>✏️ Bearbeiten</button>
+  </div>`).join('');
+}
 
 function groupEditHTML(g){
   const s=g.schedule||{};
@@ -533,8 +541,8 @@ function toggleGroupEdit(g){
   document.querySelectorAll('.group-inline').forEach(el=>el.remove());
   const item=document.querySelector('[data-gid="'+g.id+'"]');
   if(!item) return;
-  item.insertAdjacentHTML('beforeend',groupEditHTML(g));
-  item.scrollIntoView({behavior:'smooth',block:'nearest'});
+  item.insertAdjacentHTML('afterend',groupEditHTML(g));
+  item.nextElementSibling?.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 window.toggleGroupEdit=toggleGroupEdit;
 async function saveGroup(e){
@@ -548,7 +556,9 @@ window.saveGroup=saveGroup;
 
 async function renderProfiles(){
   const cats=await j('/api/cats'); const persons=await j('/api/persons');
-  byId('profileLists').innerHTML=`<div class="item"><strong>Katzen</strong><div class="small">${cats.profiles.map(p=>`${p.name}`).join(' · ')||'—'}</div></div><div class="item"><strong>Personen</strong><div class="small">${persons.profiles.map(p=>`${p.name}${p.whitelisted?' (Whitelist)':''}`).join(' · ')||'—'}</div></div>`;
+  const catEl=byId('catList'); const perEl=byId('personList');
+  if(catEl) catEl.innerHTML=cats.profiles.map(p=>`<div style="padding:3px 0;font-size:13px">${esc(p.name)}</div>`).join('')||'<span class="muted small">—</span>';
+  if(perEl) perEl.innerHTML=persons.profiles.map(p=>`<div style="padding:3px 0;font-size:13px">${esc(p.name)}${p.whitelisted?' <span class="muted small">(Whitelist)</span>':''}</div>`).join('')||'<span class="muted small">—</span>';
 }
 async function renderAudit(){ const actions=await j('/api/telegram/actions'); byId('auditPanel').innerHTML=actions.items.map(a=>`<div class="audit-item"><strong>${esc(a.action)}</strong><div class="small">${esc(a.time)}${a.camera_id?` · ${esc(a.camera_id)}`:''}</div></div>`).join('')||'<div class="audit-item">Noch keine Telegram-Aktionen.</div>'; }
 
@@ -889,9 +899,10 @@ byId('cameraForm').onsubmit=async(e)=>{
   await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); await loadAll(); editCamera(_savedId);
 };
 byId('closeCameraEdit').onclick=()=>_closeEditPanel();
-byId('addGroupBtn').onclick=()=>{
+byId('addGroupBtn').onclick=(e)=>{
+  e.stopPropagation();
   document.querySelectorAll('.group-inline').forEach(el=>el.remove());
-  byId('groupList').insertAdjacentHTML('beforeend',`<div class="item" data-gid="">${groupEditHTML({id:'',name:'',category:'',alarm_profile:'soft',coarse_objects:[],fine_models:[],schedule:{enabled:false,start:'22:00',end:'06:00'}})}</div>`);
+  byId('groupList').insertAdjacentHTML('beforeend',groupEditHTML({id:'',name:'',category:'',alarm_profile:'soft',coarse_objects:[],fine_models:[],schedule:{enabled:false,start:'22:00',end:'06:00'}}));
   byId('groupList').lastElementChild.scrollIntoView({behavior:'smooth',block:'nearest'});
 };
 byId('settingsForm').onsubmit=async(e)=>{

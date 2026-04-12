@@ -334,13 +334,11 @@
         <!-- Kameragruppen (outside settingsForm) -->
         <div class="set-section" id="set-groups">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-groups')">
-            <span class="set-icon">📁</span><span>Kameragruppen</span><span class="set-chevron">▶</span>
+            <span class="set-icon">📁</span><span>Kameragruppen</span>
+            <button type="button" id="addGroupBtn" class="btn-action" style="margin-left:auto;background:var(--accent);color:#fff;padding:4px 12px;font-size:12px;min-height:28px">+ Neue Gruppe</button>
           </button>
           <div class="set-bd"><div class="set-inner">
-            <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
-              <button type="button" id="addGroupBtn" class="btn-action">+ Neue Gruppe</button>
-            </div>
-            <div id="groupList" class="list"></div>
+            <div id="groupList"></div>
           </div></div>
         </div>
 
@@ -352,13 +350,17 @@
           <div class="set-bd"><div class="set-inner">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding-top:6px">
               <div>
-                <div class="muted small" style="margin-bottom:8px">Erkannte Profile</div>
-                <div id="profileLists" class="list"></div>
+                <div class="muted small" style="margin-bottom:6px;font-weight:600">Katzen</div>
+                <div id="catList"></div>
               </div>
               <div>
-                <div class="muted small" style="margin-bottom:8px">Telegram / MQTT / Audit</div>
-                <div id="auditPanel" class="audit"></div>
+                <div class="muted small" style="margin-bottom:6px;font-weight:600">Personen</div>
+                <div id="personList"></div>
               </div>
+            </div>
+            <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)">
+              <div class="muted small" style="margin-bottom:6px">Telegram / MQTT / Audit</div>
+              <div id="auditPanel" class="audit"></div>
             </div>
           </div></div>
         </div>
