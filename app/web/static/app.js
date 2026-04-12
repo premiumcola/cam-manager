@@ -1247,15 +1247,44 @@ byId('rescanMediaBtn')?.addEventListener('click',async()=>{
 // ── Lightbox / Media viewer ───────────────────────────────────────────────────
 let _lbItem=null;
 let _lbIndex=-1;
+let _lbDeletePending=false;
+function _lbHandleDeleteKey(){
+  if(!_lbItem) return;
+  if(_lbItem.confirmed&&!_lbDeletePending){
+    _lbDeletePending=true;
+    const btn=byId('lightboxDelete');
+    if(btn){btn.classList.add('confirm-delete');btn.innerHTML='<span>🗑</span><span style="font-size:9px">↓ nochmal</span>';}
+    return;
+  }
+  byId('lightboxDelete').click();
+}
+function _updateLbConfirmBtn(confirmed){
+  const btn=byId('lightboxConfirm');
+  if(!btn) return;
+  if(confirmed){
+    btn.style.background='#166534';btn.style.color='#4ade80';
+    btn.innerHTML='<span>✓✓</span><span style="font-size:9px;opacity:.9">Behalten</span>';
+  } else {
+    btn.style.background='';btn.style.color='';
+    btn.innerHTML='<span>✓</span><span style="font-size:9px;opacity:.8">↑</span>';
+  }
+}
 function openLightbox(item){
   _lbIndex=(state.media||[]).findIndex(x=>x.event_id===item.event_id);
   if(_lbIndex===-1) return;
   _lbItem=state.media[_lbIndex];
+  _lbDeletePending=false;
+  // reset delete button
+  const delBtn=byId('lightboxDelete');
+  if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML='<span>🗑</span><span style="font-size:9px;opacity:.8">↓</span>';delBtn.title=_lbItem.confirmed?'Bestätigt — trotzdem löschen?':'Löschen';}
+  _updateLbConfirmBtn(_lbItem.confirmed);
   const imgSrc=_lbItem.snapshot_relpath?`/media/${_lbItem.snapshot_relpath}`:(_lbItem.snapshot_url||'');
   byId('lightboxImg').src=imgSrc;
+  const confirmedBadge=_lbItem.confirmed?`<span style="background:#166534;color:#4ade80;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700">✓ Behalten</span>`:'';
   byId('lightboxMeta').innerHTML=`
     <span class="badge">${esc(_lbItem.camera_id||'')}</span>
     <span class="badge">${esc(_lbItem.time||'')}</span>
+    ${confirmedBadge}
     <span style="display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap">${(_lbItem.labels||[]).map(l=>objBubble(l,24)).join('')}</span>`;
   byId('lightboxPrev').style.display=_lbIndex>0?'flex':'none';
   byId('lightboxNext').style.display=_lbIndex<(state.media||[]).length-1?'flex':'none';
@@ -1290,6 +1319,8 @@ byId('lightboxConfirm').onclick=async()=>{
     // update state.media in place
     const sIdx=(state.media||[]).findIndex(x=>x.event_id===event_id);
     if(sIdx>=0) state.media[sIdx].confirmed=true;
+    _updateLbConfirmBtn(true);
+    if(_lbItem) _lbItem.confirmed=true;
     // update card DOM
     const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(event_id)}"]`);
     if(card){
