@@ -346,12 +346,26 @@ def api_media_storage_stats():
                     except Exception:
                         pass
             json_count = len(list(cam_dir.rglob("*.json")))
+        # Find latest stored snapshot for thumbnail fallback
+        latest_snap_url = None
+        if cam_dir.exists():
+            import json as _json
+            for jf in sorted(cam_dir.rglob("*.json"), reverse=True):
+                try:
+                    ev = _json.loads(jf.read_text(encoding="utf-8"))
+                    rel = ev.get("snapshot_relpath")
+                    if rel and (storage_root / rel).exists():
+                        latest_snap_url = f"/media/{rel}"
+                        break
+                except Exception:
+                    continue
         result.append({
             "id": cam["id"],
             "name": cam.get("name", cam["id"]),
             "size_mb": round(size_bytes / 1024 / 1024, 1),
             "jpg_count": jpg_count,
             "event_count": json_count,
+            "latest_snap_url": latest_snap_url,
         })
     return jsonify({"cameras": result})
 

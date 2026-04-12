@@ -1169,12 +1169,19 @@ function renderMediaOverview(){
   (state.mediaStats||[]).forEach(s=>{ statsByid[s.camera_id||s.id||s.name]=s; });
   ov.innerHTML=cams.map(c=>{
     const s=statsByid[c.id]||{};
-    const color=camColor(c.id);
-    const snap=`/api/camera/${esc(c.id)}/snapshot.jpg?t=${Date.now()}`;
-    return `<div class="moc-card" style="border-left-color:${color}" onclick="openMediaDrilldown('${esc(c.id)}')">
-      <div class="moc-thumb"><img src="${snap}" alt="${esc(c.name)}" onerror="this.parentElement.innerHTML='<span class=moc-thumb-placeholder>📷</span>'" /></div>
+    const icon=getCameraIcon(c.name||c.id);
+    // Use stored snapshot as thumbnail; fall back to live camera feed
+    const storedSnap=s.latest_snap_url||'';
+    const liveSnap=`/api/camera/${esc(c.id)}/snapshot.jpg?t=${Date.now()}`;
+    const thumbSrc=storedSnap||liveSnap;
+    const fallbackSrc=storedSnap?liveSnap:'';
+    const onerr=fallbackSrc
+      ?`this.onerror=function(){this.parentElement.innerHTML='<span class=moc-thumb-placeholder>${icon}</span>'};this.src='${esc(fallbackSrc)}'`
+      :`this.parentElement.innerHTML='<span class=moc-thumb-placeholder>${icon}</span>'`;
+    return `<div class="moc-card" onclick="openMediaDrilldown('${esc(c.id)}')">
+      <div class="moc-thumb"><img src="${esc(thumbSrc)}" alt="${esc(c.name)}" onerror="${esc(onerr)}" /></div>
       <div style="min-width:0">
-        <div class="moc-name">${esc(c.name)}</div>
+        <div class="moc-name"><span style="font-size:20px;vertical-align:middle;margin-right:5px">${icon}</span>${esc(c.name)}</div>
         <div class="moc-counts">${s.event_count||0} Events · ${s.jpg_count||0} Fotos</div>
       </div>
     </div>`;
