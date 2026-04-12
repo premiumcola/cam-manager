@@ -864,6 +864,27 @@ async function finishWizard(){
 }
 
 byId('reloadConfigBtn').onclick=()=>loadAll();
+
+const _RELOAD_MSGS=["Squirrel catches cam… 🐿️","Nut detected, reconnecting! 🌰","Hold still, camera! 🐿️💨","Signal acquired. Maybe. 📡🐿️","On it. Probably. 🐿️"];
+const _SQ_SVG=`<svg viewBox="0 0 40 32" width="40" height="32" xmlns="http://www.w3.org/2000/svg">
+  <path d="M28 8 Q36 4 37 12 Q38 18 32 20 Q36 22 35 28" stroke="#c8651a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <ellipse cx="18" cy="20" rx="12" ry="8" fill="#c8651a"/>
+  <circle cx="10" cy="14" r="7" fill="#c8651a"/>
+  <ellipse cx="7" cy="10" rx="3" ry="4" fill="#c8651a"/>
+  <circle cx="8" cy="13" r="2" fill="#111"/>
+  <circle cx="7.5" cy="12.5" r=".8" fill="#fff"/>
+</svg>`;
+function showReloadToast(){
+  const msg=_RELOAD_MSGS[Math.floor(Math.random()*_RELOAD_MSGS.length)];
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;bottom:24px;right:24px;z-index:2000;min-width:220px;background:var(--panel);border-radius:16px;padding:12px 16px;box-shadow:0 4px 24px rgba(0,0,0,.5);pointer-events:none';
+  t.innerHTML=`<div style="overflow:hidden;height:36px;position:relative;margin-bottom:6px">
+    <span style="position:absolute;animation:squirrel-chase 1.8s linear forwards;display:inline-flex;align-items:center;gap:4px">${_SQ_SVG}<span style="font-size:18px">📷</span></span>
+  </div>
+  <div style="font-size:12px;color:var(--muted);text-align:center">${esc(msg)}</div>`;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(()=>t.remove(),450);},1900);
+}
 byId('tlRangeSlider').addEventListener('input',e=>{state.tlHours=parseInt(e.target.value); renderTimeline();});
 // alias so discovery modal code still works
 const RTSP_PATHS=RTSP_PATH_OPTS;
