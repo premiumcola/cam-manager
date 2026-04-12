@@ -329,11 +329,14 @@ function renderTimeline(){
       const timeEnc=esc(g.events[0]?.time||'');
       const durSec=Math.round(durMs/1000);
       const da=`data-snap="${snapEnc}" data-vid="${vidEnc}" data-labels="${labEnc}" data-time="${timeEnc}" data-dur="${durSec}" data-count="${g.events.length}"`;
+      const icon=OBJ_ICONS[isAlarm?'alarm':topLabel]||OBJ_ICONS.unknown;
       if(isBar){
-        out+=`<rect ${da} x="${cx}" y="${cy-barH/2}" width="${barW}" height="${barH}" rx="6" fill="${fill}" stroke="#fff" stroke-opacity=".25" class="tl-shape" style="cursor:pointer"/>`;
+        const iconSize=Math.min(barH*0.9,13);
+        out+=`<rect ${da} x="${cx}" y="${cy-barH/2}" width="${barW}" height="${barH}" rx="6" fill="${fill}" fill-opacity="0.4" stroke="#fff" stroke-opacity=".25" class="tl-shape" style="cursor:pointer"/>`;
+        if(barW>20) out+=`<text x="${cx+barW/2}" y="${cy+5}" text-anchor="middle" font-size="${iconSize}px" style="pointer-events:none;user-select:none">${icon}</text>`;
       } else {
         const r=isAlarm?9:6;
-        out+=`<circle ${da} cx="${cx+r}" cy="${cy}" r="${r}" fill="${fill}" stroke="#fff" stroke-opacity=".35" class="tl-shape" style="cursor:pointer"/>`;
+        out+=`<text ${da} x="${cx+r}" y="${cy+5}" text-anchor="middle" font-size="14px" class="tl-shape" style="cursor:pointer;user-select:none">${icon}</text>`;
       }
     });
   });
@@ -346,6 +349,8 @@ function renderTimeline(){
   };
   svg.onmouseleave=_tlHide;
 }
+
+const OBJ_ICONS={person:'👤',cat:'🐱',bird:'🐦',car:'🚗',motion:'〰️',alarm:'🚨',unknown:'❓'};
 
 // ── RTSP path options (shared with discovery) ────────────────────────────────
 const RTSP_PATH_OPTS=[
