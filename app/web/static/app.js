@@ -1012,12 +1012,12 @@ byId('wizFinish').onclick=()=>finishWizard();
       overlay.classList.remove('visible');
       document.body.style.overflow='';
     }
-    const href=a.getAttribute('href');
-    if(href&&href.startsWith('#')){
-      e.preventDefault();
-      const target=document.querySelector(href);
-      if(target) target.scrollIntoView({behavior:'smooth',block:'start'});
-    }
+    e.preventDefault();
+    const target=document.querySelector(a.getAttribute('href'));
+    if(!target) return;
+    const shellPaddingTop=parseInt(getComputedStyle(document.querySelector('.shell')).paddingTop)||0;
+    console.log('shell padding-top:',shellPaddingTop);
+    target.scrollIntoView({behavior:'smooth',block:'start'});
   }));
 })();
 
