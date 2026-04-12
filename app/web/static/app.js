@@ -53,7 +53,7 @@ function _renderLbLabels(){
     const isActive=active.has(l);
     const svg=OBJ_SVG[l]||OBJ_SVG.alarm;
     const title=OBJ_LABEL[l]||l;
-    return `<span data-label="${l}" title="${title}" style="width:44px;height:44px;border-radius:50%;background:${isActive?'rgba(0,0,0,0.75)':'rgba(0,0,0,0.45)'};box-shadow:0 1px 6px rgba(0,0,0,0.5);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .15s,opacity .15s;opacity:${isActive?'1':'0.4'};border:2px solid ${isActive?'rgba(255,255,255,0.35)':'transparent'}">${svg}</span>`;
+    return `<span data-label="${l}" title="${title}" style="width:54px;height:54px;border-radius:50%;background:${isActive?'rgba(0,0,0,0.75)':'rgba(0,0,0,0.60)'};box-shadow:0 1px 6px rgba(0,0,0,0.5);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .15s,opacity .15s;opacity:${isActive?'1':'0.65'};border:2px solid ${isActive?'rgba(255,255,255,0.35)':'transparent'}">${svg}</span>`;
   }).join('');
   el.querySelectorAll('[data-label]').forEach(btn=>{
     btn.onclick=async()=>{
