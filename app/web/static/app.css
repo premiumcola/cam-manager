@@ -239,18 +239,25 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .ach-tab{padding:9px 18px;border-radius:999px;border:none;background:var(--surface);color:var(--muted);font-weight:600;font-size:13px;cursor:pointer;transition:all .15s}
 .ach-tab.active{background:linear-gradient(135deg,#c09010,#d4a017);color:#fff}
 .ach-tab:hover:not(.active){background:#32395a}
-.ach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
-.ach-card{border-radius:18px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;transition:transform .2s,box-shadow .2s;cursor:default;background:var(--surface)}
-.ach-card.unlocked{background:linear-gradient(160deg,#1a2a0d,#2a3a1a);border:1.5px solid #4a7a20;box-shadow:0 4px 16px rgba(74,122,32,.2)}
-.ach-card.locked{filter:grayscale(.7);opacity:.55}
-.ach-card.unlocked:hover{transform:translateY(-3px);box-shadow:0 8px 24px rgba(74,122,32,.35)}
-.ach-icon{font-size:38px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.4))}.ach-icon svg{width:56px;height:56px;display:block}
-.ach-card.locked .ach-icon{filter:grayscale(1) brightness(.6)}
-.ach-name{font-weight:700;font-size:14px;color:var(--text)}
-.ach-card.locked .ach-name{color:var(--muted)}
-.ach-category{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
-.ach-date{font-size:11px;color:#a3c040;font-weight:600;margin-top:2px}
-.ach-badge{padding:4px 10px;border-radius:999px;background:rgba(212,160,23,.15);border:1px solid #d4a017;color:#f0c040;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+.ach-grid{margin-top:4px}
+.ach-legend{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:11px;color:var(--muted)}
+.ach-leg-dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.ach-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:16px}
+.ach-card{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;cursor:default;padding:8px 4px;border-radius:14px;transition:background .15s}
+.ach-card:not(.locked):hover{background:rgba(255,255,255,.04)}
+.ach-card:not(.locked):hover .medal-wrap svg{transform:scale(1.05);filter:drop-shadow(0 6px 14px rgba(0,0,0,.55))}
+.medal-wrap{position:relative;width:92px;height:92px;display:flex;align-items:center;justify-content:center}
+.medal-wrap svg{display:block;transition:transform .2s,filter .2s;filter:drop-shadow(0 3px 8px rgba(0,0,0,.4))}
+.medal-emoji{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:32px;line-height:1;pointer-events:none}
+.medal-emoji-locked{filter:grayscale(1) brightness(0.4)}
+.medal-count-badge{position:absolute;top:-4px;right:-6px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;white-space:nowrap;pointer-events:none}
+.medal-count-badge.bronze{background:#7a3e10;color:#f0a050;border:1px solid #e08040}
+.medal-count-badge.silver{background:#304050;color:#b0d0e8;border:1px solid #90b8d0}
+.medal-count-badge.gold{background:#4a3a08;color:#f0d040;border:1px solid #e0b820}
+.medal-lock-badge{position:absolute;top:-4px;right:-6px;width:26px;height:26px;border-radius:50%;background:#1a2230;border:1.5px solid #2e4258;display:flex;align-items:center;justify-content:center;font-size:12px;color:#3a5268;pointer-events:none}
+.medal-name{font-size:12px;font-weight:600;color:var(--text);line-height:1.2}
+.medal-count{font-size:11px;font-weight:700}
+.medal-count.locked-text{color:#3a5268}
 
 /* Discovery add-camera form */
 .disc-add-form{background:#131e2e;border-radius:12px;padding:12px;margin-top:8px}

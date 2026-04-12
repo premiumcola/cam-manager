@@ -687,8 +687,11 @@ def api_achievements_unlock():
                 "date": datetime.now().isoformat(timespec="seconds"),
                 "camera_id": payload.get("camera_id", ""),
                 "species": payload.get("species", species_id),
+                "count": 1,
             }
-            _save_achievements(data)
+        else:
+            data[species_id]["count"] = data[species_id].get("count", 1) + 1
+        _save_achievements(data)
     return jsonify({"ok": True, "already_had": already, "achievements": data})
 
 

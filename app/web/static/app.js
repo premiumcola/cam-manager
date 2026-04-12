@@ -1282,6 +1282,14 @@ const BIRD_SVGS={
 'turmfalke':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M14 54 L6 57 L8 63 L16 60Z" fill="#cc6030"/><ellipse cx="36" cy="50" rx="20" ry="12" fill="#f0d8a8"/><circle cx="28" cy="50" r="2" fill="#8b5030" opacity="0.6"/><circle cx="36" cy="53" r="2" fill="#8b5030" opacity="0.6"/><circle cx="44" cy="50" r="2" fill="#8b5030" opacity="0.6"/><ellipse cx="26" cy="43" rx="18" ry="9" fill="#cc6030"/><circle cx="52" cy="36" r="11" fill="#7090c0"/><path d="M46 40 L58 38" stroke="#111" stroke-width="2" stroke-linecap="round"/><circle cx="57" cy="32" r="1.8" fill="#111"/><path d="M62 34 L72 32 L70 38 L62 37Z" fill="#807060"/></svg>`
 };
 
+// ── Achievement drill-down (placeholder) ─────────────────────────────────────
+function openAchievementDrilldown(id, name){
+  // navigate to media filtered by species
+  state.mediaLabel='';
+  state.mediaCamera=null;
+  document.querySelector('a[href="#media"]')?.click();
+}
+
 // ── Achievements / Trophäen ───────────────────────────────────────────────────
 const ACH_DEFS=[
   // Vögel
@@ -1319,6 +1327,55 @@ async function loadAchievements(){
   renderAchievements();
 }
 
+function _achTier(count){
+  if(!count||count<1) return 'locked';
+  if(count>=20) return 'gold';
+  if(count>=5) return 'silver';
+  return 'bronze';
+}
+
+function _medalSVG(achId, tier, birdSvg, isUnlocked){
+  const rimC={
+    locked:['#0e1820','#283848'],
+    bronze:['#4a2408','#c87840'],
+    silver:['#303840','#a0b4c4'],
+    gold:  ['#402e08','#e0c050'],
+  };
+  const faceC={
+    locked:['#101820','#101820'],
+    bronze:['#3a2010','#1e0e04'],
+    silver:['#202e38','#101820'],
+    gold:  ['#2a2010','#140e04'],
+  };
+  const hlC={locked:'#4a6888',bronze:'#e09860',silver:'#c0d0e0',gold:'#f0e060'};
+  const [rc,re]=rimC[tier];
+  const [fc,fe]=faceC[tier];
+  const hl=hlC[tier];
+  const uid=achId.replace(/[^a-z0-9]/g,'');
+  let bird='';
+  if(birdSvg){
+    const filter=isUnlocked?'':'style="filter:grayscale(1) brightness(0.28)"';
+    bird=birdSvg.replace('<svg ',`<svg x="16" y="16" width="68" height="68" ${filter} `);
+  }
+  return `<svg viewBox="0 0 100 100" width="92" height="92" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <radialGradient id="rg${uid}" cx="50%" cy="40%" r="55%">
+        <stop offset="0%" stop-color="${rc}"/>
+        <stop offset="100%" stop-color="${re}"/>
+      </radialGradient>
+      <radialGradient id="fg${uid}" cx="42%" cy="38%" r="65%">
+        <stop offset="0%" stop-color="${fc}"/>
+        <stop offset="100%" stop-color="${fe}"/>
+      </radialGradient>
+    </defs>
+    <circle cx="50" cy="50" r="47" fill="url(#rg${uid})"/>
+    <circle cx="50" cy="50" r="36" fill="url(#fg${uid})"/>
+    <circle cx="50" cy="50" r="36" fill="none" stroke="${re}" stroke-width="1.5" opacity=".5"/>
+    <path d="M 25 30 A 28 28 0 0 1 70 22" fill="none" stroke="${hl}" stroke-width="5" stroke-linecap="round" opacity=".35"/>
+    ${bird}
+  </svg>`;
+}
+
 function renderAchievements(){
   const unlocked=ACH_DEFS.filter(a=>_achData[a.id]);
   const total=ACH_DEFS.length;
@@ -1329,20 +1386,46 @@ function renderAchievements(){
     <span class="ach-progress-pct">${pct}%</span>`;
 
   const visible=_achTab==='all'?ACH_DEFS:ACH_DEFS.filter(a=>a.cat===_achTab);
-  byId('achievementsGrid').innerHTML=visible.map(a=>{
+
+  const legend=`<div class="ach-legend">
+    <span><span class="ach-leg-dot" style="background:#c87840"></span>Bronze 1–4×</span>
+    <span><span class="ach-leg-dot" style="background:#a0b4c4"></span>Silber 5–19×</span>
+    <span><span class="ach-leg-dot" style="background:#e0c050"></span>Gold 20×+</span>
+  </div>`;
+
+  const cards=visible.map(a=>{
     const info=_achData[a.id];
     const isUnlocked=!!info;
-    const svg=a.cat==='birds'&&BIRD_SVGS[a.id];
-    const iconHtml=svg
-      ?`<div class="ach-icon"${isUnlocked?'':' style="filter:grayscale(1) brightness(0.3)"'}>${svg}</div>`
-      :`<div class="ach-icon">${isUnlocked?a.icon:'🔒'}</div>`;
-    return `<div class="ach-card ${isUnlocked?'unlocked':'locked'}">
-      ${iconHtml}
-      <div class="ach-name">${esc(a.name)}</div>
-      <div class="ach-category">${a.cat==='birds'?'Vogel':'Säugetier'}</div>
-      ${isUnlocked?`<div class="ach-date">Entdeckt ${esc((info.date||'').slice(0,10))}</div><span class="ach-badge">entdeckt</span>`:''}
+    const count=isUnlocked?(info.count||1):0;
+    const tier=_achTier(count);
+    const birdSvg=a.cat==='birds'?BIRD_SVGS[a.id]:null;
+    const medalHtml=_medalSVG(a.id,tier,birdSvg,isUnlocked);
+    // emoji overlay for mammals (no SVG)
+    const emojiOverlay=(!birdSvg)
+      ?`<span class="medal-emoji${isUnlocked?'':' medal-emoji-locked'}">${isUnlocked?a.icon:'🔒'}</span>`
+      :'';
+    // badge — lock badge only for birds (mammals use emoji overlay for lock)
+    const badge=isUnlocked
+      ?`<span class="medal-count-badge ${tier}">${count}×</span>`
+      :(birdSvg?`<span class="medal-lock-badge">🔒</span>`:'');
+    // count label
+    const countColors={bronze:'#d4894a',silver:'#90a8be',gold:'#d4a820'};
+    const countLabel=isUnlocked
+      ?`<div class="medal-count" style="color:${countColors[tier]||'#d4a820'}">${count}×</div>`
+      :`<div class="medal-count locked-text">nicht entdeckt</div>`;
+    const clickable=isUnlocked?`onclick="openAchievementDrilldown('${esc(a.id)}','${esc(a.name)}')" style="cursor:pointer"`:'';
+    return `<div class="ach-card ${tier}" ${clickable}>
+      <div class="medal-wrap">
+        ${medalHtml}
+        ${emojiOverlay}
+        ${badge}
+      </div>
+      <div class="medal-name">${esc(a.name)}</div>
+      ${countLabel}
     </div>`;
   }).join('');
+
+  byId('achievementsGrid').innerHTML=legend+`<div class="ach-cards-grid">${cards}</div>`;
 }
 
 document.querySelectorAll('.ach-tab').forEach(btn=>{
