@@ -122,15 +122,14 @@
       </section>
 
       <section id="timeline" class="panel section">
-        <div class="section-head">
+        <div class="section-head" style="flex-wrap:wrap;gap:8px;align-items:center">
           <h3>Detections</h3>
-          <span style="flex:1"></span>
+          <div id="tlLegend" class="timeline-legend" style="flex:1;margin:0;padding:0;min-height:0;border:none"></div>
           <div class="tl-range-wrap">
             <span id="tlRangeLabel" class="tl-range-label">letzte 12h</span>
-            <input type="range" id="tlRangeSlider" min="1" max="720" value="12" step="1" style="width:160px;accent-color:var(--accent);cursor:pointer" />
+            <input type="range" id="tlRangeSlider" min="1" max="720" value="12" step="1" style="width:160px;cursor:pointer" />
           </div>
         </div>
-        <div id="tlLegend" class="timeline-legend"></div>
         <div id="timelineContainer" class="tl-container"></div>
       </section>
 
