@@ -179,7 +179,12 @@ function renderDashboard(){
     const groupColor=colors[c.group_id]||'#566d84';
     return `<article class="cv-card" data-camid="${esc(c.id)}" onclick="_cvCardClick(event,'${esc(c.id)}')">
   <div class="cv-frame">
-    <img class="cv-img cam-snap" src="${snapUrl}" alt="${esc(c.name)}" />
+    <div class="cv-img-wrap">
+      <div class="cv-loading-placeholder"><div class="cv-loading-icon">⟳</div><div class="cv-loading-text">Verbinde…</div></div>
+      <img class="cv-img cam-snap" src="${snapUrl}" alt="${esc(c.name)}"
+        onload="this.classList.add('loaded');this.previousElementSibling.style.display='none'"
+        onerror="this.style.display='none'" />
+    </div>
     <div class="cv-grad-top"></div>
     <div class="cv-grad-bot"></div>
 
