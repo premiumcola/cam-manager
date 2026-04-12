@@ -408,10 +408,12 @@ function renderCameraSettings(){
   byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`
     <div class="cam-item" data-camid="${esc(c.id)}">
       <div class="cam-item-head">
-        <span style="font-size:20px;line-height:1;flex-shrink:0">${getCameraIcon(c.name)}</span>
-        <div>
-          <div style="font-weight:700;font-size:15px">${esc(c.name)}</div>
-          <div class="small">${esc(c.location||'—')} · ${esc(c.group_id||'—')}</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:22px;line-height:1;flex-shrink:0">${getCameraIcon(c.name)}</span>
+          <div>
+            <div style="font-weight:700;font-size:15px">${esc(c.name)}</div>
+            <div class="small">${esc(c.location||'—')} · ${esc(c.group_id||'—')}</div>
+          </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <span class="badge ${stCol(c.status)}">${esc(c.status||'—')}</span>
