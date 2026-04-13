@@ -380,12 +380,12 @@
         <div class="set-section" id="set-groups">
           <div class="set-hd-row">
             <button type="button" class="set-hd" style="flex:1" onclick="toggleSetSection('set-groups')">
-              <span class="set-icon">📁</span><span>Kameragruppen</span><span style="font-size:11px;font-style:italic;color:#4e7c62;font-weight:400;margin-left:10px">Rollen · Alarmprofil · Modellstapel</span><span class="set-chevron">▶</span>
+              <span class="set-icon">📁</span><span>Kameragruppen</span><span class="set-chevron">▶</span>
             </button>
           </div>
           <div class="set-bd"><div class="set-inner">
             <div id="groupList"></div>
-            <button type="button" id="addGroupBtn" class="btn-action accent" style="width:100%;margin-top:10px;justify-content:center">+ Neue Gruppe</button>
+            <button type="button" id="addGroupBtn" class="btn-action action-green" style="width:100%;margin-top:10px;justify-content:center"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg> Neue Gruppe</button>
           </div></div>
         </div>
 
@@ -426,6 +426,7 @@
               <button class="tg-tab-btn" data-tab="tg-panel-tree">🌳 Abhängigkeiten</button>
               <button class="tg-tab-btn" data-tab="tg-panel-presets">🎛 Presets</button>
             </div>
+            <div class="tg-panels-wrap">
 
             <div id="tg-panel-verbindung" class="tg-tab-panel active">
               <form id="telegramForm" class="form" style="padding-top:6px">
@@ -530,6 +531,7 @@
               </div>
             </div>
 
+            </div><!-- /.tg-panels-wrap -->
           </div></div>
         </div>
 

@@ -420,4 +420,45 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .stat-hm-row{margin-bottom:4px}
 .stat-hm-row:last-child{margin-bottom:0}
 .stat-hm-cell[data-tip]:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 5px);left:50%;transform:translateX(-50%);background:#0d1422;color:var(--text);font-size:11px;font-weight:600;padding:4px 9px;border-radius:8px;white-space:nowrap;pointer-events:none;z-index:20;box-shadow:0 2px 10px rgba(0,0,0,.6)}
+
+/* ── Shared expandable section tab pattern ────────────────────────────────── */
+.sec-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:4px 0 12px}
+.sec-tab-btn{padding:7px 14px;border:1.5px solid rgba(255,255,255,.1);border-radius:999px;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
+.sec-tab-btn:hover{border-color:var(--accent);color:var(--text)}
+.sec-tab-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.sec-content{border-radius:14px;background:var(--bg);padding:14px 16px}
+
+/* ── 1 / 0 camera on-off toggle ──────────────────────────────────────────── */
+.io-switch{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;background:var(--surface);border:1.5px solid rgba(255,255,255,.1);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;transition:border-color .2s;flex-shrink:0}
+.io-switch .io-track{width:32px;height:18px;border-radius:999px;background:rgba(255,255,255,.1);position:relative;transition:background .2s;flex-shrink:0}
+.io-switch .io-thumb{position:absolute;width:13px;height:13px;border-radius:50%;background:#555;top:2.5px;left:2px;transition:transform .22s cubic-bezier(.4,0,.2,1),background .2s}
+.io-switch .io-lbl{font-size:11px;font-weight:800;line-height:1;transition:color .2s;min-width:9px;text-align:center}
+.io-lbl-0{color:rgba(255,255,255,.3)}
+.io-lbl-1{color:rgba(255,255,255,.3)}
+.io-switch.on .io-track{background:#22c55e}
+.io-switch.on .io-thumb{transform:translateX(14px);background:#fff}
+.io-switch.on .io-lbl-1{color:#4ade80}
+.io-switch:not(.on) .io-lbl-0{color:rgba(255,255,255,.65)}
+
+/* ── Reconnect button (premium green, vector icon) ───────────────────────── */
+.btn-reconnect{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:12px;border:none;background:rgba(34,197,94,.14);color:#4ade80;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s;-webkit-tap-highlight-color:transparent;flex-shrink:0}
+.btn-reconnect:hover{background:rgba(34,197,94,.25)}
+.btn-reconnect:active{background:rgba(34,197,94,.4)}
+@keyframes spin-once{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.btn-reconnect.spinning svg{animation:spin-once .5s cubic-bezier(.4,0,.2,1) both}
+
+/* ── Timelapse 4-mode grid ───────────────────────────────────────────────── */
+.tl-modes-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+@media(max-width:900px){.tl-modes-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.tl-modes-grid{grid-template-columns:1fr}}
+.tl-mode-col{border-radius:12px;background:var(--surface);padding:12px 14px;border:1.5px solid rgba(255,255,255,.06);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:9px}
+.tl-mode-col--on{border-color:rgba(168,85,247,.5);background:rgba(168,85,247,.07)}
+.tl-mode-col-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.tl-mode-col-name{font-weight:700;font-size:13px;line-height:1.2}
+.tl-mode-col-period{font-size:10px;color:#a855f7;margin-top:2px}
+.tl-mode-col-desc{font-size:11px;color:var(--muted);line-height:1.45;min-height:32px}
+
+/* ── Group & Telegram panels: content inset ─────────────────────────────── */
+.tg-panels-wrap{border-radius:14px;background:var(--bg);padding:12px 14px;margin-top:4px}
+.grp-tab-subtitle{font-size:11px;font-style:italic;color:#4e7c62;font-weight:400;margin-left:8px}
 .stat-empty{color:var(--muted);font-size:13px;padding:20px 0;text-align:center}

@@ -516,17 +516,34 @@ function renderCameraSettings(){
           <span style="font-size:22px;line-height:1;flex-shrink:0">${getCameraIcon(c.name)}</span>
           <div>
             <div style="font-weight:700;font-size:15px">${esc(c.name)}</div>
-            <div class="small">${esc(c.group_id||'—')}</div>
+            <div class="small muted">${esc(c.group_id||'—')}</div>
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
-          <label class="switch switch-sm switch-green" title="${c.enabled?'Kamera aktiv – zum Deaktivieren klicken':'Kamera inaktiv – zum Aktivieren klicken'}" onclick="event.stopPropagation()"><input type="checkbox" ${c.enabled?'checked':''} onchange="toggleCameraEnabled('${esc(c.id)}',this.checked)" /><span class="slider"></span></label>
-          <button class="btn-action" onclick="editCamera('${esc(c.id)}')">✏️ Bearbeiten</button>
-          <button class="btn-action" title="Kamera neu verbinden" onclick="event.stopPropagation();reloadCamera('${esc(c.id)}')">🔄 Neu verbinden</button>
+          <span class="io-switch${c.enabled?' on':''}"
+            onclick="toggleCameraEnabled('${esc(c.id)}',${!c.enabled})"
+            title="${c.enabled?'Aktiv · klicken zum Deaktivieren':'Inaktiv · klicken zum Aktivieren'}">
+            <span class="io-lbl io-lbl-0">0</span>
+            <span class="io-track"><span class="io-thumb"></span></span>
+            <span class="io-lbl io-lbl-1">1</span>
+          </span>
+          <button class="btn-reconnect" title="Neu verbinden" onclick="event.stopPropagation();_reconnectCam('${esc(c.id)}',this)">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2.5 8A5.5 5.5 0 0 1 13 5M13.5 8A5.5 5.5 0 0 1 3 11"/>
+              <polyline points="12,2 12,5.5 8.5,5.5"/>
+              <polyline points="4,14 4,10.5 7.5,10.5"/>
+            </svg>
+            Verbinden
+          </button>
         </div>
       </div>
     </div>`).join('');
 }
+window._reconnectCam=function(camId,btn){
+  btn.classList.add('spinning');
+  setTimeout(()=>btn.classList.remove('spinning'),520);
+  reloadCamera(camId);
+};
 
 // ── Whitelist chips ───────────────────────────────────────────────────────────
 let _whitelistState=[];
@@ -629,14 +646,68 @@ byId('deleteCameraBtn').onclick=async()=>{
 };
 
 function renderGroups(){
-  byId('groupList').innerHTML=state.groups.map(g=>`<div class="group-row" data-gid="${esc(g.id)}">
-    <div class="group-row-info">
-      <strong style="font-size:13px">${esc(g.name)}</strong>
-      <span class="small muted">${esc(g.category)} · ${esc(g.alarm_profile)} · ${(g.fine_models||[]).join(', ')||'ohne Feinstufe'}</span>
-    </div>
-    <button style="background:var(--accent);color:#fff;border:none;border-radius:10px;padding:6px 14px;font-size:13px;font-weight:600;cursor:pointer" onclick='toggleGroupEdit(${JSON.stringify(g).replace(/'/g,"&apos;")})'>✏️ Bearbeiten</button>
-  </div>`).join('');
+  const groups=state.groups||[];
+  const grpList=byId('groupList'); if(!grpList) return;
+  if(!groups.length){
+    grpList.innerHTML='<div class="small muted" style="padding:8px 2px">Noch keine Gruppen.</div>';
+    return;
+  }
+  const tabs=groups.map((g,i)=>`<button type="button" class="sec-tab-btn${i===0?' active':''}" id="grpTab_${esc(g.id)}" onclick="selectGroup('${esc(g.id)}')">${esc(g.name)}</button>`).join('');
+  grpList.innerHTML=`<div class="sec-tabs" id="grpTabs" style="margin-bottom:0">${tabs}</div><div class="sec-content" id="grpContent"></div>`;
+  _renderGroupContent(groups[0]);
 }
+function _renderGroupContent(g){
+  const content=byId('grpContent'); if(!content) return;
+  const s=g.schedule||{};
+  const isNew=!g.id;
+  const active=new Set(g.coarse_objects||[]);
+  const fm=new Set(g.fine_models||[]);
+  const pills=_GRP_COARSE.map(obj=>{
+    const on=active.has(obj);
+    return `<button type="button" class="grp-obj-pill${on?' active':''}" data-obj="${obj}"
+      style="padding:7px 14px;border-radius:999px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;background:${on?'var(--accent)':'var(--surface)'};color:${on?'#fff':'var(--muted)'}">${objBubble(obj,18)} ${OBJ_LABEL[obj]||obj}</button>`;
+  }).join('');
+  content.innerHTML=`<form class="group-edit-grid" onsubmit="saveGroup(event)" style="padding-top:4px">
+    <input type="hidden" name="id" value="${esc(g.id||'')}" />
+    <div style="grid-column:1/-1">
+      <input name="name" value="${esc(g.name||'')}" placeholder="Anzeigename" required style="${_GRP_INPUT}"
+        oninput="(()=>{const f=this.closest('form');const el=f.querySelector('.grp-gen-id');if(el&&!f.elements['id'].value)el.textContent='ID: '+_groupGenId(this.value);})()"/>
+      <div class="grp-gen-id small muted" style="margin-top:4px;padding-left:4px">${isNew?'ID: auto':'ID: '+esc(g.id)}</div>
+    </div>
+    <div><select name="category" style="${_GRP_SELECT}">${_GRP_CATS.map(c=>`<option${g.category===c?' selected':''}>${esc(c)}</option>`).join('')}</select><span class="field-label">Kategorie</span></div>
+    <div><select name="alarm_profile" style="${_GRP_SELECT}">${['hard','medium','soft','info'].map(p=>`<option${g.alarm_profile===p?' selected':''}>${p}</option>`).join('')}</select><span class="field-label">Alarmprofil</span></div>
+    <div style="grid-column:1/-1">
+      <div class="grp-obj-pills" style="display:flex;gap:8px;flex-wrap:wrap">${pills}</div>
+      <input type="hidden" name="coarse_objects" value="${esc((g.coarse_objects||[]).join(','))}" />
+      <span class="field-label" style="margin-top:6px;display:block">Grob-Objekte</span>
+    </div>
+    <div style="grid-column:1/-1;display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding:4px 0">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="fm_bird"${fm.has('bird_species')?' checked':''} style="width:auto;accent-color:var(--accent)" /> Vogelarten</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="fm_cat"${fm.has('cat_identity')?' checked':''} style="width:auto;accent-color:var(--accent)" /> Katzen-ID</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="fm_person"${fm.has('person_identity')?' checked':''} style="width:auto;accent-color:var(--accent)" /> Personen-ID</label>
+      <span class="field-label" style="margin-left:auto">Fine-Models</span>
+    </div>
+    <div style="grid-column:1/-1;display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-height:44px">
+      <label class="switch"><input type="checkbox" name="schedule_enabled"${s.enabled?' checked':''}
+        onchange="this.closest('form').querySelector('.grp-sched-times').style.display=this.checked?'flex':'none'" /><span class="slider"></span></label>
+      <span style="font-size:13px;font-weight:600">Zeitplan</span>
+      <div class="grp-sched-times" style="display:${s.enabled?'flex':'none'};align-items:center;gap:8px">
+        ${_groupTimeSelect('schedule_start',s.start||'22:00')}
+        <span class="muted" style="font-size:13px">→</span>
+        ${_groupTimeSelect('schedule_end',s.end||'06:00')}
+      </div>
+    </div>
+    <div style="grid-column:1/-1">
+      <button type="submit" style="width:100%;min-height:42px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer">Gruppe speichern</button>
+    </div>
+  </form>`;
+  _wireGroupPills(content.querySelector('form'));
+}
+window.selectGroup=function(groupId){
+  document.querySelectorAll('#grpTabs .sec-tab-btn').forEach(b=>b.classList.toggle('active',b.id===`grpTab_${groupId}`));
+  const g=(state.groups||[]).find(g=>g.id===groupId);
+  if(g) _renderGroupContent(g);
+};
 
 const _GRP_COARSE=['person','cat','bird','car','motion'];
 // _GRP_ICONS replaced by OBJ_SVG + OBJ_LABEL
@@ -736,6 +807,9 @@ async function saveGroup(e){
     schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'}};
   await fetch('/api/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   await loadAll();
+  // Re-select saved group so tabs update correctly
+  const savedId=id;
+  setTimeout(()=>{ const tab=byId(`grpTab_${savedId}`); if(tab) selectGroup(savedId); },50);
 }
 window.saveGroup=saveGroup;
 
@@ -1210,11 +1284,15 @@ byId('cameraForm').onsubmit=async(e)=>{
 byId('closeCameraEdit')?.addEventListener('click',()=>_closeEditPanel());
 byId('addGroupBtn').onclick=(e)=>{
   e.stopPropagation();
-  document.querySelectorAll('.group-inline').forEach(el=>el.remove());
-  byId('groupList').insertAdjacentHTML('beforeend',groupEditHTML({id:'',name:'',category:'Sonstiges',alarm_profile:'soft',coarse_objects:[],fine_models:[],schedule:{enabled:false,start:'22:00',end:'06:00'}}));
-  const form=byId('groupList').lastElementChild?.querySelector('form');
-  if(form) _wireGroupPills(form);
-  byId('groupList').lastElementChild.scrollIntoView({behavior:'smooth',block:'nearest'});
+  // Deactivate all group tabs
+  document.querySelectorAll('#grpTabs .sec-tab-btn').forEach(b=>b.classList.remove('active'));
+  // Ensure grpContent exists (if no groups yet, create the shell)
+  if(!byId('grpContent')){
+    const list=byId('groupList');
+    if(list) list.innerHTML=`<div class="sec-tabs" id="grpTabs" style="margin-bottom:0"></div><div class="sec-content" id="grpContent"></div>`;
+  }
+  _renderGroupContent({id:'',name:'',category:'Sonstiges',alarm_profile:'soft',coarse_objects:[],fine_models:[],schedule:{enabled:false,start:'22:00',end:'06:00'}});
+  byId('grpContent')?.scrollIntoView({behavior:'smooth',block:'nearest'});
 };
 // ── Section-level save functions ──────────────────────────────────────────────
 window.saveAppSettings=async function(){
@@ -1341,24 +1419,64 @@ window.loadTlSettings=async function(){
 };
 function _renderTlCameraList(cameras){
   if(!cameras.length) return '<div class="small muted" style="padding:10px 2px">Keine Kameras konfiguriert.</div>';
-  return cameras.map(cam=>{
-    const tl=cam.timelapse||{};
-    const profs=tl.profiles||{};
-    const activeTags=_TL_PROFILES_DEF.filter(p=>profs[p.key]?.enabled).map(p=>`<span class="tl-prof-tag">${esc(p.label)}</span>`).join('');
-    return `<div class="tl-cam-card" id="tlCamCard_${esc(cam.id)}">
-      <button type="button" class="tl-cam-card-head" onclick="toggleTlCamCard('${esc(cam.id)}')">
-        <span style="font-size:20px;line-height:1;flex-shrink:0">${getCameraIcon(cam.name)}</span>
-        <span class="tl-cam-card-name">${esc(cam.name)}</span>
-        <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;flex-wrap:wrap">${activeTags||'<span style="font-size:11px;color:var(--muted)">inaktiv</span>'}</div>
-        <span class="tl-cam-chevron" style="margin-left:8px">▶</span>
-      </button>
-      <div class="tl-cam-profiles hidden" id="tlCamProfiles_${esc(cam.id)}">
-        ${_renderTlProfileCards(cam)}
-        <button class="settings-save-btn" style="margin-top:10px" onclick="saveTlCameraProfiles('${esc(cam.id)}')">💾 Speichern</button>
+  const firstCam=cameras[0];
+  const tabs=cameras.map((cam,i)=>{
+    const profs=(cam.timelapse||{}).profiles||{};
+    const anyOn=_TL_PROFILES_DEF.some(p=>profs[p.key]?.enabled);
+    return `<button type="button" class="sec-tab-btn${i===0?' active':''}" id="tlTab_${esc(cam.id)}" onclick="selectTlCam('${esc(cam.id)}')">
+      ${getCameraIcon(cam.name)} ${esc(cam.name)}${anyOn?' <span style="font-size:9px;vertical-align:middle;margin-left:3px;color:#d8b4fe">●</span>':''}
+    </button>`;
+  }).join('');
+  return `<div class="sec-tabs" id="tlCamTabs" style="margin-bottom:0">${tabs}</div>
+    <div class="sec-content" id="tlCamContent">${_renderTlModesGrid(firstCam)}</div>`;
+}
+function _renderTlModesGrid(cam){
+  const tl=cam.timelapse||{};
+  const profs=tl.profiles||{};
+  const fps=parseInt(tl.fps)||30;
+  const cols=_TL_PROFILES_DEF.map(p=>{
+    const prof=profs[p.key]||{};
+    const enabled=!!prof.enabled;
+    const targetS=prof.target_seconds??p.defaultTarget;
+    const periodS=prof.period_seconds??p.defaultPeriod;
+    const isCustom=p.key==='custom';
+    return `<div class="tl-mode-col${enabled?' tl-mode-col--on':''}" id="tlProfCard_${esc(cam.id)}_${p.key}">
+      <div class="tl-mode-col-head">
+        <div>
+          <div class="tl-mode-col-name">${esc(p.label)}</div>
+          ${!isCustom?`<div class="tl-mode-col-period">${_tlPeriodLabel(periodS)}</div>`:''}
+        </div>
+        <label class="switch switch-sm" onclick="event.stopPropagation()">
+          <input type="checkbox" id="tlProf_${esc(cam.id)}_${p.key}" ${enabled?'checked':''}
+            onchange="byId('tlProfCard_${esc(cam.id)}_${p.key}').classList.toggle('tl-mode-col--on',this.checked);_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" />
+          <span class="slider"></span>
+        </label>
       </div>
+      <div class="tl-mode-col-desc" id="tlProfDesc_${esc(cam.id)}_${p.key}">${_tlResultDesc(periodS,targetS,fps)}</div>
+      <div class="field-wrap">
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="range" id="tlProfTarget_${esc(cam.id)}_${p.key}" min="10" max="600" step="10" value="${targetS}" style="flex:1;accent-color:#a855f7"
+            oninput="_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" />
+          <span id="tlProfTargetLbl_${esc(cam.id)}_${p.key}" style="font-size:11px;color:var(--muted);min-width:40px;text-align:right">${targetS}s</span>
+        </div>
+        <span class="field-label">Videolänge</span>
+      </div>
+      ${isCustom?`<div class="field-wrap">
+        <input type="number" id="tlProfPeriod_${esc(cam.id)}_${p.key}" min="60" max="31536000" value="${periodS}"
+          oninput="_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" style="max-width:160px" />
+        <span class="field-label">Zeitraum (Sek.)</span>
+      </div>`:`<input type="hidden" id="tlProfPeriod_${esc(cam.id)}_${p.key}" value="${periodS}" />`}
     </div>`;
   }).join('');
+  return `<div class="tl-modes-grid">${cols}</div>
+    <button class="settings-save-btn" style="margin-top:4px" onclick="saveTlCameraProfiles('${esc(cam.id)}')">💾 Speichern</button>`;
 }
+window.selectTlCam=function(camId){
+  document.querySelectorAll('#tlCamTabs .sec-tab-btn').forEach(b=>b.classList.toggle('active',b.id===`tlTab_${camId}`));
+  const cam=(state.cameras||[]).find(c=>c.id===camId);
+  const content=byId('tlCamContent');
+  if(cam&&content) content.innerHTML=_renderTlModesGrid(cam);
+};
 function _tlPeriodLabel(s){
   const n=parseInt(s)||0;
   if(n>=2592000) return Math.round(n/2592000)+' Monat'+( Math.round(n/2592000)!==1?'e':'');
@@ -1373,46 +1491,7 @@ function _tlResultDesc(periodS,targetS,fps){
   const totalFrames=Math.round(pN/Math.max(1,interval));
   return `alle ~${_tlIntervalLabel(interval)} · ~${totalFrames} Frames · ${tN}s Video`;
 }
-function _renderTlProfileCards(cam){
-  const tl=cam.timelapse||{};
-  const profs=tl.profiles||{};
-  const fps=parseInt(tl.fps)||30;
-  return _TL_PROFILES_DEF.map(p=>{
-    const prof=profs[p.key]||{};
-    const enabled=!!prof.enabled;
-    const targetS=prof.target_seconds??p.defaultTarget;
-    const periodS=prof.period_seconds??p.defaultPeriod;
-    const isCustom=p.key==='custom';
-    return `<div class="tl-profile-card ${enabled?'tl-profile-card--on':''}" id="tlProfCard_${esc(cam.id)}_${p.key}">
-      <div class="tl-profile-head">
-        <div class="tl-profile-info">
-          <span class="tl-profile-name">${esc(p.label)}${!isCustom?` <span style="font-size:10px;color:var(--muted);font-weight:400">${_tlPeriodLabel(periodS)}</span>`:''}</span>
-          <span class="tl-profile-desc" id="tlProfDesc_${esc(cam.id)}_${p.key}">${_tlResultDesc(periodS,targetS,fps)}</span>
-        </div>
-        <label class="switch switch-sm" style="flex-shrink:0" onclick="event.stopPropagation()">
-          <input type="checkbox" id="tlProf_${esc(cam.id)}_${p.key}" ${enabled?'checked':''}
-            onchange="byId('tlProfCard_${esc(cam.id)}_${p.key}').classList.toggle('tl-profile-card--on',this.checked);_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" />
-          <span class="slider"></span>
-        </label>
-      </div>
-      <div class="tl-profile-body">
-        <div class="field-wrap">
-          <div style="display:flex;align-items:center;gap:8px">
-            <input type="range" id="tlProfTarget_${esc(cam.id)}_${p.key}" min="10" max="600" step="10" value="${targetS}" style="flex:1;accent-color:#a855f7"
-              oninput="_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" />
-            <span id="tlProfTargetLbl_${esc(cam.id)}_${p.key}" style="font-size:12px;color:var(--muted);min-width:50px;text-align:right">${targetS}s Video</span>
-          </div>
-          <span class="field-label">Videolänge</span>
-        </div>
-        ${isCustom?`<div class="field-wrap">
-          <input type="number" id="tlProfPeriod_${esc(cam.id)}_${p.key}" min="60" max="31536000" value="${periodS}"
-            oninput="_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" style="max-width:180px" />
-          <span class="field-label">Zeitraum (Sekunden) · z.B. 3600 = 1h, 86400 = 1 Tag</span>
-        </div>`:`<input type="hidden" id="tlProfPeriod_${esc(cam.id)}_${p.key}" value="${periodS}" />`}
-      </div>
-    </div>`;
-  }).join('');
-}
+// _renderTlProfileCards replaced by _renderTlModesGrid (4-column grid)
 window._tlRefreshDesc=function(camId,profKey,fps){
   const targetEl=byId(`tlProfTarget_${camId}_${profKey}`);
   const periodEl=byId(`tlProfPeriod_${camId}_${profKey}`);
@@ -1422,14 +1501,7 @@ window._tlRefreshDesc=function(camId,profKey,fps){
   if(lblEl) lblEl.textContent=targetEl.value+'s Video';
   if(descEl) descEl.textContent=_tlResultDesc(periodEl.value,targetEl.value,fps);
 };
-window.toggleTlCamCard=function(camId){
-  const panel=byId(`tlCamProfiles_${camId}`); if(!panel) return;
-  const hidden=panel.classList.toggle('hidden');
-  const card=byId(`tlCamCard_${camId}`);
-  if(card) card.classList.toggle('open',!hidden);
-  const chev=card?.querySelector('.tl-cam-chevron');
-  if(chev) chev.style.transform=hidden?'':'rotate(90deg)';
-};
+// toggleTlCamCard replaced by selectTlCam (tab-based camera selector)
 window.openTlNav=function(){
   const section=byId('set-timelapse');
   if(section&&!section.classList.contains('open')){section.classList.add('open');loadTlSettings();}
@@ -1458,7 +1530,7 @@ window.saveTlCameraProfiles=async function(camId){
   showToast(`Timelapse für ${esc(cam.name)} gespeichert.`,'success');
   await loadAll();
   const content=byId('tlSettingsContent');
-  if(content) content.innerHTML=_renderTlCameraList(state.cameras||[]);
+  if(content){content.innerHTML=_renderTlCameraList(state.cameras||[]);selectTlCam(camId);}
 };
 
 // ── Timelapse Status Bar (Dashboard in Cameras section) ───────────────────────
