@@ -86,9 +86,9 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 /* Split badge */
 .cv-split-badge{display:inline-flex;border-radius:999px;overflow:hidden;border:1px solid rgba(255,255,255,.18);font-size:11px;font-weight:700}
 .cv-sb-half{padding:5px 11px;display:flex;align-items:center;gap:5px;white-space:nowrap}
-.cv-sb-obj{background:rgba(59,130,246,.32);color:#bfdbfe;border-right:1px solid rgba(255,255,255,.18)}
+.cv-sb-obj{background:rgba(59,130,246,.32);color:#fff;border-right:1px solid rgba(255,255,255,.18)}
 .cv-sb-obj-off{background:rgba(255,255,255,.07);color:rgba(255,255,255,.4);border-right:1px solid rgba(255,255,255,.18)}
-.cv-sb-mot{background:rgba(20,184,166,.28);color:#99f6e4}
+.cv-sb-mot{background:rgba(20,184,166,.28);color:#fff}
 .cv-sb-mot-off{background:rgba(255,255,255,.07);color:rgba(255,255,255,.4)}
 /* Brain + motion animations */
 .cv-brain-pulse{animation:cv-brain-pulse 2.8s ease-in-out infinite;transform-origin:center}
@@ -101,12 +101,17 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 .cv-card:hover .cv-actions{opacity:1;pointer-events:auto}
 .cv-card:hover .cv-grad-bot{opacity:1}
 .cv-abt{display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(0,0,0,.6);border:1.5px solid rgba(255,255,255,.28);border-radius:12px;padding:8px 12px;cursor:pointer;color:#fff;font-size:11px;font-weight:600;min-width:62px;transition:background .15s,transform .1s}
+.cv-abt svg{opacity:.85}
 .cv-abt span{display:block;text-align:center;white-space:nowrap}
 .cv-abt:hover{transform:scale(1.05)}
 .cv-abt-edit:hover{background:rgba(59,130,246,.4);border-color:rgba(59,130,246,.6)}
-.cv-abt-arm-on{background:rgba(239,68,68,.28);border-color:rgba(239,68,68,.7);color:#fca5a5}
+.cv-abt-arm-on{background:rgba(239,68,68,.28);border-color:rgba(239,68,68,.7);color:#fff}
+.cv-abt-arm-on svg{color:#fca5a5;opacity:1}
 .cv-abt-arm-on:hover{background:rgba(239,68,68,.4)}
 .cv-abt-tl-off{opacity:.4}
+.cv-abt-tl-on{background:rgba(168,85,247,.25);border-color:rgba(168,85,247,.65);color:#fff}
+.cv-abt-tl-on svg{color:#d8b4fe;opacity:1}
+.cv-abt-tl-on:hover{background:rgba(168,85,247,.4)}
 .cv-tl-view-link{font-size:9px;color:#d8b4fe;text-decoration:none;margin-top:1px;display:block;text-align:center}
 
 /* Legacy badge (used in camera settings list, not in grid) */

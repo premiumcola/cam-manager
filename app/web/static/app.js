@@ -311,7 +311,7 @@ function renderDashboard(){
     <div class="cv-actions">
       <button class="cv-abt cv-abt-edit" onclick="event.stopPropagation();editCamera('${esc(c.id)}')">${pencil}<span>Einstellungen</span></button>
       <button class="cv-abt ${c.armed?'cv-abt-arm-on':'cv-abt-arm-off'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})">${shieldMd}<span>${c.armed?'Alarm aus':'Alarm an'}</span></button>
-      <button class="cv-abt cv-abt-tl${tlOn?'':' cv-abt-tl-off'}" onclick="event.stopPropagation();toggleTimelapse('${esc(c.id)}',${tlOn})">${film}<span>Timelapse</span></button>
+      <button class="cv-abt ${tlOn?'cv-abt-tl-on':'cv-abt-tl-off'}" onclick="event.stopPropagation();toggleTimelapse('${esc(c.id)}',${tlOn})">${film}<span>Timelapse</span></button>
     </div>
   </div>
 </article>`;
