@@ -1857,5 +1857,117 @@ byId('confirmModal')?.addEventListener('click',e=>{if(e.target===byId('confirmMo
 // Inject random squirrel into hero on page load
 (()=>{const sq=SQUIRREL_CHARS[Math.floor(Math.random()*SQUIRREL_CHARS.length)];const el=byId('heroSquirrel');if(el)el.innerHTML=sq;})();
 
+// ── Statistics dashboard ──────────────────────────────────────────────────
+const _STAT_LABEL_ICONS={motion:'👁',person:'🧍',cat:'🐈',bird:'🐦',car:'🚗',dog:'🐕',fox:'🦊',hedgehog:'🦔',squirrel:'🐿️',horse:'🐴'};
+const _STAT_LABEL_COLORS={motion:'#36a2ff',person:'#ff6b6b',cat:'#9b8cff',bird:'#62d26f',car:'#00c2ff',dog:'#ffb020',fox:'#ff7a1a',hedgehog:'#a67c52',squirrel:'#c8651a'};
+let _statLoaded=false;
+
+async function loadStatistik(){
+  const content=byId('statContent'); if(!content) return;
+  _statLoaded=true;
+  content.innerHTML='<div class="stat-empty" style="padding:32px 0">Lade …</div>';
+  const [monthData,dayData]=await Promise.all([
+    j('/api/timeline?hours=720').catch(()=>({tracks:[],merged:[]})),
+    j('/api/timeline?hours=24').catch(()=>({tracks:[],merged:[]}))
+  ]);
+  _renderStatistik(monthData,dayData);
+}
+
+function _renderStatistik(monthData,dayData){
+  const content=byId('statContent'); if(!content) return;
+  const now=new Date();
+  const todayISO=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const weekAgoISO=new Date(now-7*24*3600*1000).toISOString();
+  const allMonth=monthData.merged||[];
+
+  const todayCount=allMonth.filter(e=>(e.time||'').startsWith(todayISO)).length;
+  const weekCount=allMonth.filter(e=>e.time>=weekAgoISO).length;
+  const monthCount=allMonth.length;
+
+  const camCounts={};
+  (monthData.tracks||[]).forEach(t=>{ camCounts[t.camera_id]=(t.points||[]).length; });
+  const cameras=state.cameras||[];
+  const maxCam=Math.max(1,...cameras.map(c=>camCounts[c.id]||0));
+
+  const labelCounts={};
+  allMonth.forEach(e=>(e.labels||[]).forEach(l=>{ labelCounts[l]=(labelCounts[l]||0)+1; }));
+  const totalLabels=Object.values(labelCounts).reduce((a,b)=>a+b,0)||1;
+  const top3=Object.entries(labelCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
+
+  const hmData={};
+  cameras.forEach(c=>{ hmData[c.id]=new Array(24).fill(0); });
+  (dayData.tracks||[]).forEach(t=>{
+    if(!hmData[t.camera_id]) hmData[t.camera_id]=new Array(24).fill(0);
+    (t.points||[]).forEach(e=>{
+      const h=new Date(e.time).getHours();
+      if(h>=0&&h<24) hmData[t.camera_id][h]++;
+    });
+  });
+  const hmMax=Math.max(1,...cameras.flatMap(c=>hmData[c.id]||[]));
+  const hmHasData=cameras.some(c=>(hmData[c.id]||[]).some(v=>v>0));
+
+  const periodPills=[['Heute',todayCount],['Diese Woche',weekCount],['Dieser Monat',monthCount]]
+    .map(([label,count])=>`<div class="stat-period-pill"><div class="stat-period-num">${count}</div><div class="stat-period-label">${label}</div></div>`).join('');
+
+  const camBars=cameras.length
+    ?cameras.map(c=>{
+      const cnt=camCounts[c.id]||0;
+      const pct=Math.round(cnt/maxCam*100);
+      return `<div class="stat-cam-bar-row">
+        <div class="stat-cam-bar-name" title="${esc(c.name||c.id)}">${getCameraIcon(c.name||c.id)}&nbsp;${esc(c.name||c.id)}</div>
+        <div class="stat-cam-bar-track"><div class="stat-cam-bar-fill" style="width:${pct}%"></div></div>
+        <div class="stat-cam-bar-count">${cnt}</div>
+      </div>`;}).join('')
+    :'<div class="stat-empty">Keine Kameras</div>';
+
+  const topLabels=top3.length
+    ?top3.map(([label,cnt])=>{
+      const pct=Math.round(cnt/totalLabels*100);
+      const color=_STAT_LABEL_COLORS[label]||'var(--accent)';
+      return `<div class="stat-label-row">
+        <div class="stat-label-icon">${_STAT_LABEL_ICONS[label]||'🔍'}</div>
+        <div class="stat-label-info">
+          <div class="stat-label-name">${esc(label)}</div>
+          <div class="stat-label-bar-wrap"><div class="stat-label-bar" style="width:${pct}%;background:${color}"></div></div>
+        </div>
+        <div class="stat-label-meta">${cnt}&thinsp;·&thinsp;${pct}%</div>
+      </div>`;}).join('')
+    :'<div class="stat-empty">Keine Erkennungen</div>';
+
+  const heatmap=hmHasData
+    ?`<div class="stat-heatmap-wrap"><div class="stat-hm-grid">
+        <div class="stat-hm-header">
+          <div class="stat-hm-cam-col"></div>
+          <div class="stat-hm-hours">${Array.from({length:24},(_,h)=>`<div class="stat-hm-hlabel">${h}</div>`).join('')}</div>
+        </div>
+        ${cameras.map(c=>{
+          const hours=hmData[c.id]||new Array(24).fill(0);
+          return `<div class="stat-hm-row">
+            <div class="stat-hm-cam" title="${esc(c.name||c.id)}">${getCameraIcon(c.name||c.id)}&nbsp;${esc(c.name||c.id)}</div>
+            <div class="stat-hm-cells">${hours.map((cnt,h)=>{
+              const alpha=cnt===0?0.12:Math.max(0.25,0.15+cnt/hmMax*0.8);
+              const bg=cnt===0?'rgba(41,48,74,0.5)':`rgba(59,130,246,${alpha.toFixed(2)})`;
+              const h0=String(h).padStart(2,'0');
+              const h1=String(h+1).padStart(2,'0');
+              return `<div class="stat-hm-cell" style="background:${bg}" data-tip="${h0}:00–${h1}:00 · ${cnt} Events"></div>`;
+            }).join('')}</div>
+          </div>`;}).join('')}
+      </div></div>`
+    :'<div class="stat-empty">Keine Ereignisse in den letzten 24h</div>';
+
+  content.innerHTML=`
+    <div class="stat-period-row">${periodPills}</div>
+    <div class="stat-split">
+      <div class="stat-card"><div class="stat-card-title">Events pro Kamera · letzter Monat</div>${camBars}</div>
+      <div class="stat-card"><div class="stat-card-title">Top Erkennungen · letzter Monat</div>${topLabels}</div>
+    </div>
+    <div class="stat-card"><div class="stat-card-title">Letzte 24h · Aktivität nach Stunde</div>${heatmap}</div>`;
+}
+
+byId('statRefreshBtn')?.addEventListener('click',()=>{ _statLoaded=false; loadStatistik(); });
+new IntersectionObserver((entries)=>{
+  if(entries.some(e=>e.isIntersecting)&&!_statLoaded) loadStatistik();
+},{threshold:0.05}).observe(byId('statistik'));
+
 loadAll().then(()=>{startLiveUpdate(); loadAchievements();});
 loadLogs();
