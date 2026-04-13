@@ -228,14 +228,31 @@ def api_settings_cameras():
     return jsonify({"cameras": settings.data.get("cameras", [])})
 
 
+_CONN_FIELDS = {"rtsp_url", "snapshot_url", "username", "password", "enabled"}
+
+
 @app.post('/api/settings/cameras')
 def api_settings_cameras_save():
+    global cfg
     payload = request.get_json(force=True) or {}
     if not payload.get("id"):
         return jsonify({"ok": False, "error": "id fehlt"}), 400
+    cam_id = payload["id"]
+    old_cfg = settings.get_camera(cam_id) or {}
     settings.upsert_camera(payload)
-    rebuild_runtimes()
-    return jsonify({"ok": True, "camera": settings.get_camera(payload["id"])})
+    # Only restart this camera's runtime when connection-relevant fields changed
+    conn_changed = any(payload.get(f) != old_cfg.get(f) for f in _CONN_FIELDS)
+    enabled_now = payload.get("enabled", True)
+    if conn_changed or (cam_id not in runtimes and enabled_now):
+        existing = runtimes.pop(cam_id, None)
+        if existing:
+            existing.stop()
+        cfg = get_effective_config()
+        if enabled_now:
+            rt = CameraRuntime(cam_id, get_camera_cfg, cfg, store, telegram_service, mqtt=mqtt_service, cat_registry=cat_registry, person_registry=person_registry)
+            runtimes[cam_id] = rt
+            rt.start()
+    return jsonify({"ok": True, "camera": settings.get_camera(cam_id), "reloaded": conn_changed})
 
 
 @app.post('/api/camera/<cam_id>/reload')

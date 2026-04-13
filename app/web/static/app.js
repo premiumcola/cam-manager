@@ -1121,7 +1121,6 @@ byId('cameraForm').onsubmit=async(e)=>{
     zones:JSON.parse(f['zones_json'].value||'[]'),masks:JSON.parse(f['masks_json'].value||'[]')};
   const _savedId=payload.id; _restoreEditWrapper();
   await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  await fetch(`/api/camera/${encodeURIComponent(_savedId)}/reload`,{method:'POST'});
   await loadAll(); editCamera(_savedId);
 };
 byId('closeCameraEdit').onclick=()=>_closeEditPanel();
@@ -1202,10 +1201,6 @@ function showCameraReloadAnimation(camId){
     },2000);
   });
 }
-byId('reloadConnectionsBtn')?.addEventListener('click',async()=>{
-  showCameraReloadAnimation(null);
-  await fetch('/api/reload',{method:'POST'});
-});
 async function reloadCamera(camId){
   showCameraReloadAnimation(camId);
   await fetch(`/api/camera/${encodeURIComponent(camId)}/reload`,{method:'POST'}).catch(()=>{});
