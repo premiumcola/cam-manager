@@ -136,13 +136,13 @@ function startLiveUpdate(){
         const card=byId('cameraCards')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
         if(card){
           // Update live pill classes
-          const livePill=card.querySelector('.cv-pill-live,.cv-pill-live-off');
+          const livePill=card.querySelector('.cv-pill-live-wrap');
           if(livePill){
             const isActive=c.status==='active';
-            livePill.classList.toggle('cv-pill-live',isActive);
-            livePill.classList.toggle('cv-pill-live-off',!isActive);
-            const hdr=livePill.querySelector('.cv-lp-header');
-            if(hdr){const t=hdr.lastChild;if(t&&t.nodeType===3)t.textContent='Livestream '+(isActive?'aktiv':'inaktiv');}
+            livePill.classList.toggle('cv-live-active',isActive);
+            livePill.classList.toggle('cv-live-off',!isActive);
+            const hdr=livePill.querySelector('.cv-live-exp-header span');
+            if(hdr) hdr.textContent='Livestream '+(isActive?'aktiv':'inaktiv');
           }
           // Always refresh snapshot periodically
           const img=card.querySelector('.cv-img');
@@ -280,10 +280,16 @@ function renderDashboard(){
 
     <!-- top-right: live pill + alarm pill -->
     <div class="cv-tr">
-      <div class="cv-pill ${isActive?'cv-pill-live':'cv-pill-live-off'}">
-        <div class="cv-pdot"></div>Live
-        <div class="cv-live-panel">
-          <div class="cv-lp-header">Livestream ${isActive?'aktiv':'inaktiv'}</div>
+      <div class="cv-pill-live-wrap ${isActive?'cv-live-active':'cv-live-off'}">
+        <div class="cv-live-collapsed">
+          <div class="cv-pdot"></div>
+          <span>Live</span>
+        </div>
+        <div class="cv-live-expanded">
+          <div class="cv-live-exp-header">
+            <div class="cv-pdot"></div>
+            <span>Livestream ${isActive?'aktiv':'inaktiv'}</span>
+          </div>
           <div class="cv-lp-row"><span>Auflösung</span><strong>${esc(c.resolution||'—')}</strong></div>
           <div class="cv-lp-row"><span>Analyse-Framerate<br><small>Wie oft TAM-spy analysiert</small></span><strong>${fps!=null?fps+' fps':'—'}</strong></div>
           <div class="cv-lp-row"><span>Snapshot-Intervall<br><small>Abstand zwischen gespeicherten Bildern</small></span><strong>${c.snapshot_interval_s!=null?c.snapshot_interval_s+'s':'—'}</strong></div>
