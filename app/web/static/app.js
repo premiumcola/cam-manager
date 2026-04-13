@@ -868,20 +868,21 @@ function hydrateSettings(){
   // MQTT badge
   const mqttBadge=byId('mqttStatusBadge');
   if(mqttBadge){mqttBadge.textContent=mqtt.enabled?'aktiv':'aus';mqttBadge.className='set-status-badge '+(mqtt.enabled?'set-status-badge--on':'set-status-badge--off');}
-  // Coral section
-  const coralEn=byId('coral_enabled'); if(coralEn) coralEn.checked=!!(proc.coral_enabled ?? coral.mode==='coral');
-  const birdEn=byId('bird_species_enabled'); if(birdEn) birdEn.checked=!!(proc.bird_species_enabled ?? coral.bird_species_enabled);
+  // Coral section — io-switch toggles
   const coralActive=!!(proc.coral_enabled ?? coral.mode==='coral');
+  const birdActive=!!(proc.bird_species_enabled ?? coral.bird_species_enabled);
+  const coralSwitch=byId('coralTpuSwitch'); if(coralSwitch) coralSwitch.classList.toggle('on',coralActive);
+  const birdSwitch=byId('birdSpeciesSwitch'); if(birdSwitch) birdSwitch.classList.toggle('on',birdActive);
   const coralBadge=byId('coralStatusBadge');
   if(coralBadge){coralBadge.textContent=coralActive?'aktiv':'aus';coralBadge.className='set-status-badge '+(coralActive?'set-status-badge--on':'set-status-badge--off');}
   const hint=byId('coralStatusHint');
   if(hint){
     const cam=state.cameras[0];
     const available=cam?.coral_available; const reason=cam?.coral_reason||'—';
-    hint.innerHTML=available
-      ? '✅ Coral TPU erkannt und aktiv.'
-      : `⚠️ Coral nicht verfügbar: <code>${esc(reason)}</code>`;
+    hint.textContent=available?'✅ Coral TPU erkannt und aktiv.':`⚠️ Coral nicht verfügbar: ${reason}`;
   }
+  // Coral device info from /api/system (async, non-blocking)
+  _updateCoralDeviceInfo();
   // Hydrate media settings form
   const storageSec=state.config.storage||{};
   const mlVal=storageSec.media_limit_default||24;
@@ -1344,12 +1345,33 @@ window.saveMqttSettings=async function(){
   showToast('MQTT gespeichert · Verbindungen werden neu gestartet.','success');
   await loadAll();
 };
-window.saveCoralSettings=async function(){
-  const payload={processing:{coral_enabled:byId('coral_enabled')?.checked||false,bird_species_enabled:byId('bird_species_enabled')?.checked||false}};
-  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  showToast('Coral-Einstellungen gespeichert · Kameras werden neu gestartet.','success');
+window._toggleCoralSetting=async function(key,swEl){
+  const nowOn=!swEl.classList.contains('on');
+  swEl.classList.toggle('on',nowOn);
+  const coralEnabled=key==='coral_enabled'?nowOn:!!(byId('coralTpuSwitch')?.classList.contains('on'));
+  const birdEnabled=key==='bird_species_enabled'?nowOn:!!(byId('birdSpeciesSwitch')?.classList.contains('on'));
+  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({processing:{coral_enabled:coralEnabled,bird_species_enabled:birdEnabled}})});
+  showToast('Coral gespeichert · Kameras werden neu gestartet.','success');
   await loadAll();
 };
+window.reloadCoralRuntime=async function(){
+  const coralEnabled=!!(byId('coralTpuSwitch')?.classList.contains('on'));
+  const birdEnabled=!!(byId('birdSpeciesSwitch')?.classList.contains('on'));
+  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({processing:{coral_enabled:coralEnabled,bird_species_enabled:birdEnabled}})});
+  showToast('Coral-Runtime neu gestartet.','success');
+  await loadAll();
+};
+async function _updateCoralDeviceInfo(){
+  const panel=byId('coralDeviceInfo'); if(!panel) return;
+  try{
+    const s=await j('/api/system');
+    if(s.coral_device){
+      panel.innerHTML=`<div class="field-help" style="margin-top:2px;color:#a78bfa">🔌 ${esc(s.coral_device)}</div>`;
+    }else{
+      panel.innerHTML='';
+    }
+  }catch(e){panel.innerHTML='';}
+}
 function _makeSquirrelHTML(){
   const msg=_RELOAD_MSGS[Math.floor(Math.random()*_RELOAD_MSGS.length)];
   const bigSvg=_SQ_SVG.replace('width="40" height="32"','width="82" height="76"');

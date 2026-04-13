@@ -530,15 +530,32 @@
 
         <!-- 5. Coral & Objekterkennung -->
         <div class="set-section" id="set-coral">
-          <button type="button" class="set-hd" onclick="toggleSetSection('set-coral')">
-            <span class="set-icon">🧠</span><span>Coral &amp; Objekterkennung</span><span id="coralStatusBadge" class="set-status-badge set-status-badge--off">aus</span><span class="set-chevron">▶</span>
-          </button>
+          <div class="set-hd-row">
+            <button type="button" class="set-hd" style="flex:1" onclick="toggleSetSection('set-coral')">
+              <span class="set-icon">🧠</span><span>Coral &amp; Objekterkennung</span><span id="coralStatusBadge" class="set-status-badge set-status-badge--off">aus</span><span class="set-chevron">▶</span>
+            </button>
+            <button type="button" class="btn-reconnect" style="margin-right:12px;flex-shrink:0" onclick="reloadCoralRuntime()" title="Coral neu initialisieren"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg> Reload</button>
+          </div>
           <div class="set-bd"><div class="set-inner">
             <div style="display:grid;gap:10px;padding-top:4px">
-              <label class="toggle-row"><span>Coral TPU aktivieren</span><label class="switch"><input type="checkbox" id="coral_enabled" /><span class="slider"></span></label></label>
-              <label class="toggle-row"><span>Vogelarten-Klassifikation aktivieren</span><label class="switch"><input type="checkbox" id="bird_species_enabled" /><span class="slider"></span></label></label>
-              <div id="coralStatusHint" class="field-help"></div>
-              <button type="button" class="settings-save-btn" onclick="saveCoralSettings()">💾 Coral speichern &amp; neu laden</button>
+              <div class="coral-toggle-row">
+                <span class="coral-toggle-label">Coral TPU</span>
+                <span class="io-switch" id="coralTpuSwitch" onclick="window._toggleCoralSetting('coral_enabled',this)">
+                  <span class="io-lbl io-lbl-1">1</span>
+                  <span class="io-track"><span class="io-thumb"></span></span>
+                  <span class="io-lbl io-lbl-0">0</span>
+                </span>
+              </div>
+              <div class="coral-toggle-row">
+                <span class="coral-toggle-label">Vogelarten-Klassifikation</span>
+                <span class="io-switch" id="birdSpeciesSwitch" onclick="window._toggleCoralSetting('bird_species_enabled',this)">
+                  <span class="io-lbl io-lbl-1">1</span>
+                  <span class="io-track"><span class="io-thumb"></span></span>
+                  <span class="io-lbl io-lbl-0">0</span>
+                </span>
+              </div>
+              <div id="coralStatusHint" class="field-help" style="margin-top:2px"></div>
+              <div id="coralDeviceInfo"></div>
             </div>
           </div></div>
         </div>
