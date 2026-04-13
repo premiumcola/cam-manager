@@ -215,6 +215,7 @@ def api_cameras():
         s["resolution"] = cam.get("resolution", "auto")
         s["frame_interval_ms"] = cam.get("frame_interval_ms", 350)
         s["snapshot_interval_s"] = cam.get("snapshot_interval_s", 3)
+        s["timelapse"] = cam.get("timelapse", {})
         cams.append(s)
     return jsonify({"cameras": cams})
 

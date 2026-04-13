@@ -311,7 +311,7 @@ function renderDashboard(){
     <div class="cv-actions">
       <button class="cv-abt cv-abt-edit" onclick="event.stopPropagation();editCamera('${esc(c.id)}')">${pencil}<span>Einstellungen</span></button>
       <button class="cv-abt ${c.armed?'cv-abt-arm-on':'cv-abt-arm-off'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})">${shieldMd}<span>${c.armed?'Alarm aus':'Alarm an'}</span></button>
-      <button class="cv-abt cv-abt-tl${tlOn?'':' cv-abt-tl-off'}" onclick="event.stopPropagation();toggleTimelapse('${esc(c.id)}',${tlOn})">${film}<span>${tlOn?'TL aus':'TL an'}</span>${tlOn?`<a class="cv-tl-view-link" onclick="event.stopPropagation();loadTimelapse('${esc(c.id)}')" href="#">&#9654; ansehen</a>`:''}</button>
+      <button class="cv-abt cv-abt-tl${tlOn?'':' cv-abt-tl-off'}" onclick="event.stopPropagation();toggleTimelapse('${esc(c.id)}',${tlOn})">${film}<span>Timelapse</span></button>
     </div>
   </div>
 </article>`;
@@ -772,10 +772,12 @@ async function toggleTimelapse(camId,currentlyEnabled){
   const newEnabled=!currentlyEnabled;
   const payload={...cam,timelapse:{...(cam.timelapse||{}),enabled:newEnabled}};
   try{
-    await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    showToast(newEnabled?'Timelapse aktiviert.':'Timelapse deaktiviert.','success');
+    const res=await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const r=await res.json();
+    if(!r.ok){showToast('Error: '+(r.error||'unknown'),'error');return;}
+    showToast(newEnabled?'Timelapse enabled.':'Timelapse disabled.','success');
     await loadAll();
-  }catch(e){showToast('Fehler beim Speichern: '+e.message,'error');}
+  }catch(e){showToast('Save failed: '+e.message,'error');}
 }
 window.toggleTimelapse=toggleTimelapse;
 
