@@ -1697,7 +1697,6 @@ byId('wizFinish').onclick=()=>finishWizard();
     const target=document.querySelector(a.getAttribute('href'));
     if(!target) return;
     const shellPaddingTop=parseInt(getComputedStyle(document.querySelector('.shell')).paddingTop)||0;
-    console.log('shell padding-top:',shellPaddingTop);
     target.scrollIntoView({behavior:'smooth',block:'start'});
   }));
 })();
