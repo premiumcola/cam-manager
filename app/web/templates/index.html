@@ -363,8 +363,8 @@
             <span id="tlActiveTags" class="tl-active-tags"></span>
             <span class="set-chevron">▶</span>
           </button>
-          <div class="set-bd"><div class="set-inner" style="padding:4px 0 8px">
-            <div id="tlSettingsContent" class="tl-settings-content">
+          <div class="set-bd"><div class="set-inner">
+            <div id="tlSettingsContent" class="tl-settings-content" style="padding:4px 0 8px">
               <!-- populated by loadTlSettings() -->
             </div>
           </div></div>
@@ -372,11 +372,9 @@
 
         <!-- 3. Kameragruppen -->
         <div class="set-section" id="set-groups">
-          <div class="set-hd-row">
-            <button type="button" class="set-hd" style="flex:1" onclick="toggleSetSection('set-groups')">
-              <span class="set-icon">📁</span><span>Kameragruppen</span><span class="set-chevron">▶</span>
-            </button>
-          </div>
+          <button type="button" class="set-hd" onclick="toggleSetSection('set-groups')">
+            <span class="set-icon">📁</span><span>Kameragruppen</span><span class="set-chevron">▶</span>
+          </button>
           <div class="set-bd"><div class="set-inner">
             <div id="groupList"></div>
             <button type="button" id="addGroupBtn" class="btn-action action-green" style="width:100%;margin-top:10px;justify-content:center"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg> Neue Gruppe</button>
@@ -411,9 +409,8 @@
           <button type="button" class="set-hd" onclick="toggleSetSection('set-telegram')">
             <span class="set-icon">📨</span><span>Telegram</span><span id="tgStatusBadge" class="set-status-badge set-status-badge--off">aus</span><span class="set-chevron">▶</span>
           </button>
-          <div class="set-bd"><div class="set-inner" style="padding-top:10px">
-
-            <div class="tg-tab-bar">
+          <div class="set-bd"><div class="set-inner">
+            <div class="tg-tab-bar" style="padding-top:10px">
               <button class="tg-tab-btn active" data-tab="tg-panel-verbindung">🔗 Verbindung</button>
               <button class="tg-tab-btn" data-tab="tg-panel-wann">⏰ Wann senden</button>
               <button class="tg-tab-btn" data-tab="tg-panel-was">📋 Was senden</button>

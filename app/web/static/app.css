@@ -178,7 +178,7 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 
 /* ── Timelapse Settings section ──────────────────────────────────────────────── */
 .set-hd-row{display:flex;align-items:center}
-.tl-active-tags{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px;margin-left:10px;flex-shrink:1;min-width:0}
+.tl-active-tags{display:inline-flex;flex-wrap:nowrap;align-items:center;gap:4px;margin-left:10px;flex-shrink:1;min-width:0;overflow:hidden}
 .tl-cam-tag{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(168,85,247,.18);color:#d8b4fe;white-space:nowrap}
 .tl-settings-content{display:grid;gap:8px;padding:4px 0}
 .tl-cam-card{border-radius:14px;background:var(--surface);border:1.5px solid rgba(255,255,255,.06);transition:border-color .2s,background .2s}
