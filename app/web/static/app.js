@@ -196,6 +196,8 @@ function _mediaPeriodParams(){
 }
 const MEDIA_PAGE_SIZE=48;
 async function loadMedia(){
+  // Timelapse filter: no API call needed, renderMediaGrid uses window._tlItems
+  if(state.mediaLabel==='timelapse'){state.media=[];state.mediaTotalPages=1;return;}
   const page=state.mediaPage||0;
   const offset=page*MEDIA_PAGE_SIZE;
   state.media=[];
@@ -1505,11 +1507,23 @@ function _updateLbConfirmBtn(confirmed){
     btn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↑</span><span style="font-size:22px;line-height:1">✓</span>';
   }
 }
+function _lbResetToPhoto(){
+  // Ensure photo mode is active (cleanup from any prior timelapse view)
+  const videoEl=byId('lightboxVideo');
+  if(videoEl){videoEl.pause();videoEl.src='';videoEl.style.display='none';}
+  byId('lightboxImg').style.display='';
+  const confirmBtn=byId('lightboxConfirm');
+  if(confirmBtn) confirmBtn.style.display='';
+  const labGrad=byId('lightboxLabelsGrad');
+  if(labGrad) labGrad.style.display='';
+}
 function openLightbox(item){
+  if(item.type==='timelapse'){openTLPlayer(item);return;}
   _lbIndex=(state.media||[]).findIndex(x=>x.event_id===item.event_id);
   if(_lbIndex===-1) return;
   _lbItem=state.media[_lbIndex];
   _lbDeletePending=false;
+  _lbResetToPhoto();
   // reset delete button
   const delBtn=byId('lightboxDelete');
   if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↓</span><span style="font-size:22px;line-height:1">🗑</span>';delBtn.title=_lbItem.confirmed?'Bestätigt — trotzdem löschen?':'Löschen';}
@@ -1527,10 +1541,39 @@ function openLightbox(item){
   byId('lightboxModal').classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
+function openTLPlayer(item){
+  _lbIndex=(state.media||[]).findIndex(x=>x.event_id===item.event_id);
+  _lbItem=_lbIndex>=0?state.media[_lbIndex]:item;
+  _lbDeletePending=false;
+  const imgEl=byId('lightboxImg'); imgEl.style.display='none';
+  const videoEl=byId('lightboxVideo');
+  videoEl.style.display='block'; videoEl.src=item.url; videoEl.load(); videoEl.play().catch(()=>{});
+  const confirmBtn=byId('lightboxConfirm'); if(confirmBtn) confirmBtn.style.display='none';
+  const labGrad=byId('lightboxLabelsGrad'); if(labGrad) labGrad.style.display='none';
+  byId('lightboxLabels').innerHTML='';
+  const delBtn=byId('lightboxDelete');
+  if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↓</span><span style="font-size:22px;line-height:1">🗑</span>';delBtn.title='Timelapse löschen';}
+  const period=item.period==='rolling_10min'?'10 min':item.period==='hour'?'Stunde':'Tag';
+  byId('lightboxMeta').innerHTML=`
+    <span class="badge">${esc(item.camera_id||'')}</span>
+    <span class="badge">Timelapse · ${esc(period)}</span>
+    <span class="badge">${esc(item.day||'')}</span>
+    <span class="badge">${item.size_mb} MB</span>`;
+  const total=(state.media||[]).length;
+  byId('lightboxPrev').style.opacity=_lbIndex>0?'1':'0.2';
+  byId('lightboxNext').style.opacity=_lbIndex<total-1?'1':'0.2';
+  byId('lightboxModal').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
 function closeLightbox(){
   byId('lightboxModal').classList.add('hidden');
   document.body.style.overflow='';
   _lbItem=null; _lbIndex=-1;
+  const videoEl=byId('lightboxVideo');
+  if(videoEl){videoEl.pause();videoEl.src='';videoEl.style.display='none';}
+  byId('lightboxImg').style.display='';
+  const confirmBtn=byId('lightboxConfirm'); if(confirmBtn) confirmBtn.style.display='';
+  const labGrad=byId('lightboxLabelsGrad'); if(labGrad) labGrad.style.display='';
 }
 byId('lightboxClose').onclick=closeLightbox;
 byId('lightboxModal').onclick=(e)=>{if(e.target===byId('lightboxModal')) closeLightbox();};
@@ -1573,6 +1616,27 @@ byId('lightboxConfirm').onclick=async()=>{
 };
 byId('lightboxDelete').onclick=async()=>{
   if(!_lbItem) return;
+  // Timelapse deletion
+  if(_lbItem.type==='timelapse'){
+    if(!_lbDeletePending){
+      _lbDeletePending=true;
+      const btn=byId('lightboxDelete');
+      if(btn){btn.classList.add('confirm-delete');btn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↓</span><span style="font-size:11px">nochmal</span>';}
+      return;
+    }
+    const filename=_lbItem.filename||(_lbItem.relpath||'').split('/').pop();
+    try{
+      await j(`/api/camera/${encodeURIComponent(_lbItem.camera_id)}/timelapse/${encodeURIComponent(filename)}`,{method:'DELETE'});
+      state.media=(state.media||[]).filter(x=>x.event_id!==_lbItem.event_id);
+      window._tlItems=(window._tlItems||[]).filter(x=>x.event_id!==_lbItem.event_id);
+      _lbIndex=Math.min(_lbIndex,(state.media||[]).length-1);
+      if(_lbIndex<0) closeLightbox();
+      else openLightbox(state.media[_lbIndex]);
+      renderMediaGrid();
+    }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
+    return;
+  }
+  // Photo event deletion
   const{camera_id,event_id}=_lbItem;
   if(!camera_id||!event_id) return;
   try{
@@ -1588,7 +1652,6 @@ byId('lightboxDelete').onclick=async()=>{
       byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
     }
     _decrementMediaOverviewCount(camera_id);
-    // Auto-advance: clamp index to new array bounds
     _lbIndex=Math.min(_lbIndex,(state.media||[]).length-1);
     if(_lbIndex<0) closeLightbox();
     else openLightbox(state.media[_lbIndex]);
@@ -1609,9 +1672,25 @@ function fmtMediaTime(ts){
     return d.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   }catch{return ts;}
 }
+const _TL_FILMSTRIP=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="18" x2="8" y2="22"/><line x1="16" y1="18" x2="16" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`;
 function mediaCardHTML(item){
+  const isTL=item.type==='timelapse';
+  if(isTL){
+    const period=item.period==='rolling_10min'?'10 min':item.period==='hour'?'Stunde':'Tag';
+    return `<article class="media-card mmc-tl" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
+      <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
+        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">
+          <div class="mmc-play-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:#d8b4fe;margin-left:2px"><polygon points="5,3 19,12 5,21"/></svg></div>
+        </div>
+        <div class="mmc-meta-bar"><span>${esc(period)} · ${item.size_mb} MB</span></div>
+        <div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge">${_TL_FILMSTRIP}Timelapse</span></div>
+        <div class="mmc-actions">
+          <button class="mmc-btn mmc-delete" title="Löschen" onclick="event.stopPropagation();window.deleteTLCard('${esc(item.camera_id||'')}','${esc(item.filename||'')}','${esc(item.event_id||'')}')">✕</button>
+        </div>
+      </div>
+    </article>`;
+  }
   const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
-  const color=camColor(item.camera_id);
   const confirmed=item.confirmed?'mmc-confirmed':'';
   const labelBubbles=(item.labels||[]).slice(0,3).map(l=>objBubble(l,26)).join('');
   return `<article class="media-card ${confirmed}" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
@@ -1675,51 +1754,46 @@ function renderMediaPagination(){
 }
 function renderMediaGrid(){
   const grid=byId('mediaGrid'); if(!grid) return;
-  const items=state.media||[];
+  const tl=window._tlItems||[];
+  let items;
+  if(state.mediaLabel==='timelapse'){
+    items=tl;
+  } else if(!state.mediaLabel && tl.length){
+    const merged=[...tl,...(state.media||[])].sort((a,b)=>{
+      const at=a.mtime||(a.time?new Date(a.time).getTime()/1000:0);
+      const bt=b.mtime||(b.time?new Date(b.time).getTime()/1000:0);
+      return bt-at;
+    });
+    items=merged;
+  } else {
+    items=state.media||[];
+  }
   grid.innerHTML=items.map(mediaCardHTML).join('')||'<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
   renderMediaPagination();
-  window._openMediaItem=id=>{const item=(state.media||[]).find(x=>x.event_id===id&&x.snapshot_relpath); if(item) openLightbox(item);};
+  window._openMediaItem=id=>{const item=items.find(x=>x.event_id===id); if(item) openLightbox(item);};
 }
+window._tlItems=[];
 async function openMediaDrilldown(camId){
   state.mediaCamera=camId;
   state.mediaLabel=''; state.mediaPeriod='week'; state.mediaPage=0;
+  window._tlItems=[];
   syncMediaPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
-  // highlight active card
   document.querySelectorAll('.moc-card').forEach(c=>c.classList.toggle('moc-active',c.onclick?.toString().includes(`'${camId}'`)));
-  await loadMedia();
+  const [,tlData]=await Promise.all([
+    loadMedia(),
+    fetch(`/api/camera/${encodeURIComponent(camId)}/timelapse/list`).then(r=>r.json()).catch(()=>({ok:false,files:[]}))
+  ]);
+  if(tlData.ok && tlData.files && tlData.files.length){
+    window._tlItems=tlData.files.map(f=>({...f,labels:['timelapse']}));
+  }
   renderMediaGrid();
-  loadTimelapseList(camId);
 }
 function closeMediaDrilldown(){
-  state.mediaCamera=null; state.media=[];
+  state.mediaCamera=null; state.media=[]; window._tlItems=[];
   byId('mediaDrilldown').style.display='none';
   byId('mediaOverview').style.display='';
-  const sec=byId('mediaTlSection'); if(sec) sec.style.display='none';
-}
-async function loadTimelapseList(camId){
-  const sec=byId('mediaTlSection'); const grid=byId('mediaTlGrid');
-  if(!sec||!grid) return;
-  try{
-    const r=await j(`/api/camera/${encodeURIComponent(camId)}/timelapse/list`);
-    if(!r.ok||!r.files||r.files.length===0){sec.style.display='none';return;}
-    const _periodLabel={day:'Tag',hour:'Stunde',rolling_10min:'10 Min'};
-    sec.style.display='';
-    grid.innerHTML=r.files.map(f=>{
-      const pd=_periodLabel[f.period]||f.period;
-      return `<article class="media-card tl-media-card" style="cursor:pointer;border:1.5px solid #7c3aed22" onclick="window.open('${esc(f.url)}','_blank')">
-        <div class="mmc-img-wrap" style="background:#1e1333;display:flex;align-items:center;justify-content:center;min-height:90px">
-          <span style="font-size:36px">🎞</span>
-          <span class="mmc-meta-bar" style="background:#7c3aed;position:absolute;top:6px;right:6px;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700;letter-spacing:.08em">TIMELAPSE</span>
-        </div>
-        <div style="padding:8px 10px">
-          <div style="font-size:12px;font-weight:600">${esc(f.day)} · ${esc(pd)}</div>
-          <div style="font-size:11px;color:var(--muted)">${f.size_mb} MB</div>
-        </div>
-      </article>`;
-    }).join('');
-  }catch(e){sec.style.display='none';}
 }
 function syncMediaPills(){
   document.querySelectorAll('.media-pill[data-type="label"]').forEach(p=>{
@@ -1757,6 +1831,18 @@ window.deleteMediaCard=async(btn)=>{
     if(card) card.remove();
     state.media=(state.media||[]).filter(x=>x.event_id!==eventId);
     _decrementMediaOverviewCount(camId);
+    if(!byId('mediaGrid').querySelector('.media-card')){
+      byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
+    }
+  }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
+};
+window.deleteTLCard=async(camId,filename,eventId)=>{
+  try{
+    await j(`/api/camera/${encodeURIComponent(camId)}/timelapse/${encodeURIComponent(filename)}`,{method:'DELETE'});
+    const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(eventId)}"]`);
+    if(card) card.remove();
+    state.media=(state.media||[]).filter(x=>x.event_id!==eventId);
+    window._tlItems=(window._tlItems||[]).filter(x=>x.event_id!==eventId);
     if(!byId('mediaGrid').querySelector('.media-card')){
       byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
     }

@@ -156,6 +156,11 @@
               <button class="media-pill" data-type="label" data-val="car" data-label-key="car">Auto</button>
               <button class="media-pill" data-type="label" data-val="motion" data-label-key="motion">Bewegung</button>
               <span class="filter-divider"></span>
+              <button class="media-pill" data-type="label" data-val="timelapse">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="18" x2="8" y2="22"/><line x1="16" y1="18" x2="16" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+                Timelapse
+              </button>
+              <span class="filter-divider"></span>
               <button class="media-pill" data-type="period" data-val="day">Heute</button>
               <button class="media-pill" data-type="period" data-val="week">7 Tage</button>
               <button class="media-pill" data-type="period" data-val="month">Monat</button>
@@ -163,10 +168,6 @@
           </div>
           <div id="mediaGrid" class="media-grid"></div>
           <div id="mediaPagination" class="media-pagination"></div>
-          <div id="mediaTlSection" style="display:none;margin-top:24px">
-            <div class="settings-divider" style="margin-top:0">Timelapse Videos</div>
-            <div id="mediaTlGrid" class="media-grid"></div>
-          </div>
         </div>
 
         <div class="set-section" id="set-media-config" style="margin-top:14px">
@@ -662,6 +663,7 @@
       <button id="lightboxClose" type="button" style="position:absolute;top:-14px;right:-14px;z-index:10;width:36px;height:36px;border-radius:50%;border:none;background:#1f3141;color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
       <div style="position:relative;display:inline-block;min-height:200px;min-width:300px">
         <img id="lightboxImg" src="" alt="Event" style="max-width:90vw;max-height:76vh;border-radius:18px;object-fit:contain;background:#081119;display:block;transition:transform .18s ease-in,opacity .18s ease-in" />
+        <video id="lightboxVideo" style="display:none;max-width:90vw;max-height:76vh;border-radius:18px;object-fit:contain;background:#080510;outline:none" controls playsinline preload="none"></video>
         <button id="lightboxPrev" type="button">‹</button>
         <button id="lightboxNext" type="button">›</button>
         <div id="lightboxLabelsGrad" style="position:absolute;bottom:0;left:0;width:320px;height:180px;background:radial-gradient(ellipse at bottom left,rgba(0,0,0,0.92) 0%,transparent 70%);border-radius:0 0 0 18px;pointer-events:none;z-index:3"></div>

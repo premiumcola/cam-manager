@@ -750,16 +750,34 @@ def api_camera_timelapse_list(cam_id):
     for mp4 in sorted(tl_dir.glob("*.mp4"), reverse=True):
         stat = mp4.stat()
         rel = mp4.relative_to(storage_root)
-        stem_parts = mp4.stem.split("_")
+        parts = mp4.stem.split("_", 1)
+        day = parts[0]
+        period = parts[1] if len(parts) > 1 else "day"
         files.append({
+            "event_id": f"tl_{mp4.stem}",
+            "camera_id": cam_id,
+            "type": "timelapse",
             "filename": mp4.name,
-            "day": stem_parts[0],
-            "period": "_".join(stem_parts[1:]) or "day",
+            "day": day,
+            "period": period,
             "url": f"/media/{rel.as_posix()}",
+            "relpath": rel.as_posix(),
             "size_mb": round(stat.st_size / 1024 / 1024, 1),
             "mtime": stat.st_mtime,
+            "time": day,
         })
     return jsonify({"ok": True, "files": files})
+
+
+@app.delete('/api/camera/<cam_id>/timelapse/<filename>')
+def api_camera_timelapse_delete(cam_id, filename):
+    if "/" in filename or "\\" in filename or ".." in filename:
+        return jsonify({"ok": False, "error": "invalid"}), 400
+    mp4 = storage_root / "timelapse" / cam_id / filename
+    if not mp4.exists():
+        return jsonify({"ok": False, "error": "not found"}), 404
+    mp4.unlink()
+    return jsonify({"ok": True})
 
 
 @app.get('/api/camera/<cam_id>/timelapse/rolling')
