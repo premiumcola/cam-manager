@@ -12,6 +12,7 @@ services:
       - "8099:8099"
     volumes:
       - ./app/config:/app/config
+      - ./app/web:/app/web
       - ./storage:/app/storage
       - ./models:/app/models
     environment:
