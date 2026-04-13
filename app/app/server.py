@@ -586,10 +586,16 @@ def api_camera_stream(cam_id):
     if not rt:
         return ("not running", 404)
     def gen():
+        import time as _time
+        _interval = 1.0 / 25  # 25 fps cap — avoids busy-spin against shared frame buffer
         while True:
+            t0 = _time.monotonic()
             data = rt.snapshot_jpeg(quality=82)
             if data:
                 yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + data + b'\r\n')
+            gap = _interval - (_time.monotonic() - t0)
+            if gap > 0:
+                _time.sleep(gap)
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 

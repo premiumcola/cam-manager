@@ -57,18 +57,24 @@ class CameraRuntime:
         self.mqtt = mqtt
         self.cat_registry = cat_registry
         self.person_registry = person_registry
-        self.frame = None
-        self.preview = None
+        # ── Shared frame buffers (all protected by self.lock) ────────────────
+        self.frame = None           # latest raw frame from main stream (main loop only writes)
+        self.preview = None         # latest annotated frame (main loop only writes)
+        self._preview_frame = None  # latest clean sub-stream frame (preview loop only writes)
+        # ── Threading ────────────────────────────────────────────────────────
         self.running = False
         self.thread = None
+        self.lock = threading.Lock()
+        self._preview_cap_lock = threading.Lock()  # guards preview_cap handle exclusively
+        # ── Connection state (main loop only) ───────────────────────────────
         self.last_event_at = datetime.min
         self.last_error = None
         self.event_counter_today = 0
-        self.capture = None
+        self.capture = None         # main RTSP capture — ONLY accessed by _loop
+        self.preview_cap = None     # sub-stream capture — ONLY accessed by _preview_loop
         self.connect_time = None
         self.prev_gray = None
         self._error_streak = 0
-        self.lock = threading.Lock()
         # Video recording state
         self._motion_frames: list = []
         self._motion_start_time: datetime | None = None
@@ -78,7 +84,6 @@ class CameraRuntime:
         self.bird_classifier = BirdSpeciesClassifier(proc.get("bird_species", {}))
         self._ach_lock = threading.Lock()
         self._ach_path = Path(self.global_cfg["storage"]["root"]) / "achievements.json"
-        self.preview_cap = None   # sub-stream capture (H.264, no pink)
         self._motion_confirm: deque = deque(maxlen=3)  # multi-frame confirmation
         self._tl_thread = None   # legacy single timelapse thread
         self._tl_threads: dict = {}  # profile_name → Thread
@@ -89,14 +94,17 @@ class CameraRuntime:
 
     def start(self):
         self.running = True
+        # Main ingest loop — sole reader of self.capture (RTSP / HTTP snapshot)
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
-        # Launch per-profile timelapse threads (always running; each self-checks enabled state)
+        # Sub-stream preview loop — sole reader of self.preview_cap
+        threading.Thread(target=self._preview_loop, daemon=True).start()
+        # Per-profile timelapse threads — read from self.frame (no direct camera access)
         for prof_name in _PROFILES:
             t = threading.Thread(target=self._timelapse_profile_loop, args=(prof_name,), daemon=True)
             t.start()
             self._tl_threads[prof_name] = t
-        # Keep legacy loop for cameras with old timelapse.enabled=True and no profiles configured
+        # Legacy loop for cameras with old timelapse.enabled=True and no profiles configured
         tl = self.cfg.get("timelapse") or {}
         has_profiles = any((tl.get("profiles") or {}).get(p, {}).get("enabled") for p in _PROFILES)
         if tl.get("enabled") and not has_profiles:
@@ -105,13 +113,21 @@ class CameraRuntime:
 
     def stop(self):
         self.running = False
-        for cap in (self.capture, self.preview_cap):
-            if cap is not None:
+        # Release main capture (only _loop touches this, so safe after running=False)
+        if self.capture is not None:
+            try:
+                self.capture.release()
+            except Exception:
+                pass
+            self.capture = None
+        # Release sub-stream capture under its dedicated lock
+        with self._preview_cap_lock:
+            if self.preview_cap is not None:
                 try:
-                    cap.release()
+                    self.preview_cap.release()
                 except Exception:
                     pass
-        self.preview_cap = None
+                self.preview_cap = None
 
     @staticmethod
     def _sub_stream_url(url: str) -> str | None:
@@ -144,26 +160,64 @@ class CameraRuntime:
             self.capture = cap
 
             # ── Sub-stream: H.264 preview for dashboard (no pink) ────────────
+            # Opened under _preview_cap_lock so _preview_loop sees a consistent handle.
             sub_url = self._sub_stream_url(rtsp_url)
             if sub_url:
                 try:
                     os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
                     pcap = cv2.VideoCapture(sub_url, cv2.CAP_FFMPEG)
                     pcap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-                    if pcap.isOpened():
-                        self.preview_cap = pcap
-                        log.info("[%s] Sub-stream opened for preview: %s", self.camera_id, sub_url)
-                    else:
-                        pcap.release()
-                        self.preview_cap = None
+                    with self._preview_cap_lock:
+                        old = self.preview_cap
+                        if pcap.isOpened():
+                            self.preview_cap = pcap
+                            log.info("[%s] Sub-stream opened for preview: %s", self.camera_id, sub_url)
+                        else:
+                            pcap.release()
+                            self.preview_cap = None
+                    # Release old handle outside the lock to avoid blocking _preview_loop
+                    if old is not None:
+                        try:
+                            old.release()
+                        except Exception:
+                            pass
                 except Exception as e:
                     log.warning("[%s] Sub-stream open failed: %s", self.camera_id, e)
-                    self.preview_cap = None
+                    with self._preview_cap_lock:
+                        self.preview_cap = None
 
             self.connect_time = time.time()
             self.prev_gray = None  # reset motion state on reconnect
         else:
             self.capture = None
+
+    def _preview_loop(self):
+        """Dedicated thread: sole reader of self.preview_cap (sub-stream).
+        Stores clean frames into self._preview_frame under self.lock.
+        No other thread touches preview_cap or _preview_frame directly.
+        """
+        while self.running:
+            with self._preview_cap_lock:
+                cap = self.preview_cap
+            if cap is None:
+                time.sleep(0.5)
+                continue
+            try:
+                with self._preview_cap_lock:
+                    # Re-check under lock: cap may have been replaced during reconnect
+                    cap = self.preview_cap
+                    if cap is None or not cap.isOpened():
+                        time.sleep(0.2)
+                        continue
+                    ok, frame = cap.read()
+                if ok and frame is not None:
+                    r = float(frame[:, :, 2].mean())
+                    b = float(frame[:, :, 0].mean())
+                    if not (r > b * 2.5 and r > 150):  # skip pink/artifact frames
+                        with self.lock:
+                            self._preview_frame = frame
+            except Exception:
+                time.sleep(0.2)
 
     def _grab_frame(self):
         if self.cfg.get("rtsp_url"):
@@ -340,6 +394,7 @@ class CameraRuntime:
             return False
 
     def _timelapse_loop(self):
+        """Legacy single-profile timelapse. Reads latest frame from main loop — no direct camera access."""
         _period_map = {"day": 86400, "hour": 3600, "rolling_10min": 600}
         while self.running:
             tl = self.cfg.get("timelapse") or {}
@@ -351,9 +406,11 @@ class CameraRuntime:
             period_s = _period_map.get(tl.get("period", "day"), 86400)
             total_frames = max(1, target_s * target_fps)
             interval_s = max(2.0, period_s / total_frames)
-            try:
-                frame = self._grab_frame()
-                if frame is not None:
+            # Read latest frame from shared buffer — no independent camera connection
+            with self.lock:
+                frame = self.frame.copy() if self.frame is not None else None
+            if frame is not None:
+                try:
                     tl_dir = (Path(self.global_cfg["storage"]["root"])
                               / "timelapse_frames" / self.camera_id
                               / datetime.now().strftime("%Y-%m-%d"))
@@ -362,15 +419,16 @@ class CameraRuntime:
                     out = tl_dir / f"{ts}.jpg"
                     cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
                     log.debug("[%s] timelapse frame saved: %s (interval=%.0fs)", self.camera_id, out.name, interval_s)
-            except Exception as e:
-                log.debug("[%s] timelapse frame error: %s", self.camera_id, e)
-            # Sleep in 1s chunks to stay responsive to stop
+                except Exception as e:
+                    log.debug("[%s] timelapse frame write error: %s", self.camera_id, e)
             deadline = time.time() + interval_s
             while self.running and time.time() < deadline:
                 time.sleep(1)
 
     def _timelapse_profile_loop(self, profile_name: str):
-        """Per-profile timelapse capture loop. Writes to timelapse_frames/<cam>/<profile>/<date>/."""
+        """Per-profile timelapse capture loop. Reads latest frame from main loop — no direct camera access.
+        Multiple profiles can run in parallel safely since they only read self.frame (never open captures).
+        Writes to timelapse_frames/<cam>/<profile>/<date>/."""
         while self.running:
             tl = self.cfg.get("timelapse") or {}
             prof = (tl.get("profiles") or {}).get(profile_name) or {}
@@ -382,9 +440,12 @@ class CameraRuntime:
             period_s = int(prof.get("period_seconds", _PROFILE_PERIOD_DEFAULTS.get(profile_name, 86400)))
             total_frames = max(1, target_s * target_fps)
             interval_s = max(2.0, period_s / total_frames)
-            try:
-                frame = self._grab_frame()
-                if frame is not None:
+            # Take a snapshot of the latest frame from the shared buffer.
+            # Slow profiles (monthly: ~34min interval) don't block fast profiles.
+            with self.lock:
+                frame = self.frame.copy() if self.frame is not None else None
+            if frame is not None:
+                try:
                     now = datetime.now()
                     tl_dir = (Path(self.global_cfg["storage"]["root"])
                               / "timelapse_frames" / self.camera_id
@@ -395,8 +456,8 @@ class CameraRuntime:
                     out = tl_dir / f"{ts}.jpg"
                     cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
                     log.debug("[%s][%s] tl frame saved: %s (%.0fs)", self.camera_id, profile_name, out.name, interval_s)
-            except Exception as e:
-                log.debug("[%s][%s] tl frame error: %s", self.camera_id, profile_name, e)
+                except Exception as e:
+                    log.debug("[%s][%s] tl frame write error: %s", self.camera_id, profile_name, e)
             deadline = time.time() + interval_s
             while self.running and time.time() < deadline:
                 time.sleep(1)
@@ -624,27 +685,18 @@ class CameraRuntime:
             time.sleep(interval)
 
     def snapshot_jpeg(self, quality=88):
-        # Prefer sub-stream (H.264, no pink) for the live dashboard thumbnail.
-        # Falls back to main-stream preview (annotated frame) if sub-stream unavailable.
-        if self.preview_cap is not None:
-            try:
-                if self.preview_cap.isOpened():
-                    ok, frame = self.preview_cap.read()
-                    if ok and frame is not None:
-                        r = float(frame[:, :, 2].mean())
-                        b = float(frame[:, :, 0].mean())
-                        if not (r > b * 2.5 and r > 150):  # skip pink frames
-                            ok2, buf = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
-                            if ok2:
-                                return buf.tobytes()
-            except Exception:
-                pass
+        """Thread-safe snapshot encoder. Reads only from shared frame buffers.
+        Priority: sub-stream clean frame → annotated main-stream frame → raw main-stream frame.
+        All three live in self.lock — safe to call from multiple HTTP threads concurrently."""
         with self.lock:
-            frame = self.preview if self.preview is not None else self.frame
+            frame = self._preview_frame if self._preview_frame is not None else (
+                self.preview if self.preview is not None else self.frame
+            )
             if frame is None:
                 return None
-            ok, buf = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
-            return buf.tobytes() if ok else None
+            frame = frame.copy()  # copy under lock so encoding happens outside
+        ok, buf = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), quality])
+        return buf.tobytes() if ok else None
 
     def status(self):
         cfg = self.cfg
