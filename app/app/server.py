@@ -208,8 +208,24 @@ def api_cameras():
             "id": cam["id"], "name": cam.get("name", cam["id"]), "location": cam.get("location", ""), "enabled": cam.get("enabled", True),
             "group_id": cam.get("group_id"), "role": cam.get("role"), "armed": cam.get("armed", True), "status": "disabled", "today_events": 0
         }
-        s["snapshot_url"] = f"/api/camera/{cam['id']}/snapshot.jpg"
+        # snap_url / stream_url are dashboard-display-only derived URLs.
+        # They MUST use a distinct key so they are never confused with the persisted
+        # upstream snapshot_url / rtsp_url (which live in settings.json).
+        s["snap_url"] = f"/api/camera/{cam['id']}/snapshot.jpg"
         s["stream_url"] = f"/api/camera/{cam['id']}/stream.mjpg"
+        # Expose real persisted connection fields from settings so that the edit form
+        # and any quick-action spreads ({...cam}) carry the correct upstream values.
+        s["snapshot_url"] = cam.get("snapshot_url", "")
+        s["rtsp_url"] = cam.get("rtsp_url", "")
+        s["username"] = cam.get("username", "")
+        s["password"] = cam.get("password", "")
+        s["object_filter"] = cam.get("object_filter", [])
+        s["telegram_enabled"] = cam.get("telegram_enabled", True)
+        s["mqtt_enabled"] = cam.get("mqtt_enabled", True)
+        s["whitelist_names"] = cam.get("whitelist_names", [])
+        s["schedule"] = cam.get("schedule", {"enabled": False, "start": "22:00", "end": "06:00"})
+        s["bottom_crop_px"] = cam.get("bottom_crop_px", 0)
+        s["motion_sensitivity"] = cam.get("motion_sensitivity", 0.5)
         s["zones"] = cam.get("zones", [])
         s["masks"] = cam.get("masks", [])
         s["resolution"] = cam.get("resolution", "auto")
@@ -259,6 +275,14 @@ def api_settings_cameras_save():
         return jsonify({"ok": False, "error": "id fehlt"}), 400
     cam_id = payload["id"]
     old_cfg = settings.get_camera(cam_id) or {}
+    # Guard: never persist dashboard-display URLs as the upstream connection fields.
+    # These get into the payload when quick-actions spread state.cameras objects.
+    for field in ("snapshot_url", "rtsp_url"):
+        val = payload.get(field, "")
+        if val.startswith("/api/camera/"):
+            # Retain the existing persisted value; display-only URLs must not overwrite it.
+            preserved = old_cfg.get(field, "")
+            payload[field] = preserved
     settings.upsert_camera(payload)
     # Only restart this camera's runtime when connection-relevant fields changed
     conn_changed = any(payload.get(f) != old_cfg.get(f) for f in _CONN_FIELDS)
@@ -540,7 +564,7 @@ def api_camera_status(cam_id):
     if not rt:
         return jsonify({"ok": False, "error": "camera not running"}), 404
     s = rt.status()
-    s["snapshot_url"] = f"/api/camera/{cam_id}/snapshot.jpg"
+    s["snap_url"] = f"/api/camera/{cam_id}/snapshot.jpg"
     s["stream_url"] = f"/api/camera/{cam_id}/stream.mjpg"
     return jsonify(s)
 

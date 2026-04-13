@@ -3,7 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from copy import deepcopy
 import json
+import logging
 import yaml
+
+log = logging.getLogger(__name__)
 
 DEFAULT_GROUPS = [
     {
@@ -149,9 +152,38 @@ class SettingsStore:
         self._ensure_camera_defaults()
         self._ensure_timelapse_settings()
         self._ensure_timelapse_profiles()
+        self._repair_snapshot_urls()
         self.data.setdefault("ui", {}).setdefault("wizard_completed", bool(self.data.get("cameras")))
         # Only write defaults when no file existed yet; never truncate an existing settings file.
         if not file_existed:
+            self.save()
+
+    def _repair_snapshot_urls(self):
+        """Repair cameras whose snapshot_url was corrupted with a dashboard display URL.
+
+        This happens when quick-action saves (toggleCameraEnabled, saveTlCameraProfiles,
+        etc.) spread state.cameras objects — which previously contained the display-only
+        /api/camera/<id>/snapshot.jpg URL — back to /api/settings/cameras.
+        For cameras present in base_config we restore both snapshot_url and rtsp_url.
+        For others we clear the broken relative URL so the error becomes recoverable.
+        """
+        base_cam_map = {c.get("id"): c for c in self.base_config.get("cameras", [])}
+        count = 0
+        for cam in self.data.get("cameras", []):
+            cam_id = cam.get("id", "")
+            if cam.get("snapshot_url", "").startswith("/api/camera/"):
+                base = base_cam_map.get(cam_id)
+                if base:
+                    cam["snapshot_url"] = base.get("snapshot_url", "")
+                    # Also restore rtsp_url if base has one (was wiped by the same bad save)
+                    if base.get("rtsp_url"):
+                        cam["rtsp_url"] = base["rtsp_url"]
+                    log.warning("settings: restored snapshot_url/rtsp_url for camera '%s' from base config", cam_id)
+                else:
+                    cam["snapshot_url"] = ""
+                    log.warning("settings: cleared corrupted snapshot_url for camera '%s' (not in base config; re-enter URL)", cam_id)
+                count += 1
+        if count:
             self.save()
 
     def save(self):
