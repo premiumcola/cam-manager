@@ -183,17 +183,18 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .tl-global-badge--off{background:rgba(255,255,255,.06);color:var(--muted)}
 .tl-global-switch{margin-right:14px;flex-shrink:0;padding:0 2px}
 .tl-settings-content{display:grid;gap:8px;padding:4px 0}
-.tl-cam-card{border-radius:14px;background:var(--surface)}
+.tl-cam-card{border-radius:14px;background:var(--surface);border:1.5px solid rgba(255,255,255,.06);transition:border-color .2s,background .2s}
+.tl-cam-card.open{border-color:rgba(168,85,247,.35);background:rgba(168,85,247,.04)}
 .tl-cam-card-head{display:flex;align-items:center;gap:10px;width:100%;padding:12px 14px;background:none;border:none;color:var(--text);text-align:left;cursor:pointer;border-radius:14px;transition:background .15s;min-height:52px}
-.tl-cam-card-head:hover,.tl-cam-card-head:focus-visible{background:#32395a;outline:none}
+.tl-cam-card-head:hover,.tl-cam-card-head:focus-visible{background:rgba(255,255,255,.04);outline:none}
 .tl-cam-card-name{font-weight:700;font-size:14px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tl-cam-chevron{font-size:10px;color:var(--muted);transition:transform .2s;flex-shrink:0;margin-left:4px}
 .tl-prof-dots{display:flex;gap:5px;align-items:center;flex-shrink:0}
 .tl-prof-dot{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.18)}
 .tl-prof-dot--on{background:#a855f7;border-color:#a855f7}
 .tl-cam-profiles{padding:0 12px 12px;display:grid;gap:8px}
-.tl-profile-card{border-radius:12px;background:var(--bg);padding:12px 14px;border:1.5px solid rgba(255,255,255,.06);transition:border-color .15s}
-.tl-profile-card--on{border-color:rgba(168,85,247,.45)}
+.tl-profile-card{border-radius:12px;background:var(--bg);padding:12px 14px;border:1.5px solid rgba(255,255,255,.06);transition:border-color .15s,background .15s}
+.tl-profile-card--on{border-color:rgba(168,85,247,.5);background:rgba(168,85,247,.07)}
 .tl-profile-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px}
 .tl-profile-info{display:flex;flex-direction:column;gap:3px;flex:1;overflow:hidden}
 .tl-profile-name{font-weight:700;font-size:13px}
@@ -204,7 +205,7 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .tl-sb-pill{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;background:rgba(168,85,247,.12);border:1.5px solid rgba(168,85,247,.3);border-radius:999px;cursor:pointer;font-size:13px;font-weight:600;color:#d8b4fe;transition:background .15s;-webkit-tap-highlight-color:transparent}
 .tl-sb-pill:hover,.tl-sb-pill:active{background:rgba(168,85,247,.22)}
 .tl-sb-count{background:rgba(168,85,247,.3);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700}
-.tl-sb-panel{margin-top:10px;padding:14px 16px;border-radius:14px;background:var(--surface);display:grid;gap:14px}
+.tl-sb-panel{margin-top:10px;padding:14px 16px;border-radius:14px;background:rgba(168,85,247,.07);border:1.5px solid rgba(168,85,247,.2);display:grid;gap:14px}
 .tl-sb-cam{display:grid;gap:6px}
 .tl-sb-cam-name{font-weight:700;font-size:13px}
 .tl-sb-profiles{display:grid;gap:4px}
@@ -214,6 +215,17 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .tl-sb-prof-interval{color:var(--muted)}
 .tl-sb-footer{padding-top:8px;border-top:1px solid rgba(255,255,255,.06)}
 @media (max-width:768px){.tl-cam-card-head{padding:10px 12px;min-height:48px}.tl-sb-prof-name{min-width:100px}.tl-profile-head{flex-wrap:nowrap}}
+/* Green switch variant for camera enable/disable */
+.switch-green input:checked + .slider{background:#22c55e;border-color:#22c55e}
+/* Settings section active-state badges */
+.set-status-badge{display:inline-flex;align-items:center;margin-left:8px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;flex-shrink:0}
+.set-status-badge--on{background:rgba(34,197,94,.14);color:#4ade80}
+.set-status-badge--off{background:rgba(255,255,255,.06);color:var(--muted)}
+/* Active profile tags in timelapse cam header */
+.tl-prof-tag{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(168,85,247,.25);color:#d8b4fe;flex-shrink:0}
+/* Timelapse nav link purple accent */
+.nav a.nav-tl-link{color:#d8b4fe}
+.nav a.nav-tl-link .nav-icon{color:#a855f7}
 /* ── Task 2: Media storage bar ──────────────────────────────────────────────── */
 .media-storage-bar{margin-bottom:10px}
 .storage-bar-inner{display:flex;flex-wrap:wrap;gap:8px}

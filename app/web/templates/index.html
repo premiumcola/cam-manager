@@ -91,6 +91,7 @@
         <a href="#dashboard" title="Kameraübersicht"><span class="nav-icon">📊</span><span class="nav-label">Kameraübersicht</span></a>
         <a href="#timeline" title="Timeline"><span class="nav-icon">⏱</span><span class="nav-label">Timeline</span></a>
         <a href="#statistik" title="Statistik"><span class="nav-icon">📈</span><span class="nav-label">Statistik</span></a>
+        <a href="#settings" title="Timelapse" class="nav-tl-link" onclick="return openTlNav()"><span class="nav-icon">🎬</span><span class="nav-label">Timelapse</span></a>
         <a href="#media" title="Mediathek"><span class="nav-icon">🎞</span><span class="nav-label">Mediathek</span></a>
         <a href="#achievements" title="Trophäen"><span class="nav-icon">🏆</span><span class="nav-label">Trophäen</span></a>
         <a href="#cameras" title="Kameras"><span class="nav-icon">📷</span><span class="nav-label">Kameras</span></a>
@@ -213,18 +214,6 @@
           <div class="cam-edit-inner">
           <div class="cam-edit-header">
             <h3 id="cameraEditTitle">Kamera bearbeiten</h3>
-            <div class="cam-header-badges">
-              <label class="cam-badge-toggle" title="Kamera aktiv">
-                <span>⚡</span><label class="switch switch-sm"><input type="checkbox" name="enabled" checked form="cameraForm" /><span class="slider"></span></label>
-              </label>
-              <label class="cam-badge-toggle" title="Telegram">
-                <span>📨</span><label class="switch switch-sm"><input type="checkbox" name="telegram_enabled" form="cameraForm" /><span class="slider"></span></label>
-              </label>
-              <label class="cam-badge-toggle" title="MQTT">
-                <span>🔌</span><label class="switch switch-sm"><input type="checkbox" name="mqtt_enabled" form="cameraForm" /><span class="slider"></span></label>
-              </label>
-            </div>
-            <button type="button" id="closeCameraEdit" class="close-btn">✕</button>
           </div>
           <form id="cameraForm" class="cam-form-compact">
             <input type="hidden" name="id" />
@@ -426,7 +415,7 @@
         <!-- 4. Telegram (contains own form#telegramForm) -->
         <div class="set-section" id="set-telegram">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-telegram')">
-            <span class="set-icon">📨</span><span>Telegram</span><span class="set-chevron">▶</span>
+            <span class="set-icon">📨</span><span>Telegram</span><span id="tgStatusBadge" class="set-status-badge set-status-badge--off">aus</span><span class="set-chevron">▶</span>
           </button>
           <div class="set-bd"><div class="set-inner" style="padding-top:10px">
 
@@ -547,7 +536,7 @@
         <!-- 5. Coral & Objekterkennung -->
         <div class="set-section" id="set-coral">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-coral')">
-            <span class="set-icon">🧠</span><span>Coral &amp; Objekterkennung</span><span class="set-chevron">▶</span>
+            <span class="set-icon">🧠</span><span>Coral &amp; Objekterkennung</span><span id="coralStatusBadge" class="set-status-badge set-status-badge--off">aus</span><span class="set-chevron">▶</span>
           </button>
           <div class="set-bd"><div class="set-inner">
             <div style="display:grid;gap:10px;padding-top:4px">
@@ -562,7 +551,7 @@
         <!-- 6. MQTT -->
         <div class="set-section" id="set-mqtt">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-mqtt')">
-            <span class="set-icon">🔌</span><span>MQTT</span><span class="set-chevron">▶</span>
+            <span class="set-icon">🔌</span><span>MQTT</span><span id="mqttStatusBadge" class="set-status-badge set-status-badge--off">aus</span><span class="set-chevron">▶</span>
           </button>
           <div class="set-bd"><div class="set-inner">
             <div style="display:grid;gap:10px;padding-top:4px">
