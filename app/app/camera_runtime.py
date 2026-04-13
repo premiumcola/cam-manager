@@ -43,6 +43,9 @@ _SPECIES_TO_ACH_ID = {
 
 log = logging.getLogger(__name__)
 
+_PROFILES = ("daily", "weekly", "monthly", "custom")
+_PROFILE_PERIOD_DEFAULTS = {"daily": 86400, "weekly": 604800, "monthly": 2592000, "custom": 600}
+
 
 class CameraRuntime:
     def __init__(self, camera_id: str, config_getter, global_cfg: dict, store, notifier, mqtt=None, cat_registry=None, person_registry=None):
@@ -77,7 +80,8 @@ class CameraRuntime:
         self._ach_path = Path(self.global_cfg["storage"]["root"]) / "achievements.json"
         self.preview_cap = None   # sub-stream capture (H.264, no pink)
         self._motion_confirm: deque = deque(maxlen=3)  # multi-frame confirmation
-        self._tl_thread = None  # timelapse snapshot thread
+        self._tl_thread = None   # legacy single timelapse thread
+        self._tl_threads: dict = {}  # profile_name → Thread
 
     @property
     def cfg(self):
@@ -87,8 +91,15 @@ class CameraRuntime:
         self.running = True
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
+        # Launch per-profile timelapse threads (always running; each self-checks enabled state)
+        for prof_name in _PROFILES:
+            t = threading.Thread(target=self._timelapse_profile_loop, args=(prof_name,), daemon=True)
+            t.start()
+            self._tl_threads[prof_name] = t
+        # Keep legacy loop for cameras with old timelapse.enabled=True and no profiles configured
         tl = self.cfg.get("timelapse") or {}
-        if tl.get("enabled"):
+        has_profiles = any((tl.get("profiles") or {}).get(p, {}).get("enabled") for p in _PROFILES)
+        if tl.get("enabled") and not has_profiles:
             self._tl_thread = threading.Thread(target=self._timelapse_loop, daemon=True)
             self._tl_thread.start()
 
@@ -354,6 +365,38 @@ class CameraRuntime:
             except Exception as e:
                 log.debug("[%s] timelapse frame error: %s", self.camera_id, e)
             # Sleep in 1s chunks to stay responsive to stop
+            deadline = time.time() + interval_s
+            while self.running and time.time() < deadline:
+                time.sleep(1)
+
+    def _timelapse_profile_loop(self, profile_name: str):
+        """Per-profile timelapse capture loop. Writes to timelapse_frames/<cam>/<profile>/<date>/."""
+        while self.running:
+            tl = self.cfg.get("timelapse") or {}
+            prof = (tl.get("profiles") or {}).get(profile_name) or {}
+            if not prof.get("enabled"):
+                time.sleep(10)
+                continue
+            target_s = int(prof.get("target_seconds", 60))
+            target_fps = int(tl.get("fps", 30))
+            period_s = int(prof.get("period_seconds", _PROFILE_PERIOD_DEFAULTS.get(profile_name, 86400)))
+            total_frames = max(1, target_s * target_fps)
+            interval_s = max(2.0, period_s / total_frames)
+            try:
+                frame = self._grab_frame()
+                if frame is not None:
+                    now = datetime.now()
+                    tl_dir = (Path(self.global_cfg["storage"]["root"])
+                              / "timelapse_frames" / self.camera_id
+                              / profile_name
+                              / now.strftime("%Y-%m-%d"))
+                    tl_dir.mkdir(parents=True, exist_ok=True)
+                    ts = now.strftime("%H%M%S_%f")[:10]
+                    out = tl_dir / f"{ts}.jpg"
+                    cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
+                    log.debug("[%s][%s] tl frame saved: %s (%.0fs)", self.camera_id, profile_name, out.name, interval_s)
+            except Exception as e:
+                log.debug("[%s][%s] tl frame error: %s", self.camera_id, profile_name, e)
             deadline = time.time() + interval_s
             while self.running and time.time() < deadline:
                 time.sleep(1)

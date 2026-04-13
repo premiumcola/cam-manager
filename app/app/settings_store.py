@@ -53,8 +53,21 @@ class SettingsStore:
         self.data = self._build_defaults(base_config)
         self.load()
 
+    _TL_DEFAULT_PROFILES = {
+        "daily":   {"enabled": False, "target_seconds": 60,  "period_seconds": 86400},
+        "weekly":  {"enabled": False, "target_seconds": 180, "period_seconds": 604800},
+        "monthly": {"enabled": False, "target_seconds": 300, "period_seconds": 2592000},
+        "custom":  {"enabled": False, "target_seconds": 30,  "period_seconds": 600},
+    }
+
     def _default_camera(self, cam: dict | None = None) -> dict:
         cam = cam or {}
+        _tl = cam.get("timelapse") or {}
+        _existing_profiles = _tl.get("profiles") or {}
+        _merged_profiles = {
+            pname: {**pdefault, **(_existing_profiles.get(pname) or {})}
+            for pname, pdefault in self._TL_DEFAULT_PROFILES.items()
+        }
         return {
             "id": cam.get("id", ""),
             "name": cam.get("name", cam.get("id", "")),
@@ -68,12 +81,13 @@ class SettingsStore:
             "role": cam.get("role", cam.get("group_id", "Bereichsübersicht")),
             "object_filter": cam.get("object_filter", ["person", "cat", "bird"]),
             "timelapse": {
-                "enabled": (cam.get("timelapse") or {}).get("enabled", False),
-                "fps": (cam.get("timelapse") or {}).get("fps", 30),
-                "period": (cam.get("timelapse") or {}).get("period", "day"),
-                "daily_target_seconds": (cam.get("timelapse") or {}).get("daily_target_seconds", 60),
-                "weekly_target_seconds": (cam.get("timelapse") or {}).get("weekly_target_seconds", 180),
-                "telegram_send": (cam.get("timelapse") or {}).get("telegram_send", False),
+                "enabled": _tl.get("enabled", False),
+                "fps": _tl.get("fps", 30),
+                "period": _tl.get("period", "day"),
+                "daily_target_seconds": _tl.get("daily_target_seconds", 60),
+                "weekly_target_seconds": _tl.get("weekly_target_seconds", 180),
+                "telegram_send": _tl.get("telegram_send", False),
+                "profiles": _merged_profiles,
             },
             "zones": cam.get("zones", []),
             "masks": cam.get("masks", []),
@@ -118,6 +132,9 @@ class SettingsStore:
             "telegram_actions": [],
             "review": {},
             "ui": {"wizard_completed": bool(cams)},
+            "timelapse_settings": {
+                "global_enabled": base_config.get("timelapse_settings", {}).get("global_enabled", False),
+            },
         }
 
     def load(self):
@@ -130,6 +147,8 @@ class SettingsStore:
                 pass
         self._ensure_groups()
         self._ensure_camera_defaults()
+        self._ensure_timelapse_settings()
+        self._ensure_timelapse_profiles()
         self.data.setdefault("ui", {}).setdefault("wizard_completed", bool(self.data.get("cameras")))
         # Only write defaults when no file existed yet; never truncate an existing settings file.
         if not file_existed:
@@ -137,6 +156,22 @@ class SettingsStore:
 
     def save(self):
         self.path.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _ensure_timelapse_settings(self):
+        self.data.setdefault("timelapse_settings", {"global_enabled": False})
+
+    def _ensure_timelapse_profiles(self):
+        """Additively add missing timelapse profile keys to existing cameras."""
+        for cam in self.data.get("cameras", []):
+            tl = cam.setdefault("timelapse", {})
+            profiles = tl.setdefault("profiles", {})
+            for pname, pdefault in self._TL_DEFAULT_PROFILES.items():
+                prof = profiles.setdefault(pname, {})
+                for k, v in pdefault.items():
+                    prof.setdefault(k, v)
+            # Migrate: if old timelapse.enabled=True but no profile enabled, enable daily
+            if tl.get("enabled") and not any(p.get("enabled") for p in profiles.values()):
+                profiles["daily"]["enabled"] = True
 
     def _ensure_groups(self):
         existing = {g.get("id") for g in self.data.get("camera_groups", [])}
@@ -236,7 +271,7 @@ class SettingsStore:
         loaded = yaml.safe_load(text) if format == "yaml" else json.loads(text)
         if not isinstance(loaded, dict):
             raise ValueError("Import muss ein Objekt enthalten")
-        allowed = {"app", "server", "telegram", "mqtt", "camera_groups", "cameras", "ui", "review", "telegram_actions"}
+        allowed = {"app", "server", "telegram", "mqtt", "camera_groups", "cameras", "ui", "review", "telegram_actions", "timelapse_settings"}
         for key, value in loaded.items():
             if key in allowed:
                 self.data[key] = value

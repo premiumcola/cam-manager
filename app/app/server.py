@@ -704,6 +704,60 @@ def api_telegram_test():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.get('/api/timelapse/status')
+def api_timelapse_status():
+    from .camera_runtime import _PROFILES, _PROFILE_PERIOD_DEFAULTS
+    today = datetime.now().strftime("%Y-%m-%d")
+    tl_settings = settings.data.get("timelapse_settings", {})
+    global_enabled = bool(tl_settings.get("global_enabled", False))
+    cameras_out = []
+    for cam in settings.data.get("cameras", []):
+        cam_id = cam["id"]
+        tl = cam.get("timelapse") or {}
+        profiles = tl.get("profiles") or {}
+        fps = int(tl.get("fps", 30))
+        prof_status = {}
+        any_active = False
+        for pname in _PROFILES:
+            prof = profiles.get(pname) or {}
+            enabled = bool(prof.get("enabled"))
+            if enabled:
+                any_active = True
+            fc = timelapse_builder.frame_count(cam_id, pname, today)
+            target_s = int(prof.get("target_seconds", 60))
+            period_s = int(prof.get("period_seconds", _PROFILE_PERIOD_DEFAULTS.get(pname, 86400)))
+            interval_s = max(2, round(period_s / max(1, target_s * fps)))
+            prof_status[pname] = {
+                "enabled": enabled,
+                "frame_count": fc,
+                "interval_s": interval_s,
+            }
+        cameras_out.append({
+            "camera_id": cam_id,
+            "name": cam.get("name", cam_id),
+            "any_active": any_active,
+            "profiles": prof_status,
+        })
+    total_active = sum(1 for c in cameras_out if c["any_active"])
+    return jsonify({
+        "ok": True,
+        "global_enabled": global_enabled,
+        "active_count": total_active,
+        "cameras": cameras_out,
+        "today": today,
+    })
+
+
+@app.post('/api/settings/timelapse')
+def api_settings_timelapse_save():
+    payload = request.get_json(force=True) or {}
+    ts = settings.data.setdefault("timelapse_settings", {})
+    if "global_enabled" in payload:
+        ts["global_enabled"] = bool(payload["global_enabled"])
+    settings.save()
+    return jsonify({"ok": True})
+
+
 @app.get('/api/camera/<cam_id>/timelapse')
 def api_camera_timelapse(cam_id):
     cam_cfg = settings.get_camera(cam_id)
