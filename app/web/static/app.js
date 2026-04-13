@@ -328,6 +328,8 @@ function renderDashboard(){
     let _t=null;
     el.addEventListener('mouseenter',()=>{clearTimeout(_t);el.classList.add('cv-lp-open');});
     el.addEventListener('mouseleave',()=>{_t=setTimeout(()=>el.classList.remove('cv-lp-open'),120);});
+    el.addEventListener('touchstart',e=>{e.stopPropagation();clearTimeout(_t);const open=el.classList.toggle('cv-lp-open');if(!open)clearTimeout(_t);},{passive:true});
+    document.addEventListener('touchstart',e=>{if(!el.contains(e.target)){clearTimeout(_t);el.classList.remove('cv-lp-open');}},{passive:true});
   });
 }
 
@@ -378,19 +380,12 @@ function renderTimeline(){
   });
   const now=Date.now();
 
-  // Set slider max to actual data range so user can't scroll past available data
   const slider=byId('tlRangeSlider');
-  if(slider&&earliestMs){
+  if(slider&&earliestMs&&!state._tlInitialized){
     const dataHours=Math.max(1,Math.ceil((now-earliestMs)/3600000));
-    slider.max=dataHours;
-    if(!state._tlInitialized){
-      state.tlHours=dataHours;
-      state._tlInitialized=true;
-      slider.value=dataHours;
-    } else if(state.tlHours>dataHours){
-      state.tlHours=dataHours;
-      slider.value=dataHours;
-    }
+    state.tlHours=dataHours;
+    state._tlInitialized=true;
+    slider.value=dataHours;
   }
 
   const hours=state.tlHours||12;
@@ -1519,7 +1514,7 @@ byId('cleanupNowBtn').onclick=async()=>{
 };
 
 byId('purgeOrphansBtn').onclick=async()=>{
-  if(!await showConfirm('Verwaiste Events löschen? Alle Event-Einträge ohne zugehörige Snapshot-Datei werden entfernt.')) return;
+  if(!await showConfirm('Verwaiste Events löschen? Alle Event-Einträge ohne zugehörige Mediendatei werden entfernt.')) return;
   try{
     const r=await j('/api/media/purge-orphans',{method:'POST'});
     showToast(`${r.removed||0} verwaiste Events entfernt.`,'success');
@@ -1654,7 +1649,7 @@ byId('rescanMediaBtn')?.addEventListener('click',async()=>{
     showToast(`Scan abgeschlossen: ${r.registered||0} neue Medien registriert.`,'success');
     await loadAll();
   }catch(e){showToast('Fehler beim Scan: '+e.message,'error');}
-  finally{btn.disabled=false;btn.textContent='🔍 Neu scannen';}
+  finally{btn.disabled=false;btn.textContent='🔄 Neu scannen';}
 });
 
 // ── Lightbox / Media viewer ───────────────────────────────────────────────────
