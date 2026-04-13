@@ -48,6 +48,22 @@ base_cfg = load_config()
 storage_root = Path(base_cfg["storage"]["root"])
 web_root = Path(__file__).resolve().parent.parent / "web"
 app = Flask(__name__, template_folder=str(web_root / "templates"), static_folder=str(web_root / "static"))
+
+import hashlib as _hashlib
+import pathlib as _pathlib
+_static_hashes: dict[str, str] = {}
+
+def _file_hash(filename: str) -> str:
+    if filename not in _static_hashes:
+        path = _pathlib.Path(__file__).parent.parent / "web" / "static" / filename
+        try:
+            _static_hashes[filename] = _hashlib.md5(path.read_bytes()).hexdigest()[:8]
+        except Exception:
+            _static_hashes[filename] = "0"
+    return _static_hashes[filename]
+
+app.jinja_env.globals["static_v"] = _file_hash
+
 store = EventStore(str(storage_root))
 settings = SettingsStore(storage_root / "settings.json", base_cfg)
 cfg = settings.export_effective_config(base_cfg)
