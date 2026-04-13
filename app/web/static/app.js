@@ -6,10 +6,11 @@ window.showToast=function(msg,type='info'){
   const c=byId('toastContainer'); if(!c) return;
   const t=document.createElement('div');
   t.className=`toast ${type}`;
-  t.innerHTML=`<span class="toast-msg">${esc(msg)}</span><button class="toast-close" onclick="this.closest('.toast').remove()">✕</button>`;
+  const icons={warn:'⚠️',error:'✕',success:'✓',info:'ℹ'};
+  t.innerHTML=`<span class="toast-icon">${icons[type]||'ℹ'}</span><span class="toast-msg">${esc(msg)}</span><button class="toast-close" onclick="this.closest('.toast').remove()">✕</button>`;
   c.appendChild(t);
   const dismiss=()=>{ t.classList.add('toast-out'); t.addEventListener('animationend',()=>t.remove(),{once:true}); };
-  setTimeout(dismiss,4000);
+  setTimeout(dismiss, type==='error'?8000:type==='warn'||type==='info'?6000:4000);
 };
 
 let _confirmResolve=null;
@@ -749,7 +750,15 @@ async function renderAudit(){ const actions=await j('/api/telegram/actions'); by
 async function toggleArm(camId,armed){ await fetch(`/api/camera/${camId}/arm`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({armed})}); await loadAll(); }
 window.toggleArm=toggleArm;
 window._cvCardClick=function(e,camId){ /* clicking the card itself does nothing extra */ };
-async function loadTimelapse(camId){ try{ const r=await j(`/api/camera/${camId}/timelapse`); if(r.url) window.open(r.url,'_blank'); }catch(e){ showToast('Kein Zeitraffer verfügbar.','warn'); } }
+async function loadTimelapse(camId){
+  const res=await fetch(`/api/camera/${encodeURIComponent(camId)}/timelapse`);
+  const r=await res.json();
+  if(r.ok&&r.url){window.open(r.url,'_blank');return;}
+  if(r.error==='building'){showToast('Timelapse wird gerade gebaut – bitte in ~15 Sekunden nochmal klicken.','info');return;}
+  if(r.error==='no_frames'){showToast('Noch keine Bilder für heute aufgezeichnet.','warn');return;}
+  if(r.error==='timelapse disabled'){showToast('Timelapse ist für diese Kamera deaktiviert. Bitte in den Kamera-Einstellungen aktivieren.','warn');return;}
+  showToast('Kein Zeitraffer verfügbar für '+(r.day||'heute')+'.','warn');
+}
 window.loadTimelapse=loadTimelapse;
 
 function hydrateSettings(){

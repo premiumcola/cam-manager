@@ -715,7 +715,17 @@ def api_camera_timelapse(cam_id):
     force = request.args.get("force") == "1"
     path = timelapse_builder.build_for_day(cam_id, day, fps=int(tl_cfg.get("fps", 12)), force=force)
     if not path:
-        return jsonify({"ok": False, "error": "no timelapse data", "day": day}), 404
+        # Check whether there are any frames at all for this day
+        day_dir = store.events_dir / cam_id / day
+        has_frames = day_dir.exists() and any(day_dir.rglob("*.jpg"))
+        if not has_frames:
+            return jsonify({"ok": False, "error": "no_frames", "day": day}), 404
+        # Frames exist but no MP4 yet — trigger build in background
+        import threading as _thr
+        def _bg_build():
+            timelapse_builder.build_for_day(cam_id, day, fps=int(tl_cfg.get("fps", 12)), force=True)
+        _thr.Thread(target=_bg_build, daemon=True).start()
+        return jsonify({"ok": False, "error": "building", "day": day, "retry_after": 15}), 202
     rel = Path(path).relative_to(storage_root)
     return jsonify({"ok": True, "day": day, "url": f"/media/{rel.as_posix()}"})
 
