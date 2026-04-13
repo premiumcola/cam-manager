@@ -134,14 +134,14 @@ function startLiveUpdate(){
         // Dashboard card: refresh snapshot image on status change
         const card=byId('cameraCards')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
         if(card){
-          // Update stream status icon class
-          const stIcon=card.querySelector('.cv-st-active,.cv-st-error,.cv-st-warn,.cv-icon[title^="Stream"]');
-          if(stIcon){
-            stIcon.classList.remove('cv-st-active','cv-st-error','cv-st-warn');
-            stIcon.classList.add(c.status==='active'?'cv-st-active':c.status==='error'?'cv-st-error':'cv-st-warn');
+          // Update live/offline badge
+          const liveBadge=card.querySelector('.cv-badge-live,.cv-badge-offline');
+          if(liveBadge){
+            const isActive=c.status==='active';
+            liveBadge.classList.toggle('cv-badge-live',isActive);
+            liveBadge.classList.toggle('cv-badge-offline',!isActive);
+            liveBadge.title=isActive?'Live – Stream aktiv':c.status==='error'?'Fehler – Stream verloren':'Verbinde…';
           }
-          const dot=card.querySelector('.cv-live-dot');
-          if(dot){dot.className='cv-live-dot cv-live-'+(c.status==='active'?'green':c.status==='error'?'red':'amber');}
           // Always refresh snapshot periodically (every cycle when image is visible)
           const img=card.querySelector('.cv-img');
           if(img){const base=img.src.split('?')[0];img.src=base+'?t='+Date.now();}
@@ -256,9 +256,11 @@ function renderDashboard(){
       <span class="cv-group-pill">${esc(c.group_id||'—')}</span>
     </div>
 
-    <!-- top-right: live pill or offline badge -->
+    <!-- top-right: always-visible status badges (live · armed · ai) -->
     <div class="cv-icons">
-      ${c.status==='active'?'<span class="live-pill">Live</span>':'<span class="cv-offline">offline</span>'}
+      <div class="cv-badge ${c.status==='active'?'cv-badge-live':'cv-badge-offline'}" title="${c.status==='active'?'Live – Stream aktiv':c.status==='error'?'Fehler – Stream verloren':'Verbinde…'}"><div class="cv-badge-dot"></div></div>
+      <div class="cv-badge ${c.armed?'cv-badge-armed':'cv-badge-unarmed'}" title="${c.armed?'Scharf':'Unscharf'}"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M12 2 4 5v6c0 5.3 3.5 10.2 8 11.4 4.5-1.2 8-6.1 8-11.4V5Z"/></svg></div>
+      <div class="cv-badge ${c.coral_available?'cv-badge-coral':'cv-badge-cpu'}" title="${c.coral_available?'Coral TPU aktiv':'Software-Erkennung (CPU)'}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="12" rx="10" ry="6.5"/><circle cx="12" cy="12" r="2.8" fill="currentColor" stroke="none"/></svg></div>
     </div>
 
     <!-- bottom: hover actions + arm toggle + event count -->
