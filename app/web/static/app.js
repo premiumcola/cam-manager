@@ -134,19 +134,16 @@ function startLiveUpdate(){
         // Dashboard card: refresh snapshot image on status change
         const card=byId('cameraCards')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
         if(card){
-          // Update live pill
-          const livePill=card.querySelector('.cv-live-pill');
+          // Update live pill classes
+          const livePill=card.querySelector('.cv-pill-live,.cv-pill-live-off');
           if(livePill){
             const isActive=c.status==='active';
-            livePill.classList.toggle('cv-live-pill--active',isActive);
-            livePill.classList.toggle('cv-live-pill--offline',!isActive);
-            livePill.title=isActive?'Stream aktiv':c.status==='error'?'Verbindungsfehler':'Verbinde…';
-            const lbl=livePill.querySelector('.cv-live-label');
-            if(lbl) lbl.textContent=isActive?'LIVE':c.status==='error'?'FEHLER':'WARTEN';
-            const hoverStatus=livePill.querySelector('.cv-live-hover div');
-            if(hoverStatus) hoverStatus.innerHTML=`<b>Status:</b> ${c.status||'—'}`;
+            livePill.classList.toggle('cv-pill-live',isActive);
+            livePill.classList.toggle('cv-pill-live-off',!isActive);
+            const hdr=livePill.querySelector('.cv-lp-header');
+            if(hdr){const t=hdr.lastChild;if(t&&t.nodeType===3)t.textContent='Livestream '+(isActive?'aktiv':'inaktiv');}
           }
-          // Always refresh snapshot periodically (every cycle when image is visible)
+          // Always refresh snapshot periodically
           const img=card.querySelector('.cv-img');
           if(img){const base=img.src.split('?')[0];img.src=base+'?t='+Date.now();}
         }
@@ -237,22 +234,31 @@ function renderDashboard(){
   const cams=state.cameras;
   const gridCls=_camGridCols(cams.length);
   byId('cameraCards').className=`camera-grid ${gridCls}`;
+  // shared SVGs
+  const shieldSm=`<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M12 2 4 5v6c0 5.3 3.5 10.2 8 11.4 4.5-1.2 8-6.1 8-11.4V5Z"/></svg>`;
+  const shieldMd=`<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M12 2 4 5v6c0 5.3 3.5 10.2 8 11.4 4.5-1.2 8-6.1 8-11.4V5Z"/></svg>`;
+  const pencil=`<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>`;
+  const film=`<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="18" x2="8" y2="22"/><line x1="16" y1="18" x2="16" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`;
   byId('cameraCards').innerHTML=cams.map(c=>{
     const snapUrl=`/api/camera/${esc(c.id)}/snapshot.jpg?t=${Date.now()}`;
     const isActive=c.status==='active';
-    const liveStatusCls=isActive?'cv-live-pill--active':'cv-live-pill--offline';
-    const liveLabel=isActive?'LIVE':c.status==='error'?'FEHLER':'WARTEN';
-    const liveTitle=isActive?'Stream aktiv':c.status==='error'?'Verbindungsfehler':'Verbinde…';
-    const alarmCls=c.armed?'cv-alarm-pill--armed':'cv-alarm-pill--unarmed';
     const tlOn=!!(c.timelapse&&c.timelapse.enabled);
-    const tlCls=tlOn?'cv-tl-pill--on':'cv-tl-pill--off';
-    const aiCls=c.coral_available?'cv-detect-ai--coral':'';
-    const aiTitle=c.coral_available?'Coral TPU':'CPU';
-    const filmSVG=`<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 4v16M17 4v16M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>`;
-    const shieldSVG=`<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M12 2 4 5v6c0 5.3 3.5 10.2 8 11.4 4.5-1.2 8-6.1 8-11.4V5Z"/></svg>`;
-    const pencilSVG=`<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
-    const brainSVG=`<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-1.98-3 2.5 2.5 0 0 1-1.32-4.24 3 3 0 0 1 .34-5.58 2.5 2.5 0 0 1 1.32-4.5 2.5 2.5 0 0 1 4.6-1.22Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 1.98-3 2.5 2.5 0 0 0 1.32-4.24 3 3 0 0 0-.34-5.58 2.5 2.5 0 0 0-1.32-4.5 2.5 2.5 0 0 0-4.6-1.22Z"/></svg>`;
-    const motionSVG=`<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M15 7l5 5-5 5"/></svg>`;
+    const fps=c.frame_interval_ms?Math.round(1000/c.frame_interval_ms):null;
+
+    // Brain SVG (13×13) — pulsing when Coral available
+    const brainCol=c.coral_available?'#93c5fd':'rgba(255,255,255,.25)';
+    const brainCls=c.coral_available?' class="cv-brain-pulse"':'';
+    const brainSVG=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="${brainCol}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${brainCls} aria-hidden="true"><path d="M12 2C8.5 2 6 4.5 6 7.5c0 1.5.5 2.8 1.4 3.8C6.5 12 6 13 6 14c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4 0-1-.5-2-1.4-2.7.9-1 1.4-2.3 1.4-3.8C18 4.5 15.5 2 12 2z"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>`;
+
+    // Motion SVG (13×13) — animated when stream active
+    const motCol=isActive?'#5eead4':'rgba(255,255,255,.25)';
+    const motCls=isActive?' class="cv-motion-wave"':'';
+    const motSVG=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="${motCol}" stroke-width="2.2" stroke-linecap="round"${motCls} aria-hidden="true"><circle cx="12" cy="12" r="3"/><line x1="5" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="19" y2="12"/><line x1="12" y1="5" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="19"/><line x1="8" y1="8" x2="9.4" y2="9.4"/><line x1="14.6" y1="14.6" x2="16" y2="16"/><line x1="16" y1="8" x2="14.6" y2="9.4"/><line x1="8" y1="16" x2="9.4" y2="14.6"/></svg>`;
+
+    // Timelapse filmstrip icon with bars + optional scan line
+    const barCol=tlOn?'#d8b4fe':'rgba(255,255,255,.18)';
+    const tlIcon=`<div class="cv-tl-icon"><div class="cv-tl-bar" style="background:${barCol}"></div><div class="cv-tl-bar hi" style="background:${barCol}"></div><div class="cv-tl-bar" style="background:${barCol}"></div><div class="cv-tl-bar hi" style="background:${barCol}"></div>${tlOn?'<div class="cv-tl-scan"></div>':''}</div>`;
+
     return `<article class="cv-card" data-camid="${esc(c.id)}" onclick="_cvCardClick(event,'${esc(c.id)}')">
   <div class="cv-frame">
     <div class="cv-img-wrap">
@@ -272,35 +278,33 @@ function renderDashboard(){
     </div>
 
     <!-- top-right: live pill + alarm pill -->
-    <div class="cv-status-pills">
-      <div class="cv-live-pill ${liveStatusCls}" title="${liveTitle}">
-        <span class="cv-live-dot-sm"></span>
-        <span class="cv-live-label">${liveLabel}</span>
-        <div class="cv-live-hover">
-          <div><b>Status:</b> ${esc(c.status||'—')}</div>
-          <div><b>KI:</b> ${aiTitle}</div>
-          ${c.today_events!=null?`<div><b>Heute:</b> ${c.today_events} Erkennungen</div>`:''}
+    <div class="cv-tr">
+      <div class="cv-pill ${isActive?'cv-pill-live':'cv-pill-live-off'}">
+        <div class="cv-pdot"></div>Live
+        <div class="cv-live-panel">
+          <div class="cv-lp-header"><div class="cv-pdot"></div>Livestream ${isActive?'aktiv':'inaktiv'}</div>
+          <div class="cv-lp-row"><span>Auflösung</span><strong>${esc(c.resolution||'—')}</strong></div>
+          <div class="cv-lp-row"><span>Analyse-Framerate<br><small>Wie oft TAM-spy analysiert</small></span><strong>${fps!=null?fps+' fps':'—'}</strong></div>
+          <div class="cv-lp-row"><span>Snapshot-Intervall<br><small>Abstand zwischen gespeicherten Bildern</small></span><strong>${c.snapshot_interval_s!=null?c.snapshot_interval_s+'s':'—'}</strong></div>
         </div>
       </div>
-      <div class="cv-alarm-pill ${alarmCls}" title="${c.armed?'Scharf':'Unscharf'}">
-        ${shieldSVG}<span class="cv-alarm-label">${c.armed?'ARM':'OFF'}</span>
+      <div class="cv-pill ${c.armed?'cv-pill-alarm-on':'cv-pill-alarm-off'}">${shieldSm}${c.armed?'Alarm an':'Alarm aus'}</div>
+    </div>
+
+    <!-- bottom-right: timelapse pill + split detection badge -->
+    <div class="cv-br">
+      <div class="cv-pill ${tlOn?'cv-pill-tl':'cv-pill-tl-off'}">${tlIcon}Timelapse${tlOn?' aktiv':' aus'}</div>
+      <div class="cv-split-badge">
+        <div class="cv-sb-half ${c.coral_available?'cv-sb-obj':'cv-sb-obj-off'}">${brainSVG} Objekte</div>
+        <div class="cv-sb-half ${isActive?'cv-sb-mot':'cv-sb-mot-off'}">${motSVG} Bewegung</div>
       </div>
     </div>
 
-    <!-- bottom-right: timelapse pill + detection badge -->
-    <div class="cv-bot-right">
-      <div class="cv-tl-pill ${tlCls}" title="${tlOn?'Timelapse aktiv':'Timelapse inaktiv'}">${filmSVG}<span style="font-size:10px;font-weight:700;letter-spacing:.04em">TL</span></div>
-      <div class="cv-detect-badge" title="KI: ${aiTitle}">
-        <div class="cv-detect-half cv-detect-ai ${aiCls}">${brainSVG}</div>
-        <div class="cv-detect-half cv-detect-motion">${motionSVG}</div>
-      </div>
-    </div>
-
-    <!-- bottom-left: hover-only action buttons -->
-    <div class="cv-btns">
-      <button class="cv-btn" title="Bearbeiten" onclick="event.stopPropagation();editCamera('${esc(c.id)}')">${pencilSVG}</button>
-      <button class="cv-btn${c.armed?' cv-btn--armed':''}" title="${c.armed?'Unscharf schalten':'Scharf schalten'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})">${shieldSVG}</button>
-      <button class="cv-btn" title="Timelapse ansehen" onclick="event.stopPropagation();loadTimelapse('${esc(c.id)}')">${filmSVG}</button>
+    <!-- bottom: hover action buttons (icon + label) -->
+    <div class="cv-actions">
+      <button class="cv-abt cv-abt-edit" onclick="event.stopPropagation();editCamera('${esc(c.id)}')">${pencil}<span>Einstellungen</span></button>
+      <button class="cv-abt ${c.armed?'cv-abt-arm-on':'cv-abt-arm-off'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})">${shieldMd}<span>${c.armed?'Alarm aus':'Alarm an'}</span></button>
+      <button class="cv-abt cv-abt-tl${tlOn?'':' cv-abt-tl-off'}" onclick="event.stopPropagation();loadTimelapse('${esc(c.id)}')">${film}<span>Timelapse</span></button>
     </div>
   </div>
 </article>`;
