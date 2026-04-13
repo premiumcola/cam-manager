@@ -509,8 +509,13 @@ function parseRtspUrl(url){
   }catch{return{};}
 }
 
+window.toggleCameraEnabled=async function(camId,enabled){
+  const cam=(state.cameras||[]).find(x=>x.id===camId);
+  if(!cam) return;
+  await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...cam,enabled})});
+  await loadAll();
+};
 function renderCameraSettings(){
-  const stCol=s=>s==='active'?'good':s==='error'?'danger':'warn';
   byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`
     <div class="cam-item" data-camid="${esc(c.id)}">
       <div class="cam-item-head" style="cursor:pointer" onclick="editCamera('${esc(c.id)}')">
@@ -518,12 +523,11 @@ function renderCameraSettings(){
           <span style="font-size:22px;line-height:1;flex-shrink:0">${getCameraIcon(c.name)}</span>
           <div>
             <div style="font-weight:700;font-size:15px">${esc(c.name)}</div>
-            <div class="small">${esc(c.location||'—')} · ${esc(c.group_id||'—')}</div>
+            <div class="small">${esc(c.group_id||'—')}</div>
           </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap" onclick="event.stopPropagation()">
-          <span class="badge ${stCol(c.status)}">${esc(c.status||'—')}</span>
-          <span class="badge ${c.armed?'danger':'good'}">${c.armed?'scharf':'unscharf'}</span>
+        <div style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
+          <label class="switch switch-sm" title="${c.enabled?'Aktiv':'Inaktiv'}" onclick="event.stopPropagation()"><input type="checkbox" ${c.enabled?'checked':''} onchange="toggleCameraEnabled('${esc(c.id)}',this.checked)" /><span class="slider"></span></label>
           <button class="btn-action" onclick="editCamera('${esc(c.id)}')">✏️ Bearbeiten</button>
           <button class="btn-action" title="Kamera neu verbinden" onclick="event.stopPropagation();reloadCamera('${esc(c.id)}')">🔄 Neu verbinden</button>
         </div>
@@ -561,13 +565,6 @@ function _initCameraFormListeners(){
     if(f['id'].dataset.autoGen==='1')
       f['id'].value='cam-'+f['name'].value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
   });
-  // Armed → show/hide schedule
-  f['armed']?.addEventListener('change',()=>{ byId('camScheduleSection')?.classList.toggle('hidden',!f['armed'].checked); });
-  // Timelapse toggle
-  f['timelapse_enabled']?.addEventListener('change',()=>{ byId('timelapseSettingsPanel')?.classList.toggle('hidden',!f['timelapse_enabled'].checked); });
-  // Timelapse sliders
-  f['tl_daily_seconds']?.addEventListener('input',()=>{ byId('tlDailyLabel').textContent=f['tl_daily_seconds'].value+'s'; });
-  f['tl_weekly_seconds']?.addEventListener('input',()=>{ byId('tlWeeklyLabel').textContent=f['tl_weekly_seconds'].value+'s'; });
   // Motion sensitivity slider
   f['motion_sensitivity']?.addEventListener('input',()=>{ byId('motionSensLabel').textContent=f['motion_sensitivity'].value; });
   // Frame interval slider
@@ -588,7 +585,7 @@ function editCamera(camId){
   initRtspBuilder();
   const f=byId('cameraForm').elements;
   f['id'].value=c.id||''; f['id'].dataset.autoGen='0';
-  f['name'].value=c.name||''; f['location'].value=c.location||'';
+  f['name'].value=c.name||'';
   if(f['icon']) f['icon'].value=c.icon||getCameraIcon(c.name||c.id);
   byId('cameraEditTitle').textContent=`Kamera bearbeiten · ${c.name||c.id}`;
   const p=parseRtspUrl(c.rtsp_url||'');
@@ -599,24 +596,15 @@ function editCamera(camId){
   f['snapshot_url'].value=c.snapshot_url||''; f['group_id'].value=c.group_id||'';
   f['object_filter'].value=(c.object_filter||[]).join(',');
   f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed;
-  byId('camScheduleSection')?.classList.toggle('hidden',!c.armed);
   f['schedule_start'].value=(c.schedule&&c.schedule.start)||''; f['schedule_end'].value=(c.schedule&&c.schedule.end)||''; f['schedule_enabled'].checked=!!(c.schedule&&c.schedule.enabled);
   if(f['telegram_enabled']) f['telegram_enabled'].checked=(c.telegram_enabled!==false);
   if(f['mqtt_enabled']) f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
-  const tlOn=!!(c.timelapse&&c.timelapse.enabled);
-  f['timelapse_enabled'].checked=tlOn; byId('timelapseSettingsPanel')?.classList.toggle('hidden',!tlOn);
-  const tlDaily=(c.timelapse&&c.timelapse.daily_target_seconds)||60;
-  const tlWeekly=(c.timelapse&&c.timelapse.weekly_target_seconds)||180;
-  if(f['tl_daily_seconds']){f['tl_daily_seconds'].value=tlDaily; byId('tlDailyLabel').textContent=tlDaily+'s';}
-  if(f['tl_weekly_seconds']){f['tl_weekly_seconds'].value=tlWeekly; byId('tlWeeklyLabel').textContent=tlWeekly+'s';}
-  if(f['timelapse_telegram']) f['timelapse_telegram'].checked=!!(c.timelapse&&c.timelapse.telegram_send);
-  if(f['tl_period']) f['tl_period'].value=(c.timelapse&&c.timelapse.period)||'day';
   if(f['bottom_crop_px']) f['bottom_crop_px'].value=c.bottom_crop_px||0;
   if(f['motion_sensitivity']){const ms=c.motion_sensitivity!=null?c.motion_sensitivity:0.5; f['motion_sensitivity'].value=ms; byId('motionSensLabel').textContent=ms;}
   if(f['resolution']) f['resolution'].value=c.resolution||'auto';
   if(f['frame_interval_ms']){const fi=c.frame_interval_ms||350; f['frame_interval_ms'].value=fi; byId('frameIntervalLabel').textContent=fi+'ms';}
   if(f['snapshot_interval_s']){const si=c.snapshot_interval_s||3; f['snapshot_interval_s'].value=si; byId('snapshotIntervalLabel').textContent=si+'s';}
-  j('/api/persons').then(r=>_renderWhitelistChips(r.profiles||[],c.whitelist_names||[])).catch(()=>_renderWhitelistChips([],c.whitelist_names||[]));
+  _whitelistState=[...(c.whitelist_names||[])]; _updateWhitelistHidden();
   shapeState.camera=camId; shapeState.zones=JSON.parse(JSON.stringify(c.zones||[])); shapeState.masks=JSON.parse(JSON.stringify(c.masks||[])); shapeState.points=[];
   f['zones_json'].value=JSON.stringify(shapeState.zones); f['masks_json'].value=JSON.stringify(shapeState.masks);
   byId('deleteCameraBtn').dataset.camId=camId;
@@ -1194,7 +1182,8 @@ window.applyDiscoveryRtsp=(ip)=>{
 };
 byId('cameraForm').onsubmit=async(e)=>{
   e.preventDefault(); const f=e.target.elements;
-  const payload={id:f['id'].value,name:f['name'].value,location:f['location'].value,
+  const existingCam=(state.cameras||[]).find(x=>x.id===f['id'].value);
+  const payload={id:f['id'].value,name:f['name'].value,
     icon:f['icon']?.value||getCameraIcon(f['name'].value),
     rtsp_url:f['rtsp_url'].value,snapshot_url:f['snapshot_url'].value,
     username:f['rtsp_user']?.value||'',password:f['rtsp_pass']?.value||'',
@@ -1203,7 +1192,7 @@ byId('cameraForm').onsubmit=async(e)=>{
     enabled:f['enabled'].checked,armed:f['armed'].checked,
     telegram_enabled:f['telegram_enabled'].checked,mqtt_enabled:f['mqtt_enabled'].checked,
     whitelist_names:_whitelistState.filter(Boolean),
-    timelapse:{enabled:f['timelapse_enabled'].checked,fps:30,period:f['tl_period']?.value||'day',daily_target_seconds:parseInt(f['tl_daily_seconds']?.value||'60'),weekly_target_seconds:parseInt(f['tl_weekly_seconds']?.value||'180'),telegram_send:!!(f['timelapse_telegram']?.checked)},
+    timelapse:existingCam?.timelapse||{enabled:false,fps:30,period:'day',daily_target_seconds:60,weekly_target_seconds:180,telegram_send:false},
     schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},
     bottom_crop_px:parseInt(f['bottom_crop_px']?.value||0),
     motion_sensitivity:parseFloat(f['motion_sensitivity']?.value||0.5),

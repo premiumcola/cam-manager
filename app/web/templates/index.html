@@ -213,6 +213,9 @@
           <div class="cam-edit-header">
             <h3 id="cameraEditTitle">Kamera bearbeiten</h3>
             <div class="cam-header-badges">
+              <label class="cam-badge-toggle" title="Kamera aktiv">
+                <span>⚡</span><label class="switch switch-sm"><input type="checkbox" name="enabled" checked form="cameraForm" /><span class="slider"></span></label>
+              </label>
               <label class="cam-badge-toggle" title="Telegram">
                 <span>📨</span><label class="switch switch-sm"><input type="checkbox" name="telegram_enabled" form="cameraForm" /><span class="slider"></span></label>
               </label>
@@ -231,8 +234,8 @@
             <!-- Tab bar -->
             <div class="cam-tab-bar">
               <button type="button" class="cam-tab-btn active" data-tab="cam-tab-verbindung">📡 Verbindung</button>
-              <button type="button" class="cam-tab-btn" data-tab="cam-tab-einstellungen">⚙️ Einstellungen</button>
-              <button type="button" class="cam-tab-btn" data-tab="cam-tab-zeitplan">⏰ Zeitplan</button>
+              <button type="button" class="cam-tab-btn" data-tab="cam-tab-alarm">🔔 Alarm</button>
+              <button type="button" class="cam-tab-btn" data-tab="cam-tab-qualitaet">⚙️ Qualität</button>
               <button type="button" class="cam-tab-btn" data-tab="cam-tab-zonen">🗺 Zonen</button>
             </div>
 
@@ -241,8 +244,7 @@
               <div class="cam-2col">
                 <div style="display:grid;gap:8px">
                   <div class="field-wrap"><input name="name" placeholder="Werkstatt" required /><span class="field-label">Anzeigename</span></div>
-                  <div class="field-wrap"><input name="icon" placeholder="🔧" maxlength="4" /><span class="field-label">Kamera-Icon (Emoji)</span></div>
-                  <div class="field-wrap"><input name="location" placeholder="Werkbank / Tor" /><span class="field-label">Standort</span></div>
+                  <div class="field-wrap"><input name="icon" placeholder="🔧" maxlength="4" /><span class="field-label">Icon (Emoji)</span></div>
                 </div>
                 <div style="display:grid;gap:8px">
                   <div class="field-wrap"><input name="rtsp_ip" placeholder="192.168.X.X" /><span class="field-label">Kamera-IP</span></div>
@@ -262,47 +264,23 @@
                 <div class="field-wrap"><select name="group_id" id="groupSelect"></select><span class="field-label">Gruppe</span></div>
                 <div class="field-wrap"><input name="object_filter" placeholder="person,cat,bird" /><span class="field-label">Objektfilter</span></div>
               </div>
-              <label class="toggle-row"><span>Aktiv</span><label class="switch"><input type="checkbox" name="enabled" checked /><span class="slider"></span></label></label>
             </div>
 
-            <!-- Panel: Einstellungen -->
-            <div class="cam-tab-panel" id="cam-tab-einstellungen">
+            <!-- Panel: Alarm -->
+            <div class="cam-tab-panel" id="cam-tab-alarm">
               <label class="toggle-row"><span>Armed – Alarmierung aktiv</span><label class="switch"><input type="checkbox" name="armed" checked /><span class="slider"></span></label></label>
-              <div class="settings-divider">Personen-Whitelist</div>
-              <div id="whitelistChipsContainer" class="wl-chips"></div>
-              <div class="settings-divider">Timelapse</div>
-              <label class="toggle-row"><span>Timelapse aktiv</span><label class="switch"><input type="checkbox" name="timelapse_enabled" /><span class="slider"></span></label></label>
-              <div id="timelapseSettingsPanel" class="tl-panel hidden">
-                <div class="tl-preset">
-                  <div class="tl-preset-head">Aufnahme-Zeitraum</div>
-                  <div class="field-wrap">
-                    <select name="tl_period">
-                      <option value="day">Tag (24h)</option>
-                      <option value="hour">Stunde (1h)</option>
-                      <option value="rolling_10min">10 Minuten (Test)</option>
-                    </select>
-                  </div>
-                  <div class="field-help">Bei "Tag": 60s × 30fps = 1800 Frames → alle 48s ein Snapshot. Bei "10 Minuten": ideal zum Testen der Timelapse-Funktion.</div>
+              <div id="camScheduleSection">
+                <div class="settings-divider">Zeitplan</div>
+                <label class="toggle-row"><span>Zeitplan aktiv</span><label class="switch"><input type="checkbox" name="schedule_enabled" /><span class="slider"></span></label></label>
+                <div class="row" style="grid-template-columns:1fr 1fr;margin-top:4px">
+                  <div class="field-wrap"><input name="schedule_start" placeholder="22:00" /><span class="field-label">Von</span></div>
+                  <div class="field-wrap"><input name="schedule_end" placeholder="06:00" /><span class="field-label">Bis</span></div>
                 </div>
-                <div class="tl-preset">
-                  <div class="tl-preset-head">Tages-Timelapse</div>
-                  <div class="tl-slider-row">
-                    <span class="small">Zieldauer</span>
-                    <input type="range" name="tl_daily_seconds" min="30" max="300" step="10" value="60" class="tl-range" />
-                    <span id="tlDailyLabel" class="tl-val">60s</span>
-                  </div>
-                </div>
-                <div class="tl-preset">
-                  <div class="tl-preset-head">Wochen-Timelapse</div>
-                  <div class="tl-slider-row">
-                    <span class="small">Zieldauer</span>
-                    <input type="range" name="tl_weekly_seconds" min="60" max="600" step="30" value="180" class="tl-range" />
-                    <span id="tlWeeklyLabel" class="tl-val">180s</span>
-                  </div>
-                </div>
-                <label class="toggle-row"><span>Täglich per Telegram senden</span><label class="switch"><input type="checkbox" name="timelapse_telegram" /><span class="slider"></span></label></label>
               </div>
-              <div class="settings-divider">Stream-Qualität</div>
+            </div>
+
+            <!-- Panel: Qualität -->
+            <div class="cam-tab-panel" id="cam-tab-qualitaet">
               <div class="row" style="grid-template-columns:1fr 1fr 1fr">
                 <div class="field-wrap">
                   <select name="resolution">
@@ -328,26 +306,14 @@
                   <span class="field-label">Snapshot-Intervall (HTTP-Kameras)</span>
                 </div>
               </div>
-              <div class="settings-divider">Erkennung &amp; Qualität</div>
-              <div class="row" style="grid-template-columns:1fr 1fr">
+              <div class="row" style="grid-template-columns:1fr 1fr;margin-top:4px">
                 <div class="field-wrap"><input type="number" name="bottom_crop_px" min="0" max="200" value="0" /><span class="field-label">Unterer Bildrand ausblenden (px)</span></div>
                 <div class="field-wrap">
                   <div style="display:flex;align-items:center;gap:8px">
                     <input type="range" name="motion_sensitivity" min="0.1" max="1.0" step="0.1" value="0.5" style="flex:1" />
                     <span id="motionSensLabel" style="font-size:12px;color:var(--muted);min-width:28px">0.5</span>
                   </div>
-                  <span class="field-label">Bewegungsempfindlichkeit (0.3 = weniger, 0.7 = mehr)</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Panel: Zeitplan -->
-            <div class="cam-tab-panel" id="cam-tab-zeitplan">
-              <div id="camScheduleSection">
-                <label class="toggle-row"><span>Zeitplan aktiv</span><label class="switch"><input type="checkbox" name="schedule_enabled" /><span class="slider"></span></label></label>
-                <div class="row" style="grid-template-columns:1fr 1fr;margin-top:8px">
-                  <div class="field-wrap"><input name="schedule_start" placeholder="22:00" /><span class="field-label">Von</span></div>
-                  <div class="field-wrap"><input name="schedule_end" placeholder="06:00" /><span class="field-label">Bis</span></div>
+                  <span class="field-label">Bewegungsempfindlichkeit</span>
                 </div>
               </div>
             </div>
