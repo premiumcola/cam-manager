@@ -603,6 +603,7 @@ function editCamera(camId){
   if(f['tl_daily_seconds']){f['tl_daily_seconds'].value=tlDaily; byId('tlDailyLabel').textContent=tlDaily+'s';}
   if(f['tl_weekly_seconds']){f['tl_weekly_seconds'].value=tlWeekly; byId('tlWeeklyLabel').textContent=tlWeekly+'s';}
   if(f['timelapse_telegram']) f['timelapse_telegram'].checked=!!(c.timelapse&&c.timelapse.telegram_send);
+  if(f['tl_period']) f['tl_period'].value=(c.timelapse&&c.timelapse.period)||'day';
   if(f['bottom_crop_px']) f['bottom_crop_px'].value=c.bottom_crop_px||0;
   if(f['motion_sensitivity']){const ms=c.motion_sensitivity!=null?c.motion_sensitivity:0.5; f['motion_sensitivity'].value=ms; byId('motionSensLabel').textContent=ms;}
   if(f['resolution']) f['resolution'].value=c.resolution||'auto';
@@ -1195,7 +1196,7 @@ byId('cameraForm').onsubmit=async(e)=>{
     enabled:f['enabled'].checked,armed:f['armed'].checked,
     telegram_enabled:f['telegram_enabled'].checked,mqtt_enabled:f['mqtt_enabled'].checked,
     whitelist_names:_whitelistState.filter(Boolean),
-    timelapse:{enabled:f['timelapse_enabled'].checked,fps:12,daily_target_seconds:parseInt(f['tl_daily_seconds']?.value||'60'),weekly_target_seconds:parseInt(f['tl_weekly_seconds']?.value||'180'),telegram_send:!!(f['timelapse_telegram']?.checked)},
+    timelapse:{enabled:f['timelapse_enabled'].checked,fps:30,period:f['tl_period']?.value||'day',daily_target_seconds:parseInt(f['tl_daily_seconds']?.value||'60'),weekly_target_seconds:parseInt(f['tl_weekly_seconds']?.value||'180'),telegram_send:!!(f['timelapse_telegram']?.checked)},
     schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},
     bottom_crop_px:parseInt(f['bottom_crop_px']?.value||0),
     motion_sensitivity:parseFloat(f['motion_sensitivity']?.value||0.5),
@@ -1689,11 +1690,36 @@ async function openMediaDrilldown(camId){
   document.querySelectorAll('.moc-card').forEach(c=>c.classList.toggle('moc-active',c.onclick?.toString().includes(`'${camId}'`)));
   await loadMedia();
   renderMediaGrid();
+  loadTimelapseList(camId);
 }
 function closeMediaDrilldown(){
   state.mediaCamera=null; state.media=[];
   byId('mediaDrilldown').style.display='none';
   byId('mediaOverview').style.display='';
+  const sec=byId('mediaTlSection'); if(sec) sec.style.display='none';
+}
+async function loadTimelapseList(camId){
+  const sec=byId('mediaTlSection'); const grid=byId('mediaTlGrid');
+  if(!sec||!grid) return;
+  try{
+    const r=await j(`/api/camera/${encodeURIComponent(camId)}/timelapse/list`);
+    if(!r.ok||!r.files||r.files.length===0){sec.style.display='none';return;}
+    const _periodLabel={day:'Tag',hour:'Stunde',rolling_10min:'10 Min'};
+    sec.style.display='';
+    grid.innerHTML=r.files.map(f=>{
+      const pd=_periodLabel[f.period]||f.period;
+      return `<article class="media-card tl-media-card" style="cursor:pointer;border:1.5px solid #7c3aed22" onclick="window.open('${esc(f.url)}','_blank')">
+        <div class="mmc-img-wrap" style="background:#1e1333;display:flex;align-items:center;justify-content:center;min-height:90px">
+          <span style="font-size:36px">🎞</span>
+          <span class="mmc-meta-bar" style="background:#7c3aed;position:absolute;top:6px;right:6px;border-radius:6px;padding:2px 7px;font-size:10px;font-weight:700;letter-spacing:.08em">TIMELAPSE</span>
+        </div>
+        <div style="padding:8px 10px">
+          <div style="font-size:12px;font-weight:600">${esc(f.day)} · ${esc(pd)}</div>
+          <div style="font-size:11px;color:var(--muted)">${f.size_mb} MB</div>
+        </div>
+      </article>`;
+    }).join('');
+  }catch(e){sec.style.display='none';}
 }
 function syncMediaPills(){
   document.querySelectorAll('.media-pill[data-type="label"]').forEach(p=>{

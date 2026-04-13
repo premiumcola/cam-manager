@@ -163,6 +163,10 @@
           </div>
           <div id="mediaGrid" class="media-grid"></div>
           <div id="mediaPagination" class="media-pagination"></div>
+          <div id="mediaTlSection" style="display:none;margin-top:24px">
+            <div class="settings-divider" style="margin-top:0">Timelapse Videos</div>
+            <div id="mediaTlGrid" class="media-grid"></div>
+          </div>
         </div>
 
         <div class="set-section" id="set-media-config" style="margin-top:14px">
@@ -268,6 +272,17 @@
               <div class="settings-divider">Timelapse</div>
               <label class="toggle-row"><span>Timelapse aktiv</span><label class="switch"><input type="checkbox" name="timelapse_enabled" /><span class="slider"></span></label></label>
               <div id="timelapseSettingsPanel" class="tl-panel hidden">
+                <div class="tl-preset">
+                  <div class="tl-preset-head">Aufnahme-Zeitraum</div>
+                  <div class="field-wrap">
+                    <select name="tl_period">
+                      <option value="day">Tag (24h)</option>
+                      <option value="hour">Stunde (1h)</option>
+                      <option value="rolling_10min">10 Minuten (Test)</option>
+                    </select>
+                  </div>
+                  <div class="field-help">Bei "Tag": 60s × 30fps = 1800 Frames → alle 48s ein Snapshot. Bei "10 Minuten": ideal zum Testen der Timelapse-Funktion.</div>
+                </div>
                 <div class="tl-preset">
                   <div class="tl-preset-head">Tages-Timelapse</div>
                   <div class="tl-slider-row">

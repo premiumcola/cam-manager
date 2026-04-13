@@ -77,6 +77,7 @@ class CameraRuntime:
         self._ach_path = Path(self.global_cfg["storage"]["root"]) / "achievements.json"
         self.preview_cap = None   # sub-stream capture (H.264, no pink)
         self._motion_confirm: deque = deque(maxlen=3)  # multi-frame confirmation
+        self._tl_thread = None  # timelapse snapshot thread
 
     @property
     def cfg(self):
@@ -86,6 +87,10 @@ class CameraRuntime:
         self.running = True
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
+        tl = self.cfg.get("timelapse") or {}
+        if tl.get("enabled"):
+            self._tl_thread = threading.Thread(target=self._timelapse_loop, daemon=True)
+            self._tl_thread.start()
 
     def stop(self):
         self.running = False
@@ -322,6 +327,36 @@ class CameraRuntime:
         except Exception as e:
             log.warning("[%s] Achievement unlock failed: %s", self.camera_id, e)
             return False
+
+    def _timelapse_loop(self):
+        _period_map = {"day": 86400, "hour": 3600, "rolling_10min": 600}
+        while self.running:
+            tl = self.cfg.get("timelapse") or {}
+            if not tl.get("enabled"):
+                time.sleep(10)
+                continue
+            target_s = int(tl.get("daily_target_seconds", 60))
+            target_fps = int(tl.get("fps", 30))
+            period_s = _period_map.get(tl.get("period", "day"), 86400)
+            total_frames = max(1, target_s * target_fps)
+            interval_s = max(2.0, period_s / total_frames)
+            try:
+                frame = self._grab_frame()
+                if frame is not None:
+                    tl_dir = (Path(self.global_cfg["storage"]["root"])
+                              / "timelapse_frames" / self.camera_id
+                              / datetime.now().strftime("%Y-%m-%d"))
+                    tl_dir.mkdir(parents=True, exist_ok=True)
+                    ts = datetime.now().strftime("%H%M%S")
+                    out = tl_dir / f"{ts}.jpg"
+                    cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
+                    log.debug("[%s] timelapse frame saved: %s (interval=%.0fs)", self.camera_id, out.name, interval_s)
+            except Exception as e:
+                log.debug("[%s] timelapse frame error: %s", self.camera_id, e)
+            # Sleep in 1s chunks to stay responsive to stop
+            deadline = time.time() + interval_s
+            while self.running and time.time() < deadline:
+                time.sleep(1)
 
     def _loop(self):
         if self.cfg.get("rtsp_url"):

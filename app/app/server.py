@@ -714,21 +714,89 @@ def api_camera_timelapse(cam_id):
         return jsonify({"ok": False, "error": "timelapse disabled"}), 400
     day = request.args.get("day") or datetime.now().strftime("%Y-%m-%d")
     force = request.args.get("force") == "1"
-    path = timelapse_builder.build_for_day(cam_id, day, fps=int(tl_cfg.get("fps", 12)), force=force)
+    target_s = int(tl_cfg.get("daily_target_seconds", 60))
+    target_fps = int(tl_cfg.get("fps", 30))
+    period = tl_cfg.get("period", "day")
+    path = timelapse_builder.build_period(
+        cam_id, day,
+        target_duration_s=target_s,
+        target_fps=target_fps,
+        period=period,
+        force=force
+    )
     if not path:
-        # Check whether there are any frames at all for this day
+        frames_dir = storage_root / "timelapse_frames" / cam_id / day
         day_dir = store.events_dir / cam_id / day
-        has_frames = day_dir.exists() and any(day_dir.rglob("*.jpg"))
+        has_frames = (frames_dir.exists() and any(frames_dir.glob("*.jpg"))) or \
+                     (day_dir.exists() and any(day_dir.rglob("*.jpg")))
         if not has_frames:
             return jsonify({"ok": False, "error": "no_frames", "day": day}), 404
-        # Frames exist but no MP4 yet — trigger build in background
         import threading as _thr
         def _bg_build():
-            timelapse_builder.build_for_day(cam_id, day, fps=int(tl_cfg.get("fps", 12)), force=True)
+            timelapse_builder.build_period(cam_id, day, target_duration_s=target_s,
+                                           target_fps=target_fps, period=period, force=True)
         _thr.Thread(target=_bg_build, daemon=True).start()
         return jsonify({"ok": False, "error": "building", "day": day, "retry_after": 15}), 202
     rel = Path(path).relative_to(storage_root)
     return jsonify({"ok": True, "day": day, "url": f"/media/{rel.as_posix()}"})
+
+
+@app.get('/api/camera/<cam_id>/timelapse/list')
+def api_camera_timelapse_list(cam_id):
+    tl_dir = storage_root / "timelapse" / cam_id
+    if not tl_dir.exists():
+        return jsonify({"ok": True, "files": []})
+    files = []
+    for mp4 in sorted(tl_dir.glob("*.mp4"), reverse=True):
+        stat = mp4.stat()
+        rel = mp4.relative_to(storage_root)
+        stem_parts = mp4.stem.split("_")
+        files.append({
+            "filename": mp4.name,
+            "day": stem_parts[0],
+            "period": "_".join(stem_parts[1:]) or "day",
+            "url": f"/media/{rel.as_posix()}",
+            "size_mb": round(stat.st_size / 1024 / 1024, 1),
+            "mtime": stat.st_mtime,
+        })
+    return jsonify({"ok": True, "files": files})
+
+
+@app.get('/api/camera/<cam_id>/timelapse/rolling')
+def api_camera_timelapse_rolling(cam_id):
+    minutes = int(request.args.get("minutes", 10))
+    minutes = max(1, min(minutes, 120))
+    cam_cfg = settings.get_camera(cam_id)
+    if not cam_cfg:
+        return jsonify({"ok": False, "error": "camera not found"}), 404
+    tl_cfg = cam_cfg.get("timelapse") or {}
+    if not tl_cfg.get("enabled"):
+        return jsonify({"ok": False, "error": "timelapse disabled"}), 400
+    day = datetime.now().strftime("%Y-%m-%d")
+    frames_dir = storage_root / "timelapse_frames" / cam_id / day
+    if not frames_dir.exists():
+        return jsonify({"ok": False, "error": "no_frames"}), 404
+    cutoff = datetime.now() - timedelta(minutes=minutes)
+    images = sorted([
+        p for p in frames_dir.glob("*.jpg")
+        if p.stat().st_mtime >= cutoff.timestamp()
+    ])
+    if len(images) < 2:
+        return jsonify({"ok": False, "error": "not_enough_frames", "minutes": minutes}), 404
+    target_fps = int(tl_cfg.get("fps", 30))
+    target_s = max(5, int(tl_cfg.get("daily_target_seconds", 60)) // 10)
+    path = timelapse_builder.build_period(
+        cam_id, day,
+        target_duration_s=target_s,
+        target_fps=target_fps,
+        period=f"rolling{minutes}min",
+        force=True,
+        images_override=images
+    )
+    if not path:
+        return jsonify({"ok": False, "error": "build_failed"}), 500
+    rel = Path(path).relative_to(storage_root)
+    return jsonify({"ok": True, "minutes": minutes, "url": f"/media/{rel.as_posix()}"})
 
 
 # ── Achievements / Trophäen ──────────────────────────────────────────────────
