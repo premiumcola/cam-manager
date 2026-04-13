@@ -316,6 +316,11 @@ function renderDashboard(){
   </div>
 </article>`;
   }).join('');
+  byId('cameraCards').querySelectorAll('.cv-pill-live-wrap').forEach(el=>{
+    let _t=null;
+    el.addEventListener('mouseenter',()=>{clearTimeout(_t);el.classList.add('cv-lp-open');});
+    el.addEventListener('mouseleave',()=>{_t=setTimeout(()=>el.classList.remove('cv-lp-open'),120);});
+  });
 }
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
