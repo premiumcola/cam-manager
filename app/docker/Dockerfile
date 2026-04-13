@@ -8,11 +8,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+
+# Install Python deps first — layer is only invalidated when requirements.txt changes
+COPY requirements.txt /app/
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Copy app code after deps so code changes don't re-run pip
 COPY app/ /app/app/
 COPY web/ /app/web/
 COPY config/ /app/config/
-COPY requirements.txt /app/
-RUN pip install --no-cache-dir -r /app/requirements.txt
 
 EXPOSE 8099
 CMD ["python", "-m", "app.server"]

@@ -3,6 +3,8 @@ services:
     build:
       context: ./app
       dockerfile: docker/Dockerfile
+      cache_from:
+        - tam-spy:latest
     image: tam-spy
     container_name: tam-spy
     restart: unless-stopped
@@ -20,6 +22,8 @@ services:
   #   build:
   #     context: ./app
   #     dockerfile: docker/Dockerfile.coral
+  #     cache_from:
+  #       - tam-spy-coral:latest
   #   image: tam-spy-coral
   #   container_name: tam-spy
   #   restart: unless-stopped

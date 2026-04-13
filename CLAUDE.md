@@ -6,23 +6,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TAM-spy is a self-hosted IP camera monitoring system with motion detection, object recognition (Google Coral TPU), Telegram alerts, MQTT/Home Assistant integration, and a web dashboard. It is deployed via Docker on Unraid or any Linux host.
 
-## Running the Application
+## Docker Workflow (IMPORTANT — read before every build)
 
-**Local development (without Docker):**
+**Only rebuild Docker when these files change:**
+- `app/docker/Dockerfile`
+- `app/requirements.txt`
+
+**For all other changes (Python, JS, CSS, HTML) — just restart:**
 ```bash
-cd app
-pip install -r requirements.txt
-python -m app.server
+docker restart tam-spy
+docker logs tam-spy --tail 30
 ```
-The Flask server starts on port 8099 by default.
+Web files (`web/`) and Python code (`app/`) are volume-mounted — no rebuild needed.
 
-**Docker build & run (standard):**
+**Full rebuild (only when Dockerfile or requirements.txt changed):**
+```powershell
+Set-Location D:\CLAUDE_code\tam-spy
+docker compose up --build -d
+docker logs tam-spy --tail 50
+```
+
+**After every full rebuild, prune dangling images:**
 ```bash
-cd app
-docker build -t tam-spy -f docker/Dockerfile .
-docker run -d --name tam-spy --restart unless-stopped -p 8099:8099 \
-  -v ./config:/app/config -v ./storage:/app/storage -v ./models:/app/models \
-  tam-spy
+docker image prune -f
 ```
 
 **Docker build with Coral TPU support:**
@@ -43,6 +49,15 @@ docker run -d --name tam-spy --restart unless-stopped -p 8099:8099 -e TZ=Europe/
   -v /mnt/user/appdata/tam-spy/models:/app/models \
   --device /dev/bus/usb tam-spy
 ```
+
+## Local Development (without Docker)
+
+```bash
+cd app
+pip install -r requirements.txt
+python -m app.server
+```
+The Flask server starts on port 8099 by default.
 
 ## Configuration
 
@@ -112,6 +127,14 @@ Groups define `alarm_profile` (`hard`, `medium`, `soft`, `info`) and `coarse_obj
 - Format: `git add . && git commit -m "fix/feat: beschreibung"`
 - Nach erledigter Aufgabe sofort pushen: `git push origin main`
 - Niemals auf Bestätigung warten bei git Operationen
+
+## Maintenance
+
+```powershell
+# Run monthly to reclaim build cache:
+docker builder prune -f --filter "until=168h"
+docker image prune -f
+```
 
 ## Known Limitations (by design)
 

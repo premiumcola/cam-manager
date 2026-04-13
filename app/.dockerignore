@@ -1,0 +1,10 @@
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+.git
+.gitignore
+storage/
+models/
+*.zip
+*.log
