@@ -45,33 +45,50 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 .cv-loc{color:rgba(255,255,255,.7);font-size:11px;text-shadow:0 1px 4px rgba(0,0,0,.8)}
 .cv-group-pill{display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(59,130,246,.35);border:1px solid rgba(59,130,246,.5);color:#93c5fd;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:2px;width:fit-content}
 
-/* Status badges — top right, always visible */
-.cv-icons{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:5px;align-items:center;pointer-events:none}
-.cv-badge{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);flex-shrink:0}
-.cv-badge-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
-/* Live / offline */
-.cv-badge-live{background:rgba(34,197,94,.15);border:1.5px solid rgba(34,197,94,.5)}
-.cv-badge-live .cv-badge-dot{background:#22c55e;animation:cv-pulse-green 2s ease-in-out infinite}
-.cv-badge-offline{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12)}
-.cv-badge-offline .cv-badge-dot{background:rgba(255,255,255,.3)}
-/* Armed / unarmed shield */
-.cv-badge-armed{background:rgba(239,68,68,.15);border:1.5px solid rgba(239,68,68,.45);color:#f87171;animation:cv-badge-arm-glow 2.5s ease-in-out infinite}
-.cv-badge-unarmed{background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.1);color:rgba(255,255,255,.28)}
-/* AI / coral eye */
-.cv-badge-coral{background:rgba(59,130,246,.15);border:1.5px solid rgba(59,130,246,.4);color:#60a5fa;animation:cv-badge-breathe 3s ease-in-out infinite}
-.cv-badge-cpu{background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.1);color:rgba(255,255,255,.25)}
+/* Status pills — top right */
+.cv-status-pills{position:absolute;top:8px;right:8px;display:flex;flex-direction:column;gap:5px;align-items:flex-end;z-index:3;pointer-events:auto}
+/* Live pill */
+.cv-live-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:999px;backdrop-filter:blur(8px);font-size:11px;font-weight:700;cursor:default;position:relative}
+.cv-live-pill--active{background:rgba(34,197,94,.18);border:1.5px solid rgba(34,197,94,.45);color:#4ade80}
+.cv-live-pill--offline{background:rgba(255,255,255,.07);border:1.5px solid rgba(255,255,255,.12);color:rgba(255,255,255,.4)}
+.cv-live-dot-sm{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.cv-live-pill--active .cv-live-dot-sm{background:#22c55e;animation:cv-pulse-green 2s ease-in-out infinite}
+.cv-live-pill--offline .cv-live-dot-sm{background:rgba(255,255,255,.3)}
+.cv-live-label{letter-spacing:.05em}
+/* Live hover info panel */
+.cv-live-hover{display:none;position:absolute;top:calc(100% + 6px);right:0;min-width:150px;background:rgba(12,17,30,.95);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:8px 10px;font-size:11px;color:rgba(255,255,255,.75);line-height:1.75;z-index:10;white-space:nowrap;backdrop-filter:blur(10px);pointer-events:none}
+.cv-live-pill:hover .cv-live-hover{display:block}
+/* Alarm pill */
+.cv-alarm-pill{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;backdrop-filter:blur(8px)}
+.cv-alarm-pill--armed{background:rgba(239,68,68,.18);border:1.5px solid rgba(239,68,68,.45);color:#f87171;animation:cv-badge-arm-glow 2.5s ease-in-out infinite}
+.cv-alarm-pill--unarmed{background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.1);color:rgba(255,255,255,.25)}
+.cv-alarm-label{font-size:10px;font-weight:700;letter-spacing:.05em}
 @keyframes cv-badge-arm-glow{0%,100%{box-shadow:0 0 3px 0 rgba(239,68,68,.3)}50%{box-shadow:0 0 9px 3px rgba(239,68,68,.5)}}
 @keyframes cv-badge-breathe{0%,100%{opacity:.6}50%{opacity:1}}
-/* Arm-toggle button ring (cv-actions) */
-.cv-armed{box-shadow:0 0 0 2px rgba(239,68,68,.7)}
-.cv-unarmed{box-shadow:0 0 0 2px rgba(34,197,94,.5)}
-.cv-count{font-size:12px;font-weight:800;color:#fff}
 
-/* Action buttons — bottom, visible on hover */
-.cv-actions{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:14px;padding:10px 12px;opacity:0;transition:opacity .2s;pointer-events:none}
-.cv-card:hover .cv-actions{opacity:1;pointer-events:auto}
-.cv-act-btn{width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,transform .1s}
-.cv-act-btn:hover{background:rgba(59,130,246,.5);transform:scale(1.1)}
+/* Bottom-right: timelapse pill + detection badge */
+.cv-bot-right{position:absolute;bottom:9px;right:9px;display:flex;flex-direction:column;gap:5px;align-items:flex-end;z-index:3;pointer-events:none}
+/* Timelapse pill */
+.cv-tl-pill{display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;backdrop-filter:blur(6px);position:relative;overflow:hidden}
+.cv-tl-pill--off{background:rgba(255,255,255,.05);border:1.5px solid rgba(255,255,255,.1);color:rgba(255,255,255,.22)}
+.cv-tl-pill--on{background:rgba(245,158,11,.15);border:1.5px solid rgba(245,158,11,.4);color:#fbbf24}
+.cv-tl-pill--on::after{content:'';position:absolute;left:0;right:0;height:1px;background:rgba(251,191,36,.55);animation:cv-tl-scan 2.8s linear infinite;top:0;pointer-events:none}
+@keyframes cv-tl-scan{0%{top:0;opacity:0}8%{opacity:1}92%{opacity:1}100%{top:100%;opacity:0}}
+/* Split detection badge */
+.cv-detect-badge{display:flex;border-radius:999px;overflow:hidden;border:1.5px solid rgba(255,255,255,.12);backdrop-filter:blur(6px)}
+.cv-detect-half{width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+.cv-detect-ai{background:rgba(59,130,246,.12);color:rgba(96,165,250,.6)}
+.cv-detect-ai--coral{background:rgba(59,130,246,.2);color:#60a5fa;animation:cv-badge-breathe 3s ease-in-out infinite}
+.cv-detect-motion{background:rgba(245,158,11,.1);color:rgba(251,191,36,.6)}
+
+/* Bottom-left: hover-only action buttons */
+.cv-btns{position:absolute;bottom:9px;left:9px;display:flex;gap:7px;align-items:center;opacity:0;transition:opacity .2s;pointer-events:none;z-index:3}
+.cv-card:hover .cv-btns{opacity:1;pointer-events:auto}
+.cv-card:hover .cv-grad-bot{opacity:1}
+.cv-btn{width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .15s,transform .1s;padding:0;flex-shrink:0}
+.cv-btn:hover{background:rgba(59,130,246,.5);transform:scale(1.1)}
+.cv-btn--armed{border-color:rgba(239,68,68,.6);background:rgba(239,68,68,.25)}
+.cv-btn--armed:hover{background:rgba(239,68,68,.5)}
 
 /* Legacy badge (used in camera settings list, not in grid) */
 .badge{padding:7px 10px;border-radius:999px;background:var(--surface);font-size:12px}

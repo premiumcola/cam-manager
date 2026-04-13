@@ -117,6 +117,12 @@ class CameraRuntime:
             os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|hwaccel;none"
             cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            _RES_MAP = {"720p": (1280, 720), "1080p": (1920, 1080), "4k": (3840, 2160)}
+            _res = self.cfg.get("resolution", "auto")
+            if _res in _RES_MAP:
+                _w, _h = _RES_MAP[_res]
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, _w)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, _h)
             if not cap.isOpened():
                 raise RuntimeError(f"Kamera {self.camera_id}: RTSP konnte nicht geöffnet werden")
             self.capture = cap
@@ -318,7 +324,10 @@ class CameraRuntime:
             return False
 
     def _loop(self):
-        interval = max(0.05, float(self.global_cfg.get("processing", {}).get("motion", {}).get("frame_interval_ms", 150)) / 1000.0)
+        if self.cfg.get("rtsp_url"):
+            interval = max(0.05, float(self.cfg.get("frame_interval_ms") or self.global_cfg.get("processing", {}).get("motion", {}).get("frame_interval_ms", 150)) / 1000.0)
+        else:
+            interval = max(1.0, float(self.cfg.get("snapshot_interval_s") or 3))
         cooldown = int(self.global_cfg.get("processing", {}).get("event_cooldown_seconds", 25))
         while self.running:
             try:

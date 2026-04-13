@@ -134,13 +134,17 @@ function startLiveUpdate(){
         // Dashboard card: refresh snapshot image on status change
         const card=byId('cameraCards')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
         if(card){
-          // Update live/offline badge
-          const liveBadge=card.querySelector('.cv-badge-live,.cv-badge-offline');
-          if(liveBadge){
+          // Update live pill
+          const livePill=card.querySelector('.cv-live-pill');
+          if(livePill){
             const isActive=c.status==='active';
-            liveBadge.classList.toggle('cv-badge-live',isActive);
-            liveBadge.classList.toggle('cv-badge-offline',!isActive);
-            liveBadge.title=isActive?'Live – Stream aktiv':c.status==='error'?'Fehler – Stream verloren':'Verbinde…';
+            livePill.classList.toggle('cv-live-pill--active',isActive);
+            livePill.classList.toggle('cv-live-pill--offline',!isActive);
+            livePill.title=isActive?'Stream aktiv':c.status==='error'?'Verbindungsfehler':'Verbinde…';
+            const lbl=livePill.querySelector('.cv-live-label');
+            if(lbl) lbl.textContent=isActive?'LIVE':c.status==='error'?'FEHLER':'WARTEN';
+            const hoverStatus=livePill.querySelector('.cv-live-hover div');
+            if(hoverStatus) hoverStatus.innerHTML=`<b>Status:</b> ${c.status||'—'}`;
           }
           // Always refresh snapshot periodically (every cycle when image is visible)
           const img=card.querySelector('.cv-img');
@@ -234,14 +238,25 @@ function renderDashboard(){
   const gridCls=_camGridCols(cams.length);
   byId('cameraCards').className=`camera-grid ${gridCls}`;
   byId('cameraCards').innerHTML=cams.map(c=>{
-    const stCls=c.status==='active'?'cv-st-active':c.status==='error'?'cv-st-error':'cv-st-warn';
-    const armedCls=c.armed?'cv-armed':'cv-unarmed';
     const snapUrl=`/api/camera/${esc(c.id)}/snapshot.jpg?t=${Date.now()}`;
-    const groupColor=colors[c.group_id]||'#566d84';
+    const isActive=c.status==='active';
+    const liveStatusCls=isActive?'cv-live-pill--active':'cv-live-pill--offline';
+    const liveLabel=isActive?'LIVE':c.status==='error'?'FEHLER':'WARTEN';
+    const liveTitle=isActive?'Stream aktiv':c.status==='error'?'Verbindungsfehler':'Verbinde…';
+    const alarmCls=c.armed?'cv-alarm-pill--armed':'cv-alarm-pill--unarmed';
+    const tlOn=!!(c.timelapse&&c.timelapse.enabled);
+    const tlCls=tlOn?'cv-tl-pill--on':'cv-tl-pill--off';
+    const aiCls=c.coral_available?'cv-detect-ai--coral':'';
+    const aiTitle=c.coral_available?'Coral TPU':'CPU';
+    const filmSVG=`<svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 4v16M17 4v16M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>`;
+    const shieldSVG=`<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M12 2 4 5v6c0 5.3 3.5 10.2 8 11.4 4.5-1.2 8-6.1 8-11.4V5Z"/></svg>`;
+    const pencilSVG=`<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+    const brainSVG=`<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.46 2.5 2.5 0 0 1-1.98-3 2.5 2.5 0 0 1-1.32-4.24 3 3 0 0 1 .34-5.58 2.5 2.5 0 0 1 1.32-4.5 2.5 2.5 0 0 1 4.6-1.22Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.46 2.5 2.5 0 0 0 1.98-3 2.5 2.5 0 0 0 1.32-4.24 3 3 0 0 0-.34-5.58 2.5 2.5 0 0 0-1.32-4.5 2.5 2.5 0 0 0-4.6-1.22Z"/></svg>`;
+    const motionSVG=`<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14M15 7l5 5-5 5"/></svg>`;
     return `<article class="cv-card" data-camid="${esc(c.id)}" onclick="_cvCardClick(event,'${esc(c.id)}')">
   <div class="cv-frame">
     <div class="cv-img-wrap">
-      <div class="cv-loading-placeholder">${c.status!=='active'?_makeSquirrelHTML():'<div class="cv-loading-icon">⟳</div><div class="cv-loading-text">Verbinde…</div>'}</div>
+      <div class="cv-loading-placeholder">${!isActive?_makeSquirrelHTML():'<div class="cv-loading-icon">⟳</div><div class="cv-loading-text">Verbinde…</div>'}</div>
       <img class="cv-img cam-snap" src="${snapUrl}" alt="${esc(c.name)}"
         onload="this.classList.add('loaded');this.previousElementSibling.style.display='none'"
         onerror="this.style.display='none'" />
@@ -256,22 +271,36 @@ function renderDashboard(){
       <span class="cv-group-pill">${esc(c.group_id||'—')}</span>
     </div>
 
-    <!-- top-right: always-visible status badges (live · armed · ai) -->
-    <div class="cv-icons">
-      <div class="cv-badge ${c.status==='active'?'cv-badge-live':'cv-badge-offline'}" title="${c.status==='active'?'Live – Stream aktiv':c.status==='error'?'Fehler – Stream verloren':'Verbinde…'}"><div class="cv-badge-dot"></div></div>
-      <div class="cv-badge ${c.armed?'cv-badge-armed':'cv-badge-unarmed'}" title="${c.armed?'Scharf':'Unscharf'}"><svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M12 2 4 5v6c0 5.3 3.5 10.2 8 11.4 4.5-1.2 8-6.1 8-11.4V5Z"/></svg></div>
-      <div class="cv-badge ${c.coral_available?'cv-badge-coral':'cv-badge-cpu'}" title="${c.coral_available?'Coral TPU aktiv':'Software-Erkennung (CPU)'}"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="12" rx="10" ry="6.5"/><circle cx="12" cy="12" r="2.8" fill="currentColor" stroke="none"/></svg></div>
+    <!-- top-right: live pill + alarm pill -->
+    <div class="cv-status-pills">
+      <div class="cv-live-pill ${liveStatusCls}" title="${liveTitle}">
+        <span class="cv-live-dot-sm"></span>
+        <span class="cv-live-label">${liveLabel}</span>
+        <div class="cv-live-hover">
+          <div><b>Status:</b> ${esc(c.status||'—')}</div>
+          <div><b>KI:</b> ${aiTitle}</div>
+          ${c.today_events!=null?`<div><b>Heute:</b> ${c.today_events} Erkennungen</div>`:''}
+        </div>
+      </div>
+      <div class="cv-alarm-pill ${alarmCls}" title="${c.armed?'Scharf':'Unscharf'}">
+        ${shieldSVG}<span class="cv-alarm-label">${c.armed?'ARM':'OFF'}</span>
+      </div>
     </div>
 
-    <!-- bottom: hover actions + arm toggle + event count -->
-    <div class="cv-actions">
-      <button class="cv-act-btn" title="Bearbeiten" onclick="event.stopPropagation();editCamera('${esc(c.id)}')">⚙️</button>
-      <button class="cv-act-btn" title="Timelapse" onclick="event.stopPropagation();loadTimelapse('${esc(c.id)}')">⏱️</button>
-      <button class="cv-act-btn ${armedCls}" title="${c.armed?'Unscharf schalten':'Scharf schalten'}"
-        onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})">${c.armed?'🔕':'🔔'}</button>
-      <span class="cv-act-btn" style="cursor:default" title="Heute: ${c.today_events||0} Erkennungen">
-        <span class="cv-count">${c.today_events||0}</span>
-      </span>
+    <!-- bottom-right: timelapse pill + detection badge -->
+    <div class="cv-bot-right">
+      <div class="cv-tl-pill ${tlCls}" title="${tlOn?'Timelapse aktiv':'Timelapse inaktiv'}">${filmSVG}<span style="font-size:10px;font-weight:700;letter-spacing:.04em">TL</span></div>
+      <div class="cv-detect-badge" title="KI: ${aiTitle}">
+        <div class="cv-detect-half cv-detect-ai ${aiCls}">${brainSVG}</div>
+        <div class="cv-detect-half cv-detect-motion">${motionSVG}</div>
+      </div>
+    </div>
+
+    <!-- bottom-left: hover-only action buttons -->
+    <div class="cv-btns">
+      <button class="cv-btn" title="Bearbeiten" onclick="event.stopPropagation();editCamera('${esc(c.id)}')">${pencilSVG}</button>
+      <button class="cv-btn${c.armed?' cv-btn--armed':''}" title="${c.armed?'Unscharf schalten':'Scharf schalten'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})">${shieldSVG}</button>
+      <button class="cv-btn" title="Timelapse ansehen" onclick="event.stopPropagation();loadTimelapse('${esc(c.id)}')">${filmSVG}</button>
     </div>
   </div>
 </article>`;
@@ -518,6 +547,10 @@ function _initCameraFormListeners(){
   f['tl_weekly_seconds']?.addEventListener('input',()=>{ byId('tlWeeklyLabel').textContent=f['tl_weekly_seconds'].value+'s'; });
   // Motion sensitivity slider
   f['motion_sensitivity']?.addEventListener('input',()=>{ byId('motionSensLabel').textContent=f['motion_sensitivity'].value; });
+  // Frame interval slider
+  f['frame_interval_ms']?.addEventListener('input',()=>{ byId('frameIntervalLabel').textContent=f['frame_interval_ms'].value+'ms'; });
+  // Snapshot interval slider
+  f['snapshot_interval_s']?.addEventListener('input',()=>{ byId('snapshotIntervalLabel').textContent=f['snapshot_interval_s'].value+'s'; });
 }
 
 function editCamera(camId){
@@ -556,6 +589,9 @@ function editCamera(camId){
   if(f['timelapse_telegram']) f['timelapse_telegram'].checked=!!(c.timelapse&&c.timelapse.telegram_send);
   if(f['bottom_crop_px']) f['bottom_crop_px'].value=c.bottom_crop_px||0;
   if(f['motion_sensitivity']){const ms=c.motion_sensitivity!=null?c.motion_sensitivity:0.5; f['motion_sensitivity'].value=ms; byId('motionSensLabel').textContent=ms;}
+  if(f['resolution']) f['resolution'].value=c.resolution||'auto';
+  if(f['frame_interval_ms']){const fi=c.frame_interval_ms||350; f['frame_interval_ms'].value=fi; byId('frameIntervalLabel').textContent=fi+'ms';}
+  if(f['snapshot_interval_s']){const si=c.snapshot_interval_s||3; f['snapshot_interval_s'].value=si; byId('snapshotIntervalLabel').textContent=si+'s';}
   j('/api/persons').then(r=>_renderWhitelistChips(r.profiles||[],c.whitelist_names||[])).catch(()=>_renderWhitelistChips([],c.whitelist_names||[]));
   shapeState.camera=camId; shapeState.zones=JSON.parse(JSON.stringify(c.zones||[])); shapeState.masks=JSON.parse(JSON.stringify(c.masks||[])); shapeState.points=[];
   f['zones_json'].value=JSON.stringify(shapeState.zones); f['masks_json'].value=JSON.stringify(shapeState.masks);
@@ -1125,6 +1161,9 @@ byId('cameraForm').onsubmit=async(e)=>{
     schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},
     bottom_crop_px:parseInt(f['bottom_crop_px']?.value||0),
     motion_sensitivity:parseFloat(f['motion_sensitivity']?.value||0.5),
+    resolution:f['resolution']?.value||'auto',
+    frame_interval_ms:parseInt(f['frame_interval_ms']?.value||350),
+    snapshot_interval_s:parseInt(f['snapshot_interval_s']?.value||3),
     zones:JSON.parse(f['zones_json'].value||'[]'),masks:JSON.parse(f['masks_json'].value||'[]')};
   const _savedId=payload.id; _restoreEditWrapper();
   await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});

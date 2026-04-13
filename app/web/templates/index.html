@@ -286,6 +286,32 @@
                 </div>
                 <label class="toggle-row"><span>Täglich per Telegram senden</span><label class="switch"><input type="checkbox" name="timelapse_telegram" /><span class="slider"></span></label></label>
               </div>
+              <div class="settings-divider">Stream-Qualität</div>
+              <div class="row" style="grid-template-columns:1fr 1fr 1fr">
+                <div class="field-wrap">
+                  <select name="resolution">
+                    <option value="auto">Auto</option>
+                    <option value="720p">720p (HD)</option>
+                    <option value="1080p">1080p (Full HD)</option>
+                    <option value="4k">4K (UHD)</option>
+                  </select>
+                  <span class="field-label">Auflösung</span>
+                </div>
+                <div class="field-wrap">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <input type="range" name="frame_interval_ms" min="100" max="2000" step="50" value="350" style="flex:1" />
+                    <span id="frameIntervalLabel" style="font-size:12px;color:var(--muted);min-width:40px">350ms</span>
+                  </div>
+                  <span class="field-label">Frame-Intervall</span>
+                </div>
+                <div class="field-wrap">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <input type="range" name="snapshot_interval_s" min="1" max="30" step="1" value="3" style="flex:1" />
+                    <span id="snapshotIntervalLabel" style="font-size:12px;color:var(--muted);min-width:28px">3s</span>
+                  </div>
+                  <span class="field-label">Snapshot-Intervall (HTTP-Kameras)</span>
+                </div>
+              </div>
               <div class="settings-divider">Erkennung &amp; Qualität</div>
               <div class="row" style="grid-template-columns:1fr 1fr">
                 <div class="field-wrap"><input type="number" name="bottom_crop_px" min="0" max="200" value="0" /><span class="field-label">Unterer Bildrand ausblenden (px)</span></div>

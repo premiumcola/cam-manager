@@ -75,6 +75,9 @@ class SettingsStore:
             "mqtt_enabled": cam.get("mqtt_enabled", True),
             "schedule": cam.get("schedule", {"enabled": False, "start": "22:00", "end": "06:00"}),
             "whitelist_names": cam.get("whitelist_names", []),
+            "resolution": cam.get("resolution", "auto"),
+            "frame_interval_ms": cam.get("frame_interval_ms", 350),
+            "snapshot_interval_s": cam.get("snapshot_interval_s", 3),
         }
 
     def _build_defaults(self, base_config: dict) -> dict:

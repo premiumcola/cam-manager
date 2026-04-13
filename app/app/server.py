@@ -212,6 +212,9 @@ def api_cameras():
         s["stream_url"] = f"/api/camera/{cam['id']}/stream.mjpg"
         s["zones"] = cam.get("zones", [])
         s["masks"] = cam.get("masks", [])
+        s["resolution"] = cam.get("resolution", "auto")
+        s["frame_interval_ms"] = cam.get("frame_interval_ms", 350)
+        s["snapshot_interval_s"] = cam.get("snapshot_interval_s", 3)
         cams.append(s)
     return jsonify({"cameras": cams})
 
