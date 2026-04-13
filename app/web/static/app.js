@@ -283,7 +283,7 @@ function renderDashboard(){
       <div class="cv-pill ${isActive?'cv-pill-live':'cv-pill-live-off'}">
         <div class="cv-pdot"></div>Live
         <div class="cv-live-panel">
-          <div class="cv-lp-header"><div class="cv-pdot"></div>Livestream ${isActive?'aktiv':'inaktiv'}</div>
+          <div class="cv-lp-header">Livestream ${isActive?'aktiv':'inaktiv'}</div>
           <div class="cv-lp-row"><span>Auflösung</span><strong>${esc(c.resolution||'—')}</strong></div>
           <div class="cv-lp-row"><span>Analyse-Framerate<br><small>Wie oft TAM-spy analysiert</small></span><strong>${fps!=null?fps+' fps':'—'}</strong></div>
           <div class="cv-lp-row"><span>Snapshot-Intervall<br><small>Abstand zwischen gespeicherten Bildern</small></span><strong>${c.snapshot_interval_s!=null?c.snapshot_interval_s+'s':'—'}</strong></div>
@@ -305,7 +305,7 @@ function renderDashboard(){
     <div class="cv-actions">
       <button class="cv-abt cv-abt-edit" onclick="event.stopPropagation();editCamera('${esc(c.id)}')">${pencil}<span>Einstellungen</span></button>
       <button class="cv-abt ${c.armed?'cv-abt-arm-on':'cv-abt-arm-off'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})">${shieldMd}<span>${c.armed?'Alarm aus':'Alarm an'}</span></button>
-      <button class="cv-abt cv-abt-tl${tlOn?'':' cv-abt-tl-off'}" onclick="event.stopPropagation();loadTimelapse('${esc(c.id)}')">${film}<span>Timelapse</span></button>
+      <button class="cv-abt cv-abt-tl${tlOn?'':' cv-abt-tl-off'}" onclick="event.stopPropagation();toggleTimelapse('${esc(c.id)}',${tlOn})">${film}<span>${tlOn?'TL aus':'TL an'}</span>${tlOn?`<a class="cv-tl-view-link" onclick="event.stopPropagation();loadTimelapse('${esc(c.id)}')" href="#">&#9654; ansehen</a>`:''}</button>
     </div>
   </div>
 </article>`;
@@ -760,6 +760,18 @@ async function loadTimelapse(camId){
   showToast('Kein Zeitraffer verfügbar für '+(r.day||'heute')+'.','warn');
 }
 window.loadTimelapse=loadTimelapse;
+async function toggleTimelapse(camId,currentlyEnabled){
+  const cam=(state.config?.cameras||[]).find(c=>c.id===camId)||(state.cameras||[]).find(c=>c.id===camId);
+  if(!cam) return;
+  const newEnabled=!currentlyEnabled;
+  const payload={...cam,timelapse:{...(cam.timelapse||{}),enabled:newEnabled}};
+  try{
+    await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    showToast(newEnabled?'Timelapse aktiviert.':'Timelapse deaktiviert.','success');
+    await loadAll();
+  }catch(e){showToast('Fehler beim Speichern: '+e.message,'error');}
+}
+window.toggleTimelapse=toggleTimelapse;
 
 function hydrateSettings(){
   const server=state.config.server||{}, mqtt=state.config.mqtt||{};
