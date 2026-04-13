@@ -520,7 +520,7 @@ function renderCameraSettings(){
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
-          <label class="switch switch-sm" title="${c.enabled?'Aktiv':'Inaktiv'}" onclick="event.stopPropagation()"><input type="checkbox" ${c.enabled?'checked':''} onchange="toggleCameraEnabled('${esc(c.id)}',this.checked)" /><span class="slider"></span></label>
+          <label class="switch switch-sm switch-green" title="${c.enabled?'Kamera aktiv – zum Deaktivieren klicken':'Kamera inaktiv – zum Aktivieren klicken'}" onclick="event.stopPropagation()"><input type="checkbox" ${c.enabled?'checked':''} onchange="toggleCameraEnabled('${esc(c.id)}',this.checked)" /><span class="slider"></span></label>
           <button class="btn-action" onclick="editCamera('${esc(c.id)}')">✏️ Bearbeiten</button>
           <button class="btn-action" title="Kamera neu verbinden" onclick="event.stopPropagation();reloadCamera('${esc(c.id)}')">🔄 Neu verbinden</button>
         </div>
@@ -588,7 +588,7 @@ function editCamera(camId){
   f['rtsp_url'].value=c.rtsp_url||'';
   f['snapshot_url'].value=c.snapshot_url||''; f['group_id'].value=c.group_id||'';
   f['object_filter'].value=(c.object_filter||[]).join(',');
-  f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed;
+  if(f['enabled']) f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed;
   f['schedule_start'].value=(c.schedule&&c.schedule.start)||''; f['schedule_end'].value=(c.schedule&&c.schedule.end)||''; f['schedule_enabled'].checked=!!(c.schedule&&c.schedule.enabled);
   if(f['telegram_enabled']) f['telegram_enabled'].checked=(c.telegram_enabled!==false);
   if(f['mqtt_enabled']) f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
@@ -789,9 +789,15 @@ function hydrateSettings(){
   const mqttU=byId('mqtt_username'); if(mqttU) mqttU.value=mqtt.username||'';
   const mqttPw=byId('mqtt_password'); if(mqttPw) mqttPw.value=mqtt.password||'';
   const mqttT=byId('mqtt_base_topic'); if(mqttT) mqttT.value=mqtt.base_topic||'tam-spy';
+  // MQTT badge
+  const mqttBadge=byId('mqttStatusBadge');
+  if(mqttBadge){mqttBadge.textContent=mqtt.enabled?'aktiv':'aus';mqttBadge.className='set-status-badge '+(mqtt.enabled?'set-status-badge--on':'set-status-badge--off');}
   // Coral section
   const coralEn=byId('coral_enabled'); if(coralEn) coralEn.checked=!!(proc.coral_enabled ?? coral.mode==='coral');
   const birdEn=byId('bird_species_enabled'); if(birdEn) birdEn.checked=!!(proc.bird_species_enabled ?? coral.bird_species_enabled);
+  const coralActive=!!(proc.coral_enabled ?? coral.mode==='coral');
+  const coralBadge=byId('coralStatusBadge');
+  if(coralBadge){coralBadge.textContent=coralActive?'aktiv':'aus';coralBadge.className='set-status-badge '+(coralActive?'set-status-badge--on':'set-status-badge--off');}
   const hint=byId('coralStatusHint');
   if(hint){
     const cam=state.cameras[0];
@@ -835,6 +841,8 @@ const TG_OBJECTS=['person','cat','bird','car','motion'];
 function hydrateTelegram(){
   const tg=state.config?.telegram||{};
   const el=byId('tg_enabled'); if(el) el.checked=!!tg.enabled;
+  const tgBadge=byId('tgStatusBadge');
+  if(tgBadge){tgBadge.textContent=tg.enabled?'aktiv':'aus';tgBadge.className='set-status-badge '+(tg.enabled?'set-status-badge--on':'set-status-badge--off');}
   const tok=byId('tg_token'); if(tok) tok.value=tg.token||'';
   const cid=byId('tg_chat_id'); if(cid) cid.value=tg.chat_id||'';
   // Format
@@ -1182,8 +1190,10 @@ byId('cameraForm').onsubmit=async(e)=>{
     username:f['rtsp_user']?.value||'',password:f['rtsp_pass']?.value||'',
     group_id:f['group_id'].value,role:f['group_id'].selectedOptions[0]?.textContent||f['group_id'].value,
     object_filter:f['object_filter'].value.split(',').map(x=>x.trim()).filter(Boolean),
-    enabled:f['enabled'].checked,armed:f['armed'].checked,
-    telegram_enabled:f['telegram_enabled'].checked,mqtt_enabled:f['mqtt_enabled'].checked,
+    enabled:f['enabled']?f['enabled'].checked:(existingCam?.enabled??true),
+    armed:f['armed'].checked,
+    telegram_enabled:existingCam?.telegram_enabled??true,
+    mqtt_enabled:existingCam?.mqtt_enabled??true,
     whitelist_names:_whitelistState.filter(Boolean),
     timelapse:existingCam?.timelapse||{enabled:false,fps:30,period:'day',daily_target_seconds:60,weekly_target_seconds:180,telegram_send:false},
     schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},
@@ -1197,7 +1207,7 @@ byId('cameraForm').onsubmit=async(e)=>{
   await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   await loadAll(); editCamera(_savedId);
 };
-byId('closeCameraEdit').onclick=()=>_closeEditPanel();
+byId('closeCameraEdit')?.addEventListener('click',()=>_closeEditPanel());
 byId('addGroupBtn').onclick=(e)=>{
   e.stopPropagation();
   document.querySelectorAll('.group-inline').forEach(el=>el.remove());
@@ -1334,20 +1344,34 @@ function _renderTlCameraList(cameras){
   return cameras.map(cam=>{
     const tl=cam.timelapse||{};
     const profs=tl.profiles||{};
-    const dots=_TL_PROFILES_DEF.map(p=>`<span class="tl-prof-dot ${profs[p.key]?.enabled?'tl-prof-dot--on':''}" title="${esc(p.label)}"></span>`).join('');
+    const activeTags=_TL_PROFILES_DEF.filter(p=>profs[p.key]?.enabled).map(p=>`<span class="tl-prof-tag">${esc(p.label)}</span>`).join('');
     return `<div class="tl-cam-card" id="tlCamCard_${esc(cam.id)}">
       <button type="button" class="tl-cam-card-head" onclick="toggleTlCamCard('${esc(cam.id)}')">
         <span style="font-size:20px;line-height:1;flex-shrink:0">${getCameraIcon(cam.name)}</span>
         <span class="tl-cam-card-name">${esc(cam.name)}</span>
-        <div class="tl-prof-dots">${dots}</div>
-        <span class="tl-cam-chevron">▶</span>
+        <div style="display:flex;gap:4px;align-items:center;flex-shrink:0;flex-wrap:wrap">${activeTags||'<span style="font-size:11px;color:var(--muted)">inaktiv</span>'}</div>
+        <span class="tl-cam-chevron" style="margin-left:8px">▶</span>
       </button>
       <div class="tl-cam-profiles hidden" id="tlCamProfiles_${esc(cam.id)}">
         ${_renderTlProfileCards(cam)}
-        <button class="settings-save-btn" style="margin-top:10px" onclick="saveTlCameraProfiles('${esc(cam.id)}')">💾 Timelapse für ${esc(cam.name)} speichern</button>
+        <button class="settings-save-btn" style="margin-top:10px" onclick="saveTlCameraProfiles('${esc(cam.id)}')">💾 Speichern</button>
       </div>
     </div>`;
   }).join('');
+}
+function _tlPeriodLabel(s){
+  const n=parseInt(s)||0;
+  if(n>=2592000) return Math.round(n/2592000)+' Monat'+( Math.round(n/2592000)!==1?'e':'');
+  if(n>=604800)  return Math.round(n/604800)+' Woche'+( Math.round(n/604800)!==1?'n':'');
+  if(n>=86400)   return Math.round(n/86400)+' Tag'+( Math.round(n/86400)!==1?'e':'');
+  if(n>=3600)    return Math.round(n/3600)+' Stunde'+( Math.round(n/3600)!==1?'n':'');
+  return Math.round(n/60)+' Min';
+}
+function _tlResultDesc(periodS,targetS,fps){
+  const pN=parseInt(periodS)||86400, tN=parseInt(targetS)||60, fN=parseInt(fps)||30;
+  const interval=_tlCalcInterval(pN,tN,fN);
+  const totalFrames=Math.round(pN/Math.max(1,interval));
+  return `alle ~${_tlIntervalLabel(interval)} · ~${totalFrames} Frames · ${tN}s Video`;
 }
 function _renderTlProfileCards(cam){
   const tl=cam.timelapse||{};
@@ -1358,16 +1382,16 @@ function _renderTlProfileCards(cam){
     const enabled=!!prof.enabled;
     const targetS=prof.target_seconds??p.defaultTarget;
     const periodS=prof.period_seconds??p.defaultPeriod;
-    const interval=_tlCalcInterval(periodS,targetS,fps);
+    const isCustom=p.key==='custom';
     return `<div class="tl-profile-card ${enabled?'tl-profile-card--on':''}" id="tlProfCard_${esc(cam.id)}_${p.key}">
       <div class="tl-profile-head">
         <div class="tl-profile-info">
-          <span class="tl-profile-name">${esc(p.label)}</span>
-          <span class="tl-profile-desc" id="tlProfDesc_${esc(cam.id)}_${p.key}">${esc(p.desc)} · alle ~${_tlIntervalLabel(interval)}</span>
+          <span class="tl-profile-name">${esc(p.label)}${!isCustom?` <span style="font-size:10px;color:var(--muted);font-weight:400">${_tlPeriodLabel(periodS)}</span>`:''}</span>
+          <span class="tl-profile-desc" id="tlProfDesc_${esc(cam.id)}_${p.key}">${_tlResultDesc(periodS,targetS,fps)}</span>
         </div>
-        <label class="switch switch-sm" onclick="event.stopPropagation()">
+        <label class="switch switch-sm" style="flex-shrink:0" onclick="event.stopPropagation()">
           <input type="checkbox" id="tlProf_${esc(cam.id)}_${p.key}" ${enabled?'checked':''}
-            onchange="byId('tlProfCard_${esc(cam.id)}_${p.key}').classList.toggle('tl-profile-card--on',this.checked)" />
+            onchange="byId('tlProfCard_${esc(cam.id)}_${p.key}').classList.toggle('tl-profile-card--on',this.checked);_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" />
           <span class="slider"></span>
         </label>
       </div>
@@ -1375,16 +1399,16 @@ function _renderTlProfileCards(cam){
         <div class="field-wrap">
           <div style="display:flex;align-items:center;gap:8px">
             <input type="range" id="tlProfTarget_${esc(cam.id)}_${p.key}" min="10" max="600" step="10" value="${targetS}" style="flex:1;accent-color:#a855f7"
-              oninput="byId('tlProfTargetLbl_${esc(cam.id)}_${p.key}').textContent=this.value+'s';_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" />
-            <span id="tlProfTargetLbl_${esc(cam.id)}_${p.key}" style="font-size:12px;color:var(--muted);min-width:40px">${targetS}s</span>
+              oninput="_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" />
+            <span id="tlProfTargetLbl_${esc(cam.id)}_${p.key}" style="font-size:12px;color:var(--muted);min-width:50px;text-align:right">${targetS}s Video</span>
           </div>
-          <span class="field-label">Zieldauer (Sekunden)</span>
+          <span class="field-label">Videolänge</span>
         </div>
-        <div class="field-wrap">
+        ${isCustom?`<div class="field-wrap">
           <input type="number" id="tlProfPeriod_${esc(cam.id)}_${p.key}" min="60" max="31536000" value="${periodS}"
             oninput="_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" style="max-width:180px" />
-          <span class="field-label">Aufnahmezeitraum (Sekunden) · 86400=Tag, 604800=Woche, 2592000=Monat</span>
-        </div>
+          <span class="field-label">Zeitraum (Sekunden) · z.B. 3600 = 1h, 86400 = 1 Tag</span>
+        </div>`:`<input type="hidden" id="tlProfPeriod_${esc(cam.id)}_${p.key}" value="${periodS}" />`}
       </div>
     </div>`;
   }).join('');
@@ -1393,16 +1417,24 @@ window._tlRefreshDesc=function(camId,profKey,fps){
   const targetEl=byId(`tlProfTarget_${camId}_${profKey}`);
   const periodEl=byId(`tlProfPeriod_${camId}_${profKey}`);
   const descEl=byId(`tlProfDesc_${camId}_${profKey}`);
-  if(!targetEl||!periodEl||!descEl) return;
-  const interval=_tlCalcInterval(periodEl.value,targetEl.value,fps);
-  const pdef=_TL_PROFILES_DEF.find(p=>p.key===profKey);
-  descEl.textContent=`${pdef?.desc||profKey} · alle ~${_tlIntervalLabel(interval)}`;
+  const lblEl=byId(`tlProfTargetLbl_${camId}_${profKey}`);
+  if(!targetEl||!periodEl) return;
+  if(lblEl) lblEl.textContent=targetEl.value+'s Video';
+  if(descEl) descEl.textContent=_tlResultDesc(periodEl.value,targetEl.value,fps);
 };
 window.toggleTlCamCard=function(camId){
   const panel=byId(`tlCamProfiles_${camId}`); if(!panel) return;
   const hidden=panel.classList.toggle('hidden');
-  const chev=byId(`tlCamCard_${camId}`)?.querySelector('.tl-cam-chevron');
+  const card=byId(`tlCamCard_${camId}`);
+  if(card) card.classList.toggle('open',!hidden);
+  const chev=card?.querySelector('.tl-cam-chevron');
   if(chev) chev.style.transform=hidden?'':'rotate(90deg)';
+};
+window.openTlNav=function(){
+  const section=byId('set-timelapse');
+  if(section&&!section.classList.contains('open')){section.classList.add('open');loadTlSettings();}
+  byId('settings')?.scrollIntoView({behavior:'smooth',block:'start'});
+  return false;
 };
 window.saveTlCameraProfiles=async function(camId){
   const cam=(state.cameras||[]).find(c=>c.id===camId);
