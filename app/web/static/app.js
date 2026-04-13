@@ -180,6 +180,7 @@ async function loadAll(){
   hydrateTelegram();
   initTelegramTabs();
   loadTlStatus();
+  _updateTlActiveTags(state.cameras||[]);
   if(state.bootstrap.needs_wizard) openWizard();
   byId('openWizardBtn').classList.toggle('hidden', !!state.bootstrap?.wizard_completed || !state.bootstrap?.needs_wizard);
 }
@@ -1391,29 +1392,18 @@ function _tlIntervalLabel(interval_s){
 function _tlCalcInterval(periodS,targetS,fps){
   return Math.max(2, Math.round(parseInt(periodS)||86400 / Math.max(1,(parseInt(targetS)||60)*(parseInt(fps)||30))));
 }
-function _updateTlGlobalBadge(enabled){
-  const badge=byId('tlGlobalBadge'); if(!badge) return;
-  badge.textContent=enabled?'aktiv':'aus';
-  badge.className='tl-global-badge '+(enabled?'tl-global-badge--on':'tl-global-badge--off');
+function _updateTlActiveTags(cameras){
+  const wrap=byId('tlActiveTags'); if(!wrap) return;
+  const active=(cameras||[]).filter(cam=>_TL_PROFILES_DEF.some(p=>(cam.timelapse||{}).profiles?.[p.key]?.enabled));
+  if(!active.length){wrap.innerHTML='';return;}
+  wrap.innerHTML=active.map(cam=>`<span class="tl-cam-tag">${getCameraIcon(cam.name)} ${esc(cam.name)}</span>`).join('');
 }
-window.saveTlGlobal=async function(enabled){
-  _updateTlGlobalBadge(enabled);
-  await fetch('/api/settings/timelapse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({global_enabled:enabled})});
-  await loadTlStatus();
-};
 window.loadTlSettings=async function(){
   const content=byId('tlSettingsContent'); if(!content) return;
   content.innerHTML='<div class="small muted" style="padding:10px 2px">Lade...</div>';
   try{
-    const [tlRes,camsRes]=await Promise.all([
-      fetch('/api/timelapse/status').then(r=>r.json()).catch(()=>({ok:false})),
-      Promise.resolve({cameras:state.cameras||[]}),
-    ]);
-    const globalEnabled=!!(tlRes.global_enabled);
-    const toggle=byId('tl_global_enabled');
-    if(toggle) toggle.checked=globalEnabled;
-    _updateTlGlobalBadge(globalEnabled);
     const cameras=state.cameras||[];
+    _updateTlActiveTags(cameras);
     content.innerHTML=_renderTlCameraList(cameras);
   }catch(e){content.innerHTML=`<div class="small muted" style="padding:10px 2px">Fehler: ${esc(e.message)}</div>`;}
 };
@@ -1529,6 +1519,7 @@ window.saveTlCameraProfiles=async function(camId){
   await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   showToast(`Timelapse für ${esc(cam.name)} gespeichert.`,'success');
   await loadAll();
+  _updateTlActiveTags(state.cameras||[]);
   const content=byId('tlSettingsContent');
   if(content){content.innerHTML=_renderTlCameraList(state.cameras||[]);selectTlCam(camId);}
 };

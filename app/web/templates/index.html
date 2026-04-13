@@ -133,7 +133,7 @@
       </section>
 
       <section id="statistik" class="panel section">
-        <div class="section-head"><h3>Statistik</h3><button type="button" id="statRefreshBtn" class="btn-action ghost" style="min-height:36px;padding:6px 14px;font-size:12px">↻ Aktualisieren</button></div>
+        <div class="section-head"><h3>Statistik</h3><button type="button" id="statRefreshBtn" class="btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg> Aktualisieren</button></div>
         <div id="statContent"><div class="stat-empty" style="padding:32px 0">Abschnitt öffnen, um Daten zu laden …</div></div>
       </section>
 
@@ -357,18 +357,12 @@
 
         <!-- 2. Timelapse Einstellungen -->
         <div class="set-section" id="set-timelapse">
-          <div class="set-hd-row">
-            <button type="button" class="set-hd" style="flex:1" onclick="toggleSetSection('set-timelapse');if(this.closest('.set-section').classList.contains('open'))loadTlSettings()">
-              <span class="set-icon">🎬</span>
-              <span>Timelapse</span>
-              <span id="tlGlobalBadge" class="tl-global-badge tl-global-badge--off">aus</span>
-              <span class="set-chevron">▶</span>
-            </button>
-            <label class="switch switch-sm tl-global-switch" title="Timelapse global aktiv" onclick="event.stopPropagation()">
-              <input type="checkbox" id="tl_global_enabled" onchange="saveTlGlobal(this.checked)" />
-              <span class="slider"></span>
-            </label>
-          </div>
+          <button type="button" class="set-hd" onclick="toggleSetSection('set-timelapse');if(this.closest('.set-section').classList.contains('open'))loadTlSettings()">
+            <span class="set-icon">🎬</span>
+            <span>Timelapse</span>
+            <span id="tlActiveTags" class="tl-active-tags"></span>
+            <span class="set-chevron">▶</span>
+          </button>
           <div class="set-bd"><div class="set-inner" style="padding:4px 0 8px">
             <div id="tlSettingsContent" class="tl-settings-content">
               <!-- populated by loadTlSettings() -->
