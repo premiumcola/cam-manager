@@ -179,6 +179,7 @@ async function loadAll(){
   hydrateSettings();
   hydrateTelegram();
   initTelegramTabs();
+  loadTlStatus();
   if(state.bootstrap.needs_wizard) openWizard();
   byId('openWizardBtn').classList.toggle('hidden', !!state.bootstrap?.wizard_completed || !state.bootstrap?.needs_wizard);
 }
@@ -1294,6 +1295,186 @@ byId('clearImportBtn').onclick=()=>{byId('importBox').value='';};
 byId('importJsonBtn').onclick=async()=>{await importConfig('json');};
 byId('importYamlBtn').onclick=async()=>{await importConfig('yaml');};
 async function importConfig(format){ const content=byId('importBox').value.trim(); if(!content){showToast('Bitte Inhalt einfügen.','warn');return;} const r=await j('/api/settings/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({format,content})}); byId('importBox').value=''; await loadAll(); showToast('Import erfolgreich.','success'); }
+
+// ── Timelapse Settings ────────────────────────────────────────────────────────
+const _TL_PROFILES_DEF=[
+  {key:'daily',   label:'Täglich',           desc:'24h',     defaultPeriod:86400,   defaultTarget:60},
+  {key:'weekly',  label:'Wöchentlich',        desc:'7 Tage',  defaultPeriod:604800,  defaultTarget:180},
+  {key:'monthly', label:'Monatlich',          desc:'30 Tage', defaultPeriod:2592000, defaultTarget:300},
+  {key:'custom',  label:'Benutzerdefiniert',  desc:'frei',    defaultPeriod:600,     defaultTarget:30},
+];
+function _tlIntervalLabel(interval_s){
+  if(interval_s<60) return interval_s+'s';
+  if(interval_s<3600) return Math.round(interval_s/60)+'min';
+  return Math.round(interval_s/3600)+'h';
+}
+function _tlCalcInterval(periodS,targetS,fps){
+  return Math.max(2, Math.round(parseInt(periodS)||86400 / Math.max(1,(parseInt(targetS)||60)*(parseInt(fps)||30))));
+}
+function _updateTlGlobalBadge(enabled){
+  const badge=byId('tlGlobalBadge'); if(!badge) return;
+  badge.textContent=enabled?'aktiv':'aus';
+  badge.className='tl-global-badge '+(enabled?'tl-global-badge--on':'tl-global-badge--off');
+}
+window.saveTlGlobal=async function(enabled){
+  _updateTlGlobalBadge(enabled);
+  await fetch('/api/settings/timelapse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({global_enabled:enabled})});
+  await loadTlStatus();
+};
+window.loadTlSettings=async function(){
+  const content=byId('tlSettingsContent'); if(!content) return;
+  content.innerHTML='<div class="small muted" style="padding:10px 2px">Lade...</div>';
+  try{
+    const [tlRes,camsRes]=await Promise.all([
+      fetch('/api/timelapse/status').then(r=>r.json()).catch(()=>({ok:false})),
+      Promise.resolve({cameras:state.cameras||[]}),
+    ]);
+    const globalEnabled=!!(tlRes.global_enabled);
+    const toggle=byId('tl_global_enabled');
+    if(toggle) toggle.checked=globalEnabled;
+    _updateTlGlobalBadge(globalEnabled);
+    const cameras=state.cameras||[];
+    content.innerHTML=_renderTlCameraList(cameras);
+  }catch(e){content.innerHTML=`<div class="small muted" style="padding:10px 2px">Fehler: ${esc(e.message)}</div>`;}
+};
+function _renderTlCameraList(cameras){
+  if(!cameras.length) return '<div class="small muted" style="padding:10px 2px">Keine Kameras konfiguriert.</div>';
+  return cameras.map(cam=>{
+    const tl=cam.timelapse||{};
+    const profs=tl.profiles||{};
+    const dots=_TL_PROFILES_DEF.map(p=>`<span class="tl-prof-dot ${profs[p.key]?.enabled?'tl-prof-dot--on':''}" title="${esc(p.label)}"></span>`).join('');
+    return `<div class="tl-cam-card" id="tlCamCard_${esc(cam.id)}">
+      <button type="button" class="tl-cam-card-head" onclick="toggleTlCamCard('${esc(cam.id)}')">
+        <span style="font-size:20px;line-height:1;flex-shrink:0">${getCameraIcon(cam.name)}</span>
+        <span class="tl-cam-card-name">${esc(cam.name)}</span>
+        <div class="tl-prof-dots">${dots}</div>
+        <span class="tl-cam-chevron">▶</span>
+      </button>
+      <div class="tl-cam-profiles hidden" id="tlCamProfiles_${esc(cam.id)}">
+        ${_renderTlProfileCards(cam)}
+        <button class="settings-save-btn" style="margin-top:10px" onclick="saveTlCameraProfiles('${esc(cam.id)}')">💾 Timelapse für ${esc(cam.name)} speichern</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function _renderTlProfileCards(cam){
+  const tl=cam.timelapse||{};
+  const profs=tl.profiles||{};
+  const fps=parseInt(tl.fps)||30;
+  return _TL_PROFILES_DEF.map(p=>{
+    const prof=profs[p.key]||{};
+    const enabled=!!prof.enabled;
+    const targetS=prof.target_seconds??p.defaultTarget;
+    const periodS=prof.period_seconds??p.defaultPeriod;
+    const interval=_tlCalcInterval(periodS,targetS,fps);
+    return `<div class="tl-profile-card ${enabled?'tl-profile-card--on':''}" id="tlProfCard_${esc(cam.id)}_${p.key}">
+      <div class="tl-profile-head">
+        <div class="tl-profile-info">
+          <span class="tl-profile-name">${esc(p.label)}</span>
+          <span class="tl-profile-desc" id="tlProfDesc_${esc(cam.id)}_${p.key}">${esc(p.desc)} · alle ~${_tlIntervalLabel(interval)}</span>
+        </div>
+        <label class="switch switch-sm" onclick="event.stopPropagation()">
+          <input type="checkbox" id="tlProf_${esc(cam.id)}_${p.key}" ${enabled?'checked':''}
+            onchange="byId('tlProfCard_${esc(cam.id)}_${p.key}').classList.toggle('tl-profile-card--on',this.checked)" />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="tl-profile-body">
+        <div class="field-wrap">
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="range" id="tlProfTarget_${esc(cam.id)}_${p.key}" min="10" max="600" step="10" value="${targetS}" style="flex:1;accent-color:#a855f7"
+              oninput="byId('tlProfTargetLbl_${esc(cam.id)}_${p.key}').textContent=this.value+'s';_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" />
+            <span id="tlProfTargetLbl_${esc(cam.id)}_${p.key}" style="font-size:12px;color:var(--muted);min-width:40px">${targetS}s</span>
+          </div>
+          <span class="field-label">Zieldauer (Sekunden)</span>
+        </div>
+        <div class="field-wrap">
+          <input type="number" id="tlProfPeriod_${esc(cam.id)}_${p.key}" min="60" max="31536000" value="${periodS}"
+            oninput="_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" style="max-width:180px" />
+          <span class="field-label">Aufnahmezeitraum (Sekunden) · 86400=Tag, 604800=Woche, 2592000=Monat</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+window._tlRefreshDesc=function(camId,profKey,fps){
+  const targetEl=byId(`tlProfTarget_${camId}_${profKey}`);
+  const periodEl=byId(`tlProfPeriod_${camId}_${profKey}`);
+  const descEl=byId(`tlProfDesc_${camId}_${profKey}`);
+  if(!targetEl||!periodEl||!descEl) return;
+  const interval=_tlCalcInterval(periodEl.value,targetEl.value,fps);
+  const pdef=_TL_PROFILES_DEF.find(p=>p.key===profKey);
+  descEl.textContent=`${pdef?.desc||profKey} · alle ~${_tlIntervalLabel(interval)}`;
+};
+window.toggleTlCamCard=function(camId){
+  const panel=byId(`tlCamProfiles_${camId}`); if(!panel) return;
+  const hidden=panel.classList.toggle('hidden');
+  const chev=byId(`tlCamCard_${camId}`)?.querySelector('.tl-cam-chevron');
+  if(chev) chev.style.transform=hidden?'':'rotate(90deg)';
+};
+window.saveTlCameraProfiles=async function(camId){
+  const cam=(state.cameras||[]).find(c=>c.id===camId);
+  if(!cam) return;
+  const profiles={};
+  const tl=cam.timelapse||{};
+  const fps=parseInt(tl.fps)||30;
+  for(const p of _TL_PROFILES_DEF){
+    const enabledEl=byId(`tlProf_${camId}_${p.key}`);
+    const targetEl=byId(`tlProfTarget_${camId}_${p.key}`);
+    const periodEl=byId(`tlProfPeriod_${camId}_${p.key}`);
+    profiles[p.key]={
+      enabled:!!(enabledEl?.checked),
+      target_seconds:parseInt(targetEl?.value)||p.defaultTarget,
+      period_seconds:parseInt(periodEl?.value)||p.defaultPeriod,
+    };
+  }
+  const anyEnabled=Object.values(profiles).some(p=>p.enabled);
+  const payload={...cam,timelapse:{...(cam.timelapse||{}),enabled:anyEnabled,profiles}};
+  await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  showToast(`Timelapse für ${esc(cam.name)} gespeichert.`,'success');
+  await loadAll();
+  const content=byId('tlSettingsContent');
+  if(content) content.innerHTML=_renderTlCameraList(state.cameras||[]);
+};
+
+// ── Timelapse Status Bar (Dashboard in Cameras section) ───────────────────────
+window._tlStatus=null;
+async function loadTlStatus(){
+  try{
+    window._tlStatus=await j('/api/timelapse/status');
+    renderTlStatusBar();
+  }catch(e){ /* silent */ }
+}
+function renderTlStatusBar(){
+  const bar=byId('tlStatusBar'); if(!bar) return;
+  const s=window._tlStatus;
+  if(!s||s.active_count===0){bar.innerHTML='';return;}
+  const activeCams=(s.cameras||[]).filter(c=>c.any_active);
+  const panelId='tlSbPanel';
+  bar.innerHTML=`
+    <div class="tl-sb-pill" onclick="byId('${panelId}').classList.toggle('hidden')">
+      ${_TL_FILMSTRIP}
+      <span>Timelapse aktiv</span>
+      <span class="tl-sb-count">${activeCams.length}</span>
+    </div>
+    <div class="tl-sb-panel hidden" id="${panelId}">
+      ${activeCams.map(cam=>`
+        <div class="tl-sb-cam">
+          <div class="tl-sb-cam-name">${esc(cam.name)}</div>
+          <div class="tl-sb-profiles">
+            ${_TL_PROFILES_DEF.map(p=>{
+              const prof=cam.profiles[p.key]; if(!prof?.enabled) return '';
+              return `<div class="tl-sb-profile">
+                <span class="tl-sb-prof-name">${esc(p.label)}</span>
+                <span class="tl-sb-prof-frames">${prof.frame_count} Frames heute</span>
+                <span class="tl-sb-prof-interval">alle ~${_tlIntervalLabel(prof.interval_s)}</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`).join('')}
+      <div class="tl-sb-footer small muted">Stand: ${esc(s.today||'—')}</div>
+    </div>`;
+}
 
 // ── Settings collapsible sections ────────────────────────────────────────────
 window.toggleSetSection=function(id){

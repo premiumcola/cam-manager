@@ -207,6 +207,7 @@
 
       <section id="cameras" class="panel section">
         <div class="section-head"><h3>Kameras</h3><button type="button" onclick="byId('discoveryModal').classList.remove('hidden');document.body.style.overflow='hidden'" class="btn-action action-green">🔍 Netzwerk-Discovery</button></div>
+        <div id="tlStatusBar" class="tl-status-bar"></div>
         <div id="cameraSettingsList" class="list"></div>
         <div id="cameraEditWrapper" class="cam-edit-wrapper">
           <div class="cam-edit-inner">
@@ -365,7 +366,28 @@
           </div></div>
         </div>
 
-        <!-- 2. Kameragruppen -->
+        <!-- 2. Timelapse Einstellungen -->
+        <div class="set-section" id="set-timelapse">
+          <div class="set-hd-row">
+            <button type="button" class="set-hd" style="flex:1" onclick="toggleSetSection('set-timelapse');if(this.closest('.set-section').classList.contains('open'))loadTlSettings()">
+              <span class="set-icon">🎬</span>
+              <span>Timelapse</span>
+              <span id="tlGlobalBadge" class="tl-global-badge tl-global-badge--off">aus</span>
+              <span class="set-chevron">▶</span>
+            </button>
+            <label class="switch switch-sm tl-global-switch" title="Timelapse global aktiv" onclick="event.stopPropagation()">
+              <input type="checkbox" id="tl_global_enabled" onchange="saveTlGlobal(this.checked)" />
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="set-bd"><div class="set-inner" style="padding:4px 0 8px">
+            <div id="tlSettingsContent" class="tl-settings-content">
+              <!-- populated by loadTlSettings() -->
+            </div>
+          </div></div>
+        </div>
+
+        <!-- 3. Kameragruppen -->
         <div class="set-section" id="set-groups">
           <div class="set-hd-row">
             <button type="button" class="set-hd" style="flex:1" onclick="toggleSetSection('set-groups')">
@@ -378,7 +400,7 @@
           </div></div>
         </div>
 
-        <!-- 3. Katzen & Personen -->
+        <!-- 4. Katzen & Personen -->
         <div class="set-section" id="set-profiles">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-profiles')">
             <span class="set-icon">🐾</span><span>Katzen &amp; Personen</span><span class="set-chevron">▶</span>
