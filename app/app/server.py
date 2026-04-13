@@ -44,6 +44,37 @@ from .discovery import discover_hosts
 from .settings_store import SettingsStore
 from .mqtt_service import MQTTService
 
+def _get_build_info() -> dict:
+    """Try git subprocess first (works in dev); fall back to committed buildinfo.json."""
+    import subprocess, json as _json
+    result: dict = {"commit": "dev", "date": "—", "count": "—"}
+    try:
+        repo_root = Path(__file__).resolve().parent.parent.parent
+        commit = subprocess.check_output(
+            ["git", "-C", str(repo_root), "log", "-1", "--format=%h"],
+            text=True, timeout=4, stderr=subprocess.DEVNULL).strip()
+        date = subprocess.check_output(
+            ["git", "-C", str(repo_root), "log", "-1", "--format=%ci"],
+            text=True, timeout=4, stderr=subprocess.DEVNULL).strip()[:10]
+        count = subprocess.check_output(
+            ["git", "-C", str(repo_root), "rev-list", "--count", "HEAD"],
+            text=True, timeout=4, stderr=subprocess.DEVNULL).strip()
+        if commit:
+            result = {"commit": commit, "date": date, "count": count}
+            return result
+    except Exception:
+        pass
+    try:
+        bi = Path(__file__).parent / "buildinfo.json"
+        result = _json.loads(bi.read_text())
+    except Exception:
+        pass
+    return result
+
+
+_BUILD_INFO = _get_build_info()
+
+
 base_cfg = load_config()
 storage_root = Path(base_cfg["storage"]["root"])
 web_root = Path(__file__).resolve().parent.parent / "web"
@@ -947,6 +978,56 @@ def api_achievements_unlock():
             data[species_id]["count"] = data[species_id].get("count", 1) + 1
         _save_achievements(data)
     return jsonify({"ok": True, "already_had": already, "achievements": data})
+
+
+# ── System info ──────────────────────────────────────────────────────────────
+@app.get('/api/system')
+def api_system():
+    import time as _time
+    mem_total = mem_used = proc_mem_mb = uptime_s = 0.0
+    try:
+        mem: dict = {}
+        with open('/proc/meminfo') as f:
+            for line in f:
+                parts = line.split()
+                if len(parts) >= 2:
+                    mem[parts[0].rstrip(':')] = int(parts[1]) * 1024
+        mem_total = mem.get('MemTotal', 0)
+        mem_available = mem.get('MemAvailable', 0)
+        mem_used = mem_total - mem_available
+    except Exception:
+        pass
+    try:
+        with open('/proc/uptime') as f:
+            uptime_s = float(f.read().split()[0])
+    except Exception:
+        pass
+    try:
+        import resource as _resource
+        ru = _resource.getrusage(_resource.RUSAGE_SELF)
+        proc_mem_mb = round(ru.ru_maxrss / 1024, 1)  # KB → MB on Linux
+    except Exception:
+        pass
+    coral_device = None
+    try:
+        import subprocess as _sp
+        lsusb = _sp.check_output(['lsusb'], text=True, timeout=3, stderr=_sp.DEVNULL)
+        for line in lsusb.splitlines():
+            if 'Google' in line or 'Coral' in line or '18d1' in line.lower():
+                coral_device = line.strip()
+                break
+    except Exception:
+        pass
+    return jsonify({
+        "build": _BUILD_INFO,
+        "mem_total_mb": round(mem_total / 1048576, 1),
+        "mem_used_mb": round(mem_used / 1048576, 1),
+        "proc_mem_mb": proc_mem_mb,
+        "uptime_s": uptime_s,
+        "storage_root": str(storage_root),
+        "camera_count": len(runtimes),
+        "coral_device": coral_device,
+    })
 
 
 if __name__ == '__main__':

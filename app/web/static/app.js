@@ -857,6 +857,7 @@ function hydrateSettings(){
   const pubEl=byId('set_public_base_url'); if(pubEl) pubEl.value=server.public_base_url||'';
   const subEl=byId('set_discovery_subnet'); if(subEl) subEl.value=state.config.default_discovery_subnet||'';
   updateAppInfoPanel();
+  updateSystemPanel();
   // MQTT section
   const mqttEn=byId('mqtt_enabled'); if(mqttEn) mqttEn.checked=!!mqtt.enabled;
   const mqttH=byId('mqtt_host'); if(mqttH) mqttH.value=mqtt.host||'';
@@ -894,21 +895,44 @@ function hydrateSettings(){
 
 function updateAppInfoPanel(){
   const panel=byId('appInfoPanel'); if(!panel) return;
-  const proc=state.config?.processing||{}, coral=state.config?.coral||{};
   const stor=state.config?.storage||{};
-  const bs=state.bootstrap||{};
-  const coralActive=!!(proc.coral_enabled ?? coral.mode==='coral');
-  const coralModeStr=coralActive?'✅ Coral TPU':'⬜ Software only';
-  const storagePath=stor.root||bs.storage_root||'storage/';
-  const mediaLimit=stor.media_limit_default||24;
-  const version=bs.version||'—';
+  const storagePath=stor.root||'storage/';
+  // Build info will be filled by updateSystemPanel via /api/system
   panel.innerHTML=`
-    <div class="app-info-item"><span class="app-info-label">Version</span><span class="app-info-val">${esc(version)}</span></div>
-    <div class="app-info-item"><span class="app-info-label">Coral-Modus</span><span class="app-info-val">${coralModeStr}</span></div>
     <div class="app-info-item"><span class="app-info-label">Storage-Pfad</span><span class="app-info-val"><code>${esc(storagePath)}</code></span></div>
-    <div class="app-info-item"><span class="app-info-label">Medien-Limit</span><span class="app-info-val">${esc(mediaLimit)} Fotos/Kamera</span></div>
   `;
 }
+
+async function updateSystemPanel(){
+  const panel=byId('systemInfoPanel'); if(!panel) return;
+  try{
+    const s=await j('/api/system');
+    const b=s.build||{};
+    const commit=b.commit||'dev';
+    const date=b.date||'—';
+    const count=b.count||'—';
+    const memUsed=s.mem_used_mb||0;
+    const memTotal=s.mem_total_mb||0;
+    const procMem=s.proc_mem_mb||0;
+    const uptime=s.uptime_s||0;
+    const uptimeStr=uptime>3600?`${Math.floor(uptime/3600)}h ${Math.floor((uptime%3600)/60)}m`:uptime>60?`${Math.floor(uptime/60)}m`:`${Math.round(uptime)}s`;
+    panel.innerHTML=`
+      <div class="app-info-grid" style="margin-bottom:0">
+        <div class="app-info-item"><span class="app-info-label">Build</span><span class="app-info-val"><code>${esc(commit)}</code> · ${esc(date)}</span></div>
+        <div class="app-info-item"><span class="app-info-label">Commits</span><span class="app-info-val">${esc(String(count))}</span></div>
+        ${memTotal?`<div class="app-info-item"><span class="app-info-label">RAM (System)</span><span class="app-info-val">${memUsed} / ${memTotal} MB</span></div>`:''}
+        ${procMem?`<div class="app-info-item"><span class="app-info-label">RAM (App)</span><span class="app-info-val">${procMem} MB</span></div>`:''}
+        ${uptime?`<div class="app-info-item"><span class="app-info-label">Container-Uptime</span><span class="app-info-val">${uptimeStr}</span></div>`:''}
+        ${s.camera_count!==undefined?`<div class="app-info-item"><span class="app-info-label">Aktive Runtimes</span><span class="app-info-val">${s.camera_count}</span></div>`:''}
+      </div>`;
+  }catch(e){/* silent — system info optional */}
+}
+
+let _appSaveTimer=null;
+window.saveAppSettingsDebounced=function(){
+  clearTimeout(_appSaveTimer);
+  _appSaveTimer=setTimeout(()=>saveAppSettings(),600);
+};
 
 // ── Telegram page hydrate & logic ─────────────────────────────────────────────
 const TG_OBJECTS=['person','cat','bird','car','motion'];
