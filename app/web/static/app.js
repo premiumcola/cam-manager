@@ -319,6 +319,11 @@ function renderDashboard(){
 </article>`;
   }).join('');
   byId('cameraCards').querySelectorAll('.cv-pill-live-wrap').forEach(el=>{
+    const collapsed=el.querySelector('.cv-live-collapsed');
+    requestAnimationFrame(()=>{
+      const w=Math.ceil(collapsed.getBoundingClientRect().width);
+      if(w>0) el.style.setProperty('--lp-collapsed-w', w+'px');
+    });
     let _t=null;
     el.addEventListener('mouseenter',()=>{clearTimeout(_t);el.classList.add('cv-lp-open');});
     el.addEventListener('mouseleave',()=>{_t=setTimeout(()=>el.classList.remove('cv-lp-open'),120);});
