@@ -983,6 +983,7 @@ function closeDiscoveryModal(){
   document.body.style.overflow='';
 }
 let _discoveryItems=[];
+function _hostnameToId(h){return h.toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40);}
 function _renderDiscoveryResults(){
   const hideConfigured=byId('discoveryHideConfigured')?.checked;
   const pathOpts=RTSP_PATHS.map(p=>`<option value="${esc(p.value)}">${esc(p.label)}</option>`).join('');
@@ -1012,10 +1013,12 @@ function _renderDiscoveryResults(){
     const already=allConfigured.has(x.ip);
     const vendor=x.guess==='Unbekannte Kamera'?`Unbekannte Kamera (${x.ip})`:esc(x.guess||'Unbekannte Kamera');
     const groupOpts=state.groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
+    const computedId=x.hostname?_hostnameToId(x.hostname):'cam-'+x.ip.replace(/\./g,'-');
+    const displayName=x.hostname?esc(x.hostname.charAt(0).toUpperCase()+x.hostname.slice(1)):'';
     return `<div class="item" data-disc-ip="${esc(x.ip)}">
       <div class="item-head">
         <div>
-          <strong>${esc(x.ip)}</strong>
+          <strong>${esc(x.ip)}</strong>${x.hostname?` <span class="muted small">${esc(x.hostname)}</span>`:''}
           ${already?'<span class="badge good" style="margin-left:8px;font-size:11px">✓ Bereits konfiguriert</span>':''}
         </div>
         <span class="small muted">Ports: ${esc(ports)}</span>
@@ -1029,9 +1032,10 @@ function _renderDiscoveryResults(){
         </div>
         <div id="disc_add_form_${uid}" class="disc-add-form hidden">
           <div class="discovery-creds" style="margin-top:8px">
-            <input id="disc_name_${uid}" class="disc-input" placeholder="Kameraname" value="${esc(vendor)}" style="flex:1.5"/>
+            <input id="disc_name_${uid}" class="disc-input" placeholder="${x.hostname?'Kameraname':esc(vendor)}" value="${displayName}" style="flex:1.5"/>
             <select id="disc_group_${uid}" class="disc-select" style="flex:1">${groupOpts}</select>
           </div>
+          <div class="field-help" style="padding:2px 6px">ID: <code>${esc(computedId)}</code></div>
           <div style="display:flex;gap:8px;margin-top:6px">
             <button class="action-btn" style="flex:1;background:var(--accent)" onclick="saveDiscoveryCamera('${esc(x.ip)}')">💾 Kamera speichern</button>
             <button class="action-btn" style="flex:0 0 auto" onclick="byId('disc_add_form_${uid}').classList.add('hidden')">Abbrechen</button>
@@ -1080,7 +1084,8 @@ window.saveDiscoveryCamera=async(ip)=>{
   const groupId=byId(`disc_group_${uid}`)?.value||state.groups[0]?.id||'';
   const rtsp=`rtsp://${user}:${_rtspEnc(pass)}@${ip}:554${path}`;
   const snap=`http://${user}:${_rtspEnc(pass)}@${ip}/cgi-bin/snapshot.cgi`;
-  const camId='cam-'+ip.replace(/\./g,'-');
+  const _item=_discoveryItems.find(x=>x.ip===ip);
+  const camId=_item?.hostname?_hostnameToId(_item.hostname):'cam-'+ip.replace(/\./g,'-');
   const payload={id:camId,name,location:'',rtsp_url:rtsp,snapshot_url:snap,
     group_id:groupId,enabled:true,armed:true,
     object_filter:['person','cat','bird'],

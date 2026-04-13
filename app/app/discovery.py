@@ -163,8 +163,19 @@ def discover_hosts(subnet: str, max_hosts: int = 254) -> tuple[list, int]:
                 banners["rtsp_confirmed"] = True
                 break
 
+        hostname = ""
+        _prev_timeout = socket.getdefaulttimeout()
+        try:
+            socket.setdefaulttimeout(1.0)
+            fqdn = socket.gethostbyaddr(ip)[0]
+            hostname = fqdn.split(".")[0].lower()
+        except Exception:
+            pass
+        finally:
+            socket.setdefaulttimeout(_prev_timeout)
+
         open_ports.sort()
-        results.append({"ip": ip, "open_ports": open_ports, "guess": _guess(open_ports, banners)})
+        results.append({"ip": ip, "open_ports": open_ports, "guess": _guess(open_ports, banners), "hostname": hostname})
 
     results.sort(key=lambda x: list(map(int, x["ip"].split("."))))
     return results, len(hosts)
