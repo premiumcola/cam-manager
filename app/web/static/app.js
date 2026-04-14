@@ -1,5 +1,5 @@
 
-const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabel:'',mediaPeriod:'week',tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false};
+const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),mediaPeriod:'week',tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false};
 
 // ── Toast & Confirm helpers ───────────────────────────────────────────────────
 window.showToast=function(msg,type='info'){
@@ -213,17 +213,23 @@ function _mediaPeriodParams(){
 }
 const MEDIA_PAGE_SIZE=48;
 async function loadMedia(){
-  // Timelapse filter: no API call needed, renderMediaGrid uses window._tlItems
-  if(state.mediaLabel==='timelapse'){state.media=[];state.mediaTotalPages=1;return;}
+  // Timelapse-only shortcut: no API call needed, renderMediaGrid uses window._tlItems
+  const labels=state.mediaLabels;
+  const onlyTL=labels.size===1&&labels.has('timelapse');
+  if(onlyTL){state.media=[];state.mediaTotalPages=1;return;}
   const page=state.mediaPage||0;
   const offset=page*MEDIA_PAGE_SIZE;
   state.media=[];
   const cams=state.mediaCamera?[state.mediaCamera]:state.cameras.map(c=>c.id);
   const periodParams=_mediaPeriodParams();
+  // Build label filter param — exclude 'timelapse' (handled separately in grid)
+  const motionLabels=[...labels].filter(l=>l!=='timelapse');
+  const labelParam=motionLabels.length===1?`&label=${encodeURIComponent(motionLabels[0])}`
+    :motionLabels.length>1?`&labels=${encodeURIComponent(motionLabels.join(','))}`:'';
   let totalCount=0;
   const allItems=[];
   for(const camId of cams){
-    const data=await j(`/api/camera/${camId}/media?limit=${MEDIA_PAGE_SIZE}&offset=${offset}${state.mediaLabel?`&label=${encodeURIComponent(state.mediaLabel)}`:''}${periodParams}`);
+    const data=await j(`/api/camera/${camId}/media?limit=${MEDIA_PAGE_SIZE}&offset=${offset}${labelParam}${periodParams}`);
     const items=data.items||[];
     totalCount+=data.total_count||items.length;
     for(const item of items) allItems.push({...item,camera_id:camId});
@@ -465,7 +471,7 @@ function renderTimeline(){
   container.querySelectorAll('.tl-bar').forEach(bar=>{
     bar.onclick=()=>{
       state.mediaCamera=bar.dataset.camid;
-      state.mediaLabel=bar.dataset.label;
+      state.mediaLabels=bar.dataset.label?new Set([bar.dataset.label]):new Set();
       document.querySelector('#media').scrollIntoView({behavior:'smooth',block:'start'});
       loadMedia().then(()=>renderMediaGrid());
     };
@@ -902,7 +908,7 @@ function hydrateSettings(){
   const storageSec=state.config.storage||{};
   const mlVal=storageSec.media_limit_default||24;
   const mlEl=byId('ms_media_limit'); if(mlEl){ mlEl.value=mlVal; }
-  const mlLbl=byId('ms_media_limit_val'); if(mlLbl) mlLbl.textContent=mlVal+' Fotos';
+  const mlLbl=byId('ms_media_limit_val'); if(mlLbl) mlLbl.textContent=mlVal+' Medien';
   const rdVal=storageSec.retention_days||14;
   const rdEl=byId('ms_retention_days'); if(rdEl) rdEl.value=rdVal;
   const rdLbl=byId('ms_retention_days_val'); if(rdLbl) rdLbl.textContent=rdVal+' Tage';
@@ -1879,8 +1885,8 @@ function openLightbox(item){
   document.body.style.overflow='hidden';
 }
 function _tlNavItems(){
-  // When in the timelapse tab, navigation items are _tlItems; otherwise state.media
-  if(state.mediaLabel==='timelapse') return window._tlItems||[];
+  // When in the timelapse filter, navigation items are _tlItems; otherwise state.media
+  if(state.mediaLabels.has('timelapse')&&state.mediaLabels.size===1) return window._tlItems||[];
   return (state.media||[]).filter(x=>x.type==='timelapse').length>0
     ? (window._tlItems||[])
     : (state.media||[]);
@@ -2114,10 +2120,16 @@ function renderMediaOverview(){
       <div class="moc-thumb"><img src="${esc(thumbSrc)}" alt="${esc(c.name)}" onerror="${esc(onerr)}" /></div>
       <div style="min-width:0">
         <div class="moc-name"><span style="font-size:20px;vertical-align:middle;margin-right:5px">${icon}</span>${esc(c.name)}</div>
-        <div class="moc-counts">${s.event_count||0} Events · ${s.jpg_count||0} Fotos</div>
+        <div class="moc-counts">${s.event_count||0} Events · ${s.jpg_count||0} Medien</div>
       </div>
     </div>`;
   }).join('');
+}
+function _goToPage(n){
+  const p=Math.max(0,Math.min(state.mediaTotalPages-1,n));
+  if(p===state.mediaPage) return;
+  state.mediaPage=p;
+  loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();});
 }
 function renderMediaPagination(){
   const pg=byId('mediaPagination'); if(!pg) return;
@@ -2125,9 +2137,9 @@ function renderMediaPagination(){
   const cur=state.mediaPage||0;
   if(total<=1){pg.innerHTML='';return;}
   const pills=[];
-  const mkPill=(n,label,active,disabled)=>`<button class="page-pill${active?' active':''}" ${disabled?'disabled':''} onclick="state.mediaPage=${n};loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();})">${label}</button>`;
+  const mkPill=(n,label,active,disabled)=>`<button class="page-pill${active?' active':''}" ${disabled?'disabled':''} onclick="_goToPage(${n})">${label}</button>`;
   pills.push(mkPill(cur-1,'‹',false,cur===0));
-  // window of pages around current
+  // sliding window of pages with ellipsis
   const maxPills=7;
   let start=Math.max(0,cur-3);
   let end=Math.min(total-1,start+maxPills-3);
@@ -2136,32 +2148,48 @@ function renderMediaPagination(){
   for(let i=start;i<=end;i++) pills.push(mkPill(i,i+1,i===cur,false));
   if(end<total-1){if(end<total-2) pills.push(`<span class="page-pill" style="cursor:default;opacity:.4">…</span>`);pills.push(mkPill(total-1,total,false,false));}
   pills.push(mkPill(cur+1,'›',false,cur>=total-1));
+  // direct page jump input
+  if(total>5) pills.push(`<input type="number" min="1" max="${total}" value="${cur+1}" title="Zur Seite springen" style="width:52px;padding:4px 6px;border-radius:8px;border:1px solid #2a3f56;background:var(--surface);color:var(--text);font-size:13px;font-weight:600;text-align:center" onchange="const v=parseInt(this.value);if(!isNaN(v))_goToPage(v-1)" onclick="this.select()">`);
   pg.innerHTML=pills.join('');
 }
 function renderMediaGrid(){
   const grid=byId('mediaGrid'); if(!grid) return;
   const tl=window._tlItems||[];
+  const labels=state.mediaLabels;
+  const onlyTL=labels.size===1&&labels.has('timelapse');
+  const hasTL=labels.has('timelapse');
   let items;
-  if(state.mediaLabel==='timelapse'){
+  if(onlyTL){
     items=tl;
-  } else if(!state.mediaLabel && tl.length){
+  } else if(labels.size===0&&tl.length){
+    // No filter — merge TL + motion events, sorted by time
     const merged=[...tl,...(state.media||[])].sort((a,b)=>{
       const at=a.mtime||(a.time?new Date(a.time).getTime()/1000:0);
       const bt=b.mtime||(b.time?new Date(b.time).getTime()/1000:0);
       return bt-at;
     });
     items=merged;
+  } else if(hasTL&&labels.size>1){
+    // TL + other filters: merge TL + filtered motion events
+    items=[...tl,...(state.media||[])].sort((a,b)=>{
+      const at=a.mtime||(a.time?new Date(a.time).getTime()/1000:0);
+      const bt=b.mtime||(b.time?new Date(b.time).getTime()/1000:0);
+      return bt-at;
+    });
   } else {
     items=state.media||[];
   }
+  // Light slide-in on page change
+  grid.style.opacity='0';grid.style.transform='translateX(10px)';
   grid.innerHTML=items.map(mediaCardHTML).join('')||'<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
+  requestAnimationFrame(()=>{grid.style.transition='opacity .18s ease,transform .18s ease';grid.style.opacity='1';grid.style.transform='';});
   renderMediaPagination();
   window._openMediaItem=id=>{const item=items.find(x=>x.event_id===id); if(item) openLightbox(item);};
 }
 window._tlItems=[];
 async function openMediaDrilldown(camId){
   state.mediaCamera=camId;
-  state.mediaLabel=''; state.mediaPeriod='week'; state.mediaPage=0;
+  state.mediaLabels=new Set(); state.mediaPeriod='week'; state.mediaPage=0;
   window._tlItems=[];
   syncMediaPills();
   byId('mediaOverview').style.display='none';
@@ -2182,8 +2210,11 @@ function closeMediaDrilldown(){
   byId('mediaOverview').style.display='';
 }
 function syncMediaPills(){
+  const labels=state.mediaLabels;
   document.querySelectorAll('.media-pill[data-type="label"]').forEach(p=>{
-    p.classList.toggle('active',p.dataset.val===state.mediaLabel);
+    const val=p.dataset.val;
+    if(val==='') p.classList.toggle('active',labels.size===0);
+    else p.classList.toggle('active',labels.has(val));
   });
   document.querySelectorAll('.media-pill[data-type="period"]').forEach(p=>{
     p.classList.toggle('active',p.dataset.val===state.mediaPeriod);
@@ -2198,8 +2229,21 @@ function syncMediaPills(){
   });
   document.querySelectorAll('.media-pill').forEach(p=>{
     p.addEventListener('click',()=>{
-      if(p.dataset.type==='label') state.mediaLabel=p.dataset.val;
-      else state.mediaPeriod=p.dataset.val;
+      if(p.dataset.type==='label'){
+        const val=p.dataset.val;
+        if(val===''){
+          // "All" — clear all label filters
+          state.mediaLabels=new Set();
+        } else if(state.mediaLabels.has(val)){
+          // Toggle off
+          state.mediaLabels.delete(val);
+        } else {
+          // Toggle on (add to selection)
+          state.mediaLabels.add(val);
+        }
+      } else {
+        state.mediaPeriod=p.dataset.val;
+      }
       state.mediaPage=0;
       syncMediaPills();
       if(state.mediaCamera) loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();});
@@ -2290,7 +2334,7 @@ const MAMMAL_SVGS={
 // ── Achievement drill-down (placeholder) ─────────────────────────────────────
 function openAchievementDrilldown(id, name){
   // navigate to media filtered by species
-  state.mediaLabel='';
+  state.mediaLabels=new Set();
   state.mediaCamera=null;
   document.querySelector('a[href="#media"]')?.click();
 }
