@@ -99,6 +99,7 @@ class CameraRuntime:
         self._preview_fps: float = 0.0          # measured sub-stream FPS (rolling 5s window)
         self._preview_fps_frames: int = 0        # frame counter for FPS window
         self._preview_fps_window_start: float = time.time()
+        self._preview_resolution: str = ""      # "WxH" of last received preview frame
         # ── Viewer tracking (MJPEG stream connections) ────────────────────────
         self._live_viewers: int = 0
         self._viewers_lock = threading.Lock()
@@ -252,6 +253,8 @@ class CameraRuntime:
                     r = float(frame[:, :, 2].mean())
                     b = float(frame[:, :, 0].mean())
                     if not (r > b * 2.5 and r > 150):  # skip pink/artifact frames
+                        h, w = frame.shape[:2]
+                        self._preview_resolution = f"{w}×{h}"
                         with self.lock:
                             self._preview_frame = frame
                         # Measure sub-stream FPS over a rolling 5s window
@@ -985,6 +988,7 @@ class CameraRuntime:
             "stale_streak": self._stale_streak,
             # Stream activity
             "preview_fps": self._preview_fps,
+            "preview_resolution": self._preview_resolution,
             "live_viewers": self._live_viewers,
             "stream_mode": "live" if self._live_viewers > 0 else "baseline",
         }

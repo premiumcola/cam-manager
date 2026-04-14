@@ -288,6 +288,7 @@ function renderDashboard(){
   const shieldSm=`<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M12 2 4 5v6c0 5.3 3.5 10.2 8 11.4 4.5-1.2 8-6.1 8-11.4V5Z"/></svg>`;
   const shieldMd=`<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M12 2 4 5v6c0 5.3 3.5 10.2 8 11.4 4.5-1.2 8-6.1 8-11.4V5Z"/></svg>`;
   const pencil=`<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>`;
+  const playIcon=`<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><polygon points="5,3 19,12 5,21"/></svg>`;
   byId('cameraCards').innerHTML=cams.map(c=>{
     const snapUrl=`/api/camera/${esc(c.id)}/snapshot.jpg?t=${Date.now()}`;
     const isActive=c.status==='active';
@@ -343,11 +344,8 @@ function renderDashboard(){
           </div>
           <div class="cv-lp-row"><span>Stream-Modus</span><strong class="cv-stream-mode ${streamMode==='live'?'cv-mode-live':'cv-mode-base'}">${streamMode==='live'?'● Live':'○ Vorschau'}</strong></div>
           <div class="cv-lp-row"><span>Preview-FPS<br><small>Gemessen (Sub-Stream)</small></span><strong class="cv-lp-fps-val">${previewFps!=null?previewFps+' fps':'—'}</strong></div>
-          <div class="cv-lp-row"><span>Auflösung</span><strong>${esc(c.resolution||'—')}</strong></div>
+          <div class="cv-lp-row"><span>Auflösung</span><strong>${esc(c.preview_resolution||c.resolution||'—')}</strong></div>
           <div class="cv-lp-row"><span>Analyse-Framerate<br><small>Wie oft TAM-spy analysiert</small></span><strong>${fps!=null?fps+' fps':'—'}</strong></div>
-          <div class="cv-lp-row" style="margin-top:6px">
-            <button class="cv-lp-livebtn" onclick="event.stopPropagation();openLiveView('${esc(c.id)}','${esc(c.name)}')">▶ Live ansehen</button>
-          </div>
         </div>
       </div>
       <div class="cv-pill ${c.armed?'cv-pill-alarm-on':'cv-pill-alarm-off'}">${shieldSm}${c.armed?'Alarm an':'Alarm aus'}</div>
@@ -364,6 +362,7 @@ function renderDashboard(){
 
     <!-- bottom: hover action buttons (icon + label) -->
     <div class="cv-actions">
+      <button class="cv-abt cv-abt-live" onclick="event.stopPropagation();openLiveView('${esc(c.id)}','${esc(c.name)}')">${playIcon}<span>Live</span></button>
       <button class="cv-abt cv-abt-edit" onclick="event.stopPropagation();editCamera('${esc(c.id)}')">${pencil}<span>Einstellungen</span></button>
       <button class="cv-abt ${c.armed?'cv-abt-arm-on':'cv-abt-arm-off'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})">${shieldMd}<span>${c.armed?'Alarm aus':'Alarm an'}</span></button>
     </div>
@@ -1054,7 +1053,7 @@ function hydrateSettings(){
   const storageSec=state.config.storage||{};
   const mlVal=storageSec.media_limit_default||24;
   const mlEl=byId('ms_media_limit'); if(mlEl){ mlEl.value=mlVal; }
-  const mlLbl=byId('ms_media_limit_val'); if(mlLbl) mlLbl.textContent=mlVal+' Medien';
+  const mlLbl=byId('ms_media_limit_val'); if(mlLbl) mlLbl.textContent=mlVal;
   const rdVal=storageSec.retention_days||14;
   const rdEl=byId('ms_retention_days'); if(rdEl) rdEl.value=rdVal;
   const rdLbl=byId('ms_retention_days_val'); if(rdLbl) rdLbl.textContent=rdVal+' Tage';
@@ -2278,8 +2277,12 @@ function renderMediaOverview(){
     return `<div class="moc-card" onclick="openMediaDrilldown('${esc(c.id)}')">
       <div class="moc-thumb"><img src="${esc(thumbSrc)}" alt="${esc(c.name)}" onerror="${esc(onerr)}" /></div>
       <div style="min-width:0">
-        <div class="moc-name"><span style="font-size:20px;vertical-align:middle;margin-right:5px">${icon}</span>${esc(c.name)}</div>
-        <div class="moc-counts">${s.event_count||0} Events · ${s.jpg_count||0} Medien</div>
+        <div class="moc-name"><span style="font-size:28px;vertical-align:middle;margin-right:5px;line-height:1">${icon}</span>${esc(c.name)}</div>
+        <div class="moc-counts">
+          <span title="Bewegungsereignisse">🎯 ${s.event_count||0}</span>
+          <span title="Bilder/Snapshots" style="margin-left:7px">📸 ${s.jpg_count||0}</span>
+          <span title="Timelapse-Videos" style="margin-left:7px">🎬 ${s.timelapse_count||0}</span>
+        </div>
       </div>
     </div>`;
   }).join('');

@@ -613,12 +613,15 @@ def api_media_storage_stats():
                         break
                 except Exception:
                     continue
+        timelapse_dir = storage_root / "timelapse" / cam["id"]
+        timelapse_count = len(list(timelapse_dir.glob("*.mp4"))) if timelapse_dir.exists() else 0
         result.append({
             "id": cam["id"],
             "name": cam.get("name", cam["id"]),
             "size_mb": round(size_bytes / 1024 / 1024, 1),
             "jpg_count": jpg_count,
             "event_count": json_count,
+            "timelapse_count": timelapse_count,
             "latest_snap_url": latest_snap_url,
         })
     return jsonify({"cameras": result})

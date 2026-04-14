@@ -178,13 +178,21 @@
           <div class="set-bd"><div class="set-inner">
             <form id="mediaSettingsForm" class="form" style="padding-top:8px">
               <div class="field-help" style="margin-bottom:10px">Maximale Anzahl Medien die gleichzeitig in der Mediathek angezeigt werden.</div>
-              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:10px">
-                <span style="font-size:13px;white-space:nowrap;color:var(--muted)">Medien pro Seite</span>
-                <input id="ms_media_limit" name="media_limit_default" type="range" min="12" max="200" step="4" style="flex:1;min-width:100px;accent-color:var(--accent)" oninput="byId('ms_media_limit_val').textContent=this.value+' Medien'" />
-                <span id="ms_media_limit_val" style="min-width:64px;font-size:13px;font-weight:600;color:var(--text)">24 Medien</span>
-                <span style="font-size:13px;white-space:nowrap;color:var(--muted)">Aufbewahrung</span>
-                <input id="ms_retention_days" name="retention_days" type="range" min="1" max="90" step="1" value="14" style="flex:1;min-width:100px;accent-color:var(--accent)" oninput="byId('ms_retention_days_val').textContent=this.value+' Tage'" />
-                <span id="ms_retention_days_val" style="min-width:64px;font-size:13px;font-weight:600;color:var(--text)">14 Tage</span>
+              <div style="display:grid;gap:10px;margin-bottom:10px">
+                <div>
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+                    <span style="font-size:13px;color:var(--muted)">Medien pro Seite</span>
+                    <span id="ms_media_limit_val" style="font-size:13px;font-weight:700;color:var(--text)">24</span>
+                  </div>
+                  <input id="ms_media_limit" name="media_limit_default" type="range" min="12" max="200" step="4" style="width:100%;accent-color:var(--accent)" oninput="byId('ms_media_limit_val').textContent=this.value" />
+                </div>
+                <div>
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+                    <span style="font-size:13px;color:var(--muted)">Aufbewahrung</span>
+                    <span id="ms_retention_days_val" style="font-size:13px;font-weight:700;color:var(--text)">14 Tage</span>
+                  </div>
+                  <input id="ms_retention_days" name="retention_days" type="range" min="1" max="90" step="1" value="14" style="width:100%;accent-color:var(--accent)" oninput="byId('ms_retention_days_val').textContent=this.value+' Tage'" />
+                </div>
                 <label class="toggle-row" style="margin:0;white-space:nowrap;gap:8px">
                   <span style="font-size:13px">Auto-Cleanup</span>
                   <label class="switch"><input type="checkbox" id="ms_auto_cleanup" name="auto_cleanup_enabled" /><span class="slider"></span></label>
@@ -547,9 +555,10 @@
         <div class="set-section" id="set-coral">
           <div class="set-hd-row">
             <button type="button" class="set-hd" style="flex:1" onclick="toggleSetSection('set-coral')">
-              <span class="set-icon">🧠</span><span>Coral &amp; Objekterkennung</span><span id="coralStatusBadge" class="set-status-badge set-status-badge--off">aus</span><span class="set-chevron">▶</span>
+              <span class="set-icon">🧠</span><span>Coral &amp; Objekterkennung</span><span id="coralStatusBadge" class="set-status-badge set-status-badge--off">aus</span>
             </button>
-            <button type="button" class="btn-reconnect" style="margin-right:12px;flex-shrink:0" onclick="reloadCoralRuntime()" title="Coral neu initialisieren"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg> Reload</button>
+            <button type="button" class="btn-reconnect" style="margin:0 6px;flex-shrink:0" onclick="reloadCoralRuntime()" title="Coral neu initialisieren"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg> Reload</button>
+            <span class="set-chevron" style="padding:0 16px 0 4px">▶</span>
           </div>
           <div class="set-bd"><div class="set-inner">
             <div style="display:grid;gap:10px;padding-top:4px">
