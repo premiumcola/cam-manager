@@ -112,6 +112,25 @@ def _guess(open_ports: list[int], banners: dict) -> str:
     return "Unbekannte Kamera"
 
 
+def _reolink_rtsp_hints(ip: str, rtsp_port: int, user: str = "admin") -> dict:
+    """Probe a Reolink camera to detect whether it supports H.264 or H.265 main stream,
+    and return suggested RTSP URL patterns.
+    Returns a dict with 'rtsp_main', 'rtsp_sub', and 'codec' keys."""
+    port_str = f":{rtsp_port}" if rtsp_port != 554 else ""
+    # Reolink naming convention:
+    #   h264Preview_01_main / h264Preview_01_sub — older firmware (RLC-810A etc.)
+    #   h265Preview_01_main / h264Preview_01_sub — newer firmware (CX810 etc.)
+    # Sub-stream is always H.264 regardless of main codec.
+    # We pick h264Preview as the conservative default; the UI lets users switch to h265.
+    return {
+        "rtsp_main_h264": f"rtsp://{user}:@{ip}{port_str}/h264Preview_01_main",
+        "rtsp_main_h265": f"rtsp://{user}:@{ip}{port_str}/h265Preview_01_main",
+        "rtsp_sub": f"rtsp://{user}:@{ip}{port_str}/h264Preview_01_sub",
+        "suggested_path": "/h264Preview_01_main",
+        "note": "Reolink — use H.265 path for CX810/newer firmware; H.264 for RLC-810A/older",
+    }
+
+
 def discover_hosts(subnet: str, max_hosts: int = 254) -> tuple[list, int]:
     """Two-phase scan. Phase 1: sweep all hosts × CAMERA_INDICATOR_PORTS in parallel.
     Phase 2: banner-fetch only the handful of camera candidates.
@@ -175,7 +194,13 @@ def discover_hosts(subnet: str, max_hosts: int = 254) -> tuple[list, int]:
             socket.setdefaulttimeout(_prev_timeout)
 
         open_ports.sort()
-        results.append({"ip": ip, "open_ports": open_ports, "guess": _guess(open_ports, banners), "hostname": hostname})
+        guess = _guess(open_ports, banners)
+        entry = {"ip": ip, "open_ports": open_ports, "guess": guess, "hostname": hostname}
+        # Attach Reolink-specific RTSP URL hints so the wizard can pre-populate fields
+        if guess == "Reolink":
+            rtsp_port = next((p for p in (554, 8554) if p in open_ports), 554)
+            entry["reolink_hints"] = _reolink_rtsp_hints(ip, rtsp_port)
+        results.append(entry)
 
     results.sort(key=lambda x: list(map(int, x["ip"].split("."))))
     return results, len(hosts)

@@ -480,8 +480,9 @@ function renderTimeline(){
 
 // ── RTSP path options (shared with discovery) ────────────────────────────────
 const RTSP_PATH_OPTS=[
-  {label:'Reolink – Main',   value:'/h264Preview_01_main'},
-  {label:'Reolink – Sub',    value:'/h264Preview_01_sub'},
+  {label:'Reolink H.264 – Main (RLC-810A, ältere FW)',   value:'/h264Preview_01_main'},
+  {label:'Reolink H.265 – Main (CX810, neuere FW)',      value:'/h265Preview_01_main'},
+  {label:'Reolink – Sub (immer H.264)',                   value:'/h264Preview_01_sub'},
   {label:'Hikvision – Main', value:'/Streaming/Channels/101'},
   {label:'Hikvision – Sub',  value:'/Streaming/Channels/102'},
   {label:'Dahua – Main',     value:'/cam/realmonitor?channel=1&subtype=0'},
@@ -1221,6 +1222,13 @@ function closeDiscoveryModal(){
 }
 let _discoveryItems=[];
 function _hostnameToId(h){return h.toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40);}
+function _defaultRtspPath(x){
+  const g=(x.guess||'').toLowerCase();
+  if(g.includes('reolink')) return '/h264Preview_01_main';
+  if(g.includes('hikvision')) return '/Streaming/Channels/101';
+  if(g.includes('dahua')||g.includes('amcrest')) return '/cam/realmonitor?channel=1&subtype=0';
+  return RTSP_PATH_OPTS[0].value;
+}
 function _renderDiscoveryResults(){
   const hideConfigured=byId('discoveryHideConfigured')?.checked;
   const pathOpts=RTSP_PATHS.map(p=>`<option value="${esc(p.value)}">${esc(p.label)}</option>`).join('');
@@ -1252,6 +1260,9 @@ function _renderDiscoveryResults(){
     const groupOpts=state.groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
     const computedId=x.hostname?_hostnameToId(x.hostname):'cam-'+x.ip.replace(/\./g,'-');
     const displayName=x.hostname?esc(x.hostname.charAt(0).toUpperCase()+x.hostname.slice(1)):'';
+    const defaultPath=_defaultRtspPath(x);
+    const pathOptsForCam=RTSP_PATHS.map(p=>`<option value="${esc(p.value)}"${p.value===defaultPath?' selected':''}>${esc(p.label)}</option>`).join('');
+    const reolinkNote=x.reolink_hints?`<div class="field-help" style="padding:3px 6px;margin-top:2px">Reolink: H.264-Main für RLC-810A / ältere FW · H.265-Main für CX810 / neuere FW · Sub immer H.264</div>`:'';
     return `<div class="item" data-disc-ip="${esc(x.ip)}">
       <div class="item-head">
         <div>
@@ -1262,10 +1273,11 @@ function _renderDiscoveryResults(){
       </div>
       <div class="small" style="color:${already?'var(--good)':'var(--muted)'};margin-bottom:6px">${vendor}</div>
       ${already?'':(`<div id="disc_form_wrap_${uid}">
+        ${reolinkNote}
         <div class="discovery-creds">
           <input id="disc_user_${uid}" class="disc-input" placeholder="Benutzer" value="admin" />
           <input id="disc_pass_${uid}" class="disc-input" type="password" placeholder="Passwort" />
-          <select id="disc_path_${uid}" class="disc-select">${pathOpts}</select>
+          <select id="disc_path_${uid}" class="disc-select">${pathOptsForCam}</select>
         </div>
         <div id="disc_add_form_${uid}" class="disc-add-form hidden">
           <div class="discovery-creds" style="margin-top:8px">
