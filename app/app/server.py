@@ -382,6 +382,7 @@ def api_cameras():
         # upstream snapshot_url / rtsp_url (which live in settings.json).
         s["snap_url"] = f"/api/camera/{cam['id']}/snapshot.jpg"
         s["stream_url"] = f"/api/camera/{cam['id']}/stream.mjpg"
+        s["stream_url_hd"] = f"/api/camera/{cam['id']}/stream_hd.mjpg"
         # Expose real persisted connection fields from settings so that the edit form
         # and any quick-action spreads ({...cam}) carry the correct upstream values.
         s["snapshot_url"] = cam.get("snapshot_url", "")
@@ -735,6 +736,7 @@ def api_camera_status(cam_id):
     s = rt.status()
     s["snap_url"] = f"/api/camera/{cam_id}/snapshot.jpg"
     s["stream_url"] = f"/api/camera/{cam_id}/stream.mjpg"
+    s["stream_url_hd"] = f"/api/camera/{cam_id}/stream_hd.mjpg"
     return jsonify(s)
 
 
@@ -751,20 +753,57 @@ def api_camera_snapshot(cam_id):
 
 @app.get('/api/camera/<cam_id>/stream.mjpg')
 def api_camera_stream(cam_id):
+    """Baseline preview stream — sub-stream quality, ~25fps cap.
+    Increments live_viewers while connected so stream_mode reflects active users."""
     rt = runtimes.get(cam_id)
     if not rt:
         return ("not running", 404)
+    rt.add_viewer()
     def gen():
         import time as _time
         _interval = 1.0 / 25  # 25 fps cap — avoids busy-spin against shared frame buffer
-        while True:
-            t0 = _time.monotonic()
-            data = rt.snapshot_jpeg(quality=82)
-            if data:
-                yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + data + b'\r\n')
-            gap = _interval - (_time.monotonic() - t0)
-            if gap > 0:
-                _time.sleep(gap)
+        try:
+            while True:
+                t0 = _time.monotonic()
+                data = rt.snapshot_jpeg(quality=82)
+                if data:
+                    yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + data + b'\r\n')
+                gap = _interval - (_time.monotonic() - t0)
+                if gap > 0:
+                    _time.sleep(gap)
+        finally:
+            rt.remove_viewer()
+    return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.get('/api/camera/<cam_id>/stream_hd.mjpg')
+def api_camera_stream_hd(cam_id):
+    """Interactive HD stream — reads from main-stream annotated frames (full resolution).
+    Use only when a user is actively watching. Quality=90, ~10fps practical cap
+    (main stream capture interval limits effective FPS to ~3–5fps on Reolink)."""
+    rt = runtimes.get(cam_id)
+    if not rt:
+        return ("not running", 404)
+    rt.add_viewer()
+    def gen():
+        import time as _time
+        _interval = 1.0 / 15  # 15fps target — main stream usually limits to ~3-5fps
+        try:
+            while True:
+                t0 = _time.monotonic()
+                with rt.lock:
+                    frame = rt.preview.copy() if rt.preview is not None else (
+                        rt.frame.copy() if rt.frame is not None else None
+                    )
+                if frame is not None:
+                    ok, buf = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+                    if ok:
+                        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
+                gap = _interval - (_time.monotonic() - t0)
+                if gap > 0:
+                    _time.sleep(gap)
+        finally:
+            rt.remove_viewer()
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
