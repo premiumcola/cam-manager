@@ -356,7 +356,7 @@ class CameraRuntime:
         if not frames:
             return None
         try:
-            day_dir = Path(self.global_cfg["storage"]["root"]) / "events" / self.camera_id / start_time.strftime("%Y-%m-%d")
+            day_dir = Path(self.global_cfg["storage"]["root"]) / "motion_detection" / self.camera_id / start_time.strftime("%Y-%m-%d")
             day_dir.mkdir(parents=True, exist_ok=True)
             event_id = start_time.strftime("%Y%m%d-%H%M%S-vid")
             vid_path = day_dir / f"{event_id}.mp4"
@@ -749,7 +749,7 @@ class CameraRuntime:
                     self.event_counter_today += 1
                     ts = datetime.now()
                     event_id = ts.strftime("%Y%m%d-%H%M%S-%f")
-                    day_dir = Path(self.global_cfg["storage"]["root"]) / "events" / self.camera_id / ts.strftime("%Y-%m-%d")
+                    day_dir = Path(self.global_cfg["storage"]["root"]) / "motion_detection" / self.camera_id / ts.strftime("%Y-%m-%d")
                     day_dir.mkdir(parents=True, exist_ok=True)
                     snap_path = day_dir / f"{event_id}.jpg"
                     # drawn is already based on proc_frame (bottom-cropped), so saved snapshot is clean

@@ -35,7 +35,7 @@ def _period_label(period_s: int) -> str:
 def _duration_label(target_s: int) -> str:
     """Convert target duration seconds to a short label for filenames."""
     if target_s < 60:
-        return f"{target_s}s"
+        return f"{target_s}sec"
     mins = target_s // 60
     return f"{mins}min"
 
@@ -255,10 +255,10 @@ class TimelapseBuilder:
     def make_output_name(self, window_key: str, profile_name: str,
                          period_s: int, target_s: int) -> str:
         """Generate a human-readable filename stem.
-        Example: '2026-04-14_020435_custom_1min-to-10s'"""
+        Example: '2026-04-14_020435_custom_1min_to_10sec'"""
         p_label = _period_label(period_s)
         d_label = _duration_label(target_s)
-        return f"{window_key}_{profile_name}_{p_label}-to-{d_label}"
+        return f"{window_key}_{profile_name}_{p_label}_to_{d_label}"
 
     # ── Profile-based (new) ───────────────────────────────────────────────────
 

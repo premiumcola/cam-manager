@@ -96,6 +96,7 @@ def _file_hash(filename: str) -> str:
 app.jinja_env.globals["static_v"] = _file_hash
 
 store = EventStore(str(storage_root))
+(storage_root / "object_detection").mkdir(parents=True, exist_ok=True)
 settings = SettingsStore(storage_root / "settings.json", base_cfg)
 cfg = settings.export_effective_config(base_cfg)
 cat_registry = IdentityRegistry(storage_root / "cat_registry.json", threshold=int(cfg.get("processing", {}).get("cat_identity", {}).get("match_threshold", 10)))
@@ -179,7 +180,7 @@ _run_daily_cleanup()
 
 def _migrate_timelapse_events():
     """One-time migration: remove timelapse-type events that were incorrectly stored
-    in the EventStore (storage/events/<cam_id>/) under old code. These are now tracked
+    in the EventStore (storage/motion_detection/<cam_id>/) under old code. These are now tracked
     as sidecar JSONs next to the .mp4 files in storage/timelapse/<cam_id>/.
     Covers both date-subdirectory and camera-level tl_*.json placements."""
     import threading, shutil as _shutil
@@ -187,7 +188,7 @@ def _migrate_timelapse_events():
         log = logging.getLogger(__name__)
         try:
             removed = 0
-            events_root = storage_root / "events"
+            events_root = storage_root / "motion_detection"
             if not events_root.exists():
                 return
             for cam_dir in events_root.iterdir():
@@ -582,7 +583,7 @@ def api_wizard_complete():
 @app.get('/api/media/storage-stats')
 def api_media_storage_stats():
     result = []
-    events_dir = storage_root / "events"
+    events_dir = storage_root / "motion_detection"
     for cam in get_effective_config().get("cameras", []):
         cam_dir = events_dir / cam["id"]
         size_bytes = 0

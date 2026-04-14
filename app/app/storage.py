@@ -7,7 +7,14 @@ import json
 class EventStore:
     def __init__(self, root: str):
         self.root = Path(root)
-        self.events_dir = self.root / "events"
+        self.events_dir = self.root / "motion_detection"
+        # One-time migration: rename legacy events/ → motion_detection/
+        old_events = self.root / "events"
+        if old_events.exists() and not self.events_dir.exists():
+            try:
+                old_events.rename(self.events_dir)
+            except Exception:
+                pass
         self.events_dir.mkdir(parents=True, exist_ok=True)
 
     def _cam_dir(self, camera_id: str) -> Path:
@@ -189,7 +196,7 @@ class EventStore:
         return removed
 
     def scan_media_files(self, camera_ids: list[str], public_base_url: str = "") -> int:
-        """Scan storage/events for orphaned media files (.jpg/.jpeg/.mp4) not yet registered as events.
+        """Scan storage/motion_detection for orphaned media files (.jpg/.jpeg/.mp4) not yet registered as events.
         Covers both flat files directly in cam_dir/ and files in any depth of subdirectories.
         Returns count of newly registered events."""
         import logging as _log

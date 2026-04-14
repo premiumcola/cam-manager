@@ -1889,7 +1889,7 @@ function _tlPeriodLabel(item){
   if(item.period_s>0){
     const p=item.period_s,d=item.target_s||0;
     const pl=p<3600?Math.round(p/60)+'min':p<86400?Math.round(p/3600)+'h':p<604800?'daily':p<2592000?'weekly':'monthly';
-    const dl=d<60?d+'s':Math.floor(d/60)+'min';
+    const dl=d<60?d+'sec':Math.floor(d/60)+'min';
     return `${pl}→${dl}`;
   }
   const raw=item.profile||item.period||'';
@@ -2043,20 +2043,32 @@ const _TL_FILMSTRIP=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none"
 function mediaCardHTML(item){
   const isTL=item.type==='timelapse';
   if(isTL){
-    const period=_tlPeriodLabel(item);
-    const dayLabel=(item.window_key||item.day||'').substring(0,10);
-    const sizeLabel=item.size_mb!=null?` · ${item.size_mb} MB`:'';
+    const wk=item.window_key||item.day||'';
+    const datePart=wk.substring(0,10);
+    const timePart=wk.length>=15?wk.substring(11,13)+':'+wk.substring(13,15):'';
+    const durLabel=item.target_s!=null?(item.target_s<60?item.target_s+'s':Math.floor(item.target_s/60)+'min'):'';
+    const sizeText=item.size_mb!=null?item.size_mb+' MB':'';
     const thumbSrc=item.thumb_url||'';
     const thumbEl=thumbSrc
       ? `<img src="${esc(thumbSrc)}" alt="preview" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;opacity:.7" loading="lazy" onerror="this.remove()">`
       : '';
+    const badgeStyle='font-size:10px;font-weight:700;color:#e2e8f0;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);padding:2px 6px;border-radius:4px;line-height:1.45;white-space:nowrap';
+    const badgeSubStyle='font-size:10px;color:#a5bfce;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);padding:1px 6px;border-radius:4px;line-height:1.45;white-space:nowrap;margin-top:2px';
     return `<article class="media-card mmc-tl" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
       <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
         ${thumbEl}
-        <div style="position:relative;z-index:1;width:100%;height:100%;display:flex;align-items:center;justify-content:center">
+        <div style="position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center">
           <div class="mmc-play-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:#d8b4fe;margin-left:2px"><polygon points="5,3 19,12 5,21"/></svg></div>
         </div>
-        <div class="mmc-meta-bar" style="position:relative;z-index:1"><span>${esc(dayLabel)} · ${esc(period)}${sizeLabel}</span></div>
+        <div class="mmc-meta-bar"></div>
+        <div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none">
+          ${datePart?`<div style="${badgeStyle}">${esc(datePart)}</div>`:''}
+          ${timePart?`<div style="${badgeSubStyle}">${esc(timePart)}</div>`:''}
+        </div>
+        ${(durLabel||sizeText)?`<div style="position:absolute;bottom:7px;right:8px;z-index:2;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          ${durLabel?`<div style="${badgeStyle}">${esc(durLabel)}</div>`:''}
+          ${sizeText?`<div style="${badgeSubStyle}">${esc(sizeText)}</div>`:''}
+        </div>`:''}
         <div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge">${_TL_FILMSTRIP}Timelapse</span></div>
         <div class="mmc-actions" style="z-index:3">
           <button class="mmc-btn mmc-delete" title="Löschen" onclick="event.stopPropagation();window.deleteTLCard('${esc(item.camera_id||'')}','${esc(item.filename||'')}','${esc(item.event_id||'')}')">✕</button>
