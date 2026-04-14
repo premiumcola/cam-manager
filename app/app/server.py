@@ -191,7 +191,11 @@ def media_file(subpath):
 def api_logs():
     level_name = request.args.get('level', 'DEBUG').upper()
     min_level = getattr(logging, level_name, logging.DEBUG)
-    return jsonify({"logs": log_buffer.get(min_level)})
+    subsystem = (request.args.get('subsystem') or '').strip().lower()
+    logs = log_buffer.get(min_level)
+    if subsystem:
+        logs = [l for l in logs if subsystem in (l.get('logger') or '').lower()]
+    return jsonify({"logs": logs})
 
 
 @app.get('/api/bootstrap')

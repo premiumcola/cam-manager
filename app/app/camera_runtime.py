@@ -94,6 +94,11 @@ class CameraRuntime:
 
     def start(self):
         self.running = True
+        # Clean up stale frame directories from previous runs before starting
+        try:
+            self._cleanup_stale_timelapse_frames()
+        except Exception as _e:
+            log.warning("[%s] stale timelapse frame cleanup error: %s", self.camera_id, _e)
         # Main ingest loop — sole reader of self.capture (RTSP / HTTP snapshot)
         self.thread = threading.Thread(target=self._loop, daemon=True)
         self.thread.start()
@@ -393,6 +398,98 @@ class CameraRuntime:
             log.warning("[%s] Achievement unlock failed: %s", self.camera_id, e)
             return False
 
+    def _cleanup_stale_timelapse_frames(self):
+        """Remove timelapse frame directories from previous runs (older than today).
+        Called once on startup before any encode thread begins, so no lock needed."""
+        import shutil
+        storage_root = Path(self.global_cfg["storage"]["root"])
+        today = datetime.now().strftime("%Y-%m-%d")
+        tl_base = storage_root / "timelapse_frames" / self.camera_id
+        if not tl_base.exists():
+            return
+        for profile_dir in tl_base.iterdir():
+            if not profile_dir.is_dir():
+                continue
+            for window_dir in sorted(profile_dir.iterdir()):
+                if not window_dir.is_dir():
+                    continue
+                # Window dirs start with YYYY-MM-DD (custom: YYYY-MM-DD_HHMMSS)
+                dir_date = window_dir.name[:10]
+                if dir_date < today:
+                    try:
+                        shutil.rmtree(str(window_dir))
+                        log.info("[%s][media] cleaned stale timelapse frames: %s/%s",
+                                 self.camera_id, profile_dir.name, window_dir.name)
+                    except Exception as e:
+                        log.warning("[%s][media] stale frame cleanup failed for %s: %s",
+                                    self.camera_id, window_dir, e)
+
+    def _finalize_timelapse_window(self, profile_name: str, window_key: str,
+                                   target_s: int, target_fps: int):
+        """Encode a completed timelapse window into a video, register it in the event store,
+        then delete the frame directory. Called from _timelapse_profile_loop only."""
+        import shutil
+        from .timelapse import TimelapseBuilder as _TLB
+        storage_root = Path(self.global_cfg["storage"]["root"])
+        frames_dir = storage_root / "timelapse_frames" / self.camera_id / profile_name / window_key
+        if not frames_dir.exists():
+            log.debug("[%s][%s] finalize: no frames dir for window %s",
+                      self.camera_id, profile_name, window_key)
+            return
+        images = sorted(frames_dir.glob("*.jpg"))
+        n = len(images)
+        if n < 2:
+            log.debug("[%s][%s] finalize: only %d frames in window %s — skipping encode",
+                      self.camera_id, profile_name, n, window_key)
+            try:
+                shutil.rmtree(str(frames_dir))
+                log.debug("[%s][%s] cleaned sparse frame dir: %s", self.camera_id, profile_name, frames_dir.name)
+            except Exception as e:
+                log.warning("[%s][%s] cleanup failed: %s", self.camera_id, profile_name, e)
+            return
+
+        log.info("[%s][timelapse] encoding window %s/%s (%d frames → %ds @ %dfps)",
+                 self.camera_id, profile_name, window_key, n, target_s, target_fps)
+        out_dir = storage_root / "timelapse" / self.camera_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"{window_key}_{profile_name}.mp4"
+        builder = _TLB(storage_root)
+        path = builder._write_video(images, out_path, target_s, target_fps)
+
+        if path:
+            size_mb = out_path.stat().st_size / 1024 / 1024 if out_path.exists() else 0
+            log.info("[%s][timelapse] video created: %s (%.1f MB)", self.camera_id, out_path.name, size_mb)
+            # Register in event store so the mediathek finds it
+            try:
+                rel = out_path.relative_to(storage_root)
+                event_id = f"tl_{self.camera_id}_{window_key}_{profile_name}"
+                event = {
+                    "event_id": event_id,
+                    "camera_id": self.camera_id,
+                    "type": "timelapse",
+                    "profile": profile_name,
+                    "window_key": window_key,
+                    "time": datetime.now().isoformat(timespec="seconds"),
+                    "labels": ["timelapse"],
+                    "top_label": "timelapse",
+                    "video_url": f"/media/{rel.as_posix()}",
+                    "snapshot_relpath": rel.as_posix(),
+                }
+                self.store.add_event(self.camera_id, event)
+                log.debug("[%s][timelapse] registered in store: %s", self.camera_id, event_id)
+            except Exception as e:
+                log.warning("[%s][timelapse] store registration failed: %s", self.camera_id, e)
+        else:
+            log.warning("[%s][timelapse] encode failed for window %s/%s", self.camera_id, profile_name, window_key)
+
+        # Always clean up frames, even if encode failed (prevents unbounded accumulation)
+        try:
+            shutil.rmtree(str(frames_dir))
+            log.info("[%s][timelapse] cleaned %d frames for window %s/%s",
+                     self.camera_id, n, profile_name, window_key)
+        except Exception as e:
+            log.warning("[%s][timelapse] frame cleanup failed: %s", self.camera_id, e)
+
     def _timelapse_loop(self):
         """Legacy single-profile timelapse. Reads latest frame from main loop — no direct camera access."""
         _period_map = {"day": 86400, "hour": 3600, "rolling_10min": 600}
@@ -427,37 +524,79 @@ class CameraRuntime:
 
     def _timelapse_profile_loop(self, profile_name: str):
         """Per-profile timelapse capture loop. Reads latest frame from main loop — no direct camera access.
-        Multiple profiles can run in parallel safely since they only read self.frame (never open captures).
-        Writes to timelapse_frames/<cam>/<profile>/<date>/."""
+        Tracks period windows: encodes, registers, and cleans up frames when each window ends.
+        - custom: fixed-duration rolling windows (period_seconds long each)
+        - daily/weekly/monthly: one window per calendar day, encoded at day boundary
+        """
+        window_key: str | None = None
+        window_start_t: float = 0.0
+
         while self.running:
             tl = self.cfg.get("timelapse") or {}
             prof = (tl.get("profiles") or {}).get(profile_name) or {}
             if not prof.get("enabled"):
+                if window_key is not None:
+                    log.debug("[%s][%s] profile disabled — resetting window %s", self.camera_id, profile_name, window_key)
+                window_key = None
+                window_start_t = 0.0
                 time.sleep(10)
                 continue
+
             target_s = int(prof.get("target_seconds", 60))
             target_fps = int(tl.get("fps", 30))
             period_s = int(prof.get("period_seconds", _PROFILE_PERIOD_DEFAULTS.get(profile_name, 86400)))
             total_frames = max(1, target_s * target_fps)
             interval_s = max(2.0, period_s / total_frames)
-            # Take a snapshot of the latest frame from the shared buffer.
-            # Slow profiles (monthly: ~34min interval) don't block fast profiles.
+
+            now = datetime.now()
+            now_t = time.time()
+
+            # ── Determine current window key and handle period boundaries ─────
+            if profile_name == "custom":
+                if window_key is None:
+                    # Start first window
+                    window_start_t = now_t
+                    window_key = now.strftime("%Y-%m-%d_%H%M%S")
+                    log.info("[%s][timelapse] custom window started: %s (period=%ds interval=%.0fs)",
+                             self.camera_id, window_key, period_s, interval_s)
+                elif now_t - window_start_t >= period_s:
+                    # Period elapsed — finalize current window and start fresh
+                    old_key = window_key
+                    self._finalize_timelapse_window(profile_name, old_key, target_s, target_fps)
+                    window_start_t = now_t
+                    window_key = now.strftime("%Y-%m-%d_%H%M%S")
+                    log.info("[%s][timelapse] custom new window: %s", self.camera_id, window_key)
+            else:
+                # Calendar-based: one window per calendar day
+                new_key = now.strftime("%Y-%m-%d")
+                if window_key is not None and new_key != window_key:
+                    # Day rolled over — finalize the completed day
+                    old_key = window_key
+                    self._finalize_timelapse_window(profile_name, old_key, target_s, target_fps)
+                    log.info("[%s][timelapse] %s day boundary: finalized %s, starting %s",
+                             self.camera_id, profile_name, old_key, new_key)
+                if window_key is None or new_key != window_key:
+                    window_key = new_key
+                    log.info("[%s][timelapse] %s window: %s (period=%ds interval=%.0fs)",
+                             self.camera_id, profile_name, window_key, period_s, interval_s)
+
+            # ── Capture frame into the current window directory ───────────────
             with self.lock:
                 frame = self.frame.copy() if self.frame is not None else None
-            if frame is not None:
+            if frame is not None and window_key is not None:
                 try:
-                    now = datetime.now()
                     tl_dir = (Path(self.global_cfg["storage"]["root"])
                               / "timelapse_frames" / self.camera_id
-                              / profile_name
-                              / now.strftime("%Y-%m-%d"))
+                              / profile_name / window_key)
                     tl_dir.mkdir(parents=True, exist_ok=True)
                     ts = now.strftime("%H%M%S_%f")[:10]
                     out = tl_dir / f"{ts}.jpg"
                     cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
-                    log.debug("[%s][%s] tl frame saved: %s (%.0fs)", self.camera_id, profile_name, out.name, interval_s)
+                    log.debug("[%s][%s] frame saved: %s window=%s (%.0fs/frame)",
+                              self.camera_id, profile_name, out.name, window_key, interval_s)
                 except Exception as e:
-                    log.debug("[%s][%s] tl frame write error: %s", self.camera_id, profile_name, e)
+                    log.debug("[%s][%s] frame write error: %s", self.camera_id, profile_name, e)
+
             deadline = time.time() + interval_s
             while self.running and time.time() < deadline:
                 time.sleep(1)

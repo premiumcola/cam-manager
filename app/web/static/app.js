@@ -98,6 +98,21 @@ const SQUIRREL_CHARS=[
 ];
 const download=(url)=>window.open(url,'_blank');
 
+// ── Camera snapshot retry (handles 503 on initial load before stream is ready) ─
+function _camImgRetry(img){
+  const retries=parseInt(img.dataset.snapRetry||'0');
+  if(retries>=12){img.style.display='none';return;}
+  img.dataset.snapRetry=retries+1;
+  // Exponential backoff: 500ms, 1s, 1.5s … capped at 3s
+  const delay=Math.min(500*(retries+1),3000);
+  setTimeout(()=>{
+    if(!img.isConnected) return; // card removed from DOM
+    const base=img.src.split('?')[0];
+    img.src=base+'?t='+Date.now();
+  },delay);
+}
+window._camImgRetry=_camImgRetry;
+
 // ── Camera edit slide panel ───────────────────────────────────────────────────
 let _currentEditCamId=null;
 function _restoreEditWrapper(){
@@ -268,7 +283,7 @@ function renderDashboard(){
       <div class="cv-loading-placeholder">${!isActive?_makeSquirrelHTML():'<div class="cv-loading-icon">⟳</div><div class="cv-loading-text">Verbinde…</div>'}</div>
       <img class="cv-img cam-snap" src="${snapUrl}" alt="${esc(c.name)}"
         onload="this.classList.add('loaded');this.previousElementSibling.style.display='none'"
-        onerror="this.style.display='none'" />
+        onerror="_camImgRetry(this)" />
     </div>
     <div class="cv-grad-top"></div>
     <div class="cv-grad-bot"></div>
@@ -1739,10 +1754,18 @@ byId('wizFinish').onclick=()=>finishWizard();
 })();
 
 // ── Logs ─────────────────────────────────────────────────────────────────────
+function _logSubsystemShort(logger){
+  if(!logger) return '';
+  const p=logger.split('.').pop()||logger;
+  const MAP={camera_runtime:'cam',timelapse:'tl',telegram_bot:'tg',detectors:'coral',storage:'store',mqtt_service:'mqtt',server:'srv',discovery:'disc'};
+  return MAP[p]||p.slice(0,8);
+}
 async function loadLogs(){
   const level=byId('logLevelFilter')?.value||'INFO';
+  const subsystem=byId('logSubsystemFilter')?.value||'';
   try{
-    const r=await j(`/api/logs?level=${level}`);
+    const params=`level=${level}${subsystem?'&subsystem='+encodeURIComponent(subsystem):''}`;
+    const r=await j(`/api/logs?${params}`);
     renderLogs(r.logs||[]);
   }catch(e){
     byId('logOutput').innerHTML=`<div class="log-row ERROR"><span class="log-ts">--:--:--</span><span class="log-level">ERROR</span><span>${esc(String(e))}</span></div>`;
@@ -1751,12 +1774,16 @@ async function loadLogs(){
 function renderLogs(logs){
   const out=byId('logOutput');
   if(!logs.length){out.innerHTML='<div class="log-row INFO"><span class="log-ts">—</span><span class="log-level">—</span><span>Keine Log-Einträge auf diesem Level.</span></div>'; return;}
-  out.innerHTML=logs.map(l=>`<div class="log-row ${esc(l.level)}"><span class="log-ts">${esc(l.ts||'')}</span><span class="log-level">${esc(l.level||'')}</span><span>${esc(l.msg||'')}</span></div>`).join('');
+  out.innerHTML=logs.map(l=>{
+    const tag=_logSubsystemShort(l.logger);
+    return `<div class="log-row ${esc(l.level)}"><span class="log-ts">${esc(l.ts||'')}</span><span class="log-level">${esc(l.level||'')}</span>${tag?`<span class="log-subsys">${esc(tag)}</span>`:'<span class="log-subsys"></span>'}<span>${esc(l.msg||'')}</span></div>`;
+  }).join('');
   out.scrollTop=out.scrollHeight;
 }
 byId('logRefreshBtn').onclick=loadLogs;
 byId('logClearBtn').onclick=()=>{byId('logOutput').innerHTML='';};
 byId('logLevelFilter').onchange=loadLogs;
+byId('logSubsystemFilter')?.addEventListener('change',loadLogs);
 
 // ── Telegram test button ──────────────────────────────────────────────────────
 byId('telegramTestBtn')?.addEventListener('click',async()=>{
