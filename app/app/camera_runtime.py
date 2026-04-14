@@ -1,5 +1,6 @@
 from __future__ import annotations
 import cv2
+import hashlib
 import time
 import threading
 import logging
@@ -563,6 +564,7 @@ class CameraRuntime:
         """
         window_key: str | None = None
         window_start_t: float = 0.0
+        _last_frame_hash: str | None = None   # per-thread duplicate detection
 
         while self.running:
             tl = self.cfg.get("timelapse") or {}
@@ -622,22 +624,30 @@ class CameraRuntime:
                 frame = self.frame.copy() if self.frame is not None else None
             if frame is not None and window_key is not None:
                 try:
-                    # Validate frame quality before saving — reject corrupted/blank frames
-                    from .timelapse import TimelapseBuilder as _TLB_check
-                    ok, reason = _TLB_check._is_valid_frame(frame)
-                    if not ok:
-                        log_tl.debug("[%s][%s] frame skipped at capture: %s",
-                                  self.camera_id, profile_name, reason)
+                    # Duplicate-frame guard: skip if content is identical to previous capture
+                    # (indicates stale camera feed / stuck stream)
+                    fhash = hashlib.md5(frame[::8, ::8].tobytes()).hexdigest()
+                    if fhash == _last_frame_hash:
+                        log_tl.debug("[%s][%s] duplicate frame skipped — camera feed may be stale",
+                                  self.camera_id, profile_name)
                     else:
-                        tl_dir = (Path(self.global_cfg["storage"]["root"])
-                                  / "timelapse_frames" / self.camera_id
-                                  / profile_name / window_key)
-                        tl_dir.mkdir(parents=True, exist_ok=True)
-                        ts = now.strftime("%H%M%S_%f")[:10]
-                        out = tl_dir / f"{ts}.jpg"
-                        cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
-                        log_tl.debug("[%s][%s] frame saved: %s window=%s (%.0fs/frame)",
-                                  self.camera_id, profile_name, out.name, window_key, interval_s)
+                        _last_frame_hash = fhash
+                        # Validate frame quality before saving — reject corrupted/blank frames
+                        from .timelapse import TimelapseBuilder as _TLB_check
+                        ok, reason = _TLB_check._is_valid_frame(frame)
+                        if not ok:
+                            log_tl.debug("[%s][%s] frame skipped at capture: %s",
+                                      self.camera_id, profile_name, reason)
+                        else:
+                            tl_dir = (Path(self.global_cfg["storage"]["root"])
+                                      / "timelapse_frames" / self.camera_id
+                                      / profile_name / window_key)
+                            tl_dir.mkdir(parents=True, exist_ok=True)
+                            ts = now.strftime("%H%M%S_%f")[:10]
+                            out = tl_dir / f"{ts}.jpg"
+                            cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
+                            log_tl.debug("[%s][%s] frame saved: %s window=%s (%.0fs/frame)",
+                                      self.camera_id, profile_name, out.name, window_key, interval_s)
                 except Exception as e:
                     log_tl.debug("[%s][%s] frame write error: %s", self.camera_id, profile_name, e)
 

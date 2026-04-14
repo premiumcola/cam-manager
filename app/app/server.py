@@ -783,12 +783,14 @@ def api_camera_arm(cam_id):
 @app.get('/api/camera/<cam_id>/media')
 def api_camera_media(cam_id):
     label = request.args.get('label')
+    labels_raw = request.args.get('labels')
+    labels = [l.strip() for l in labels_raw.split(',') if l.strip()] if labels_raw else None
     start = request.args.get('start')
     end = request.args.get('end')
     limit = int(request.args.get('limit') or get_effective_config().get("storage", {}).get("media_limit_default", 24))
     offset = int(request.args.get('offset') or 0)
-    items = store.list_events(cam_id, label=label, start=start, end=end, limit=limit, offset=offset)
-    total_count = store.count_events(cam_id, label=label, start=start, end=end)
+    items = store.list_events(cam_id, label=label, labels=labels, start=start, end=end, limit=limit, offset=offset)
+    total_count = store.count_events(cam_id, label=label, labels=labels, start=start, end=end)
     for item in items:
         review = settings.get_review(f"{cam_id}:{item['event_id']}")
         if review:

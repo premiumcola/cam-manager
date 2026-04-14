@@ -2,6 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 from datetime import datetime, timedelta
 import cv2
+import hashlib
 import logging
 import numpy as np
 import os
@@ -79,9 +80,21 @@ class TimelapseBuilder:
         # Completely white/oversaturated
         if brightness > 253.0:
             return False, f"too_bright(brightness={brightness:.1f})"
-        # Pink/magenta H.265 artifact: heavy red dominance with no green/blue content
+        # Full-frame pink/magenta H.265 artifact: heavy red dominance
         if r > 160 and r > g * 2.5 and r > b * 2.5:
             return False, f"pink_artifact(r={r:.0f},g={g:.0f},b={b:.0f})"
+        # Quadrant-level partial pink check (stricter threshold to catch partial corruption)
+        qh, qw = h // 2, w // 2
+        for qi, (rs, cs) in enumerate([(slice(0, qh), slice(0, qw)),
+                                        (slice(0, qh), slice(qw, None)),
+                                        (slice(qh, None), slice(0, qw)),
+                                        (slice(qh, None), slice(qw, None))]):
+            sub = img[rs, cs]
+            sb = float(sub[:, :, 0].mean())
+            sg = float(sub[:, :, 1].mean())
+            sr = float(sub[:, :, 2].mean())
+            if sr > 180 and sr > sg * 3.0 and sr > sb * 3.0:
+                return False, f"partial_pink_q{qi}(r={sr:.0f},g={sg:.0f},b={sb:.0f})"
         # No spatial detail: std < 2.0 means a completely solid/flat frame
         # (works for both color and grayscale; a solid gray or solid color both fail this)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -196,19 +209,24 @@ class TimelapseBuilder:
 
     def _write_video(self, images: list, out_path: Path,
                      target_duration_s: int, target_fps: int) -> str | None:
-        """Subsample images, validate each frame, skip corrupt ones, write to out_path.
+        """Subsample images, deduplicate, validate each frame, skip corrupt ones, write to out_path.
         Uses ffmpeg (H.264, small files, iOS-safe) with OpenCV mp4v as fallback.
-        Two-pass validation avoids loading all 4K frames into RAM simultaneously.
+        Two-pass: Pass 1 validates + deduplicates (no frame data kept in memory),
+        Pass 2 encodes. FPS is computed from actual unique frame count so the encoded
+        video length honours target_duration_s regardless of how many frames were captured.
         Also writes a .jpg thumbnail (middle valid frame, ≤640 px wide).
         Returns path string or None on failure."""
+        # Limit source to what we'd need at target_fps — avoids processing thousands of frames
         total_frames_needed = max(2, target_duration_s * target_fps)
         if len(images) > total_frames_needed:
             step = len(images) / total_frames_needed
             images = [images[int(i * step)] for i in range(total_frames_needed)]
 
-        # ── Pass 1: validate — collect valid paths, determine reference size ──
+        # ── Pass 1: validate + content-hash dedup ────────────────────────────
+        seen_hashes: set = set()
         valid_paths: list = []
         skipped = 0
+        dup_frames = 0
         ref_size: tuple[int, int] | None = None
 
         for img_path in images:
@@ -217,25 +235,52 @@ class TimelapseBuilder:
             if not ok:
                 log.debug("timelapse: skip corrupt frame %s — %s", img_path.name, reason)
                 skipped += 1
-                del img
+                if img is not None:
+                    del img
                 continue
+            # Content-based dedup: sample every 8th pixel to avoid loading full 4K frame
+            fhash = hashlib.md5(img[::8, ::8].tobytes()).hexdigest()
             if ref_size is None:
                 ref_size = (img.shape[1], img.shape[0])
+            del img  # free immediately — do NOT accumulate
+            if fhash in seen_hashes:
+                dup_frames += 1
+                continue
+            seen_hashes.add(fhash)
             valid_paths.append(img_path)
-            del img  # do NOT accumulate in memory
 
+        total_input = skipped + dup_frames + len(valid_paths)
         if skipped > 0:
             log.info("timelapse: skipped %d/%d corrupt frames for %s",
-                     skipped, skipped + len(valid_paths), out_path.name)
+                     skipped, total_input, out_path.name)
+        if dup_frames > 0:
+            dup_ratio = dup_frames / max(1, total_input)
+            if dup_ratio > 0.6:
+                log.warning("timelapse: HIGH duplicate ratio %.0f%% (%d/%d) for %s — "
+                            "camera stream may be stuck or feeding stale frames",
+                            dup_ratio * 100, dup_frames, total_input, out_path.name)
+            else:
+                log.info("timelapse: removed %d/%d duplicate frames for %s",
+                         dup_frames, total_input, out_path.name)
 
         if len(valid_paths) < 2:
-            log.warning("timelapse: only %d valid frames (of %d) — skipping encode for %s",
-                        len(valid_paths), skipped + len(valid_paths), out_path.name)
+            log.warning("timelapse: only %d valid unique frames (of %d total input) — "
+                        "skipping encode for %s", len(valid_paths), total_input, out_path.name)
             return None
 
-        fps = float(max(1, target_fps))
+        # ── Compute fps to honour target_duration_s ──────────────────────────
+        # fps = frames / desired_duration, capped at target_fps.
+        # This ensures: actual video length ≈ target_duration_s regardless of
+        # how many source frames were captured in the window.
+        n = len(valid_paths)
+        fps = n / max(1.0, float(target_duration_s))
+        fps = min(float(target_fps), max(1.0, fps))
+        actual_duration = n / fps
+        log.info("timelapse: %s — source=%d unique frames, fps=%.2f, "
+                 "expected_duration=%.1fs (target=%ds)",
+                 out_path.name, n, fps, actual_duration, target_duration_s)
 
-        # ── Pass 2: encode — try ffmpeg first, fall back to OpenCV ────────────
+        # ── Pass 2: encode ────────────────────────────────────────────────────
         path = self._write_video_ffmpeg(valid_paths, out_path, fps, ref_size)
         if path is None:
             log.debug("timelapse: ffmpeg unavailable/failed, falling back to OpenCV for %s",
@@ -247,7 +292,7 @@ class TimelapseBuilder:
             return None
 
         # ── Thumbnail from middle valid frame ─────────────────────────────────
-        self._write_thumbnail(valid_paths[len(valid_paths) // 2], out_path)
+        self._write_thumbnail(valid_paths[n // 2], out_path)
         return path
 
     # ── Naming helpers ────────────────────────────────────────────────────────

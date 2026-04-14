@@ -48,7 +48,17 @@ class EventStore:
         matches[0].write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return True
 
-    def _filter_events(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None):
+    def _filter_events(self, camera_id: str, label: str | None = None,
+                       labels: list | None = None,
+                       start: str | None = None, end: str | None = None):
+        """Filter events for a camera. `labels` (list) takes precedence over `label` (str).
+        Multi-label filter uses OR logic: event matches if any of its labels is in the filter set."""
+        filter_set: set | None = None
+        if labels:
+            filter_set = set(labels)
+        elif label:
+            filter_set = {label}
+
         items = []
         cam_dir = self._cam_dir(camera_id)
         for file in cam_dir.rglob("*.json"):
@@ -61,19 +71,26 @@ class EventStore:
                 continue
             if end and t and t > end:
                 continue
-            labels = obj.get("labels", [])
-            if label and label not in labels and obj.get("cat_name") != label and obj.get("bird_species") != label:
-                continue
+            if filter_set:
+                evt_labels = set(obj.get("labels", []))
+                extras = {obj.get("cat_name"), obj.get("bird_species")} - {None}
+                if not (filter_set & (evt_labels | extras)):
+                    continue
             items.append(obj)
         items.sort(key=lambda x: x.get("time", ""), reverse=True)
         return items
 
-    def list_events(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None, limit: int = 24, offset: int = 0):
-        items = self._filter_events(camera_id, label=label, start=start, end=end)
+    def list_events(self, camera_id: str, label: str | None = None,
+                    labels: list | None = None,
+                    start: str | None = None, end: str | None = None,
+                    limit: int = 24, offset: int = 0):
+        items = self._filter_events(camera_id, label=label, labels=labels, start=start, end=end)
         return items[offset:offset + limit]
 
-    def count_events(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None) -> int:
-        return len(self._filter_events(camera_id, label=label, start=start, end=end))
+    def count_events(self, camera_id: str, label: str | None = None,
+                     labels: list | None = None,
+                     start: str | None = None, end: str | None = None) -> int:
+        return len(self._filter_events(camera_id, label=label, labels=labels, start=start, end=end))
 
     def stats_range(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None):
         from collections import Counter, defaultdict
