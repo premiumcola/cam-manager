@@ -648,6 +648,51 @@ function editCamera(camId){
   requestAnimationFrame(()=>wrapper.classList.add('slide-open'));
   _currentEditCamId=camId;
   setTimeout(()=>wrapper.scrollIntoView({behavior:'smooth',block:'nearest'}),120);
+  // Populate connection diagnostics panel
+  _loadCamDiagnostics(camId);
+}
+
+async function _loadCamDiagnostics(camId){
+  const panel=byId('camDiagnostics'); if(!panel) return;
+  panel.style.display='none';
+  try{
+    const s=await j(`/api/camera/${encodeURIComponent(camId)}/status`);
+    if(!s||s.ok===false) return;
+    // Frame age
+    const ageEl=byId('diagFrameAge');
+    if(ageEl){
+      const age=s.frame_age_s;
+      if(age==null){ageEl.textContent='—'; ageEl.className='cam-diag-val';}
+      else if(age<5){ageEl.textContent=age.toFixed(1)+'s'; ageEl.className='cam-diag-val ok';}
+      else if(age<30){ageEl.textContent=age.toFixed(1)+'s'; ageEl.className='cam-diag-val warn';}
+      else{ageEl.textContent=age.toFixed(1)+'s'; ageEl.className='cam-diag-val bad';}
+    }
+    // Reconnect count
+    const rcEl=byId('diagReconnects');
+    if(rcEl){
+      const rc=s.reconnect_count||0;
+      rcEl.textContent=rc; rcEl.className='cam-diag-val '+(rc===0?'ok':rc<5?'warn':'bad');
+    }
+    // Stale incidents
+    const stEl=byId('diagStale');
+    if(stEl){
+      const st=s.stale_incidents||0;
+      stEl.textContent=st; stEl.className='cam-diag-val '+(st===0?'ok':st<10?'warn':'bad');
+    }
+    // Error streak
+    const esEl=byId('diagErrorStreak');
+    if(esEl){
+      const es=s.error_streak||0;
+      esEl.textContent=es; esEl.className='cam-diag-val '+(es===0?'ok':es<5?'warn':'bad');
+    }
+    // Last error
+    const errEl=byId('diagLastError');
+    if(errEl){
+      if(s.last_error){errEl.textContent=s.last_error; errEl.style.display='';}
+      else errEl.style.display='none';
+    }
+    panel.style.display='';
+  }catch(e){/* no diagnostics available — stay hidden */}
 }
 window.editCamera=editCamera;
 

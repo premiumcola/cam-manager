@@ -1,6 +1,5 @@
 from __future__ import annotations
 import cv2
-import hashlib
 import time
 import threading
 import logging
@@ -90,6 +89,10 @@ class CameraRuntime:
         self._motion_confirm: deque = deque(maxlen=3)  # multi-frame confirmation
         self._tl_thread = None   # legacy single timelapse thread
         self._tl_threads: dict = {}  # profile_name → Thread
+        # ── Connection health / diagnostics ──────────────────────────────────
+        self.frame_ts: float = 0.0          # epoch of last frame written to self.frame
+        self._reconnect_count: int = 0      # how many times capture was reopened
+        self._stale_incidents: int = 0      # how often timelapse saw a stale frame buffer
 
     @property
     def cfg(self):
@@ -564,7 +567,7 @@ class CameraRuntime:
         """
         window_key: str | None = None
         window_start_t: float = 0.0
-        _last_frame_hash: str | None = None   # per-thread duplicate detection
+        _last_frame_ts: float = 0.0   # frame_ts at last capture — detects stale buffer
 
         while self.running:
             tl = self.cfg.get("timelapse") or {}
@@ -622,16 +625,20 @@ class CameraRuntime:
             # ── Capture frame into the current window directory ───────────────
             with self.lock:
                 frame = self.frame.copy() if self.frame is not None else None
+                frame_ts = self.frame_ts
             if frame is not None and window_key is not None:
                 try:
-                    # Duplicate-frame guard: skip if content is identical to previous capture
-                    # (indicates stale camera feed / stuck stream)
-                    fhash = hashlib.md5(frame[::8, ::8].tobytes()).hexdigest()
-                    if fhash == _last_frame_hash:
-                        log_tl.debug("[%s][%s] duplicate frame skipped — camera feed may be stale",
-                                  self.camera_id, profile_name)
+                    # Staleness guard: skip only when the frame buffer hasn't been updated
+                    # since the last capture — this means the RTSP stream is genuinely stuck.
+                    # A static scene (identical content, new timestamp) is intentionally saved.
+                    if frame_ts == _last_frame_ts:
+                        age_s = time.time() - frame_ts
+                        log_tl.warning("[%s][%s] stale frame buffer (age=%.0fs) — RTSP stream may be stuck",
+                                      self.camera_id, profile_name, age_s)
+                        self._stale_incidents += 1
+                        # Don't advance _last_frame_ts so we keep warning each interval
                     else:
-                        _last_frame_hash = fhash
+                        _last_frame_ts = frame_ts
                         # Validate frame quality before saving — reject corrupted/blank frames
                         from .timelapse import TimelapseBuilder as _TLB_check
                         ok, reason = _TLB_check._is_valid_frame(frame)
@@ -667,6 +674,7 @@ class CameraRuntime:
                 # Always store raw frame so status → "active" and snapshots work
                 with self.lock:
                     self.frame = frame
+                    self.frame_ts = time.time()
                 if self._error_streak > 0:
                     log_cam.info("[%s] Stream wiederhergestellt nach %d Fehlern", self.camera_id, self._error_streak)
                 self.last_error = None
@@ -874,6 +882,7 @@ class CameraRuntime:
                 except Exception:
                     pass
                 self.capture = None
+                self._reconnect_count += 1
                 time.sleep(5.0)
             time.sleep(interval)
 
@@ -893,6 +902,8 @@ class CameraRuntime:
 
     def status(self):
         cfg = self.cfg
+        now_t = time.time()
+        frame_age_s = round(now_t - self.frame_ts, 1) if self.frame_ts > 0 else None
         return {
             "id": self.camera_id,
             "name": cfg.get("name", self.camera_id),
@@ -911,4 +922,9 @@ class CameraRuntime:
             "coral_reason": getattr(self.detector, "reason", "disabled"),
             "bird_species_available": getattr(self.bird_classifier, "available", False),
             "bird_species_mode": getattr(self.bird_classifier, "mode", "none"),
+            # Connection health diagnostics
+            "frame_age_s": frame_age_s,
+            "reconnect_count": self._reconnect_count,
+            "stale_incidents": self._stale_incidents,
+            "error_streak": self._error_streak,
         }

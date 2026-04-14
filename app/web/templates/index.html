@@ -254,6 +254,17 @@
                 <div class="field-wrap"><select name="group_id" id="groupSelect"></select><span class="field-label">Gruppe</span></div>
                 <div class="field-wrap"><input name="object_filter" placeholder="person,cat,bird" /><span class="field-label">Objektfilter</span></div>
               </div>
+              <!-- Connection health diagnostics (populated by JS on open) -->
+              <div id="camDiagnostics" style="display:none;margin-top:10px">
+                <div class="settings-divider" style="margin-bottom:6px">Verbindungsdiagnose</div>
+                <div class="cam-diag-grid">
+                  <div class="cam-diag-item"><span class="cam-diag-label">Stream-Alter</span><span id="diagFrameAge" class="cam-diag-val">—</span></div>
+                  <div class="cam-diag-item"><span class="cam-diag-label">Reconnects</span><span id="diagReconnects" class="cam-diag-val">—</span></div>
+                  <div class="cam-diag-item"><span class="cam-diag-label">Stale Incidents</span><span id="diagStale" class="cam-diag-val">—</span></div>
+                  <div class="cam-diag-item"><span class="cam-diag-label">Fehler-Streak</span><span id="diagErrorStreak" class="cam-diag-val">—</span></div>
+                </div>
+                <div id="diagLastError" style="display:none;margin-top:5px;font-size:11px;color:var(--danger);background:rgba(239,68,68,.08);border-radius:6px;padding:5px 8px;word-break:break-all"></div>
+              </div>
             </div>
 
             <!-- Panel: Alarm -->
