@@ -180,15 +180,27 @@ _run_daily_cleanup()
 def _migrate_timelapse_events():
     """One-time migration: remove timelapse-type events that were incorrectly stored
     in the EventStore (storage/events/<cam_id>/) under old code. These are now tracked
-    as sidecar JSONs next to the .mp4 files in storage/timelapse/<cam_id>/."""
-    import threading
+    as sidecar JSONs next to the .mp4 files in storage/timelapse/<cam_id>/.
+    Covers both date-subdirectory and camera-level tl_*.json placements."""
+    import threading, shutil as _shutil
     def _do_migrate():
         log = logging.getLogger(__name__)
         try:
             removed = 0
-            for cam_dir in (storage_root / "events").iterdir():
+            events_root = storage_root / "events"
+            if not events_root.exists():
+                return
+            for cam_dir in events_root.iterdir():
                 if not cam_dir.is_dir():
                     continue
+                # Remove tl_ files directly in the camera directory (flat placement)
+                for jf in list(cam_dir.glob("tl_*.json")):
+                    try:
+                        jf.unlink()
+                        removed += 1
+                    except Exception:
+                        pass
+                # Remove tl_ files inside date subdirectories
                 for date_dir in cam_dir.iterdir():
                     if not date_dir.is_dir():
                         continue
@@ -202,6 +214,27 @@ def _migrate_timelapse_events():
                 log.info("[migration] Removed %d stale timelapse events from EventStore", removed)
         except Exception as e:
             log.warning("[migration] Timelapse event migration failed: %s", e)
+
+        # Also clean up stale timelapse_frames dirs for cameras that no longer exist
+        try:
+            frames_root = storage_root / "timelapse_frames"
+            if not frames_root.exists():
+                return
+            active_ids = {c["id"] for c in (settings.data.get("cameras") or [])}
+            cleaned = 0
+            for cam_dir in frames_root.iterdir():
+                if not cam_dir.is_dir():
+                    continue
+                if cam_dir.name not in active_ids:
+                    try:
+                        _shutil.rmtree(str(cam_dir))
+                        cleaned += 1
+                        log.info("[migration] Removed stale frame dir for old camera: %s", cam_dir.name)
+                    except Exception as e:
+                        log.warning("[migration] Could not remove %s: %s", cam_dir.name, e)
+        except Exception as e:
+            log.warning("[migration] Stale frame dir cleanup failed: %s", e)
+
     threading.Thread(target=_do_migrate, daemon=True).start()
 
 
@@ -238,9 +271,11 @@ def _generate_missing_thumbnails():
                             scale = 640 / tw
                             frame = _cv2.resize(frame, (640, int(th * scale)))
                         _cv2.imwrite(str(thumb), frame, [int(_cv2.IMWRITE_JPEG_QUALITY), 80])
+                        del frame
                         count += 1
                 except Exception as e:
                     log.debug("[thumb] failed for %s: %s", mp4.name, e)
+                import time as _time; _time.sleep(0.05)  # pace startup
         if count:
             log.info("[startup] Generated %d missing timelapse thumbnails", count)
     threading.Thread(target=_do, daemon=True).start()

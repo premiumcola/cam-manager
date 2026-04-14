@@ -4,8 +4,15 @@ from datetime import datetime, timedelta
 import cv2
 import logging
 import numpy as np
+import os
+import subprocess
+import tempfile
 
 log = logging.getLogger(__name__)
+
+# Maximum output width for timelapse videos. 4K source frames are downscaled to this
+# width to keep file sizes manageable for mobile/web playback.
+_MAX_OUTPUT_WIDTH = 1920
 
 
 def _period_label(period_s: int) -> str:
@@ -50,20 +57,6 @@ class TimelapseBuilder:
         prefix = day.replace("-", "") + "-"
         return sorted(cam_dir.glob(f"{prefix}*.jpg"))
 
-    def _open_video_writer(self, out_path: Path, fps: float, w: int, h: int) -> cv2.VideoWriter:
-        """Use mp4v (MPEG-4 Part 2) — reliable and iOS-compatible in .mp4 container."""
-        writer = cv2.VideoWriter(
-            str(out_path),
-            cv2.VideoWriter_fourcc(*"mp4v"),
-            fps, (w, h)
-        )
-        if writer.isOpened():
-            log.debug("timelapse: using codec mp4v for %s", out_path.name)
-            return writer
-        writer.release()
-        log.warning("timelapse: mp4v failed for %s, trying DIVX fallback", out_path.name)
-        return cv2.VideoWriter(str(out_path), cv2.VideoWriter_fourcc(*"DIVX"), fps, (w, h))
-
     @staticmethod
     def _is_valid_frame(img) -> tuple[bool, str]:
         """Validate a decoded frame before it enters a timelapse video.
@@ -97,20 +90,126 @@ class TimelapseBuilder:
             return False, f"no_detail(std={gray_std:.2f})"
         return True, ""
 
+    @staticmethod
+    def _scale_dims(w: int, h: int, max_w: int = _MAX_OUTPUT_WIDTH) -> tuple[int, int]:
+        """Return output (w, h) capped at max_w, height always divisible by 2 (H.264 req)."""
+        if w <= max_w:
+            # Still ensure even dimensions
+            return (w // 2 * 2, h // 2 * 2)
+        scale = max_w / w
+        return (max_w, int(h * scale) // 2 * 2)
+
+    def _write_video_ffmpeg(self, valid_paths: list, out_path: Path,
+                            fps: float, ref_size: tuple[int, int]) -> str | None:
+        """Encode valid JPEG frames to H.264 MP4 via ffmpeg concat demuxer.
+        No frame data is loaded into Python memory — ffmpeg reads files directly.
+        Returns path string on success, None on failure."""
+        w, h = ref_size
+        out_w, out_h = self._scale_dims(w, h)
+        frame_dur = 1.0 / fps
+
+        concat_fd, concat_path = tempfile.mkstemp(suffix=".txt")
+        try:
+            with os.fdopen(concat_fd, "w") as f:
+                for p in valid_paths:
+                    # ffmpeg concat requires forward slashes even on Windows
+                    f.write(f"file '{str(p).replace(chr(92), '/')}'\n")
+                    f.write(f"duration {frame_dur:.6f}\n")
+                # Repeat last frame entry without duration (ffmpeg concat requirement)
+                if valid_paths:
+                    f.write(f"file '{str(valid_paths[-1]).replace(chr(92), '/')}'\n")
+
+            cmd = [
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-f", "concat", "-safe", "0", "-i", concat_path,
+                "-vf", f"scale={out_w}:{out_h}",
+                "-c:v", "libx264",
+                "-crf", "28",           # good quality/size balance
+                "-preset", "fast",
+                "-movflags", "+faststart",  # progressive download / iOS
+                "-pix_fmt", "yuv420p",  # required for broad iOS/Android compat
+                str(out_path),
+            ]
+            result = subprocess.run(cmd, capture_output=True, timeout=180)
+            if result.returncode == 0 and out_path.exists() and out_path.stat().st_size > 0:
+                log.debug("timelapse: ffmpeg encoded %s (%d frames → H.264 %dx%d)",
+                          out_path.name, len(valid_paths), out_w, out_h)
+                return str(out_path)
+            if result.returncode != 0:
+                log.warning("timelapse: ffmpeg failed for %s: %s",
+                            out_path.name, result.stderr.decode(errors="replace")[-300:])
+        except Exception as e:
+            log.warning("timelapse: ffmpeg exception for %s: %s", out_path.name, e)
+        finally:
+            try:
+                os.unlink(concat_path)
+            except Exception:
+                pass
+        return None
+
+    def _write_video_opencv(self, valid_paths: list, out_path: Path,
+                            fps: float, ref_size: tuple[int, int]) -> str | None:
+        """Fallback encoder using OpenCV VideoWriter (mp4v/MPEG-4 Part 2).
+        Reads and writes one frame at a time to keep peak memory low."""
+        w, h = ref_size
+        out_w, out_h = self._scale_dims(w, h)
+        writer = cv2.VideoWriter(
+            str(out_path),
+            cv2.VideoWriter_fourcc(*"mp4v"),
+            fps, (out_w, out_h)
+        )
+        if not writer.isOpened():
+            writer.release()
+            writer = cv2.VideoWriter(
+                str(out_path),
+                cv2.VideoWriter_fourcc(*"DIVX"),
+                fps, (out_w, out_h)
+            )
+        for img_path in valid_paths:
+            img = cv2.imread(str(img_path))
+            if img is None:
+                continue
+            if (img.shape[1], img.shape[0]) != (out_w, out_h):
+                img = cv2.resize(img, (out_w, out_h))
+            writer.write(img)
+            del img
+        writer.release()
+        if out_path.exists() and out_path.stat().st_size > 0:
+            return str(out_path)
+        return None
+
+    def _write_thumbnail(self, img_path: Path, out_path: Path) -> None:
+        """Write a thumbnail .jpg alongside the video. Max 640px wide."""
+        try:
+            img = cv2.imread(str(img_path))
+            if img is None:
+                return
+            tw, th = img.shape[1], img.shape[0]
+            if tw > 640:
+                scale = 640 / tw
+                img = cv2.resize(img, (640, int(th * scale)))
+            thumb_path = out_path.with_suffix(".jpg")
+            cv2.imwrite(str(thumb_path), img, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            log.debug("timelapse: thumbnail written: %s", thumb_path.name)
+        except Exception as e:
+            log.debug("timelapse: thumbnail write failed: %s", e)
+
     def _write_video(self, images: list, out_path: Path,
                      target_duration_s: int, target_fps: int) -> str | None:
         """Subsample images, validate each frame, skip corrupt ones, write to out_path.
-        Also writes a thumbnail .jpg alongside the video (middle valid frame).
+        Uses ffmpeg (H.264, small files, iOS-safe) with OpenCV mp4v as fallback.
+        Two-pass validation avoids loading all 4K frames into RAM simultaneously.
+        Also writes a .jpg thumbnail (middle valid frame, ≤640 px wide).
         Returns path string or None on failure."""
         total_frames_needed = max(2, target_duration_s * target_fps)
         if len(images) > total_frames_needed:
             step = len(images) / total_frames_needed
             images = [images[int(i * step)] for i in range(total_frames_needed)]
 
-        # Load and validate all frames first
-        valid_frames: list = []
+        # ── Pass 1: validate — collect valid paths, determine reference size ──
+        valid_paths: list = []
         skipped = 0
-        ref_size: tuple[int, int] | None = None  # (w, h)
+        ref_size: tuple[int, int] | None = None
 
         for img_path in images:
             img = cv2.imread(str(img_path))
@@ -118,55 +217,45 @@ class TimelapseBuilder:
             if not ok:
                 log.debug("timelapse: skip corrupt frame %s — %s", img_path.name, reason)
                 skipped += 1
+                del img
                 continue
-            # Normalise to reference size (use first valid frame as reference)
             if ref_size is None:
                 ref_size = (img.shape[1], img.shape[0])
-            elif (img.shape[1], img.shape[0]) != ref_size:
-                img = cv2.resize(img, ref_size)
-            valid_frames.append(img)
+            valid_paths.append(img_path)
+            del img  # do NOT accumulate in memory
 
         if skipped > 0:
             log.info("timelapse: skipped %d/%d corrupt frames for %s",
-                     skipped, skipped + len(valid_frames), out_path.name)
+                     skipped, skipped + len(valid_paths), out_path.name)
 
-        if len(valid_frames) < 2:
+        if len(valid_paths) < 2:
             log.warning("timelapse: only %d valid frames (of %d) — skipping encode for %s",
-                        len(valid_frames), skipped + len(valid_frames), out_path.name)
+                        len(valid_paths), skipped + len(valid_paths), out_path.name)
             return None
 
-        w, h = ref_size
         fps = float(max(1, target_fps))
-        writer = self._open_video_writer(out_path, fps, w, h)
-        for img in valid_frames:
-            writer.write(img)
-        writer.release()
 
-        if not out_path.exists():
-            log.warning("timelapse: VideoWriter produced no file: %s", out_path)
+        # ── Pass 2: encode — try ffmpeg first, fall back to OpenCV ────────────
+        path = self._write_video_ffmpeg(valid_paths, out_path, fps, ref_size)
+        if path is None:
+            log.debug("timelapse: ffmpeg unavailable/failed, falling back to OpenCV for %s",
+                      out_path.name)
+            path = self._write_video_opencv(valid_paths, out_path, fps, ref_size)
+
+        if path is None:
+            log.warning("timelapse: encode failed for %s", out_path.name)
             return None
 
-        # Write thumbnail: pick middle valid frame, scale to max 640px wide
-        try:
-            thumb_frame = valid_frames[len(valid_frames) // 2]
-            thumb_path = out_path.with_suffix(".jpg")
-            tw, th = thumb_frame.shape[1], thumb_frame.shape[0]
-            if tw > 640:
-                scale = 640 / tw
-                thumb_frame = cv2.resize(thumb_frame, (640, int(th * scale)))
-            cv2.imwrite(str(thumb_path), thumb_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-            log.debug("timelapse: thumbnail written: %s", thumb_path.name)
-        except Exception as e:
-            log.debug("timelapse: thumbnail write failed: %s", e)
-
-        return str(out_path)
+        # ── Thumbnail from middle valid frame ─────────────────────────────────
+        self._write_thumbnail(valid_paths[len(valid_paths) // 2], out_path)
+        return path
 
     # ── Naming helpers ────────────────────────────────────────────────────────
 
     def make_output_name(self, window_key: str, profile_name: str,
                          period_s: int, target_s: int) -> str:
         """Generate a human-readable filename stem.
-        Example: '2026-04-14_020435_custom_2min-to-10s'"""
+        Example: '2026-04-14_020435_custom_1min-to-10s'"""
         p_label = _period_label(period_s)
         d_label = _duration_label(target_s)
         return f"{window_key}_{profile_name}_{p_label}-to-{d_label}"
