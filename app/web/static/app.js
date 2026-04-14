@@ -1878,25 +1878,51 @@ function openLightbox(item){
   byId('lightboxModal').classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
+function _tlNavItems(){
+  // When in the timelapse tab, navigation items are _tlItems; otherwise state.media
+  if(state.mediaLabel==='timelapse') return window._tlItems||[];
+  return (state.media||[]).filter(x=>x.type==='timelapse').length>0
+    ? (window._tlItems||[])
+    : (state.media||[]);
+}
+function _tlPeriodLabel(item){
+  if(item.period_s>0){
+    const p=item.period_s,d=item.target_s||0;
+    const pl=p<3600?Math.round(p/60)+'min':p<86400?Math.round(p/3600)+'h':p<604800?'daily':p<2592000?'weekly':'monthly';
+    const dl=d<60?d+'s':Math.floor(d/60)+'min';
+    return `${pl}→${dl}`;
+  }
+  const raw=item.profile||item.period||'';
+  if(raw==='rolling_10min') return '10 min';
+  if(raw==='hour') return 'Stunde';
+  if(raw==='custom') return 'Custom';
+  if(raw==='daily'||raw==='day') return 'Tag';
+  if(raw==='weekly') return 'Woche';
+  if(raw==='monthly') return 'Monat';
+  return raw||'Timelapse';
+}
 function openTLPlayer(item){
-  _lbIndex=(state.media||[]).findIndex(x=>x.event_id===item.event_id);
-  _lbItem=_lbIndex>=0?state.media[_lbIndex]:item;
+  const navItems=_tlNavItems();
+  _lbIndex=navItems.findIndex(x=>x.event_id===item.event_id);
+  _lbItem=_lbIndex>=0?navItems[_lbIndex]:item;
   _lbDeletePending=false;
   const imgEl=byId('lightboxImg'); imgEl.style.display='none';
   const videoEl=byId('lightboxVideo');
-  videoEl.style.display='block'; videoEl.src=item.url; videoEl.load(); videoEl.play().catch(()=>{});
+  const videoSrc=item.url||(item.relpath?'/media/'+item.relpath:'');
+  videoEl.style.display='block'; videoEl.src=videoSrc; videoEl.load(); videoEl.play().catch(()=>{});
   const confirmBtn=byId('lightboxConfirm'); if(confirmBtn) confirmBtn.style.display='none';
   const labGrad=byId('lightboxLabelsGrad'); if(labGrad) labGrad.style.display='none';
   byId('lightboxLabels').innerHTML='';
   const delBtn=byId('lightboxDelete');
   if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↓</span><span style="font-size:22px;line-height:1">🗑</span>';delBtn.title='Timelapse löschen';}
-  const period=item.period==='rolling_10min'?'10 min':item.period==='hour'?'Stunde':'Tag';
+  const period=_tlPeriodLabel(item);
+  const sizeBadge=item.size_mb!=null?`<span class="badge">${item.size_mb} MB</span>`:'';
   byId('lightboxMeta').innerHTML=`
     <span class="badge">${esc(item.camera_id||'')}</span>
     <span class="badge">Timelapse · ${esc(period)}</span>
-    <span class="badge">${esc(item.day||'')}</span>
-    <span class="badge">${item.size_mb} MB</span>`;
-  const total=(state.media||[]).length;
+    <span class="badge">${esc(item.window_key||item.day||'')}</span>
+    ${sizeBadge}`;
+  const total=navItems.length;
   byId('lightboxPrev').style.opacity=_lbIndex>0?'1':'0.2';
   byId('lightboxNext').style.opacity=_lbIndex<total-1?'1':'0.2';
   byId('lightboxModal').classList.remove('hidden');
@@ -1914,12 +1940,13 @@ function closeLightbox(){
 }
 byId('lightboxClose').onclick=closeLightbox;
 byId('lightboxModal').onclick=(e)=>{if(e.target===byId('lightboxModal')) closeLightbox();};
-byId('lightboxPrev').onclick=()=>{const i=(state.media||[]).findIndex(x=>x.event_id===_lbItem?.event_id);if(i>0) openLightbox(state.media[i-1]);};
-byId('lightboxNext').onclick=()=>{const i=(state.media||[]).findIndex(x=>x.event_id===_lbItem?.event_id);if(i>=0&&i<(state.media||[]).length-1) openLightbox(state.media[i+1]);};
+function _lbNavList(){return _lbItem?.type==='timelapse'?_tlNavItems():(state.media||[]);}
+byId('lightboxPrev').onclick=()=>{const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>0) openLightbox(nav[i-1]);};
+byId('lightboxNext').onclick=()=>{const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>=0&&i<nav.length-1) openLightbox(nav[i+1]);};
 document.addEventListener('keydown',(e)=>{
   if(byId('lightboxModal').classList.contains('hidden')) return;
-  if(e.key==='ArrowLeft'){e.preventDefault();const i=(state.media||[]).findIndex(x=>x.event_id===_lbItem?.event_id);if(i>0) openLightbox(state.media[i-1]);}
-  else if(e.key==='ArrowRight'){e.preventDefault();const i=(state.media||[]).findIndex(x=>x.event_id===_lbItem?.event_id);if(i>=0&&i<(state.media||[]).length-1) openLightbox(state.media[i+1]);}
+  if(e.key==='ArrowLeft'){e.preventDefault();const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>0) openLightbox(nav[i-1]);}
+  else if(e.key==='ArrowRight'){e.preventDefault();const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>=0&&i<nav.length-1) openLightbox(nav[i+1]);}
   else if(e.key==='ArrowUp'){e.preventDefault();byId('lightboxConfirm').click();}
   else if(e.key==='ArrowDown'){e.preventDefault();_lbHandleDeleteKey();}
   else if(e.key==='Escape') closeLightbox();
@@ -1962,14 +1989,17 @@ byId('lightboxDelete').onclick=async()=>{
       return;
     }
     const filename=_lbItem.filename||(_lbItem.relpath||'').split('/').pop();
+    if(!filename){showToast('Dateiname fehlt','error');return;}
     try{
       await j(`/api/camera/${encodeURIComponent(_lbItem.camera_id)}/timelapse/${encodeURIComponent(filename)}`,{method:'DELETE'});
-      state.media=(state.media||[]).filter(x=>x.event_id!==_lbItem.event_id);
-      window._tlItems=(window._tlItems||[]).filter(x=>x.event_id!==_lbItem.event_id);
-      _lbIndex=Math.min(_lbIndex,(state.media||[]).length-1);
-      if(_lbIndex<0) closeLightbox();
-      else openLightbox(state.media[_lbIndex]);
+      const deletedId=_lbItem.event_id;
+      state.media=(state.media||[]).filter(x=>x.event_id!==deletedId);
+      window._tlItems=(window._tlItems||[]).filter(x=>x.event_id!==deletedId);
       renderMediaGrid();
+      const nav=_tlNavItems();
+      const nextIdx=Math.min(_lbIndex,nav.length-1);
+      if(nextIdx<0) closeLightbox();
+      else openLightbox(nav[nextIdx]);
     }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
     return;
   }
@@ -2013,13 +2043,13 @@ const _TL_FILMSTRIP=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none"
 function mediaCardHTML(item){
   const isTL=item.type==='timelapse';
   if(isTL){
-    const period=item.period==='rolling_10min'?'10 min':item.period==='hour'?'Stunde':'Tag';
+    const period=_tlPeriodLabel(item);
     return `<article class="media-card mmc-tl" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
       <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
         <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">
           <div class="mmc-play-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:#d8b4fe;margin-left:2px"><polygon points="5,3 19,12 5,21"/></svg></div>
         </div>
-        <div class="mmc-meta-bar"><span>${esc(period)} · ${item.size_mb} MB</span></div>
+        <div class="mmc-meta-bar"><span>${esc(period)}${item.size_mb != null ? ' · ' + item.size_mb + ' MB' : ''}</span></div>
         <div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge">${_TL_FILMSTRIP}Timelapse</span></div>
         <div class="mmc-actions">
           <button class="mmc-btn mmc-delete" title="Löschen" onclick="event.stopPropagation();window.deleteTLCard('${esc(item.camera_id||'')}','${esc(item.filename||'')}','${esc(item.event_id||'')}')">✕</button>

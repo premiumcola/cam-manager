@@ -177,6 +177,37 @@ def _run_daily_cleanup():
 _run_daily_cleanup()
 
 
+def _migrate_timelapse_events():
+    """One-time migration: remove timelapse-type events that were incorrectly stored
+    in the EventStore (storage/events/<cam_id>/) under old code. These are now tracked
+    as sidecar JSONs next to the .mp4 files in storage/timelapse/<cam_id>/."""
+    import threading
+    def _do_migrate():
+        log = logging.getLogger(__name__)
+        try:
+            removed = 0
+            for cam_dir in (storage_root / "events").iterdir():
+                if not cam_dir.is_dir():
+                    continue
+                for date_dir in cam_dir.iterdir():
+                    if not date_dir.is_dir():
+                        continue
+                    for jf in list(date_dir.glob("tl_*.json")):
+                        try:
+                            jf.unlink()
+                            removed += 1
+                        except Exception:
+                            pass
+            if removed:
+                log.info("[migration] Removed %d stale timelapse events from EventStore", removed)
+        except Exception as e:
+            log.warning("[migration] Timelapse event migration failed: %s", e)
+    threading.Thread(target=_do_migrate, daemon=True).start()
+
+
+_migrate_timelapse_events()
+
+
 @app.get('/')
 def index():
     return render_template('index.html')
@@ -862,6 +893,7 @@ def api_camera_timelapse(cam_id):
 
 @app.get('/api/camera/<cam_id>/timelapse/list')
 def api_camera_timelapse_list(cam_id):
+    import json as _json
     tl_dir = storage_root / "timelapse" / cam_id
     if not tl_dir.exists():
         return jsonify({"ok": True, "files": []})
@@ -869,21 +901,35 @@ def api_camera_timelapse_list(cam_id):
     for mp4 in sorted(tl_dir.glob("*.mp4"), reverse=True):
         stat = mp4.stat()
         rel = mp4.relative_to(storage_root)
-        parts = mp4.stem.split("_", 1)
-        day = parts[0]
-        period = parts[1] if len(parts) > 1 else "day"
+        # Try sidecar JSON first for rich metadata
+        meta: dict = {}
+        sidecar = tl_dir / f"{mp4.stem}.json"
+        if sidecar.exists():
+            try:
+                meta = _json.loads(sidecar.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+        # Fallback: derive from filename
+        parts = mp4.stem.split("_", 2)
+        day = parts[0] if parts else mp4.stem
+        period = meta.get("period") or (parts[2] if len(parts) > 2 else "day")
         files.append({
-            "event_id": f"tl_{mp4.stem}",
+            "event_id": meta.get("event_id") or f"tl_{mp4.stem}",
             "camera_id": cam_id,
             "type": "timelapse",
             "filename": mp4.name,
-            "day": day,
+            "day": meta.get("window_key", day)[:10],
+            "window_key": meta.get("window_key", day),
+            "profile": meta.get("profile", period),
             "period": period,
+            "period_s": meta.get("period_s", 0),
+            "target_s": meta.get("target_s", 0),
+            "frame_count": meta.get("frame_count", 0),
             "url": f"/media/{rel.as_posix()}",
             "relpath": rel.as_posix(),
-            "size_mb": round(stat.st_size / 1024 / 1024, 1),
+            "size_mb": meta.get("size_mb") or round(stat.st_size / 1024 / 1024, 1),
             "mtime": stat.st_mtime,
-            "time": day,
+            "time": meta.get("time") or day,
         })
     return jsonify({"ok": True, "files": files})
 
@@ -896,6 +942,13 @@ def api_camera_timelapse_delete(cam_id, filename):
     if not mp4.exists():
         return jsonify({"ok": False, "error": "not found"}), 404
     mp4.unlink()
+    # Also delete sidecar JSON if present
+    sidecar = mp4.with_suffix(".json")
+    if sidecar.exists():
+        try:
+            sidecar.unlink()
+        except Exception:
+            pass
     return jsonify({"ok": True})
 
 

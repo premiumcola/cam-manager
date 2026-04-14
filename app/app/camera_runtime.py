@@ -401,8 +401,11 @@ class CameraRuntime:
             return False
 
     def _cleanup_stale_timelapse_frames(self):
-        """Remove timelapse frame directories from previous runs (older than today).
-        Called once on startup before any encode thread begins, so no lock needed."""
+        """Remove timelapse frame directories from previous runs on startup.
+        - Previous-day directories: always deleted (stale)
+        - Today's directories: all except the newest per profile are deleted
+          (abandoned mid-run windows that never got encoded)
+        Called once on startup before any encode thread begins."""
         import shutil
         storage_root = Path(self.global_cfg["storage"]["root"])
         today = datetime.now().strftime("%Y-%m-%d")
@@ -412,25 +415,35 @@ class CameraRuntime:
         for profile_dir in tl_base.iterdir():
             if not profile_dir.is_dir():
                 continue
-            for window_dir in sorted(profile_dir.iterdir()):
-                if not window_dir.is_dir():
-                    continue
-                # Window dirs start with YYYY-MM-DD (custom: YYYY-MM-DD_HHMMSS)
+            all_windows = sorted([d for d in profile_dir.iterdir() if d.is_dir()])
+            for i, window_dir in enumerate(all_windows):
                 dir_date = window_dir.name[:10]
                 if dir_date < today:
+                    # Previous day: always clean up
                     try:
                         shutil.rmtree(str(window_dir))
-                        log_tl.info("[%s][media] cleaned stale timelapse frames: %s/%s",
+                        log_tl.info("[%s][media] cleaned stale frames (old day): %s/%s",
                                  self.camera_id, profile_dir.name, window_dir.name)
                     except Exception as e:
                         log_tl.warning("[%s][media] stale frame cleanup failed for %s: %s",
                                     self.camera_id, window_dir, e)
+                elif dir_date == today and i < len(all_windows) - 1:
+                    # Today but not the newest window → abandoned, safe to clean
+                    try:
+                        shutil.rmtree(str(window_dir))
+                        log_tl.info("[%s][media] cleaned abandoned window (today): %s/%s",
+                                 self.camera_id, profile_dir.name, window_dir.name)
+                    except Exception as e:
+                        log_tl.warning("[%s][media] abandoned cleanup failed for %s: %s",
+                                    self.camera_id, window_dir, e)
 
     def _finalize_timelapse_window(self, profile_name: str, window_key: str,
-                                   target_s: int, target_fps: int):
-        """Encode a completed timelapse window into a video, register it in the event store,
-        then delete the frame directory. Called from _timelapse_profile_loop only."""
+                                   target_s: int, target_fps: int, period_s: int = 0):
+        """Encode a completed timelapse window into a video, write a sidecar metadata JSON
+        next to the video (NOT in EventStore), then delete the frame directory.
+        Called from _timelapse_profile_loop only."""
         import shutil
+        import json as _json
         from .timelapse import TimelapseBuilder as _TLB
         storage_root = Path(self.global_cfg["storage"]["root"])
         frames_dir = storage_root / "timelapse_frames" / self.camera_id / profile_name / window_key
@@ -445,52 +458,70 @@ class CameraRuntime:
                       self.camera_id, profile_name, n, window_key)
             try:
                 shutil.rmtree(str(frames_dir))
-                log_tl.debug("[%s][%s] cleaned sparse frame dir: %s", self.camera_id, profile_name, frames_dir.name)
+                log_tl.debug("[%s][%s] cleaned sparse dir: %s", self.camera_id, profile_name, frames_dir.name)
             except Exception as e:
-                log.warning("[%s][%s] cleanup failed: %s", self.camera_id, profile_name, e)
+                log_tl.warning("[%s][%s] cleanup failed: %s", self.camera_id, profile_name, e)
             return
 
         log_tl.info("[%s][timelapse] encoding window %s/%s (%d frames → %ds @ %dfps)",
                  self.camera_id, profile_name, window_key, n, target_s, target_fps)
         out_dir = storage_root / "timelapse" / self.camera_id
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"{window_key}_{profile_name}.mp4"
+
         builder = _TLB(storage_root)
+        stem = builder.make_output_name(window_key, profile_name, period_s, target_s)
+        out_path = out_dir / f"{stem}.mp4"
         path = builder._write_video(images, out_path, target_s, target_fps)
 
         if path:
-            size_mb = out_path.stat().st_size / 1024 / 1024 if out_path.exists() else 0
+            size_mb = round(out_path.stat().st_size / 1024 / 1024, 2) if out_path.exists() else 0
             log_tl.info("[%s][timelapse] video created: %s (%.1f MB)", self.camera_id, out_path.name, size_mb)
-            # Register in event store so the mediathek finds it
+            # Write sidecar JSON next to the video — NOT in EventStore
             try:
-                rel = out_path.relative_to(storage_root)
-                event_id = f"tl_{self.camera_id}_{window_key}_{profile_name}"
-                event = {
-                    "event_id": event_id,
+                meta = {
+                    "event_id": f"tl_{stem}",
                     "camera_id": self.camera_id,
                     "type": "timelapse",
                     "profile": profile_name,
                     "window_key": window_key,
+                    "period_s": period_s,
+                    "target_s": target_s,
+                    "frame_count": n,
                     "time": datetime.now().isoformat(timespec="seconds"),
-                    "labels": ["timelapse"],
-                    "top_label": "timelapse",
-                    "video_url": f"/media/{rel.as_posix()}",
-                    "snapshot_relpath": rel.as_posix(),
+                    "filename": out_path.name,
+                    "relpath": f"timelapse/{self.camera_id}/{out_path.name}",
+                    "size_mb": size_mb,
                 }
-                self.store.add_event(self.camera_id, event)
-                log_tl.debug("[%s][timelapse] registered in store: %s", self.camera_id, event_id)
+                meta_path = out_dir / f"{stem}.json"
+                meta_path.write_text(_json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+                log_tl.debug("[%s][timelapse] sidecar JSON written: %s", self.camera_id, meta_path.name)
             except Exception as e:
-                log_tl.warning("[%s][timelapse] store registration failed: %s", self.camera_id, e)
+                log_tl.warning("[%s][timelapse] sidecar write failed: %s", self.camera_id, e)
         else:
             log_tl.warning("[%s][timelapse] encode failed for window %s/%s", self.camera_id, profile_name, window_key)
 
-        # Always clean up frames, even if encode failed (prevents unbounded accumulation)
+        # Always clean up frames regardless of encode outcome
         try:
             shutil.rmtree(str(frames_dir))
             log_tl.info("[%s][timelapse] cleaned %d frames for window %s/%s",
                      self.camera_id, n, profile_name, window_key)
         except Exception as e:
             log_tl.warning("[%s][timelapse] frame cleanup failed: %s", self.camera_id, e)
+
+    def _finalize_orphaned_windows(self, profile_name: str, current_key: str,
+                                    target_s: int, target_fps: int, period_s: int):
+        """Scan the profile's frame directory for any windows other than current_key and finalize them.
+        Called after a new window is started so stale/abandoned windows get encoded and cleaned."""
+        storage_root = Path(self.global_cfg["storage"]["root"])
+        profile_dir = storage_root / "timelapse_frames" / self.camera_id / profile_name
+        if not profile_dir.exists():
+            return
+        for window_dir in sorted(profile_dir.iterdir()):
+            if not window_dir.is_dir() or window_dir.name == current_key:
+                continue
+            log_tl.info("[%s][%s] orphaned window found: %s — finalizing",
+                     self.camera_id, profile_name, window_dir.name)
+            self._finalize_timelapse_window(profile_name, window_dir.name, target_s, target_fps, period_s)
 
     def _timelapse_loop(self):
         """Legacy single-profile timelapse. Reads latest frame from main loop — no direct camera access."""
@@ -564,23 +595,27 @@ class CameraRuntime:
                 elif now_t - window_start_t >= period_s:
                     # Period elapsed — finalize current window and start fresh
                     old_key = window_key
-                    self._finalize_timelapse_window(profile_name, old_key, target_s, target_fps)
+                    self._finalize_timelapse_window(profile_name, old_key, target_s, target_fps, period_s)
                     window_start_t = now_t
                     window_key = now.strftime("%Y-%m-%d_%H%M%S")
                     log_tl.info("[%s][timelapse] custom new window: %s", self.camera_id, window_key)
+                    # Scan for any other abandoned windows and clean them
+                    self._finalize_orphaned_windows(profile_name, window_key, target_s, target_fps, period_s)
             else:
                 # Calendar-based: one window per calendar day
                 new_key = now.strftime("%Y-%m-%d")
                 if window_key is not None and new_key != window_key:
                     # Day rolled over — finalize the completed day
                     old_key = window_key
-                    self._finalize_timelapse_window(profile_name, old_key, target_s, target_fps)
+                    self._finalize_timelapse_window(profile_name, old_key, target_s, target_fps, period_s)
                     log_tl.info("[%s][timelapse] %s day boundary: finalized %s, starting %s",
                              self.camera_id, profile_name, old_key, new_key)
                 if window_key is None or new_key != window_key:
                     window_key = new_key
                     log_tl.info("[%s][timelapse] %s window: %s (period=%ds interval=%.0fs)",
                              self.camera_id, profile_name, window_key, period_s, interval_s)
+                    # Scan for abandoned windows from prior days
+                    self._finalize_orphaned_windows(profile_name, window_key, target_s, target_fps, period_s)
 
             # ── Capture frame into the current window directory ───────────────
             with self.lock:
