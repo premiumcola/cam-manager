@@ -93,10 +93,29 @@ class CameraRuntime:
         self.frame_ts: float = 0.0          # epoch of last frame written to self.frame
         self._reconnect_count: int = 0      # how many times capture was reopened
         self._stale_incidents: int = 0      # how often timelapse saw a stale frame buffer
+        self._stale_streak: int = 0         # consecutive stale capture intervals (reset on fresh frame)
+        self._force_reconnect: bool = False  # timelapse sets True to request RTSP reopen from _loop
+        # ── Preview stream metrics ────────────────────────────────────────────
+        self._preview_fps: float = 0.0          # measured sub-stream FPS (rolling 5s window)
+        self._preview_fps_frames: int = 0        # frame counter for FPS window
+        self._preview_fps_window_start: float = time.time()
+        # ── Viewer tracking (MJPEG stream connections) ────────────────────────
+        self._live_viewers: int = 0
+        self._viewers_lock = threading.Lock()
 
     @property
     def cfg(self):
         return self.config_getter(self.camera_id) or {"id": self.camera_id, "name": self.camera_id}
+
+    def add_viewer(self):
+        """Increment live viewer count (called when MJPEG client connects)."""
+        with self._viewers_lock:
+            self._live_viewers += 1
+
+    def remove_viewer(self):
+        """Decrement live viewer count (called when MJPEG client disconnects)."""
+        with self._viewers_lock:
+            self._live_viewers = max(0, self._live_viewers - 1)
 
     def start(self):
         self.running = True
@@ -142,9 +161,17 @@ class CameraRuntime:
 
     @staticmethod
     def _sub_stream_url(url: str) -> str | None:
-        """Derive H.264 sub-stream URL from main-stream URL (Reolink pattern)."""
+        """Derive H.264 sub-stream URL from main-stream URL.
+        Handles both Reolink H.264 and H.265 main streams:
+          - h264Preview_01_main → h264Preview_01_sub (RLC-810A, older firmware)
+          - h265Preview_01_main → h264Preview_01_sub (CX810, newer firmware — H.265 on main, H.264 on sub)
+        """
         if "/h264Preview_01_main" in url:
             return url.replace("/h264Preview_01_main", "/h264Preview_01_sub")
+        if "/h265Preview_01_main" in url:
+            # Newer Reolink cameras (CX810 etc.) use H.265 on main stream.
+            # Sub-stream is always H.264 regardless of main-stream codec.
+            return url.replace("/h265Preview_01_main", "/h264Preview_01_sub")
         return None
 
     def _open_capture(self):
@@ -227,6 +254,13 @@ class CameraRuntime:
                     if not (r > b * 2.5 and r > 150):  # skip pink/artifact frames
                         with self.lock:
                             self._preview_frame = frame
+                        # Measure sub-stream FPS over a rolling 5s window
+                        self._preview_fps_frames += 1
+                        elapsed = time.time() - self._preview_fps_window_start
+                        if elapsed >= 5.0:
+                            self._preview_fps = round(self._preview_fps_frames / elapsed, 1)
+                            self._preview_fps_frames = 0
+                            self._preview_fps_window_start = time.time()
             except Exception:
                 time.sleep(0.2)
 
@@ -633,12 +667,19 @@ class CameraRuntime:
                     # A static scene (identical content, new timestamp) is intentionally saved.
                     if frame_ts == _last_frame_ts:
                         age_s = time.time() - frame_ts
-                        log_tl.warning("[%s][%s] stale frame buffer (age=%.0fs) — RTSP stream may be stuck",
-                                      self.camera_id, profile_name, age_s)
                         self._stale_incidents += 1
-                        # Don't advance _last_frame_ts so we keep warning each interval
+                        self._stale_streak += 1
+                        log_tl.warning("[%s][%s] stale frame buffer (age=%.0fs, streak=%d) — RTSP stream may be stuck",
+                                      self.camera_id, profile_name, age_s, self._stale_streak)
+                        # After 15 consecutive stale intervals, request a forced RTSP reconnect
+                        if self._stale_streak >= 15 and not self._force_reconnect:
+                            log_tl.error("[%s][%s] stale streak exceeded threshold — requesting RTSP reconnect",
+                                        self.camera_id, profile_name)
+                            self._force_reconnect = True
+                        # Don't advance _last_frame_ts so we keep detecting stale each interval
                     else:
                         _last_frame_ts = frame_ts
+                        self._stale_streak = 0  # reset streak on any fresh frame
                         # Validate frame quality before saving — reject corrupted/blank frames
                         from .timelapse import TimelapseBuilder as _TLB_check
                         ok, reason = _TLB_check._is_valid_frame(frame)
@@ -669,6 +710,20 @@ class CameraRuntime:
             interval = max(1.0, float(self.cfg.get("snapshot_interval_s") or 3))
         cooldown = int(self.global_cfg.get("processing", {}).get("event_cooldown_seconds", 25))
         while self.running:
+            # Timelapse threads may request a forced reconnect when they detect a stale stream
+            if self._force_reconnect:
+                self._force_reconnect = False
+                self._stale_streak = 0
+                log_cam.warning("[%s] Forced RTSP reconnect triggered (stale-feed recovery)", self.camera_id)
+                try:
+                    if self.capture is not None:
+                        self.capture.release()
+                except Exception:
+                    pass
+                self.capture = None
+                self._reconnect_count += 1
+                time.sleep(2.0)
+                continue
             try:
                 frame = self._grab_frame()
                 # Always store raw frame so status → "active" and snapshots work
@@ -927,4 +982,9 @@ class CameraRuntime:
             "reconnect_count": self._reconnect_count,
             "stale_incidents": self._stale_incidents,
             "error_streak": self._error_streak,
+            "stale_streak": self._stale_streak,
+            # Stream activity
+            "preview_fps": self._preview_fps,
+            "live_viewers": self._live_viewers,
+            "stream_mode": "live" if self._live_viewers > 0 else "baseline",
         }
