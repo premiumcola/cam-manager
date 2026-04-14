@@ -220,7 +220,17 @@ def _migrate_timelapse_events():
             frames_root = storage_root / "timelapse_frames"
             if not frames_root.exists():
                 return
-            active_ids = {c["id"] for c in (settings.data.get("cameras") or [])}
+            cameras = settings.data.get("cameras") or []
+            active_ids = {c["id"] for c in cameras}
+            # Build map of which profiles are enabled per camera
+            enabled_profiles: dict[str, set] = {}
+            for c in cameras:
+                tl = c.get("timelapse") or {}
+                profs = tl.get("profiles") or {}
+                enabled_profiles[c["id"]] = {
+                    p for p, cfg in profs.items() if cfg.get("enabled")
+                }
+
             cleaned = 0
             for cam_dir in frames_root.iterdir():
                 if not cam_dir.is_dir():
@@ -229,9 +239,25 @@ def _migrate_timelapse_events():
                     try:
                         _shutil.rmtree(str(cam_dir))
                         cleaned += 1
-                        log.info("[migration] Removed stale frame dir for old camera: %s", cam_dir.name)
+                        log.info("[migration] Removed frame dir for deleted camera: %s", cam_dir.name)
                     except Exception as e:
                         log.warning("[migration] Could not remove %s: %s", cam_dir.name, e)
+                    continue
+                # For active cameras: remove frame dirs for DISABLED profiles
+                active_profs = enabled_profiles.get(cam_dir.name, set())
+                for prof_dir in cam_dir.iterdir():
+                    if not prof_dir.is_dir():
+                        continue
+                    if prof_dir.name not in active_profs:
+                        try:
+                            _shutil.rmtree(str(prof_dir))
+                            cleaned += 1
+                            log.info("[migration] Removed frame dir for disabled profile: %s/%s",
+                                     cam_dir.name, prof_dir.name)
+                        except Exception as e:
+                            log.warning("[migration] Could not remove %s: %s", prof_dir, e)
+            if cleaned:
+                log.info("[migration] Cleaned %d stale frame directories", cleaned)
         except Exception as e:
             log.warning("[migration] Stale frame dir cleanup failed: %s", e)
 
