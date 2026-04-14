@@ -222,11 +222,14 @@ class TimelapseBuilder:
             step = len(images) / total_frames_needed
             images = [images[int(i * step)] for i in range(total_frames_needed)]
 
-        # ── Pass 1: validate + content-hash dedup ────────────────────────────
+        # ── Pass 1: validate + duplicate diagnostic ──────────────────────────
+        # Duplicates are NOT filtered here — they may represent legitimate static scenes.
+        # Capture-time dedup (_timelapse_profile_loop) already prevents stuck-stream frames
+        # from accumulating on disk. Encode-time dedup is diagnostic only.
         seen_hashes: set = set()
         valid_paths: list = []
         skipped = 0
-        dup_frames = 0
+        dup_count = 0
         ref_size: tuple[int, int] | None = None
 
         for img_path in images:
@@ -238,33 +241,33 @@ class TimelapseBuilder:
                 if img is not None:
                     del img
                 continue
-            # Content-based dedup: sample every 8th pixel to avoid loading full 4K frame
+            # Count duplicates for diagnostics (sample every 8th pixel)
             fhash = hashlib.md5(img[::8, ::8].tobytes()).hexdigest()
             if ref_size is None:
                 ref_size = (img.shape[1], img.shape[0])
             del img  # free immediately — do NOT accumulate
             if fhash in seen_hashes:
-                dup_frames += 1
-                continue
-            seen_hashes.add(fhash)
-            valid_paths.append(img_path)
+                dup_count += 1
+            else:
+                seen_hashes.add(fhash)
+            valid_paths.append(img_path)  # keep all valid frames regardless of duplicates
 
-        total_input = skipped + dup_frames + len(valid_paths)
+        total_input = skipped + len(valid_paths)
         if skipped > 0:
             log.info("timelapse: skipped %d/%d corrupt frames for %s",
                      skipped, total_input, out_path.name)
-        if dup_frames > 0:
-            dup_ratio = dup_frames / max(1, total_input)
+        if dup_count > 0:
+            dup_ratio = dup_count / max(1, len(valid_paths))
             if dup_ratio > 0.6:
-                log.warning("timelapse: HIGH duplicate ratio %.0f%% (%d/%d) for %s — "
-                            "camera stream may be stuck or feeding stale frames",
-                            dup_ratio * 100, dup_frames, total_input, out_path.name)
+                log.warning("timelapse: %.0f%% duplicate frames detected in %s (%d/%d) — "
+                            "check if camera stream was stuck during capture window",
+                            dup_ratio * 100, out_path.name, dup_count, len(valid_paths))
             else:
-                log.info("timelapse: removed %d/%d duplicate frames for %s",
-                         dup_frames, total_input, out_path.name)
+                log.debug("timelapse: %d/%d duplicate frames in %s (static scene?)",
+                          dup_count, len(valid_paths), out_path.name)
 
         if len(valid_paths) < 2:
-            log.warning("timelapse: only %d valid unique frames (of %d total input) — "
+            log.warning("timelapse: only %d valid frames (of %d total) — "
                         "skipping encode for %s", len(valid_paths), total_input, out_path.name)
             return None
 
@@ -276,7 +279,7 @@ class TimelapseBuilder:
         fps = n / max(1.0, float(target_duration_s))
         fps = min(float(target_fps), max(1.0, fps))
         actual_duration = n / fps
-        log.info("timelapse: %s — source=%d unique frames, fps=%.2f, "
+        log.info("timelapse: %s — source=%d valid frames, fps=%.2f, "
                  "expected_duration=%.1fs (target=%ds)",
                  out_path.name, n, fps, actual_duration, target_duration_s)
 
