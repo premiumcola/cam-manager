@@ -133,7 +133,25 @@ function _closeEditPanel(){
 
 // ── Live update ───────────────────────────────────────────────────────────────
 let _liveUpdateInterval=null;
+let _previewRefreshInterval=null;
 const _prevCamStatuses=new Map();
+
+// ── 5fps dashboard preview refresh ────────────────────────────────────────────
+// Refreshes all visible camera thumbnails at ~5fps while the tab is active.
+// Uses the existing snapshot.jpg endpoint (served from sub-stream frame buffer).
+function startPreviewRefresh(){
+  if(_previewRefreshInterval) clearInterval(_previewRefreshInterval);
+  _previewRefreshInterval=setInterval(()=>{
+    if(document.hidden) return; // don't burn requests when tab is backgrounded
+    const grid=byId('cameraCards');
+    if(!grid) return;
+    grid.querySelectorAll('.cv-img.loaded').forEach(img=>{
+      const base=img.src.split('?')[0];
+      img.src=base+'?t='+Date.now();
+    });
+  },200); // 5fps
+}
+
 function startLiveUpdate(){
   if(_liveUpdateInterval) clearInterval(_liveUpdateInterval);
   state.cameras.forEach(c=>_prevCamStatuses.set(c.id,c.status));
@@ -142,15 +160,21 @@ function startLiveUpdate(){
       const r=await j('/api/cameras');
       (r.cameras||[]).forEach(c=>{
         const prev=_prevCamStatuses.get(c.id);
-        if(prev===c.status) return;
         _prevCamStatuses.set(c.id,c.status);
-        // Show squirrel whenever camera starts reconnecting
-        if(c.status==='starting') showCameraReloadAnimation(c.id);
-        const wasOffline=prev==='starting'||prev==='disabled'||prev==null;
-        // Dashboard card: refresh snapshot image on status change
+        if(prev!==c.status){
+          // Show squirrel whenever camera starts reconnecting
+          if(c.status==='starting') showCameraReloadAnimation(c.id);
+          // Camera settings list badge
+          const item=byId('cameraSettingsList')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
+          if(item){
+            const stCol=s=>s==='active'?'good':s==='error'?'danger':'warn';
+            const b=item.querySelector('.badge');
+            if(b){b.className=`badge ${stCol(c.status)}`;b.textContent=c.status||'—';}
+          }
+        }
+        // Always update live pill and FPS display
         const card=byId('cameraCards')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
         if(card){
-          // Update live pill classes
           const livePill=card.querySelector('.cv-pill-live-wrap');
           if(livePill){
             const isActive=c.status==='active';
@@ -158,17 +182,17 @@ function startLiveUpdate(){
             livePill.classList.toggle('cv-live-off',!isActive);
             const hdr=livePill.querySelector('.cv-live-exp-header span');
             if(hdr) hdr.textContent='Livestream '+(isActive?'aktiv':'inaktiv');
+            // Update measured FPS display in pill
+            const fpsEl=livePill.querySelector('.cv-lp-fps-val');
+            if(fpsEl) fpsEl.textContent=(c.preview_fps||0)>0?(c.preview_fps+' fps'):'—';
+            // Update stream mode badge
+            const modeEl=livePill.querySelector('.cv-stream-mode');
+            if(modeEl){
+              const mode=c.stream_mode||'baseline';
+              modeEl.textContent=mode==='live'?'● Live':'○ Vorschau';
+              modeEl.className='cv-stream-mode '+(mode==='live'?'cv-mode-live':'cv-mode-base');
+            }
           }
-          // Always refresh snapshot periodically
-          const img=card.querySelector('.cv-img');
-          if(img){const base=img.src.split('?')[0];img.src=base+'?t='+Date.now();}
-        }
-        // Camera settings list badge
-        const item=byId('cameraSettingsList')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
-        if(item){
-          const stCol=s=>s==='active'?'good':s==='error'?'danger':'warn';
-          const b=item.querySelector('.badge');
-          if(b){b.className=`badge ${stCol(c.status)}`;b.textContent=c.status||'—';}
         }
       });
     }catch{/* silent */}
@@ -198,6 +222,7 @@ async function loadAll(){
   _updateTlActiveTags(state.cameras||[]);
   if(state.bootstrap.needs_wizard) openWizard();
   byId('openWizardBtn').classList.toggle('hidden', !!state.bootstrap?.wizard_completed || !state.bootstrap?.needs_wizard);
+  startPreviewRefresh(); // 5fps thumbnail refresh for dashboard cards
 }
 
 function _mediaPeriodParams(){
@@ -268,6 +293,8 @@ function renderDashboard(){
     const isActive=c.status==='active';
     const tlOn=!!(c.timelapse&&c.timelapse.enabled);
     const fps=c.frame_interval_ms?Math.round(1000/c.frame_interval_ms):null;
+    const previewFps=(c.preview_fps||0)>0?c.preview_fps:null;
+    const streamMode=c.stream_mode||'baseline';
 
     // Brain SVG (13×13) — pulsing when Coral available
     const brainCol=c.coral_available?'#93c5fd':'rgba(255,255,255,.25)';
@@ -307,15 +334,20 @@ function renderDashboard(){
         <div class="cv-live-collapsed">
           <div class="cv-pdot"></div>
           <span>Live</span>
+          ${previewFps?`<span class="cv-fps-badge">${previewFps}</span>`:''}
         </div>
         <div class="cv-live-expanded">
           <div class="cv-live-exp-header">
             <div class="cv-pdot"></div>
             <span>Livestream ${isActive?'aktiv':'inaktiv'}</span>
           </div>
+          <div class="cv-lp-row"><span>Stream-Modus</span><strong class="cv-stream-mode ${streamMode==='live'?'cv-mode-live':'cv-mode-base'}">${streamMode==='live'?'● Live':'○ Vorschau'}</strong></div>
+          <div class="cv-lp-row"><span>Preview-FPS<br><small>Gemessen (Sub-Stream)</small></span><strong class="cv-lp-fps-val">${previewFps!=null?previewFps+' fps':'—'}</strong></div>
           <div class="cv-lp-row"><span>Auflösung</span><strong>${esc(c.resolution||'—')}</strong></div>
           <div class="cv-lp-row"><span>Analyse-Framerate<br><small>Wie oft TAM-spy analysiert</small></span><strong>${fps!=null?fps+' fps':'—'}</strong></div>
-          <div class="cv-lp-row"><span>Snapshot-Intervall<br><small>Abstand zwischen gespeicherten Bildern</small></span><strong>${c.snapshot_interval_s!=null?c.snapshot_interval_s+'s':'—'}</strong></div>
+          <div class="cv-lp-row" style="margin-top:6px">
+            <button class="cv-lp-livebtn" onclick="event.stopPropagation();openLiveView('${esc(c.id)}','${esc(c.name)}')">▶ Live ansehen</button>
+          </div>
         </div>
       </div>
       <div class="cv-pill ${c.armed?'cv-pill-alarm-on':'cv-pill-alarm-off'}">${shieldSm}${c.armed?'Alarm an':'Alarm aus'}</div>
@@ -686,6 +718,32 @@ async function _loadCamDiagnostics(camId){
       const es=s.error_streak||0;
       esEl.textContent=es; esEl.className='cam-diag-val '+(es===0?'ok':es<5?'warn':'bad');
     }
+    // Stale streak
+    const ssEl=byId('diagStaleStreak');
+    if(ssEl){
+      const ss=s.stale_streak||0;
+      ssEl.textContent=ss; ssEl.className='cam-diag-val '+(ss===0?'ok':ss<5?'warn':'bad');
+    }
+    // Preview FPS
+    const fpsDiagEl=byId('diagPreviewFps');
+    if(fpsDiagEl){
+      const pfps=s.preview_fps||0;
+      fpsDiagEl.textContent=pfps>0?pfps+' fps':'—';
+      fpsDiagEl.className='cam-diag-val '+(pfps>=8?'ok':pfps>=2?'warn':'');
+    }
+    // Stream mode
+    const modeEl=byId('diagStreamMode');
+    if(modeEl){
+      const mode=s.stream_mode||'baseline';
+      modeEl.textContent=mode==='live'?'Live':'Vorschau';
+      modeEl.className='cam-diag-val '+(mode==='live'?'ok':'');
+    }
+    // Live viewers
+    const viewEl=byId('diagLiveViewers');
+    if(viewEl){
+      const v=s.live_viewers||0;
+      viewEl.textContent=v; viewEl.className='cam-diag-val '+(v>0?'ok':'');
+    }
     // Last error
     const errEl=byId('diagLastError');
     if(errEl){
@@ -891,7 +949,11 @@ async function renderAudit(){ const actions=await j('/api/telegram/actions'); by
 
 async function toggleArm(camId,armed){ await fetch(`/api/camera/${camId}/arm`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({armed})}); await loadAll(); }
 window.toggleArm=toggleArm;
-window._cvCardClick=function(e,camId){ /* clicking the card itself does nothing extra */ };
+window._cvCardClick=function(e,camId){
+  const cam=(state.cameras||[]).find(c=>c.id===camId);
+  if(!cam) return;
+  openLiveView(camId, cam.name||camId);
+};
 async function loadTimelapse(camId){
   const res=await fetch(`/api/camera/${encodeURIComponent(camId)}/timelapse`);
   const r=await res.json();
@@ -902,6 +964,44 @@ async function loadTimelapse(camId){
   showToast('Kein Zeitraffer verfügbar für '+(r.day||'heute')+'.','warn');
 }
 window.loadTimelapse=loadTimelapse;
+
+// ── Live View Modal ───────────────────────────────────────────────────────────
+let _liveViewCamId=null;
+let _liveViewHd=false;
+function openLiveView(camId,camName){
+  const modal=byId('liveViewModal'); if(!modal) return;
+  _liveViewCamId=camId; _liveViewHd=false;
+  byId('liveViewTitle').textContent=camName||camId;
+  _setLiveViewStream(false);
+  modal.classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+function _setLiveViewStream(hd){
+  _liveViewHd=hd;
+  const img=byId('liveViewImg'); if(!img||!_liveViewCamId) return;
+  img.src=''; // disconnect current stream first
+  const url=hd?`/api/camera/${encodeURIComponent(_liveViewCamId)}/stream_hd.mjpg`
+               :`/api/camera/${encodeURIComponent(_liveViewCamId)}/stream.mjpg`;
+  img.src=url;
+  const hdBtn=byId('liveViewHdBtn');
+  if(hdBtn){
+    hdBtn.textContent=hd?'◀ Vorschau':'HD';
+    hdBtn.title=hd?'Zurück zur Vorschau (Sub-Stream)':'Hochauflösend (Haupt-Stream, annotiert)';
+    hdBtn.classList.toggle('cv-livebtn-active',hd);
+  }
+  const modeLabel=byId('liveViewModeLabel');
+  if(modeLabel) modeLabel.textContent=hd?'HD · Haupt-Stream':'Vorschau · Sub-Stream';
+}
+function closeLiveView(){
+  const modal=byId('liveViewModal'); if(!modal) return;
+  const img=byId('liveViewImg'); if(img) img.src=''; // disconnect MJPEG stream → remove_viewer
+  modal.classList.add('hidden');
+  document.body.style.overflow='';
+  _liveViewCamId=null;
+}
+window.openLiveView=openLiveView;
+window.closeLiveView=closeLiveView;
+
 async function toggleTimelapse(camId,currentlyEnabled){
   const cam=(state.config?.cameras||[]).find(c=>c.id===camId)||(state.cameras||[]).find(c=>c.id===camId);
   if(!cam) return;
@@ -2007,6 +2107,8 @@ function _lbNavList(){return _lbItem?.type==='timelapse'?_tlNavItems():(state.me
 byId('lightboxPrev').onclick=()=>{const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>0) openLightbox(nav[i-1]);};
 byId('lightboxNext').onclick=()=>{const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>=0&&i<nav.length-1) openLightbox(nav[i+1]);};
 document.addEventListener('keydown',(e)=>{
+  // Live view ESC close (takes priority)
+  if(e.key==='Escape'&&!byId('liveViewModal')?.classList.contains('hidden')){closeLiveView();return;}
   if(byId('lightboxModal').classList.contains('hidden')) return;
   if(e.key==='ArrowLeft'){e.preventDefault();const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>0) openLightbox(nav[i-1]);}
   else if(e.key==='ArrowRight'){e.preventDefault();const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>=0&&i<nav.length-1) openLightbox(nav[i+1]);}

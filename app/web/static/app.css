@@ -182,6 +182,18 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .cam-diag-val.ok{color:var(--success)}
 .cam-diag-val.warn{color:#f59e0b}
 .cam-diag-val.bad{color:var(--danger)}
+/* Live view: stream mode badges in live pill */
+.cv-fps-badge{font-size:9px;font-weight:700;background:rgba(34,197,94,.18);color:#4ade80;border-radius:999px;padding:0 5px;line-height:16px;margin-left:2px;font-variant-numeric:tabular-nums}
+.cv-stream-mode{font-size:11px;font-variant-numeric:tabular-nums}
+.cv-mode-live{color:#4ade80}
+.cv-mode-base{color:var(--muted)}
+/* Live view pill button */
+.cv-lp-livebtn{width:100%;padding:7px 10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s}
+.cv-lp-livebtn:hover{background:#2563eb}
+/* HD button in live view modal */
+.cv-livebtn-hd{padding:6px 14px;border-radius:10px;border:1.5px solid rgba(255,255,255,.15);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
+.cv-livebtn-hd:hover{border-color:var(--accent);color:var(--text)}
+.cv-livebtn-hd.cv-livebtn-active{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,.1)}
 
 
 /* ── Timelapse Settings section ──────────────────────────────────────────────── */

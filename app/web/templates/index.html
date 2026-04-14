@@ -259,9 +259,13 @@
                 <div class="settings-divider" style="margin-bottom:6px">Verbindungsdiagnose</div>
                 <div class="cam-diag-grid">
                   <div class="cam-diag-item"><span class="cam-diag-label">Stream-Alter</span><span id="diagFrameAge" class="cam-diag-val">—</span></div>
+                  <div class="cam-diag-item"><span class="cam-diag-label">Preview-FPS</span><span id="diagPreviewFps" class="cam-diag-val">—</span></div>
+                  <div class="cam-diag-item"><span class="cam-diag-label">Stream-Modus</span><span id="diagStreamMode" class="cam-diag-val">—</span></div>
+                  <div class="cam-diag-item"><span class="cam-diag-label">Aktive Viewer</span><span id="diagLiveViewers" class="cam-diag-val">—</span></div>
                   <div class="cam-diag-item"><span class="cam-diag-label">Reconnects</span><span id="diagReconnects" class="cam-diag-val">—</span></div>
-                  <div class="cam-diag-item"><span class="cam-diag-label">Stale Incidents</span><span id="diagStale" class="cam-diag-val">—</span></div>
                   <div class="cam-diag-item"><span class="cam-diag-label">Fehler-Streak</span><span id="diagErrorStreak" class="cam-diag-val">—</span></div>
+                  <div class="cam-diag-item"><span class="cam-diag-label">Stale Incidents</span><span id="diagStale" class="cam-diag-val">—</span></div>
+                  <div class="cam-diag-item"><span class="cam-diag-label">Stale Streak</span><span id="diagStaleStreak" class="cam-diag-val">—</span></div>
                 </div>
                 <div id="diagLastError" style="display:none;margin-top:5px;font-size:11px;color:var(--danger);background:rgba(239,68,68,.08);border-radius:6px;padding:5px 8px;word-break:break-all"></div>
               </div>
@@ -683,6 +687,26 @@
         <button id="lightboxDelete" type="button" style="position:absolute;bottom:68px;right:12px;z-index:5">🗑</button>
       </div>
       <div id="lightboxMeta" style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center"></div>
+    </div>
+  </div>
+
+  <!-- Live view modal -->
+  <div id="liveViewModal" class="modal hidden" style="padding:12px;align-items:center;justify-content:center" onclick="if(event.target===this)closeLiveView()">
+    <div style="position:relative;width:min(96vw,1200px);display:flex;flex-direction:column;align-items:stretch;gap:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span id="liveViewTitle" style="font-size:16px;font-weight:700;color:#fff"></span>
+          <span id="liveViewModeLabel" style="font-size:11px;font-weight:600;color:var(--muted);background:rgba(255,255,255,.08);padding:3px 8px;border-radius:999px">Vorschau · Sub-Stream</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button id="liveViewHdBtn" class="cv-livebtn-hd" onclick="_setLiveViewStream(!_liveViewHd)" title="Hochauflösend (Haupt-Stream, annotiert)">HD</button>
+          <button class="close-btn" onclick="closeLiveView()" style="font-size:18px;padding:6px 12px">✕</button>
+        </div>
+      </div>
+      <div style="position:relative;border-radius:14px;overflow:hidden;background:#050d18;line-height:0">
+        <img id="liveViewImg" src="" alt="Live" style="width:100%;max-height:82vh;object-fit:contain;display:block" />
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-align:center">Vorschau: Sub-Stream (H.264, ~25fps) · HD: Haupt-Stream annotiert · ESC zum Schließen</div>
     </div>
   </div>
 
