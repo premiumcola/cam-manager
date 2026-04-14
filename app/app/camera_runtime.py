@@ -42,6 +42,8 @@ _SPECIES_TO_ACH_ID = {
 }
 
 log = logging.getLogger(__name__)
+log_tl = logging.getLogger(__name__ + ".timelapse")   # timelapse-specific logs
+log_cam = logging.getLogger(__name__ + ".camera")     # connection/stream logs
 
 _PROFILES = ("daily", "weekly", "monthly", "custom")
 _PROFILE_PERIOD_DEFAULTS = {"daily": 86400, "weekly": 604800, "monthly": 2592000, "custom": 600}
@@ -176,7 +178,7 @@ class CameraRuntime:
                         old = self.preview_cap
                         if pcap.isOpened():
                             self.preview_cap = pcap
-                            log.info("[%s] Sub-stream opened for preview: %s", self.camera_id, sub_url)
+                            log_cam.info("[%s] Sub-stream opened for preview: %s", self.camera_id, sub_url)
                         else:
                             pcap.release()
                             self.preview_cap = None
@@ -187,7 +189,7 @@ class CameraRuntime:
                         except Exception:
                             pass
                 except Exception as e:
-                    log.warning("[%s] Sub-stream open failed: %s", self.camera_id, e)
+                    log_cam.warning("[%s] Sub-stream open failed: %s", self.camera_id, e)
                     with self._preview_cap_lock:
                         self.preview_cap = None
 
@@ -418,10 +420,10 @@ class CameraRuntime:
                 if dir_date < today:
                     try:
                         shutil.rmtree(str(window_dir))
-                        log.info("[%s][media] cleaned stale timelapse frames: %s/%s",
+                        log_tl.info("[%s][media] cleaned stale timelapse frames: %s/%s",
                                  self.camera_id, profile_dir.name, window_dir.name)
                     except Exception as e:
-                        log.warning("[%s][media] stale frame cleanup failed for %s: %s",
+                        log_tl.warning("[%s][media] stale frame cleanup failed for %s: %s",
                                     self.camera_id, window_dir, e)
 
     def _finalize_timelapse_window(self, profile_name: str, window_key: str,
@@ -433,22 +435,22 @@ class CameraRuntime:
         storage_root = Path(self.global_cfg["storage"]["root"])
         frames_dir = storage_root / "timelapse_frames" / self.camera_id / profile_name / window_key
         if not frames_dir.exists():
-            log.debug("[%s][%s] finalize: no frames dir for window %s",
+            log_tl.debug("[%s][%s] finalize: no frames dir for window %s",
                       self.camera_id, profile_name, window_key)
             return
         images = sorted(frames_dir.glob("*.jpg"))
         n = len(images)
         if n < 2:
-            log.debug("[%s][%s] finalize: only %d frames in window %s — skipping encode",
+            log_tl.debug("[%s][%s] finalize: only %d frames in window %s — skipping encode",
                       self.camera_id, profile_name, n, window_key)
             try:
                 shutil.rmtree(str(frames_dir))
-                log.debug("[%s][%s] cleaned sparse frame dir: %s", self.camera_id, profile_name, frames_dir.name)
+                log_tl.debug("[%s][%s] cleaned sparse frame dir: %s", self.camera_id, profile_name, frames_dir.name)
             except Exception as e:
                 log.warning("[%s][%s] cleanup failed: %s", self.camera_id, profile_name, e)
             return
 
-        log.info("[%s][timelapse] encoding window %s/%s (%d frames → %ds @ %dfps)",
+        log_tl.info("[%s][timelapse] encoding window %s/%s (%d frames → %ds @ %dfps)",
                  self.camera_id, profile_name, window_key, n, target_s, target_fps)
         out_dir = storage_root / "timelapse" / self.camera_id
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -458,7 +460,7 @@ class CameraRuntime:
 
         if path:
             size_mb = out_path.stat().st_size / 1024 / 1024 if out_path.exists() else 0
-            log.info("[%s][timelapse] video created: %s (%.1f MB)", self.camera_id, out_path.name, size_mb)
+            log_tl.info("[%s][timelapse] video created: %s (%.1f MB)", self.camera_id, out_path.name, size_mb)
             # Register in event store so the mediathek finds it
             try:
                 rel = out_path.relative_to(storage_root)
@@ -476,19 +478,19 @@ class CameraRuntime:
                     "snapshot_relpath": rel.as_posix(),
                 }
                 self.store.add_event(self.camera_id, event)
-                log.debug("[%s][timelapse] registered in store: %s", self.camera_id, event_id)
+                log_tl.debug("[%s][timelapse] registered in store: %s", self.camera_id, event_id)
             except Exception as e:
-                log.warning("[%s][timelapse] store registration failed: %s", self.camera_id, e)
+                log_tl.warning("[%s][timelapse] store registration failed: %s", self.camera_id, e)
         else:
-            log.warning("[%s][timelapse] encode failed for window %s/%s", self.camera_id, profile_name, window_key)
+            log_tl.warning("[%s][timelapse] encode failed for window %s/%s", self.camera_id, profile_name, window_key)
 
         # Always clean up frames, even if encode failed (prevents unbounded accumulation)
         try:
             shutil.rmtree(str(frames_dir))
-            log.info("[%s][timelapse] cleaned %d frames for window %s/%s",
+            log_tl.info("[%s][timelapse] cleaned %d frames for window %s/%s",
                      self.camera_id, n, profile_name, window_key)
         except Exception as e:
-            log.warning("[%s][timelapse] frame cleanup failed: %s", self.camera_id, e)
+            log_tl.warning("[%s][timelapse] frame cleanup failed: %s", self.camera_id, e)
 
     def _timelapse_loop(self):
         """Legacy single-profile timelapse. Reads latest frame from main loop — no direct camera access."""
@@ -515,9 +517,9 @@ class CameraRuntime:
                     ts = datetime.now().strftime("%H%M%S")
                     out = tl_dir / f"{ts}.jpg"
                     cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
-                    log.debug("[%s] timelapse frame saved: %s (interval=%.0fs)", self.camera_id, out.name, interval_s)
+                    log_tl.debug("[%s] timelapse frame saved: %s (interval=%.0fs)", self.camera_id, out.name, interval_s)
                 except Exception as e:
-                    log.debug("[%s] timelapse frame write error: %s", self.camera_id, e)
+                    log_tl.debug("[%s] timelapse frame write error: %s", self.camera_id, e)
             deadline = time.time() + interval_s
             while self.running and time.time() < deadline:
                 time.sleep(1)
@@ -536,7 +538,7 @@ class CameraRuntime:
             prof = (tl.get("profiles") or {}).get(profile_name) or {}
             if not prof.get("enabled"):
                 if window_key is not None:
-                    log.debug("[%s][%s] profile disabled — resetting window %s", self.camera_id, profile_name, window_key)
+                    log_tl.debug("[%s][%s] profile disabled — resetting window %s", self.camera_id, profile_name, window_key)
                 window_key = None
                 window_start_t = 0.0
                 time.sleep(10)
@@ -557,7 +559,7 @@ class CameraRuntime:
                     # Start first window
                     window_start_t = now_t
                     window_key = now.strftime("%Y-%m-%d_%H%M%S")
-                    log.info("[%s][timelapse] custom window started: %s (period=%ds interval=%.0fs)",
+                    log_tl.info("[%s][timelapse] custom window started: %s (period=%ds interval=%.0fs)",
                              self.camera_id, window_key, period_s, interval_s)
                 elif now_t - window_start_t >= period_s:
                     # Period elapsed — finalize current window and start fresh
@@ -565,7 +567,7 @@ class CameraRuntime:
                     self._finalize_timelapse_window(profile_name, old_key, target_s, target_fps)
                     window_start_t = now_t
                     window_key = now.strftime("%Y-%m-%d_%H%M%S")
-                    log.info("[%s][timelapse] custom new window: %s", self.camera_id, window_key)
+                    log_tl.info("[%s][timelapse] custom new window: %s", self.camera_id, window_key)
             else:
                 # Calendar-based: one window per calendar day
                 new_key = now.strftime("%Y-%m-%d")
@@ -573,11 +575,11 @@ class CameraRuntime:
                     # Day rolled over — finalize the completed day
                     old_key = window_key
                     self._finalize_timelapse_window(profile_name, old_key, target_s, target_fps)
-                    log.info("[%s][timelapse] %s day boundary: finalized %s, starting %s",
+                    log_tl.info("[%s][timelapse] %s day boundary: finalized %s, starting %s",
                              self.camera_id, profile_name, old_key, new_key)
                 if window_key is None or new_key != window_key:
                     window_key = new_key
-                    log.info("[%s][timelapse] %s window: %s (period=%ds interval=%.0fs)",
+                    log_tl.info("[%s][timelapse] %s window: %s (period=%ds interval=%.0fs)",
                              self.camera_id, profile_name, window_key, period_s, interval_s)
 
             # ── Capture frame into the current window directory ───────────────
@@ -592,10 +594,10 @@ class CameraRuntime:
                     ts = now.strftime("%H%M%S_%f")[:10]
                     out = tl_dir / f"{ts}.jpg"
                     cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
-                    log.debug("[%s][%s] frame saved: %s window=%s (%.0fs/frame)",
+                    log_tl.debug("[%s][%s] frame saved: %s window=%s (%.0fs/frame)",
                               self.camera_id, profile_name, out.name, window_key, interval_s)
                 except Exception as e:
-                    log.debug("[%s][%s] frame write error: %s", self.camera_id, profile_name, e)
+                    log_tl.debug("[%s][%s] frame write error: %s", self.camera_id, profile_name, e)
 
             deadline = time.time() + interval_s
             while self.running and time.time() < deadline:
@@ -614,7 +616,7 @@ class CameraRuntime:
                 with self.lock:
                     self.frame = frame
                 if self._error_streak > 0:
-                    log.info("[%s] Stream wiederhergestellt nach %d Fehlern", self.camera_id, self._error_streak)
+                    log_cam.info("[%s] Stream wiederhergestellt nach %d Fehlern", self.camera_id, self._error_streak)
                 self.last_error = None
                 self._error_streak = 0
                 # Apply bottom crop before processing (removes corrupt H.264 bottom strip)
@@ -811,7 +813,7 @@ class CameraRuntime:
                 if self._error_streak == 1:
                     log.debug("[%s] Frame lesen fehlgeschlagen: %s", self.camera_id, e)
                 elif self._error_streak == 5:
-                    log.warning("[%s] Verbindungsprobleme – %d aufeinanderfolgende Fehler: %s", self.camera_id, self._error_streak, e)
+                    log_cam.warning("[%s] Verbindungsprobleme – %d aufeinanderfolgende Fehler: %s", self.camera_id, self._error_streak, e)
                 elif self._error_streak == 15 or (self._error_streak > 15 and self._error_streak % 30 == 0):
                     log.error("[%s] Stream verloren (streak=%d): %s", self.camera_id, self._error_streak, e)
                 try:

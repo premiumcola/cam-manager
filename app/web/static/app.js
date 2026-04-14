@@ -1756,8 +1756,11 @@ byId('wizFinish').onclick=()=>finishWizard();
 // ── Logs ─────────────────────────────────────────────────────────────────────
 function _logSubsystemShort(logger){
   if(!logger) return '';
+  // Handle sub-loggers like camera_runtime.timelapse, camera_runtime.camera
+  if(logger.includes('camera_runtime.timelapse')) return 'tl';
+  if(logger.includes('camera_runtime.camera')) return 'cam';
   const p=logger.split('.').pop()||logger;
-  const MAP={camera_runtime:'cam',timelapse:'tl',telegram_bot:'tg',detectors:'coral',storage:'store',mqtt_service:'mqtt',server:'srv',discovery:'disc'};
+  const MAP={camera_runtime:'runtime',timelapse:'tl',telegram_bot:'tg',detectors:'coral',storage:'store',mqtt_service:'mqtt',server:'srv',discovery:'disc'};
   return MAP[p]||p.slice(0,8);
 }
 async function loadLogs(){
