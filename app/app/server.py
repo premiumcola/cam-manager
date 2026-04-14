@@ -208,6 +208,47 @@ def _migrate_timelapse_events():
 _migrate_timelapse_events()
 
 
+def _generate_missing_thumbnails():
+    """Generate thumbnail .jpg for any timelapse .mp4 that does not have one yet.
+    Runs once on startup in background — safe to re-run, skips if thumb exists."""
+    import threading, cv2 as _cv2
+    def _do():
+        log = logging.getLogger(__name__)
+        tl_base = storage_root / "timelapse"
+        if not tl_base.exists():
+            return
+        count = 0
+        for cam_dir in tl_base.iterdir():
+            if not cam_dir.is_dir():
+                continue
+            for mp4 in cam_dir.glob("*.mp4"):
+                thumb = mp4.with_suffix(".jpg")
+                if thumb.exists():
+                    continue
+                try:
+                    cap = _cv2.VideoCapture(str(mp4))
+                    total = int(cap.get(_cv2.CAP_PROP_FRAME_COUNT))
+                    if total > 0:
+                        cap.set(_cv2.CAP_PROP_POS_FRAMES, total // 2)
+                    ok, frame = cap.read()
+                    cap.release()
+                    if ok and frame is not None:
+                        tw, th = frame.shape[1], frame.shape[0]
+                        if tw > 640:
+                            scale = 640 / tw
+                            frame = _cv2.resize(frame, (640, int(th * scale)))
+                        _cv2.imwrite(str(thumb), frame, [int(_cv2.IMWRITE_JPEG_QUALITY), 80])
+                        count += 1
+                except Exception as e:
+                    log.debug("[thumb] failed for %s: %s", mp4.name, e)
+        if count:
+            log.info("[startup] Generated %d missing timelapse thumbnails", count)
+    threading.Thread(target=_do, daemon=True).start()
+
+
+_generate_missing_thumbnails()
+
+
 @app.get('/')
 def index():
     return render_template('index.html')
@@ -910,9 +951,13 @@ def api_camera_timelapse_list(cam_id):
             except Exception:
                 pass
         # Fallback: derive from filename
+        # Filename patterns: "2026-04-14_020435_custom.mp4" or "2026-04-14_020435_custom_1min-to-10s.mp4"
         parts = mp4.stem.split("_", 2)
         day = parts[0] if parts else mp4.stem
-        period = meta.get("period") or (parts[2] if len(parts) > 2 else "day")
+        period = meta.get("period") or (parts[2].split("_")[0] if len(parts) > 2 else "day")
+        # Thumbnail: same stem as video but .jpg (written by _write_video)
+        thumb = tl_dir / f"{mp4.stem}.jpg"
+        thumb_url = f"/media/{(thumb.relative_to(storage_root)).as_posix()}" if thumb.exists() else None
         files.append({
             "event_id": meta.get("event_id") or f"tl_{mp4.stem}",
             "camera_id": cam_id,
@@ -926,6 +971,7 @@ def api_camera_timelapse_list(cam_id):
             "target_s": meta.get("target_s", 0),
             "frame_count": meta.get("frame_count", 0),
             "url": f"/media/{rel.as_posix()}",
+            "thumb_url": thumb_url,
             "relpath": rel.as_posix(),
             "size_mb": meta.get("size_mb") or round(stat.st_size / 1024 / 1024, 1),
             "mtime": stat.st_mtime,
@@ -942,13 +988,14 @@ def api_camera_timelapse_delete(cam_id, filename):
     if not mp4.exists():
         return jsonify({"ok": False, "error": "not found"}), 404
     mp4.unlink()
-    # Also delete sidecar JSON if present
-    sidecar = mp4.with_suffix(".json")
-    if sidecar.exists():
-        try:
-            sidecar.unlink()
-        except Exception:
-            pass
+    # Also delete sidecar JSON and thumbnail if present
+    for companion_suffix in (".json", ".jpg"):
+        companion = mp4.with_suffix(companion_suffix)
+        if companion.exists():
+            try:
+                companion.unlink()
+            except Exception:
+                pass
     return jsonify({"ok": True})
 
 

@@ -2044,14 +2044,21 @@ function mediaCardHTML(item){
   const isTL=item.type==='timelapse';
   if(isTL){
     const period=_tlPeriodLabel(item);
+    const dayLabel=(item.window_key||item.day||'').substring(0,10);
+    const sizeLabel=item.size_mb!=null?` · ${item.size_mb} MB`:'';
+    const thumbSrc=item.thumb_url||'';
+    const thumbEl=thumbSrc
+      ? `<img src="${esc(thumbSrc)}" alt="preview" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;opacity:.7" loading="lazy" onerror="this.remove()">`
+      : '';
     return `<article class="media-card mmc-tl" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
       <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
-        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">
+        ${thumbEl}
+        <div style="position:relative;z-index:1;width:100%;height:100%;display:flex;align-items:center;justify-content:center">
           <div class="mmc-play-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:#d8b4fe;margin-left:2px"><polygon points="5,3 19,12 5,21"/></svg></div>
         </div>
-        <div class="mmc-meta-bar"><span>${esc(period)}${item.size_mb != null ? ' · ' + item.size_mb + ' MB' : ''}</span></div>
+        <div class="mmc-meta-bar" style="position:relative;z-index:1"><span>${esc(dayLabel)} · ${esc(period)}${sizeLabel}</span></div>
         <div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge">${_TL_FILMSTRIP}Timelapse</span></div>
-        <div class="mmc-actions">
+        <div class="mmc-actions" style="z-index:3">
           <button class="mmc-btn mmc-delete" title="Löschen" onclick="event.stopPropagation();window.deleteTLCard('${esc(item.camera_id||'')}','${esc(item.filename||'')}','${esc(item.event_id||'')}')">✕</button>
         </div>
       </div>

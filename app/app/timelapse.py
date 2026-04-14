@@ -68,7 +68,9 @@ class TimelapseBuilder:
     def _is_valid_frame(img) -> tuple[bool, str]:
         """Validate a decoded frame before it enters a timelapse video.
         Returns (is_valid, reason_if_rejected).
-        Conservative thresholds — night/dark frames pass as long as they have detail."""
+        Conservative thresholds — night/dark and IR (B=G=R) frames pass as long as
+        they have spatial detail. Do NOT reject based on color uniformity: many cameras
+        output grayscale (B=G=R) in nighttime/IR mode and these are fully valid frames."""
         if img is None or img.size == 0:
             return False, "null/empty"
         h, w = img.shape[:2]
@@ -79,32 +81,26 @@ class TimelapseBuilder:
         r = float(img[:, :, 2].mean())
         brightness = (b + g + r) / 3.0
         # Completely black frame
-        if brightness < 3.0:
+        if brightness < 2.0:
             return False, f"too_dark(brightness={brightness:.1f})"
         # Completely white/oversaturated
         if brightness > 253.0:
             return False, f"too_bright(brightness={brightness:.1f})"
-        # Pink/magenta H.265 artifact: heavy red dominance
-        if r > 160 and r > g * 2.0 and r > b * 2.0:
+        # Pink/magenta H.265 artifact: heavy red dominance with no green/blue content
+        if r > 160 and r > g * 2.5 and r > b * 2.5:
             return False, f"pink_artifact(r={r:.0f},g={g:.0f},b={b:.0f})"
-        # Uniform gray/color: > 80% of pixels have channels within ±8 of each other
-        b_ch = img[:, :, 0].astype(np.int16)
-        g_ch = img[:, :, 1].astype(np.int16)
-        r_ch = img[:, :, 2].astype(np.int16)
-        uniform_frac = float(np.mean(
-            (np.abs(r_ch - g_ch) < 8) & (np.abs(r_ch - b_ch) < 8)
-        ))
-        if uniform_frac > 0.85:
-            return False, f"uniform_gray(frac={uniform_frac:.0%})"
-        # No detail at all (completely solid color, even if not gray)
+        # No spatial detail: std < 2.0 means a completely solid/flat frame
+        # (works for both color and grayscale; a solid gray or solid color both fail this)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        if float(gray.std()) < 1.5:
-            return False, "no_detail(std<1.5)"
+        gray_std = float(gray.std())
+        if gray_std < 2.0:
+            return False, f"no_detail(std={gray_std:.2f})"
         return True, ""
 
     def _write_video(self, images: list, out_path: Path,
                      target_duration_s: int, target_fps: int) -> str | None:
         """Subsample images, validate each frame, skip corrupt ones, write to out_path.
+        Also writes a thumbnail .jpg alongside the video (middle valid frame).
         Returns path string or None on failure."""
         total_frames_needed = max(2, target_duration_s * target_fps)
         if len(images) > total_frames_needed:
@@ -149,6 +145,20 @@ class TimelapseBuilder:
         if not out_path.exists():
             log.warning("timelapse: VideoWriter produced no file: %s", out_path)
             return None
+
+        # Write thumbnail: pick middle valid frame, scale to max 640px wide
+        try:
+            thumb_frame = valid_frames[len(valid_frames) // 2]
+            thumb_path = out_path.with_suffix(".jpg")
+            tw, th = thumb_frame.shape[1], thumb_frame.shape[0]
+            if tw > 640:
+                scale = 640 / tw
+                thumb_frame = cv2.resize(thumb_frame, (640, int(th * scale)))
+            cv2.imwrite(str(thumb_path), thumb_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+            log.debug("timelapse: thumbnail written: %s", thumb_path.name)
+        except Exception as e:
+            log.debug("timelapse: thumbnail write failed: %s", e)
+
         return str(out_path)
 
     # ── Naming helpers ────────────────────────────────────────────────────────

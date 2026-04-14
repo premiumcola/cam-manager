@@ -622,15 +622,22 @@ class CameraRuntime:
                 frame = self.frame.copy() if self.frame is not None else None
             if frame is not None and window_key is not None:
                 try:
-                    tl_dir = (Path(self.global_cfg["storage"]["root"])
-                              / "timelapse_frames" / self.camera_id
-                              / profile_name / window_key)
-                    tl_dir.mkdir(parents=True, exist_ok=True)
-                    ts = now.strftime("%H%M%S_%f")[:10]
-                    out = tl_dir / f"{ts}.jpg"
-                    cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
-                    log_tl.debug("[%s][%s] frame saved: %s window=%s (%.0fs/frame)",
-                              self.camera_id, profile_name, out.name, window_key, interval_s)
+                    # Validate frame quality before saving — reject corrupted/blank frames
+                    from .timelapse import TimelapseBuilder as _TLB_check
+                    ok, reason = _TLB_check._is_valid_frame(frame)
+                    if not ok:
+                        log_tl.debug("[%s][%s] frame skipped at capture: %s",
+                                  self.camera_id, profile_name, reason)
+                    else:
+                        tl_dir = (Path(self.global_cfg["storage"]["root"])
+                                  / "timelapse_frames" / self.camera_id
+                                  / profile_name / window_key)
+                        tl_dir.mkdir(parents=True, exist_ok=True)
+                        ts = now.strftime("%H%M%S_%f")[:10]
+                        out = tl_dir / f"{ts}.jpg"
+                        cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
+                        log_tl.debug("[%s][%s] frame saved: %s window=%s (%.0fs/frame)",
+                                  self.camera_id, profile_name, out.name, window_key, interval_s)
                 except Exception as e:
                     log_tl.debug("[%s][%s] frame write error: %s", self.camera_id, profile_name, e)
 

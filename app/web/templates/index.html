@@ -658,18 +658,18 @@
   </div>
 
   <!-- Lightbox modal for media viewer -->
-  <div id="lightboxModal" class="modal hidden" style="padding:0">
-    <div style="position:relative;max-width:96vw;max-height:96vh;display:flex;flex-direction:column;align-items:center">
-      <button id="lightboxClose" type="button" style="position:absolute;top:-14px;right:-14px;z-index:10;width:36px;height:36px;border-radius:50%;border:none;background:#1f3141;color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
-      <div style="position:relative;display:inline-block;min-height:200px;min-width:300px">
-        <img id="lightboxImg" src="" alt="Event" style="max-width:90vw;max-height:76vh;border-radius:18px;object-fit:contain;background:#081119;display:block;transition:transform .18s ease-in,opacity .18s ease-in" />
-        <video id="lightboxVideo" style="display:none;max-width:90vw;max-height:76vh;border-radius:18px;object-fit:contain;background:#080510;outline:none" controls playsinline preload="none"></video>
+  <div id="lightboxModal" class="modal hidden" style="padding:0;align-items:center;justify-content:center">
+    <div id="lightboxInner" style="position:relative;width:min(94vw,1400px);display:flex;flex-direction:column;align-items:center">
+      <button id="lightboxClose" type="button" style="position:absolute;top:-14px;right:-14px;z-index:10;width:36px;height:36px;border-radius:50%;border:none;background:#1f3141;color:#fff;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">✕</button>
+      <div id="lightboxMediaWrap" style="position:relative;width:100%;border-radius:18px;overflow:hidden;background:#080510;min-height:240px">
+        <img id="lightboxImg" src="" alt="Event" style="width:100%;max-height:80vh;object-fit:contain;background:#081119;display:block;transition:transform .18s ease-in,opacity .18s ease-in" />
+        <video id="lightboxVideo" style="display:none;width:100%;max-height:80vh;object-fit:contain;background:#080510;outline:none;border-radius:18px" controls playsinline preload="metadata"></video>
         <button id="lightboxPrev" type="button">‹</button>
         <button id="lightboxNext" type="button">›</button>
-        <div id="lightboxLabelsGrad" style="position:absolute;bottom:0;left:0;width:320px;height:180px;background:radial-gradient(ellipse at bottom left,rgba(0,0,0,0.92) 0%,transparent 70%);border-radius:0 0 0 18px;pointer-events:none;z-index:3"></div>
+        <div id="lightboxLabelsGrad" style="position:absolute;bottom:0;left:0;width:320px;height:180px;background:radial-gradient(ellipse at bottom left,rgba(0,0,0,0.92) 0%,transparent 70%);pointer-events:none;z-index:3"></div>
         <div id="lightboxLabels" style="position:absolute;bottom:14px;left:14px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:auto;z-index:4"></div>
-        <button id="lightboxConfirm" type="button" style="position:absolute;top:28px;right:16px">✓</button>
-        <button id="lightboxDelete" type="button" style="position:absolute;bottom:28px;right:16px">🗑</button>
+        <button id="lightboxConfirm" type="button" style="position:absolute;top:12px;right:12px;z-index:5">✓</button>
+        <button id="lightboxDelete" type="button" style="position:absolute;bottom:12px;right:12px;z-index:5">🗑</button>
       </div>
       <div id="lightboxMeta" style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center"></div>
     </div>
