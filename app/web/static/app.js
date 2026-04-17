@@ -1,5 +1,6 @@
 
 const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),mediaPeriod:'week',tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false};
+let _hmTip=null; // fixed-position heatmap tooltip, bypasses overflow-x:auto clipping
 
 // ── Toast & Confirm helpers ───────────────────────────────────────────────────
 window.showToast=function(msg,type='info'){
@@ -2257,35 +2258,72 @@ function mediaCardHTML(item){
     </div>
   </article>`;
 }
+function _fmtMb(mb){
+  if(!mb||mb<=0) return '0 MB';
+  if(mb>=1024) return (mb/1024).toFixed(1)+' GB';
+  return Math.round(mb)+' MB';
+}
 function renderMediaOverview(){
   const ov=byId('mediaOverview'); if(!ov) return;
   const cams=state.cameras;
   if(!cams.length){ov.innerHTML=''; return;}
   const statsByid={};
   (state.mediaStats||[]).forEach(s=>{ statsByid[s.camera_id||s.id||s.name]=s; });
-  ov.innerHTML=cams.map(c=>{
+
+  const totalStats=(state.mediaStats||[]).reduce((acc,s)=>({
+    size_mb:(acc.size_mb||0)+(s.size_mb||0),
+    event_count:(acc.event_count||0)+(s.event_count||0),
+    jpg_count:(acc.jpg_count||0)+(s.jpg_count||0),
+    timelapse_count:(acc.timelapse_count||0)+(s.timelapse_count||0)
+  }),{size_mb:0,event_count:0,jpg_count:0,timelapse_count:0});
+
+  const allCard=`<div class="moc-card" onclick="openAllMediaDrilldown()">
+    <div class="moc-all-thumb">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="none"><rect x="2" y="7" width="20" height="13" rx="2.5" stroke="#4a6477" stroke-width="1.5" fill="none"/><circle cx="8.5" cy="11.5" r="1.5" fill="#4a6477"/><path d="M15.5 9l-4 4-2-2-3.5 3.5" stroke="#4a6477" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 4h6" stroke="#4a6477" stroke-width="1.5" stroke-linecap="round"/></svg>
+    </div>
+    <div class="moc-body">
+      <div class="moc-name">Alle Medien</div>
+      <div class="moc-desc">${cams.length} Kamera${cams.length!==1?'s':''} · Gesamtarchiv</div>
+      <div class="moc-storage-row">
+        <div class="moc-counts">
+          <span class="moc-count-chip" title="Ereignisse">🎯 ${totalStats.event_count}</span>
+          <span class="moc-count-chip" title="Snapshots">📸 ${totalStats.jpg_count}</span>
+          <span class="moc-count-chip" title="Timelapse-Videos">🎬 ${totalStats.timelapse_count}</span>
+        </div>
+        <div class="moc-storage-val">${_fmtMb(totalStats.size_mb)}</div>
+      </div>
+    </div>
+  </div>`;
+
+  const ts=Date.now();
+  const camCards=cams.map(c=>{
     const s=statsByid[c.id]||{};
     const icon=getCameraIcon(c.name||c.id);
-    // Use stored snapshot as thumbnail; fall back to live camera feed
+    const desc=[c.location,c.group_id].filter(Boolean).join(' · ')||'Kamera';
     const storedSnap=s.latest_snap_url||'';
-    const liveSnap=`/api/camera/${esc(c.id)}/snapshot.jpg?t=${Date.now()}`;
+    const liveSnap=`/api/camera/${encodeURIComponent(c.id)}/snapshot.jpg?t=${ts}`;
     const thumbSrc=storedSnap||liveSnap;
-    const fallbackSrc=storedSnap?liveSnap:'';
-    const onerr=fallbackSrc
-      ?`this.onerror=function(){this.parentElement.innerHTML='<span class=moc-thumb-placeholder>${icon}</span>'};this.src='${esc(fallbackSrc)}'`
-      :`this.parentElement.innerHTML='<span class=moc-thumb-placeholder>${icon}</span>'`;
+    const placeholderInner=`<span style="font-size:48px;opacity:.25">${icon}</span>`;
+    const fallback=storedSnap?`this.onerror=function(){this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'${placeholderInner}',style:'display:flex;align-items:center;justify-content:center;width:100%;height:100%'}))};this.src='${liveSnap}'`
+      :`this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'${placeholderInner}',style:'display:flex;align-items:center;justify-content:center;width:100%;height:100%'}))`;
     return `<div class="moc-card" onclick="openMediaDrilldown('${esc(c.id)}')">
-      <div class="moc-thumb"><img src="${esc(thumbSrc)}" alt="${esc(c.name)}" onerror="${esc(onerr)}" /></div>
-      <div style="min-width:0">
-        <div class="moc-name"><span style="font-size:28px;vertical-align:middle;margin-right:5px;line-height:1">${icon}</span>${esc(c.name)}</div>
-        <div class="moc-counts">
-          <span title="Bewegungsereignisse">🎯 ${s.event_count||0}</span>
-          <span title="Bilder/Snapshots" style="margin-left:7px">📸 ${s.jpg_count||0}</span>
-          <span title="Timelapse-Videos" style="margin-left:7px">🎬 ${s.timelapse_count||0}</span>
+      <div class="moc-thumb"><img src="${esc(thumbSrc)}" alt="${esc(c.name)}" onerror="${esc(fallback)}" loading="lazy"/></div>
+      <div class="moc-body">
+        <div class="moc-name">${icon} ${esc(c.name)}</div>
+        <div class="moc-desc">${esc(desc)}</div>
+        <div class="moc-storage-row">
+          <div class="moc-counts">
+            <span class="moc-count-chip" title="Ereignisse">🎯 ${s.event_count||0}</span>
+            <span class="moc-count-chip" title="Snapshots">📸 ${s.jpg_count||0}</span>
+            <span class="moc-count-chip" title="Timelapse-Videos">🎬 ${s.timelapse_count||0}</span>
+          </div>
+          <div class="moc-storage-val">${_fmtMb(s.size_mb||0)}</div>
         </div>
       </div>
     </div>`;
   }).join('');
+
+  ov.innerHTML=allCard+camCards;
 }
 function _goToPage(n){
   const p=Math.max(0,Math.min(state.mediaTotalPages-1,n));
@@ -2349,6 +2387,25 @@ function renderMediaGrid(){
   window._openMediaItem=id=>{const item=items.find(x=>x.event_id===id); if(item) openLightbox(item);};
 }
 window._tlItems=[];
+async function openAllMediaDrilldown(){
+  state.mediaCamera=null;
+  state.mediaLabels=new Set(); state.mediaPeriod='week'; state.mediaPage=0;
+  window._tlItems=[];
+  syncMediaPills();
+  byId('mediaOverview').style.display='none';
+  byId('mediaDrilldown').style.display='';
+  await loadMedia();
+  const tlAll=[];
+  for(const c of state.cameras){
+    const tlData=await fetch(`/api/camera/${encodeURIComponent(c.id)}/timelapse/list`).then(r=>r.json()).catch(()=>({ok:false,files:[]}));
+    if(tlData.ok&&tlData.files&&tlData.files.length){
+      tlAll.push(...tlData.files.map(f=>({...f,labels:['timelapse']})));
+    }
+  }
+  window._tlItems=tlAll;
+  renderMediaGrid();
+}
+window.openAllMediaDrilldown=openAllMediaDrilldown;
 async function openMediaDrilldown(camId){
   state.mediaCamera=camId;
   state.mediaLabels=new Set(); state.mediaPeriod='week'; state.mediaPage=0;
@@ -2750,6 +2807,26 @@ function _renderStatistik(monthData,dayData){
       <div class="stat-card"><div class="stat-card-title">Top Erkennungen · letzter Monat</div>${topLabels}</div>
     </div>
     <div class="stat-card"><div class="stat-card-title">Letzte 24h · Aktivität nach Stunde</div>${heatmap}</div>`;
+
+  // Wire fixed-position tooltip for heatmap cells (CSS ::after clips inside overflow-x:auto)
+  if(!_hmTip){
+    _hmTip=document.createElement('div');
+    _hmTip.style.cssText='position:fixed;z-index:9999;background:#0d1422;color:#edf4fb;font-size:11px;font-weight:600;padding:4px 9px;border-radius:8px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 10px rgba(0,0,0,.6);display:none;border:1px solid rgba(255,255,255,.08)';
+    document.body.appendChild(_hmTip);
+  }
+  content.querySelectorAll('.stat-hm-cell[data-tip]').forEach(cell=>{
+    cell.addEventListener('mouseenter',e=>{
+      _hmTip.textContent=cell.dataset.tip;
+      _hmTip.style.display='block';
+      _hmTip.style.left=(e.clientX+14)+'px';
+      _hmTip.style.top=(e.clientY-36)+'px';
+    });
+    cell.addEventListener('mousemove',e=>{
+      _hmTip.style.left=(e.clientX+14)+'px';
+      _hmTip.style.top=(e.clientY-36)+'px';
+    });
+    cell.addEventListener('mouseleave',()=>{ _hmTip.style.display='none'; });
+  });
 }
 
 byId('statRefreshBtn')?.addEventListener('click',()=>{ _statLoaded=false; loadStatistik(); });
