@@ -143,7 +143,7 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 .moc-cat-card:hover{background:#2a3248}
 .moc-cat-card:active{opacity:.7}
 .moc-cat-icon{display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.moc-cat-name{font-size:11px;font-weight:600;color:var(--muted);text-align:center;line-height:1.2;word-break:break-word}
+.moc-cat-name{font-size:12px;font-weight:700;color:var(--muted);text-align:center;line-height:1.25;word-break:break-word}
 /* Rescan button scan animation */
 #rescanMediaBtn.scanning svg{animation:spin 1s linear infinite;transform-origin:center}
 /* Timelapse filter pill — violet semantic token */
