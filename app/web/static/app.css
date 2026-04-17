@@ -128,11 +128,13 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 .moc-archive-section{margin-top:20px;padding-top:4px}
 .moc-archive-hdr{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;margin-bottom:10px;padding-top:14px;border-top:1px solid rgba(255,255,255,.06)}
 .moc-archive-count{background:var(--surface);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:600;letter-spacing:0}
-.moc-archive-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px}
-@media(max-width:768px){.moc-archive-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px}}
-.moc-archived{opacity:.75;border:1px solid rgba(255,255,255,.06)}
+.moc-archive-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+@media(max-width:768px){.moc-archive-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px}}
+.moc-archived{opacity:.72;border:1px solid rgba(255,255,255,.06);font-size:12px}
+.moc-archived .moc-card-body{padding:8px 10px}
+.moc-archived .moc-cam-name{font-size:12px}
 .moc-archived:hover{opacity:1;border-color:transparent}
-.moc-arch-thumb{background:#0a0d14}
+.moc-arch-thumb{background:#0a0d14;height:80px}
 /* Timelapse filter pill — violet semantic token */
 .media-pill[data-val="timelapse"]{color:#a855f7;background:rgba(168,85,247,.08);border-color:rgba(168,85,247,.3)}
 .media-pill[data-val="timelapse"]:hover:not(.active){background:rgba(168,85,247,.16);color:#c084fc;border-color:rgba(168,85,247,.5)}
@@ -498,6 +500,9 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .btn-reconnect:active{background:rgba(34,197,94,.4)}
 @keyframes spin-once{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .btn-reconnect.spinning svg{animation:spin-once .5s cubic-bezier(.4,0,.2,1) both}
+.btn-cam-delete{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;border:none;background:rgba(239,68,68,.12);color:rgba(239,68,68,.7);cursor:pointer;transition:background .15s,color .15s;-webkit-tap-highlight-color:transparent;flex-shrink:0}
+.btn-cam-delete:hover{background:rgba(239,68,68,.25);color:#f87171}
+.btn-cam-delete:active{background:rgba(239,68,68,.4)}
 
 /* ── Timelapse mode grid (3 cols desktop → 2 tablet → 1 mobile) ─────────── */
 .tl-modes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}

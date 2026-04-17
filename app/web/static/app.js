@@ -598,6 +598,12 @@ function renderCameraSettings(){
             </svg>
             Verbinden
           </button>
+          <button class="btn-cam-delete" title="Kamera löschen" onclick="event.stopPropagation();_quickDeleteCamera('${esc(c.id)}','${esc(c.name)}')">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="2,4 14,4"/><path d="M5 4V2h6v2"/><path d="M3 4l1 10h8l1-10"/>
+              <line x1="6.5" y1="7" x2="6.5" y2="11"/><line x1="9.5" y1="7" x2="9.5" y2="11"/>
+            </svg>
+          </button>
         </div>
       </div>
     </div>`).join('');
@@ -606,6 +612,14 @@ window._reconnectCam=function(camId,btn){
   btn.classList.add('spinning');
   setTimeout(()=>btn.classList.remove('spinning'),520);
   reloadCamera(camId);
+};
+window._quickDeleteCamera=async function(camId,camName){
+  if(!await showConfirm(`Kamera "${camName}" wirklich löschen?\n\nDie Kamera wird aus der Konfiguration entfernt. Medien bleiben im Speicher erhalten und erscheinen unter "Archivierte Kameras".`)) return;
+  const r=await j(`/api/settings/cameras/${encodeURIComponent(camId)}`,{method:'DELETE'});
+  if(r.event_count>0) showToast(`${r.event_count} gespeicherte Ereignisse bleiben im Archiv erhalten.`,'warn');
+  // Close edit panel if this camera was open
+  if(_currentEditCamId===camId) _restoreEditWrapper();
+  await loadAll();
 };
 
 // ── Whitelist chips ───────────────────────────────────────────────────────────

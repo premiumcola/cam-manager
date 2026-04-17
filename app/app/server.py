@@ -34,6 +34,8 @@ logging.getLogger().setLevel(logging.DEBUG)
 for _noisy in ("urllib3", "werkzeug", "httpx", "httpcore", "telegram"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 
+import socket
+import ipaddress
 from .config_loader import load_config
 from .storage import EventStore
 from .camera_runtime import CameraRuntime
@@ -42,6 +44,17 @@ from .cat_identity import IdentityRegistry
 from .timelapse import TimelapseBuilder
 from .discovery import discover_hosts
 from .settings_store import SettingsStore
+
+
+def _auto_detect_subnet() -> str:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return str(ipaddress.IPv4Network(f"{ip}/24", strict=False))
+    except Exception:
+        return "192.168.1.0/24"
 from .mqtt_service import MQTTService
 
 def _get_build_info() -> dict:
@@ -363,8 +376,11 @@ def api_config():
 
 @app.get('/api/discover')
 def api_discover():
-    subnet = request.args.get('subnet') or get_effective_config().get("server", {}).get("default_discovery_subnet", "192.168.1.0/24")
+    configured = get_effective_config().get("server", {}).get("default_discovery_subnet", "")
+    subnet = request.args.get('subnet') or configured or _auto_detect_subnet()
+    logging.info(f"[discovery] starting scan on subnet={subnet}")
     cameras, total_scanned = discover_hosts(subnet)
+    logging.info(f"[discovery] scan done — {len(cameras)} cameras found out of {total_scanned} hosts")
     return jsonify({"subnet": subnet, "results": cameras, "total_scanned": total_scanned})
 
 
