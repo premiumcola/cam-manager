@@ -50,10 +50,12 @@ const OBJ_SVG={
   alarm:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3C7 3 4 7.5 4 12C4 17 7 19 7 19H17C17 19 20 17 20 12C20 7.5 17 3 12 3Z" fill="#ef4444"/><rect x="11" y="19" width="2" height="2.5" rx=".75" fill="#ef4444"/><rect x="9.5" y="21.5" width="5" height="1.5" rx=".75" fill="#ef4444"/><rect x="11.2" y="8" width="1.6" height="5.5" rx=".75" fill="#fff"/><circle cx="12" cy="15.5" r="1.1" fill="#fff"/></svg>`
 };
 function objBubble(label,size=22){
-  const svg=OBJ_SVG[label]||OBJ_SVG.alarm;
+  const raw=OBJ_SVG[label]||OBJ_SVG.alarm;
+  const svgPx=Math.round(size*0.70);
+  const svg=raw.replace('width="16" height="16"',`width="${svgPx}" height="${svgPx}"`);
   const c=colors[label]||colors.unknown;
   const r=Math.max(6,Math.round(size*0.38));
-  return `<span style="width:${size}px;height:${size}px;border-radius:${r}px;background:${c}22;border:1px solid ${c}55;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${svg}</span>`;
+  return `<span style="width:${size}px;height:${size}px;border-radius:${r}px;background:${c}40;border:1.5px solid ${c}80;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${svg}</span>`;
 }
 const TL_LABELS=['person','cat','bird','car','motion','alarm'];
 function _renderLbLabels(){
@@ -62,7 +64,8 @@ function _renderLbLabels(){
   const active=new Set(_lbItem.labels||[]);
   el.innerHTML=TL_LABELS.map(l=>{
     const isActive=active.has(l);
-    const svg=OBJ_SVG[l]||OBJ_SVG.alarm;
+    const rawSvg=OBJ_SVG[l]||OBJ_SVG.alarm;
+    const svg=rawSvg.replace('width="16" height="16"','width="30" height="30"');
     const title=OBJ_LABEL[l]||l;
     return `<span data-label="${l}" title="${title}" style="width:54px;height:54px;border-radius:50%;background:${isActive?'rgba(0,0,0,0.75)':'rgba(0,0,0,0.60)'};box-shadow:0 1px 6px rgba(0,0,0,0.5);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .15s,opacity .15s;opacity:${isActive?'1':'0.65'};border:2px solid ${isActive?'rgba(255,255,255,0.35)':'transparent'}">${svg}</span>`;
   }).join('');
@@ -246,14 +249,29 @@ function _mediaPeriodParams(){
   else{const d=new Date(now);d.setDate(d.getDate()-7);start=d.toISOString().slice(0,10)+'T00:00:00';}
   return `&start=${start}&end=${end}`;
 }
-const MEDIA_PAGE_SIZE=48;
+function _dynPageSize(){
+  const isMobile=window.innerWidth<=768;
+  const GAP=10,MIN_CARD=160;
+  const mediaEl=byId('media');
+  let w=mediaEl&&mediaEl.clientWidth>MIN_CARD?mediaEl.clientWidth-24:window.innerWidth-(isMobile?24:320);
+  w=Math.max(MIN_CARD+1,w);
+  const cols=Math.max(1,Math.floor((w+GAP)/(MIN_CARD+GAP)));
+  const cardW=(w-(cols-1)*GAP)/cols;
+  const cardH=Math.round(cardW*10/16)+36;
+  const oh=(isMobile?56:0)+52+44+100+52+24;
+  const avail=window.innerHeight-oh;
+  const rows=Math.min(5,Math.max(1,Math.floor(avail/(cardH+GAP))));
+  return Math.max(6,rows*cols);
+}
+let _cachedPageSize=0;
 async function loadMedia(){
   // Timelapse-only shortcut: no API call needed, renderMediaGrid uses window._tlItems
   const labels=state.mediaLabels;
   const onlyTL=labels.size===1&&labels.has('timelapse');
   if(onlyTL){state.media=[];state.mediaTotalPages=1;return;}
   const page=state.mediaPage||0;
-  const offset=page*MEDIA_PAGE_SIZE;
+  const ps=_dynPageSize(); _cachedPageSize=ps;
+  const offset=page*ps;
   state.media=[];
   const cams=state.mediaCamera?[state.mediaCamera]:state.cameras.map(c=>c.id);
   const periodParams=_mediaPeriodParams();
@@ -264,14 +282,14 @@ async function loadMedia(){
   let totalCount=0;
   const allItems=[];
   for(const camId of cams){
-    const data=await j(`/api/camera/${camId}/media?limit=${MEDIA_PAGE_SIZE}&offset=${offset}${labelParam}${periodParams}`);
+    const data=await j(`/api/camera/${camId}/media?limit=${ps}&offset=${offset}${labelParam}${periodParams}`);
     const items=data.items||[];
     totalCount+=data.total_count||items.length;
     for(const item of items) allItems.push({...item,camera_id:camId});
   }
   allItems.sort((a,b)=>(b.time||'').localeCompare(a.time||''));
   state.media=allItems;
-  state.mediaTotalPages=Math.max(1,Math.ceil(totalCount/MEDIA_PAGE_SIZE));
+  state.mediaTotalPages=Math.max(1,Math.ceil(totalCount/ps));
   state.mediaHasMore=false;
 }
 
@@ -1078,9 +1096,6 @@ function hydrateSettings(){
   _updateCoralDeviceInfo();
   // Hydrate media settings form
   const storageSec=state.config.storage||{};
-  const mlVal=storageSec.media_limit_default||24;
-  const mlEl=byId('ms_media_limit'); if(mlEl){ mlEl.value=mlVal; }
-  const mlLbl=byId('ms_media_limit_val'); if(mlLbl) mlLbl.textContent=mlVal;
   const rdVal=storageSec.retention_days||14;
   const rdEl=byId('ms_retention_days'); if(rdEl) rdEl.value=rdVal;
   const rdLbl=byId('ms_retention_days_val'); if(rdLbl) rdLbl.textContent=rdVal+' Tage';
@@ -1907,7 +1922,7 @@ byId('purgeOrphansBtn').onclick=async()=>{
 byId('mediaSettingsForm').onsubmit=async(e)=>{
   e.preventDefault();
   const f=e.target.elements;
-  const payload={storage:{retention_days:Number(f['retention_days'].value||14),media_limit_default:Number(f['media_limit_default'].value||24),auto_cleanup_enabled:!!(f['auto_cleanup_enabled']?.checked)}};
+  const payload={storage:{retention_days:Number(f['retention_days'].value||14),auto_cleanup_enabled:!!(f['auto_cleanup_enabled']?.checked)}};
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   await loadAll();
 };
@@ -3020,6 +3035,17 @@ new IntersectionObserver((entries)=>{
   redirectTl();
   window.addEventListener('hashchange',redirectTl);
 })();
+
+let _mediaResizeTimer=0;
+window.addEventListener('resize',()=>{
+  clearTimeout(_mediaResizeTimer);
+  _mediaResizeTimer=setTimeout(()=>{
+    if(byId('mediaDrilldown')?.style.display!=='none'){
+      const ns=_dynPageSize();
+      if(Math.abs(ns-_cachedPageSize)>=4){state.mediaPage=0;loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();});}
+    }
+  },400);
+});
 
 loadAll().then(()=>{startLiveUpdate(); loadAchievements();});
 loadLogs();

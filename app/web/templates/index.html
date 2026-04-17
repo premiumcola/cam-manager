@@ -133,13 +133,12 @@
         <!-- 1. Overview  2. Per-camera bars  3. Top detections -->
         <div id="statContent"><div class="stat-empty" style="padding:32px 0">Abschnitt öffnen, um Daten zu laden …</div></div>
         <!-- 4. Timeline — rendered by renderTimeline(), not overwritten by _renderStatistik -->
-        <div class="stat-tl-block">
-          <div class="stat-tl-hdr">Timeline</div>
-          <div id="timelineContainer" class="tl-container"></div>
-          <div style="margin-top:10px;padding:0 4px">
-            <div style="font-size:11px;font-style:italic;color:var(--muted);margin-bottom:6px">Legende · Filter</div>
-            <div id="tlLegend" class="timeline-legend" style="margin:0;padding:0"></div>
+        <div class="stat-card stat-tl-card">
+          <div class="stat-tl-card-hdr">
+            <span class="stat-card-title">Timeline</span>
+            <div id="tlLegend" class="timeline-legend stat-tl-legend-inline"></div>
           </div>
+          <div id="timelineContainer" class="tl-container"></div>
         </div>
         <!-- 5. Last 24h heatmap — rendered by _renderStatistik into this container -->
         <div id="statHeatmapBlock"></div>
@@ -185,15 +184,7 @@
           </button>
           <div class="set-bd"><div class="set-inner">
             <form id="mediaSettingsForm" class="form" style="padding-top:8px">
-              <div class="field-help" style="margin-bottom:10px">Maximale Anzahl Medien die gleichzeitig in der Mediathek angezeigt werden.</div>
               <div style="display:grid;gap:10px;margin-bottom:10px">
-                <div>
-                  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-                    <span style="font-size:13px;color:var(--muted)">Medien pro Seite</span>
-                    <span id="ms_media_limit_val" style="font-size:13px;font-weight:700;color:var(--text)">24</span>
-                  </div>
-                  <input id="ms_media_limit" name="media_limit_default" type="range" min="12" max="200" step="4" style="width:100%;accent-color:var(--accent)" oninput="byId('ms_media_limit_val').textContent=this.value" />
-                </div>
                 <div>
                   <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
                     <span style="font-size:13px;color:var(--muted)">Aufbewahrung</span>
