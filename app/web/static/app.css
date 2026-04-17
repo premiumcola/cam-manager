@@ -130,11 +130,22 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 .moc-archive-count{background:var(--surface);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:600;letter-spacing:0}
 .moc-archive-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 @media(max-width:768px){.moc-archive-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px}}
-.moc-archived{opacity:.72;border:1px solid rgba(255,255,255,.06);font-size:12px}
+.moc-archived{opacity:.52;border:1px solid rgba(255,255,255,.04);font-size:12px;background:#0d1220;filter:saturate(.55)}
 .moc-archived .moc-body{padding:8px 10px}
 .moc-archived .moc-cam-name{font-size:12px}
-.moc-archived:hover{opacity:1;border-color:transparent}
-.moc-arch-thumb{background:#0a0d14;height:80px}
+.moc-archived:hover{opacity:.82;filter:saturate(.9);border-color:transparent}
+.moc-arch-thumb{background:#080c14;height:80px}
+/* Category section */
+.moc-cat-section{margin-top:18px;padding-top:4px}
+.moc-cat-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}
+@media(max-width:768px){.moc-cat-grid{grid-template-columns:repeat(3,1fr);gap:6px}}
+.moc-cat-card{background:var(--surface);border-radius:12px;padding:10px 8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;transition:background .15s,opacity .15s;min-height:56px;-webkit-tap-highlight-color:transparent;overflow:hidden}
+.moc-cat-card:hover{background:#2a3248}
+.moc-cat-card:active{opacity:.7}
+.moc-cat-icon{display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.moc-cat-name{font-size:11px;font-weight:600;color:var(--muted);text-align:center;line-height:1.2;white-space:nowrap}
+/* Rescan button scan animation */
+#rescanMediaBtn.scanning svg{animation:spin 1s linear infinite;transform-origin:center}
 /* Timelapse filter pill — violet semantic token */
 .media-pill[data-val="timelapse"]{color:#a855f7;background:rgba(168,85,247,.08);border-color:rgba(168,85,247,.3)}
 .media-pill[data-val="timelapse"]:hover:not(.active){background:rgba(168,85,247,.16);color:#c084fc;border-color:rgba(168,85,247,.5)}
