@@ -583,48 +583,81 @@ def api_wizard_complete():
 
 @app.get('/api/media/storage-stats')
 def api_media_storage_stats():
-    result = []
+    import json as _json
     events_dir = storage_root / "motion_detection"
-    for cam in get_effective_config().get("cameras", []):
-        cam_dir = events_dir / cam["id"]
+    tl_root = storage_root / "timelapse"
+    active_cams = get_effective_config().get("cameras", [])
+    active_ids = {c["id"] for c in active_cams}
+
+    def _cam_stats_dict(cam_id: str, name_hint: str = "") -> dict:
         size_bytes = 0
         jpg_count = 0
         json_count = 0
+        latest_snap_url = None
+        resolved_name = name_hint or cam_id
+        cam_dir = events_dir / cam_id
         if cam_dir.exists():
-            for pattern in ("*.jpg", "*.jpeg", "*.mp4"):
+            for pattern in ("*.jpg", "*.jpeg"):
                 for p in cam_dir.rglob(pattern):
                     try:
                         size_bytes += p.stat().st_size
-                        if pattern != "*.mp4":
-                            jpg_count += 1
+                        jpg_count += 1
                     except Exception:
                         pass
             json_count = len(list(cam_dir.rglob("*.json")))
-        # Find latest stored snapshot for thumbnail fallback
-        latest_snap_url = None
-        if cam_dir.exists():
-            import json as _json
             for jf in sorted(cam_dir.rglob("*.json"), reverse=True):
                 try:
                     ev = _json.loads(jf.read_text(encoding="utf-8"))
+                    if resolved_name == cam_id:
+                        resolved_name = ev.get("camera_name", cam_id)
                     rel = ev.get("snapshot_relpath")
-                    if rel and (storage_root / rel).exists():
+                    if not latest_snap_url and rel and (storage_root / rel).exists():
                         latest_snap_url = f"/media/{rel}"
+                    if resolved_name != cam_id and latest_snap_url:
                         break
                 except Exception:
                     continue
-        timelapse_dir = storage_root / "timelapse" / cam["id"]
-        timelapse_count = len(list(timelapse_dir.glob("*.mp4"))) if timelapse_dir.exists() else 0
-        result.append({
-            "id": cam["id"],
-            "name": cam.get("name", cam["id"]),
+        tl_dir = tl_root / cam_id
+        tl_count = 0
+        if tl_dir.exists():
+            tl_count = len(list(tl_dir.glob("*.mp4")))
+            for p in tl_dir.rglob("*"):
+                try:
+                    if p.is_file():
+                        size_bytes += p.stat().st_size
+                except Exception:
+                    pass
+        return {
+            "id": cam_id,
+            "name": resolved_name,
             "size_mb": round(size_bytes / 1024 / 1024, 1),
             "jpg_count": jpg_count,
             "event_count": json_count,
-            "timelapse_count": timelapse_count,
+            "timelapse_count": tl_count,
             "latest_snap_url": latest_snap_url,
-        })
-    return jsonify({"cameras": result})
+        }
+
+    result = [_cam_stats_dict(c["id"], name_hint=c.get("name", c["id"])) for c in active_cams]
+
+    # Archived: media folders for cameras no longer in active config
+    archived = []
+    seen = set()
+    if events_dir.exists():
+        for d in sorted(events_dir.iterdir()):
+            if not d.is_dir() or d.name in active_ids:
+                continue
+            s = _cam_stats_dict(d.name)
+            if s["jpg_count"] or s["event_count"] or s["timelapse_count"]:
+                archived.append(s)
+                seen.add(d.name)
+    if tl_root.exists():
+        for d in sorted(tl_root.iterdir()):
+            if not d.is_dir() or d.name in active_ids or d.name in seen:
+                continue
+            if any(d.glob("*.mp4")):
+                archived.append(_cam_stats_dict(d.name))
+
+    return jsonify({"cameras": result, "archived": archived})
 
 
 @app.post('/api/media/rescan')
