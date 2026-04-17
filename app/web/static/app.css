@@ -23,7 +23,7 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 @media(max-width:900px){.cam-grid-2,.cam-grid-4,.cam-grid-n{grid-template-columns:1fr}}
 
 /* Card = just the video frame */
-.cv-card{border-radius:18px;overflow:hidden;cursor:pointer;background:#0a0e1a;transition:transform .18s,box-shadow .18s;position:relative;min-width:0}
+.cv-card{border-radius:18px;overflow:hidden;cursor:pointer;background:#0a0e1a;transition:transform .18s,box-shadow .18s;position:relative;min-width:0;contain:paint}
 .cv-card:hover{transform:scale(1.012);box-shadow:0 12px 40px rgba(0,0,0,.55);z-index:1}
 .cv-frame{position:relative;aspect-ratio:16/9;overflow:hidden}
 .cv-sq-runner{position:relative;width:100%;height:90px;overflow:hidden;background:rgba(0,0,0,0.2);border-radius:12px}
@@ -486,8 +486,8 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 @keyframes spin-once{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 .btn-reconnect.spinning svg{animation:spin-once .5s cubic-bezier(.4,0,.2,1) both}
 
-/* ── Timelapse 4-mode grid ───────────────────────────────────────────────── */
-.tl-modes-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+/* ── Timelapse mode grid (3 cols desktop → 2 tablet → 1 mobile) ─────────── */
+.tl-modes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
 @media(max-width:900px){.tl-modes-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:480px){.tl-modes-grid{grid-template-columns:1fr}}
 .tl-mode-col{border-radius:12px;background:var(--surface);padding:12px 14px;border:1.5px solid rgba(255,255,255,.06);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:9px}
@@ -495,7 +495,9 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .tl-mode-col-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .tl-mode-col-name{font-weight:700;font-size:13px;line-height:1.2}
 .tl-mode-col-period{font-size:10px;color:#a855f7;margin-top:2px}
-.tl-mode-col-desc{font-size:11px;color:var(--muted);line-height:1.45;min-height:32px}
+.tl-mode-col-desc{font-size:11px;color:var(--muted);line-height:1.45;min-height:40px}
+.tl-desc-line{margin-bottom:3px}
+.tl-desc-result{color:#a855f7;font-weight:700}
 
 /* ── Group & Telegram panels: content inset ─────────────────────────────── */
 .tg-panels-wrap{border-radius:14px;background:var(--bg);padding:12px 14px;margin-top:4px}
