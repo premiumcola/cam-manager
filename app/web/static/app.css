@@ -131,7 +131,7 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 .moc-archive-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 @media(max-width:768px){.moc-archive-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px}}
 .moc-archived{opacity:.72;border:1px solid rgba(255,255,255,.06);font-size:12px}
-.moc-archived .moc-card-body{padding:8px 10px}
+.moc-archived .moc-body{padding:8px 10px}
 .moc-archived .moc-cam-name{font-size:12px}
 .moc-archived:hover{opacity:1;border-color:transparent}
 .moc-arch-thumb{background:#0a0d14;height:80px}

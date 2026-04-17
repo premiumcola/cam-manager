@@ -615,11 +615,12 @@ window._reconnectCam=function(camId,btn){
 };
 window._quickDeleteCamera=async function(camId,camName){
   if(!await showConfirm(`Kamera "${camName}" wirklich löschen?\n\nDie Kamera wird aus der Konfiguration entfernt. Medien bleiben im Speicher erhalten und erscheinen unter "Archivierte Kameras".`)) return;
-  const r=await j(`/api/settings/cameras/${encodeURIComponent(camId)}`,{method:'DELETE'});
-  if(r.event_count>0) showToast(`${r.event_count} gespeicherte Ereignisse bleiben im Archiv erhalten.`,'warn');
-  // Close edit panel if this camera was open
-  if(_currentEditCamId===camId) _restoreEditWrapper();
-  await loadAll();
+  try{
+    const r=await j(`/api/settings/cameras/${encodeURIComponent(camId)}`,{method:'DELETE'});
+    if(r.event_count>0) showToast(`${r.event_count} gespeicherte Ereignisse bleiben im Archiv erhalten.`,'warn');
+    if(_currentEditCamId===camId) _restoreEditWrapper();
+    await loadAll();
+  }catch(e){showToast('Fehler beim Löschen: '+esc(e.message||e),'error');}
 };
 
 // ── Whitelist chips ───────────────────────────────────────────────────────────
