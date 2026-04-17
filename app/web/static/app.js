@@ -1603,12 +1603,12 @@ async function importConfig(format){ const content=byId('importBox').value.trim(
 
 // ── Timelapse Settings ────────────────────────────────────────────────────────
 const _TL_PROFILES_DEF=[
-  {key:'daily',     label:'Täglich',           defaultPeriod:86400,    defaultTarget:60},
-  {key:'weekly',    label:'Wöchentlich',        defaultPeriod:604800,   defaultTarget:180},
-  {key:'monthly',   label:'Monatlich',          defaultPeriod:2592000,  defaultTarget:300},
-  {key:'quarterly', label:'Quartal',            defaultPeriod:7776000,  defaultTarget:600},
-  {key:'yearly',    label:'Jährlich',           defaultPeriod:31536000, defaultTarget:900},
-  {key:'custom',    label:'Benutzerdefiniert',  defaultPeriod:3600,     defaultTarget:30},
+  {key:'daily',     label:'Täglich',          defaultPeriod:86400,    defaultTarget:60,  minTarget:10, maxTarget:180},
+  {key:'weekly',    label:'Wöchentlich',       defaultPeriod:604800,   defaultTarget:120, minTarget:30, maxTarget:360},
+  {key:'monthly',   label:'Monatlich',         defaultPeriod:2592000,  defaultTarget:300, minTarget:60, maxTarget:600},
+  {key:'quarterly', label:'Quartal',           defaultPeriod:7776000,  defaultTarget:600, minTarget:120,maxTarget:900},
+  {key:'yearly',    label:'Jährlich',          defaultPeriod:31536000, defaultTarget:900, minTarget:300,maxTarget:900},
+  {key:'custom',    label:'Benutzerdefiniert', defaultPeriod:3600,     defaultTarget:30,  minTarget:10, maxTarget:900},
 ];
 const _TL_PERIOD_OPTIONS=[
   {v:900,      l:'15 Min'},
@@ -1632,9 +1632,9 @@ function _tlSpeedupLabel(v){
   return v+'×';
 }
 /* Custom inline SVG icon set for timelapse compact cards — black/white/violet only */
-const _TL_ICO_SPAN=`<svg width="14" height="12" viewBox="0 0 14 12" fill="none" aria-hidden="true"><rect x="0.75" y="0.75" width="2" height="10.5" rx="1" fill="currentColor"/><line x1="3.5" y1="6" x2="7" y2="6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><polygon points="7,3 13.5,6 7,9" fill="currentColor"/></svg>`;
-const _TL_ICO_FRAMES=`<svg width="13" height="11" viewBox="0 0 13 11" fill="none" aria-hidden="true"><rect x="2.5" y="0.75" width="8" height="9.5" rx="1.2" stroke="currentColor" stroke-width="1.5"/><rect x="0.5" y="2.25" width="2" height="1.75" rx="0.5" fill="currentColor"/><rect x="0.5" y="7" width="2" height="1.75" rx="0.5" fill="currentColor"/><rect x="10.5" y="2.25" width="2" height="1.75" rx="0.5" fill="currentColor"/><rect x="10.5" y="7" width="2" height="1.75" rx="0.5" fill="currentColor"/></svg>`;
-const _TL_ICO_SPEED=`<svg width="12" height="11" viewBox="0 0 12 11" fill="none" aria-hidden="true"><path d="M1 1.25L5 5.5L1 9.75" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 1.25L10 5.5L6 9.75" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const _TL_ICO_SPAN=`<svg width="16" height="14" viewBox="0 0 14 12" fill="none" aria-hidden="true"><rect x="0.75" y="0.75" width="2" height="10.5" rx="1" fill="currentColor"/><line x1="3.5" y1="6" x2="7" y2="6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><polygon points="7,3 13.5,6 7,9" fill="currentColor"/></svg>`;
+const _TL_ICO_FRAMES=`<svg width="15" height="13" viewBox="0 0 13 11" fill="none" aria-hidden="true"><rect x="2.5" y="0.75" width="8" height="9.5" rx="1.2" stroke="currentColor" stroke-width="1.5"/><rect x="0.5" y="2.25" width="2" height="1.75" rx="0.5" fill="currentColor"/><rect x="0.5" y="7" width="2" height="1.75" rx="0.5" fill="currentColor"/><rect x="10.5" y="2.25" width="2" height="1.75" rx="0.5" fill="currentColor"/><rect x="10.5" y="7" width="2" height="1.75" rx="0.5" fill="currentColor"/></svg>`;
+const _TL_ICO_SPEED=`<svg width="14" height="13" viewBox="0 0 12 11" fill="none" aria-hidden="true"><path d="M1 1.25L5 5.5L1 9.75" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 1.25L10 5.5L6 9.75" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 function _tlIntervalLabel(interval_s){
   if(interval_s<60) return interval_s+'s';
   if(interval_s<3600) return Math.round(interval_s/60)+'min';
@@ -1665,7 +1665,7 @@ function _renderTlCameraList(cameras){
     const profs=(cam.timelapse||{}).profiles||{};
     const anyOn=_TL_PROFILES_DEF.some(p=>profs[p.key]?.enabled);
     return `<button type="button" class="sec-tab-btn${i===0?' active':''}" id="tlTab_${esc(cam.id)}" onclick="selectTlCam('${esc(cam.id)}')">
-      ${getCameraIcon(cam.name)} ${esc(cam.name)}${anyOn?' <span style="font-size:9px;vertical-align:middle;margin-left:3px;color:#d8b4fe">●</span>':''}
+      ${getCameraIcon(cam.name)} ${esc(cam.name)}
     </button>`;
   }).join('');
   return `<div class="sec-tabs" id="tlCamTabs" style="margin-bottom:0">${tabs}</div>
@@ -1681,11 +1681,12 @@ function _renderTlModesGrid(cam){
     const targetS=prof.target_seconds??p.defaultTarget;
     const periodS=prof.period_seconds??p.defaultPeriod;
     const isCustom=p.key==='custom';
+    const minT=p.minTarget||10, maxT=p.maxTarget||900;
+    const clampedTarget=Math.max(minT,Math.min(maxT,targetS));
     return `<div class="tl-mode-col${enabled?' tl-mode-col--on':''}" id="tlProfCard_${esc(cam.id)}_${p.key}">
       <div class="tl-mode-col-head">
         <div>
           <div class="tl-mode-col-name">${esc(p.label)}</div>
-          ${!isCustom?`<div class="tl-mode-col-period">${_tlPeriodLabel(periodS)}</div>`:''}
         </div>
         <label class="switch switch-sm" onclick="event.stopPropagation()">
           <input type="checkbox" id="tlProf_${esc(cam.id)}_${p.key}" ${enabled?'checked':''}
@@ -1693,12 +1694,12 @@ function _renderTlModesGrid(cam){
           <span class="slider"></span>
         </label>
       </div>
-      <div class="tl-mode-col-desc" id="tlProfDesc_${esc(cam.id)}_${p.key}">${_tlResultDesc(periodS,targetS,fps)}</div>
+      <div class="tl-mode-col-desc" id="tlProfDesc_${esc(cam.id)}_${p.key}">${_tlResultDesc(periodS,clampedTarget,fps)}</div>
       <div class="field-wrap">
         <div style="display:flex;align-items:center;gap:8px">
-          <input type="range" id="tlProfTarget_${esc(cam.id)}_${p.key}" min="10" max="900" step="10" value="${Math.min(targetS,900)}" style="flex:1;accent-color:#a855f7"
+          <input type="range" id="tlProfTarget_${esc(cam.id)}_${p.key}" min="${minT}" max="${maxT}" step="10" value="${clampedTarget}" style="flex:1;accent-color:#a855f7"
             oninput="_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" />
-          <span id="tlProfTargetLbl_${esc(cam.id)}_${p.key}" style="font-size:11px;color:#a855f7;font-weight:700;min-width:36px;text-align:right">${targetS}s</span>
+          <span id="tlProfTargetLbl_${esc(cam.id)}_${p.key}" style="font-size:11px;color:#a855f7;font-weight:700;min-width:36px;text-align:right">${clampedTarget}s</span>
         </div>
         <span class="field-label">Zieldauer Video</span>
       </div>
@@ -1736,7 +1737,8 @@ function _tlResultDesc(periodS,targetS,fps){
   const periodLabel=_tlPeriodLabel(pN);
   const intervalLabel=_tlIntervalLabel(interval);
   const speedup=_tlSpeedupLabel(Math.round(pN/Math.max(1,tN)));
-  return `<div class="tl-drow"><span class="tl-drow-ico">${_TL_ICO_SPAN}</span><span class="tl-drow-text">${periodLabel} → ${tN}s Video</span></div><div class="tl-drow"><span class="tl-drow-ico">${_TL_ICO_FRAMES}</span><span class="tl-drow-text">~${totalFrames} Frames · ~${intervalLabel}</span></div><div class="tl-drow tl-drow-accent"><span class="tl-drow-ico">${_TL_ICO_SPEED}</span><span class="tl-drow-text">${speedup} · ${fN}fps</span></div>`;
+  const comprPct=(Math.floor(100*(1-tN/Math.max(1,pN))*100)/100).toFixed(2).replace('.',',');
+  return `<div class="tl-drow"><span class="tl-drow-ico">${_TL_ICO_SPAN}</span><span class="tl-drow-text">${periodLabel} mit ${intervalLabel} → ${tN}s Video (${fN} fps)</span></div><div class="tl-drow"><span class="tl-drow-ico">${_TL_ICO_FRAMES}</span><span class="tl-drow-text">${totalFrames} frames → Jede ${intervalLabel} ein Foto</span></div><div class="tl-drow tl-drow-accent"><span class="tl-drow-ico">${_TL_ICO_SPEED}</span><span class="tl-drow-text">${speedup} · Kompression ${comprPct}%</span></div>`;
 }
 // _renderTlProfileCards replaced by _renderTlModesGrid (4-column grid)
 window._tlRefreshDesc=function(camId,profKey,fps){
