@@ -483,6 +483,9 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 /* tooltip handled by JS _hmTip (position:fixed) to avoid overflow-x:auto clipping */
 .stat-tl-block{margin-top:12px}
 .stat-tl-hdr{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);padding:4px 0 10px}
+.stat-drillable{cursor:pointer;border-radius:8px;transition:background .12s,opacity .12s}
+.stat-drillable:hover{background:rgba(255,255,255,.04)}
+.stat-drillable:active{opacity:.7}
 
 /* ── Shared expandable section tab pattern ────────────────────────────────── */
 .sec-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:4px 0 12px}

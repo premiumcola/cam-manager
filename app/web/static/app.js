@@ -1,6 +1,7 @@
 
 const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),mediaPeriod:'week',tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false};
 let _hmTip=null; // fixed-position heatmap tooltip, bypasses overflow-x:auto clipping
+const STAT_MEDIA_DRILLDOWN=true;
 
 // ── Toast & Confirm helpers ───────────────────────────────────────────────────
 window.showToast=function(msg,type='info'){
@@ -480,7 +481,9 @@ function renderTimeline(){
     const camIcon=getCameraIcon(camName);
     // TASK 3: camera label with icon, 15px bold, extra margin for 2nd+ block
     html+=`<div class="tl-cam-block${ti>0?' tl-cam-block--notfirst':''}">`;
-    html+=`<div class="tl-cam-header"><span class="tl-cam-icon">${camIcon}</span><span class="tl-cam-name">${esc(camName)}</span></div>`;
+    const tlHdrCls=STAT_MEDIA_DRILLDOWN?'tl-cam-header stat-drillable':'tl-cam-header';
+    const tlHdrClick=STAT_MEDIA_DRILLDOWN?`onclick="_statOpenMedia('${esc(tr.camera_id)}','')"`:'' ;
+    html+=`<div class="${tlHdrCls}" ${tlHdrClick}><span class="tl-cam-icon">${camIcon}</span><span class="tl-cam-name">${esc(camName)}</span></div>`;
     // TASK 4: sunken pool wrapper with vertical grid lines
     html+=`<div class="tl-lanes-wrap">`;
     for(let k=1;k<5;k++) html+=`<div class="tl-vgrid" style="left:calc(36px + (100% - 36px)*${k}/5)"></div>`;
@@ -2872,6 +2875,15 @@ async function loadStatistik(){
   _renderStatistik(monthData,dayData);
 }
 
+function _statOpenMedia(camId,label){
+  if(camId){ state.mediaCamera=camId; }
+  if(label){ state.mediaLabels=new Set([label]); } else { state.mediaLabels=new Set(); }
+  const mediaSection=document.querySelector('#media');
+  if(!mediaSection) return;
+  mediaSection.scrollIntoView({behavior:'smooth',block:'start'});
+  setTimeout(()=>{ loadMedia(); },400);
+}
+
 function _renderStatistik(monthData,dayData){
   const content=byId('statContent'); if(!content) return;
   const now=new Date();
@@ -2912,7 +2924,9 @@ function _renderStatistik(monthData,dayData){
     ?cameras.map(c=>{
       const cnt=camCounts[c.id]||0;
       const pct=Math.round(cnt/maxCam*100);
-      return `<div class="stat-cam-bar-row">
+      const rowCls=STAT_MEDIA_DRILLDOWN?'stat-cam-bar-row stat-drillable':'stat-cam-bar-row';
+      const rowClick=STAT_MEDIA_DRILLDOWN?`onclick="_statOpenMedia('${esc(c.id)}','')"`:'' ;
+      return `<div class="${rowCls}" ${rowClick}>
         <div class="stat-cam-bar-name" title="${esc(c.name||c.id)}">${getCameraIcon(c.name||c.id)}&nbsp;${esc(c.name||c.id)}</div>
         <div class="stat-cam-bar-track"><div class="stat-cam-bar-fill" style="width:${pct}%"></div></div>
         <div class="stat-cam-bar-count">${cnt}</div>
@@ -2923,7 +2937,9 @@ function _renderStatistik(monthData,dayData){
     ?top3.map(([label,cnt])=>{
       const pct=Math.round(cnt/totalLabels*100);
       const color=_STAT_LABEL_COLORS[label]||'var(--accent)';
-      return `<div class="stat-label-row">
+      const lblCls=STAT_MEDIA_DRILLDOWN?'stat-label-row stat-drillable':'stat-label-row';
+      const lblClick=STAT_MEDIA_DRILLDOWN?`onclick="_statOpenMedia('','${esc(label)}')"`:'' ;
+      return `<div class="${lblCls}" ${lblClick}>
         <div class="stat-label-icon">${_STAT_LABEL_ICONS[label]||'🔍'}</div>
         <div class="stat-label-info">
           <div class="stat-label-name">${esc(label)}</div>
@@ -2941,8 +2957,10 @@ function _renderStatistik(monthData,dayData){
         </div>
         ${cameras.map(c=>{
           const hours=hmData[c.id]||new Array(24).fill(0);
+          const hmCamCls=STAT_MEDIA_DRILLDOWN?'stat-hm-cam stat-drillable':'stat-hm-cam';
+          const hmCamClick=STAT_MEDIA_DRILLDOWN?`onclick="_statOpenMedia('${esc(c.id)}','')"`:'' ;
           return `<div class="stat-hm-row">
-            <div class="stat-hm-cam" title="${esc(c.name||c.id)}">${getCameraIcon(c.name||c.id)}&nbsp;${esc(c.name||c.id)}</div>
+            <div class="${hmCamCls}" title="${esc(c.name||c.id)}" ${hmCamClick}>${getCameraIcon(c.name||c.id)}&nbsp;${esc(c.name||c.id)}</div>
             <div class="stat-hm-cells">${hours.map((cnt,h)=>{
               const alpha=cnt===0?0.12:Math.max(0.25,0.15+cnt/hmMax*0.8);
               const bg=cnt===0?'rgba(41,48,74,0.5)':`rgba(59,130,246,${alpha.toFixed(2)})`;
