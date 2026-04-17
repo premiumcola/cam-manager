@@ -46,7 +46,7 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 .cv-group-pill{display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(59,130,246,.35);border:1px solid rgba(59,130,246,.5);color:#93c5fd;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:2px;width:fit-content}
 
 /* ── Top-right pill container ─────────────────────────────────────────────── */
-.cv-tr{position:absolute;top:var(--cv-overlay-inset);right:var(--cv-overlay-inset);display:flex;flex-direction:column;gap:4px;align-items:flex-end;z-index:3}
+.cv-tr{position:absolute;top:var(--cv-overlay-inset);right:var(--cv-overlay-inset);display:flex;flex-direction:column;gap:8px;align-items:flex-end;z-index:3}
 
 /* Base pill */
 .cv-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px 5px 8px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.02em;position:relative;cursor:default;backdrop-filter:blur(8px)}
