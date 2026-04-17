@@ -1407,14 +1407,13 @@ function _renderDiscoveryResults(){
             <input id="disc_name_${uid}" class="disc-input" placeholder="${x.hostname?'Kameraname':esc(vendor)}" value="${displayName}" style="flex:1.5"/>
             <select id="disc_group_${uid}" class="disc-select" style="flex:1">${groupOpts}</select>
           </div>
-          <div class="field-help" style="padding:2px 6px">ID: <code>${esc(computedId)}</code></div>
-          <div style="display:flex;gap:8px;margin-top:6px">
-            <button class="action-btn" style="flex:1;background:var(--accent)" onclick="saveDiscoveryCamera('${esc(x.ip)}')">💾 Kamera speichern</button>
-            <button class="action-btn" style="flex:0 0 auto" onclick="byId('disc_add_form_${uid}').classList.add('hidden')">Abbrechen</button>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn-action accent" style="flex:1;min-height:40px" onclick="saveDiscoveryCamera('${esc(x.ip)}')"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3,8 7,12 13,4"/></svg> Kamera speichern</button>
+            <button class="btn-action ghost" style="min-height:40px" onclick="byId('disc_add_form_${uid}').classList.add('hidden')">Abbrechen</button>
           </div>
         </div>
-        <div class="chip-row" style="margin-top:8px">
-          <button class="action-btn" onclick="openDiscoveryAddForm('${esc(x.ip)}')">+ Kamera hinzufügen</button>
+        <div style="margin-top:8px">
+          <button class="btn-action action-green" style="width:100%" onclick="openDiscoveryAddForm('${esc(x.ip)}')"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="5" width="13" height="9" rx="2"/><path d="M5.5 5L6.5 3h3l1 2"/><circle cx="8" cy="9.5" r="2.2"/><line x1="8" y1="8.2" x2="8" y2="10.8"/><line x1="6.7" y1="9.5" x2="9.3" y2="9.5"/></svg> Kamera hinzufügen</button>
         </div>
       </div>`)}
     </div>`;
