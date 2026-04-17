@@ -1603,12 +1603,12 @@ async function importConfig(format){ const content=byId('importBox').value.trim(
 
 // ── Timelapse Settings ────────────────────────────────────────────────────────
 const _TL_PROFILES_DEF=[
-  {key:'daily',     label:'Täglich',          defaultPeriod:86400,    defaultTarget:60,  minTarget:10, maxTarget:180},
-  {key:'weekly',    label:'Wöchentlich',       defaultPeriod:604800,   defaultTarget:120, minTarget:30, maxTarget:360},
-  {key:'monthly',   label:'Monatlich',         defaultPeriod:2592000,  defaultTarget:300, minTarget:60, maxTarget:600},
-  {key:'quarterly', label:'Quartal',           defaultPeriod:7776000,  defaultTarget:600, minTarget:120,maxTarget:900},
-  {key:'yearly',    label:'Jährlich',          defaultPeriod:31536000, defaultTarget:900, minTarget:300,maxTarget:900},
-  {key:'custom',    label:'Benutzerdefiniert', defaultPeriod:3600,     defaultTarget:30,  minTarget:10, maxTarget:900},
+  {key:'daily',     label:'Täglich',          defaultPeriod:86400,    defaultTarget:60,  minTarget:10, maxTarget:180,  step:5},
+  {key:'weekly',    label:'Wöchentlich',       defaultPeriod:604800,   defaultTarget:120, minTarget:30, maxTarget:360,  step:10},
+  {key:'monthly',   label:'Monatlich',         defaultPeriod:2592000,  defaultTarget:300, minTarget:60, maxTarget:600,  step:15},
+  {key:'quarterly', label:'Quartal',           defaultPeriod:7776000,  defaultTarget:600, minTarget:120,maxTarget:1800, step:30},
+  {key:'yearly',    label:'Jährlich',          defaultPeriod:31536000, defaultTarget:900, minTarget:300,maxTarget:2700, step:60},
+  {key:'custom',    label:'Benutzerdefiniert', defaultPeriod:3600,     defaultTarget:30,  minTarget:10, maxTarget:2700, step:10},
 ];
 const _TL_PERIOD_OPTIONS=[
   {v:900,      l:'15 Min'},
@@ -1638,10 +1638,16 @@ const _TL_ICO_SPEED=`<svg width="14" height="13" viewBox="0 0 12 11" fill="none"
 function _tlIntervalLabel(interval_s){
   if(interval_s<60) return interval_s+'s';
   if(interval_s<3600) return Math.round(interval_s/60)+'min';
-  return Math.round(interval_s/3600)+'h';
+  if(interval_s<86400) return Math.round(interval_s/3600)+'h';
+  return Math.round(interval_s/86400)+'d';
+}
+function _tlTargetLabel(secs){
+  const n=parseInt(secs)||0;
+  if(n<60) return n+'s';
+  return Math.round(n/60)+'min';
 }
 function _tlCalcInterval(periodS,targetS,fps){
-  return Math.max(2, Math.round(parseInt(periodS)||86400 / Math.max(1,(parseInt(targetS)||60)*(parseInt(fps)||30))));
+  return Math.max(2, Math.round((parseInt(periodS)||86400) / Math.max(1,(parseInt(targetS)||60)*(parseInt(fps)||30))));
 }
 function _updateTlActiveTags(cameras){
   const wrap=byId('tlActiveTags'); if(!wrap) return;
@@ -1697,9 +1703,9 @@ function _renderTlModesGrid(cam){
       <div class="tl-mode-col-desc" id="tlProfDesc_${esc(cam.id)}_${p.key}">${_tlResultDesc(periodS,clampedTarget,fps)}</div>
       <div class="field-wrap">
         <div style="display:flex;align-items:center;gap:8px">
-          <input type="range" id="tlProfTarget_${esc(cam.id)}_${p.key}" min="${minT}" max="${maxT}" step="10" value="${clampedTarget}" style="flex:1;accent-color:#a855f7"
+          <input type="range" id="tlProfTarget_${esc(cam.id)}_${p.key}" min="${minT}" max="${maxT}" step="${p.step||10}" value="${clampedTarget}" style="flex:1;accent-color:#a855f7"
             oninput="_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" />
-          <span id="tlProfTargetLbl_${esc(cam.id)}_${p.key}" style="font-size:11px;color:#a855f7;font-weight:700;min-width:36px;text-align:right">${clampedTarget}s</span>
+          <span id="tlProfTargetLbl_${esc(cam.id)}_${p.key}" style="font-size:11px;color:#a855f7;font-weight:700;min-width:36px;text-align:right">${_tlTargetLabel(clampedTarget)}</span>
         </div>
         <span class="field-label">Zieldauer Video</span>
       </div>
@@ -1733,11 +1739,11 @@ function _tlPeriodLabel(s){
 function _tlResultDesc(periodS,targetS,fps){
   const pN=parseInt(periodS)||86400, tN=parseInt(targetS)||60, fN=parseInt(fps)||30;
   const interval=_tlCalcInterval(pN,tN,fN);
-  const totalFrames=Math.round(pN/Math.max(1,interval));
+  const totalFrames=Math.round(tN*fN);
   const periodLabel=_tlPeriodLabel(pN);
   const intervalLabel=_tlIntervalLabel(interval);
   const speedup=_tlSpeedupLabel(Math.round(pN/Math.max(1,tN)));
-  const comprPct=(Math.floor(100*(1-tN/Math.max(1,pN))*100)/100).toFixed(2).replace('.',',');
+  const comprPct=(Math.floor((1-tN/Math.max(1,pN))*10000)/100).toFixed(2).replace('.',',');
   return `<div class="tl-drow"><span class="tl-drow-ico">${_TL_ICO_SPAN}</span><span class="tl-drow-text">${periodLabel} mit ${intervalLabel} → ${tN}s Video (${fN} fps)</span></div><div class="tl-drow"><span class="tl-drow-ico">${_TL_ICO_FRAMES}</span><span class="tl-drow-text">${totalFrames} frames → Jede ${intervalLabel} ein Foto</span></div><div class="tl-drow tl-drow-accent"><span class="tl-drow-ico">${_TL_ICO_SPEED}</span><span class="tl-drow-text">${speedup} · Kompression ${comprPct}%</span></div>`;
 }
 // _renderTlProfileCards replaced by _renderTlModesGrid (4-column grid)
@@ -1747,7 +1753,7 @@ window._tlRefreshDesc=function(camId,profKey,fps){
   const descEl=byId(`tlProfDesc_${camId}_${profKey}`);
   const lblEl=byId(`tlProfTargetLbl_${camId}_${profKey}`);
   if(!targetEl||!periodEl) return;
-  if(lblEl) lblEl.textContent=targetEl.value+'s';
+  if(lblEl) lblEl.textContent=_tlTargetLabel(parseInt(targetEl.value)||10);
   if(descEl) descEl.innerHTML=_tlResultDesc(periodEl.value,targetEl.value,fps);
 };
 // toggleTlCamCard replaced by selectTlCam (tab-based camera selector)
