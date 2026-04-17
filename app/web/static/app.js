@@ -2954,13 +2954,17 @@ function _renderStatistik(monthData,dayData){
       </div></div>`
     :'<div class="stat-empty">Keine Ereignisse in den letzten 24h</div>';
 
+  // 1–3: overview + per-camera + top detections
   content.innerHTML=`
     <div class="stat-period-row">${periodPills}</div>
     <div class="stat-split">
       <div class="stat-card"><div class="stat-card-title">Events pro Kamera · letzter Monat</div>${camBars}</div>
       <div class="stat-card"><div class="stat-card-title">Top Erkennungen · letzter Monat</div>${topLabels}</div>
-    </div>
-    <div class="stat-card"><div class="stat-card-title">Letzte 24h · Aktivität nach Stunde</div>${heatmap}</div>`;
+    </div>`;
+
+  // 5: last 24h heatmap — rendered after the static timeline block (#4)
+  const hmBlock=byId('statHeatmapBlock');
+  if(hmBlock) hmBlock.innerHTML=`<div class="stat-card" style="margin-top:0"><div class="stat-card-title">Letzte 24h · Aktivität nach Stunde</div>${heatmap}</div>`;
 
   // Wire fixed-position tooltip for heatmap cells (CSS ::after clips inside overflow-x:auto)
   if(!_hmTip){
@@ -2968,7 +2972,7 @@ function _renderStatistik(monthData,dayData){
     _hmTip.style.cssText='position:fixed;z-index:9999;background:#0d1422;color:#edf4fb;font-size:11px;font-weight:600;padding:4px 9px;border-radius:8px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 10px rgba(0,0,0,.6);display:none;border:1px solid rgba(255,255,255,.08)';
     document.body.appendChild(_hmTip);
   }
-  content.querySelectorAll('.stat-hm-cell[data-tip]').forEach(cell=>{
+  (hmBlock||content).querySelectorAll('.stat-hm-cell[data-tip]').forEach(cell=>{
     cell.addEventListener('mouseenter',e=>{
       _hmTip.textContent=cell.dataset.tip;
       _hmTip.style.display='block';
@@ -2987,6 +2991,17 @@ byId('statRefreshBtn')?.addEventListener('click',()=>{ _statLoaded=false; loadSt
 new IntersectionObserver((entries)=>{
   if(entries.some(e=>e.isIntersecting)&&!_statLoaded) loadStatistik();
 },{threshold:0.05}).observe(byId('statistik'));
+
+// Redirect #timeline → #statistik for nav backwards-compatibility
+(function(){
+  const redirectTl=()=>{
+    if(window.location.hash==='#timeline'){
+      byId('statistik')?.scrollIntoView({behavior:'smooth',block:'start'});
+    }
+  };
+  redirectTl();
+  window.addEventListener('hashchange',redirectTl);
+})();
 
 loadAll().then(()=>{startLiveUpdate(); loadAchievements();});
 loadLogs();

@@ -481,6 +481,8 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .stat-hm-row{margin-bottom:4px}
 .stat-hm-row:last-child{margin-bottom:0}
 /* tooltip handled by JS _hmTip (position:fixed) to avoid overflow-x:auto clipping */
+.stat-tl-block{margin-top:12px}
+.stat-tl-hdr{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);padding:4px 0 10px}
 
 /* ── Shared expandable section tab pattern ────────────────────────────────── */
 .sec-tabs{display:flex;gap:6px;flex-wrap:wrap;padding:4px 0 12px}
