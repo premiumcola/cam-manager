@@ -442,11 +442,12 @@ class CameraRuntime:
             return False
 
     def _cleanup_stale_timelapse_frames(self):
-        """Remove timelapse frame directories from previous runs on startup.
-        - Previous-day directories: always deleted (stale)
-        - Today's directories: all except the newest per profile are deleted
-          (abandoned mid-run windows that never got encoded)
-        Called once on startup before any encode thread begins."""
+        """Scan timelapse frame directories on startup and log what was found.
+        - Previous-day directories: preserved so _finalize_orphaned_windows can encode
+          them when the profile loop starts (restart-safe behavior).
+        - Today's directories: all except the newest per profile are cleaned up
+          (mid-run windows that were abandoned without encode).
+        Called once on startup before any profile thread begins."""
         import shutil
         storage_root = Path(self.global_cfg["storage"]["root"])
         today = datetime.now().strftime("%Y-%m-%d")
@@ -460,16 +461,15 @@ class CameraRuntime:
             for i, window_dir in enumerate(all_windows):
                 dir_date = window_dir.name[:10]
                 if dir_date < today:
-                    # Previous day: always clean up
-                    try:
-                        shutil.rmtree(str(window_dir))
-                        log_tl.info("[%s][media] cleaned stale frames (old day): %s/%s",
-                                 self.camera_id, profile_dir.name, window_dir.name)
-                    except Exception as e:
-                        log_tl.warning("[%s][media] stale frame cleanup failed for %s: %s",
-                                    self.camera_id, window_dir, e)
+                    # Previous day: keep frames on disk — the profile loop will call
+                    # _finalize_orphaned_windows() which encodes and then deletes them.
+                    n = len(list(window_dir.glob("*.jpg")))
+                    log_tl.info(
+                        "[%s][media] previous-day frames preserved for encoding: "
+                        "%s/%s (%d frames) — will be encoded on profile startup",
+                        self.camera_id, profile_dir.name, window_dir.name, n)
                 elif dir_date == today and i < len(all_windows) - 1:
-                    # Today but not the newest window → abandoned, safe to clean
+                    # Today but not the newest window → abandoned mid-run, safe to delete
                     try:
                         shutil.rmtree(str(window_dir))
                         log_tl.info("[%s][media] cleaned abandoned window (today): %s/%s",

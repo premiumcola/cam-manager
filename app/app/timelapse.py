@@ -216,11 +216,14 @@ class TimelapseBuilder:
         video length honours target_duration_s regardless of how many frames were captured.
         Also writes a .jpg thumbnail (middle valid frame, ≤640 px wide).
         Returns path string or None on failure."""
+        # Record original frame count for completeness reporting
+        frames_on_disk = len(images)
+        expected_frames = max(2, target_duration_s * target_fps)
+
         # Limit source to what we'd need at target_fps — avoids processing thousands of frames
-        total_frames_needed = max(2, target_duration_s * target_fps)
-        if len(images) > total_frames_needed:
-            step = len(images) / total_frames_needed
-            images = [images[int(i * step)] for i in range(total_frames_needed)]
+        if frames_on_disk > expected_frames:
+            step = frames_on_disk / expected_frames
+            images = [images[int(i * step)] for i in range(expected_frames)]
 
         # ── Pass 1: validate + duplicate diagnostic ──────────────────────────
         # Duplicates are NOT filtered here — they may represent legitimate static scenes.
@@ -279,9 +282,24 @@ class TimelapseBuilder:
         fps = n / max(1.0, float(target_duration_s))
         fps = min(float(target_fps), max(1.0, fps))
         actual_duration = n / fps
-        log.info("timelapse: %s — source=%d valid frames, fps=%.2f, "
-                 "expected_duration=%.1fs (target=%ds)",
-                 out_path.name, n, fps, actual_duration, target_duration_s)
+
+        # ── Completeness report ───────────────────────────────────────────────
+        coverage_pct = min(100.0, 100.0 * frames_on_disk / expected_frames)
+        shorter = actual_duration < target_duration_s * 0.95
+        log.info(
+            "timelapse: %s\n"
+            "  config   : %ds @ %dfps = %d frames expected\n"
+            "  on disk  : %d frames (%.0f%% of expected%s)\n"
+            "  corrupt  : %d frames dropped (%.1f%%)\n"
+            "  result   : %.1fs video%s",
+            out_path.name,
+            target_duration_s, target_fps, expected_frames,
+            frames_on_disk, coverage_pct,
+            "" if coverage_pct >= 99 else " — app was down/restarting for part of window",
+            skipped, 100.0 * skipped / max(1, skipped + n),
+            actual_duration,
+            f" ⚠ shorter than target {target_duration_s}s" if shorter else " ✓"
+        )
 
         # ── Pass 2: encode ────────────────────────────────────────────────────
         path = self._write_video_ffmpeg(valid_paths, out_path, fps, ref_size)
