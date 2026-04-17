@@ -1627,6 +1627,14 @@ function _tlClosestPeriod(v){
   const n=parseInt(v)||3600;
   return _TL_PERIOD_OPTIONS.reduce((a,b)=>Math.abs(b.v-n)<Math.abs(a.v-n)?b:a).v;
 }
+function _tlSpeedupLabel(v){
+  if(v>=10000) return (Math.round(v/100)/10).toFixed(1)+'k×';
+  return v+'×';
+}
+/* Custom inline SVG icon set for timelapse compact cards — black/white/violet only */
+const _TL_ICO_SPAN=`<svg width="14" height="12" viewBox="0 0 14 12" fill="none" aria-hidden="true"><rect x="0.75" y="0.75" width="2" height="10.5" rx="1" fill="currentColor"/><line x1="3.5" y1="6" x2="7" y2="6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><polygon points="7,3 13.5,6 7,9" fill="currentColor"/></svg>`;
+const _TL_ICO_FRAMES=`<svg width="13" height="11" viewBox="0 0 13 11" fill="none" aria-hidden="true"><rect x="2.5" y="0.75" width="8" height="9.5" rx="1.2" stroke="currentColor" stroke-width="1.5"/><rect x="0.5" y="2.25" width="2" height="1.75" rx="0.5" fill="currentColor"/><rect x="0.5" y="7" width="2" height="1.75" rx="0.5" fill="currentColor"/><rect x="10.5" y="2.25" width="2" height="1.75" rx="0.5" fill="currentColor"/><rect x="10.5" y="7" width="2" height="1.75" rx="0.5" fill="currentColor"/></svg>`;
+const _TL_ICO_SPEED=`<svg width="12" height="11" viewBox="0 0 12 11" fill="none" aria-hidden="true"><path d="M1 1.25L5 5.5L1 9.75" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 1.25L10 5.5L6 9.75" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 function _tlIntervalLabel(interval_s){
   if(interval_s<60) return interval_s+'s';
   if(interval_s<3600) return Math.round(interval_s/60)+'min';
@@ -1727,7 +1735,8 @@ function _tlResultDesc(periodS,targetS,fps){
   const totalFrames=Math.round(pN/Math.max(1,interval));
   const periodLabel=_tlPeriodLabel(pN);
   const intervalLabel=_tlIntervalLabel(interval);
-  return `<div class="tl-desc-line">📸 alle ~${intervalLabel} · ~${totalFrames} Frames aus ${periodLabel}</div><div class="tl-desc-result">▶ ${tN}s · ${fN}fps</div>`;
+  const speedup=_tlSpeedupLabel(Math.round(pN/Math.max(1,tN)));
+  return `<div class="tl-drow"><span class="tl-drow-ico">${_TL_ICO_SPAN}</span><span class="tl-drow-text">${periodLabel} → ${tN}s Video</span></div><div class="tl-drow"><span class="tl-drow-ico">${_TL_ICO_FRAMES}</span><span class="tl-drow-text">~${totalFrames} Frames · ~${intervalLabel}</span></div><div class="tl-drow tl-drow-accent"><span class="tl-drow-ico">${_TL_ICO_SPEED}</span><span class="tl-drow-text">${speedup} · ${fN}fps</span></div>`;
 }
 // _renderTlProfileCards replaced by _renderTlModesGrid (4-column grid)
 window._tlRefreshDesc=function(camId,profKey,fps){

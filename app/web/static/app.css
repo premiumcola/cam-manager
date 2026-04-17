@@ -495,9 +495,12 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .tl-mode-col-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .tl-mode-col-name{font-weight:700;font-size:13px;line-height:1.2}
 .tl-mode-col-period{font-size:10px;color:#a855f7;margin-top:2px}
-.tl-mode-col-desc{font-size:11px;color:var(--muted);line-height:1.45;min-height:40px}
-.tl-desc-line{margin-bottom:3px}
-.tl-desc-result{color:#a855f7;font-weight:700}
+.tl-mode-col-desc{font-size:11px;color:var(--muted);line-height:1.4;min-height:52px;overflow:hidden}
+.tl-drow{display:flex;align-items:center;gap:5px;margin-bottom:4px;color:var(--muted)}
+.tl-drow:last-child{margin-bottom:0}
+.tl-drow-ico{display:flex;align-items:center;flex-shrink:0}
+.tl-drow-text{font-size:10px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-drow-accent{color:#a855f7}
 
 /* ── Group & Telegram panels: content inset ─────────────────────────────── */
 .tg-panels-wrap{border-radius:14px;background:var(--bg);padding:12px 14px;margin-top:4px}
