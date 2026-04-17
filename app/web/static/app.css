@@ -486,6 +486,7 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .stat-tl-card{margin-top:12px}
 .stat-tl-card-hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
 .stat-tl-legend-inline{flex:1;justify-content:flex-end;margin:0;padding:0}
+.stat-tl-legend-inline .tl-leg-prefix{font-size:10px;color:var(--muted);opacity:.7}
 .stat-drillable{cursor:pointer;border-radius:8px;transition:background .12s,opacity .12s}
 .stat-drillable:hover{background:rgba(255,255,255,.04)}
 .stat-drillable:active{opacity:.7}
