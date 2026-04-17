@@ -55,7 +55,7 @@ function objBubble(label,size=22){
   const svg=raw.replace('width="16" height="16"',`width="${svgPx}" height="${svgPx}"`);
   const c=colors[label]||colors.unknown;
   const r=Math.max(6,Math.round(size*0.38));
-  return `<span style="width:${size}px;height:${size}px;border-radius:${r}px;background:${c}40;border:1.5px solid ${c}80;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${svg}</span>`;
+  return `<span style="width:${size}px;height:${size}px;border-radius:${r}px;background:${c}40;border:1.5px solid ${c}80;backdrop-filter:blur(3px);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${svg}</span>`;
 }
 const TL_LABELS=['person','cat','bird','car','motion','alarm'];
 function _renderLbLabels(){
