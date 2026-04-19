@@ -2346,13 +2346,25 @@ function mediaCardHTML(item){
       </div>
     </article>`;
   }
+  const isVideo=!!(item.video_relpath||item.video_url);
   const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
   const confirmed=item.confirmed?'mmc-confirmed':'';
   const labelBubbles=(item.labels||[]).slice(0,3).map(l=>objBubble(l,26)).join('');
+  const badgeSt='font-size:10px;font-weight:700;color:#e2e8f0;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);padding:2px 6px;border-radius:4px;line-height:1.45;white-space:nowrap';
+  const fmtDur=s=>{if(!s||s<=0)return'';const m=Math.floor(s/60),sec=Math.round(s%60);return`${m}:${String(sec).padStart(2,'0')}`;};
+  const fmtByt=b=>{if(!b||b<=0)return'';if(b>=1048576)return(b/1048576).toFixed(1)+' MB';return Math.round(b/1024)+' KB';};
+  const mediaInner=isVideo
+    ?`<div style="position:absolute;inset:0;background:#0a0e1a;display:flex;align-items:center;justify-content:center">
+        <div class="mmc-play-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="color:#fff;margin-left:3px"><polygon points="5,3 19,12 5,21"/></svg></div>
+      </div>
+      <div class="mmc-meta-bar"><span>${fmtMediaTime(item.time||'')}</span></div>
+      ${item.duration_s?`<div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none"><div style="${badgeSt}">${fmtDur(item.duration_s)}</div></div>`:''}
+      ${item.file_size_bytes?`<div style="position:absolute;bottom:7px;right:8px;z-index:2;pointer-events:none"><div style="${badgeSt}">${fmtByt(item.file_size_bytes)}</div></div>`:''}`
+    :`<img src="${esc(imgSrc)}" alt="event" loading="lazy" onerror="this.style.display='none'" />
+      <div class="mmc-meta-bar"><span>${fmtMediaTime(item.time||'')}</span></div>`;
   return `<article class="media-card ${confirmed}" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
     <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
-      <img src="${esc(imgSrc)}" alt="event" loading="lazy" onerror="this.closest('[data-event-id]')?.remove()" />
-      <div class="mmc-meta-bar"><span>${fmtMediaTime(item.time||'')}</span></div>
+      ${mediaInner}
       <div class="media-label-bubbles">${labelBubbles}</div>
       ${item.confirmed
         ? `<span class="media-confirmed-badge">✓</span>`
