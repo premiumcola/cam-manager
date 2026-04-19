@@ -423,6 +423,7 @@ function renderDashboard(){
 }
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
+const CAT_COLORS={alle:'#8888aa',motion:'#22c55e',person:'#a855f7',cat:'#ec4899',bird:'#06b6d4',car:'#f59e0b',timelapse:'#3b82f6'};
 const TL_LANES=['person','cat','bird','car','motion'];
 const GAP_MS=2*60*1000;
 let _tlActiveLanes=new Set(TL_LANES);
@@ -485,8 +486,8 @@ function renderTimeline(){
   const leg=byId('tlLegend');
   if(leg){
     leg.innerHTML=`<span class="tl-leg-prefix">Filter:</span>`+
-      TL_LANES.map(l=>`<button class="tl-legend-pill${_tlActiveLanes.has(l)?' tl-legend-pill--active':''}" data-lane="${l}">${objBubble(l,18)}<span>${OBJ_LABEL[l]||l}</span></button>`).join('');
-    leg.querySelectorAll('.tl-legend-pill').forEach(btn=>{
+      TL_LANES.map(l=>`<button class="cat-filter-btn${_tlActiveLanes.has(l)?' active':''}" data-lane="${l}" style="--cb:${CAT_COLORS[l]||'#8888aa'}"><span class="cfb-icon">${objBubble(l,18)}</span><span>${OBJ_LABEL[l]||l}</span></button>`).join('');
+    leg.querySelectorAll('.cat-filter-btn[data-lane]').forEach(btn=>{
       btn.onclick=()=>{
         const lane=btn.dataset.lane;
         if(_tlActiveLanes.has(lane)) _tlActiveLanes.delete(lane); else _tlActiveLanes.add(lane);
@@ -2485,19 +2486,18 @@ function renderMediaOverview(){
 
   // Category filter bar — full-width row below camera cards
   const _CAT_DEFS=[
-    {label:'motion', name:'Bewegung', clr:'#22c55e'},
-    {label:'person', name:'Person',   clr:'#7c4dff'},
-    {label:'cat',    name:'Katze',    clr:'#e91e8c'},
-    {label:'bird',   name:'Vogel',    clr:'#0ea5e9'},
-    {label:'car',    name:'Auto',     clr:'#f59e0b'},
-    {label:'timelapse',name:'Timelapse',clr:'#a855f7'},
+    {label:'motion',    name:'Bewegung',  clr:CAT_COLORS.motion},
+    {label:'person',    name:'Person',    clr:CAT_COLORS.person},
+    {label:'cat',       name:'Katze',     clr:CAT_COLORS.cat},
+    {label:'bird',      name:'Vogel',     clr:CAT_COLORS.bird},
+    {label:'car',       name:'Auto',      clr:CAT_COLORS.car},
+    {label:'timelapse', name:'Timelapse', clr:CAT_COLORS.timelapse},
   ];
-  const _TL_CAT_ICON=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="18" x2="8" y2="22"/><line x1="16" y1="18" x2="16" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`;
+  const _TL_CAT_ICON=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${CAT_COLORS.timelapse}" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="18" x2="8" y2="22"/><line x1="16" y1="18" x2="16" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`;
   const catBtns=_CAT_DEFS.map(({label,name,clr})=>{
     const icon=(label==='timelapse'?_TL_CAT_ICON:(OBJ_SVG[label]||'').replace('width="16" height="16"','width="18" height="18"'));
-    return `<button class="moc-cat-btn" onclick="openCategoryDrilldown('${esc(label)}')"
-      style="--cb:${clr};color:${clr};background:${clr}18">
-      ${icon}<span class="moc-cat-label">${esc(name)}</span>
+    return `<button class="cat-filter-btn" onclick="openCategoryDrilldown('${esc(label)}')" style="--cb:${clr}">
+      <span class="cfb-icon">${icon}</span><span>${esc(name)}</span>
     </button>`;
   }).join('');
   const catSection=`<div class="moc-cat-section">
@@ -2640,7 +2640,7 @@ function syncMediaPills(){
   document.querySelectorAll('.media-pill[data-label-key]').forEach(p=>{
     const key=p.dataset.labelKey;
     if(key&&OBJ_SVG[key]){
-      p.innerHTML=`<span style="display:inline-flex;align-items:center;gap:5px;pointer-events:none">${objBubble(key,18)}<span>${OBJ_LABEL[key]||key}</span></span>`;
+      p.innerHTML=`<span class="cfb-icon" style="pointer-events:none">${objBubble(key,18)}</span><span style="pointer-events:none">${OBJ_LABEL[key]||key}</span>`;
     }
   });
   document.querySelectorAll('.media-pill').forEach(p=>{
