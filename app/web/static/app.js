@@ -2535,18 +2535,10 @@ function renderMediaPagination(){
   const total=state.mediaTotalPages||1;
   const cur=state.mediaPage||0;
   if(total<=1){pg.innerHTML='';return;}
-  const pills=[];
-  const mkPill=(n,label,active,disabled)=>`<button class="page-pill${active?' active':''}" ${disabled?'disabled':''} onclick="_goToPage(${n})">${label}</button>`;
-  pills.push(mkPill(cur-1,'‹',false,cur===0));
-  const maxPills=7;
-  let start=Math.max(0,cur-3);
-  let end=Math.min(total-1,start+maxPills-3);
-  start=Math.max(0,end-(maxPills-3));
-  if(start>0){pills.push(mkPill(0,'1',false,false));if(start>1) pills.push(`<span class="page-pill" style="cursor:default;opacity:.4">…</span>`);}
-  for(let i=start;i<=end;i++) pills.push(mkPill(i,i+1,i===cur,false));
-  if(end<total-1){if(end<total-2) pills.push(`<span class="page-pill" style="cursor:default;opacity:.4">…</span>`);pills.push(mkPill(total-1,total,false,false));}
-  pills.push(mkPill(cur+1,'›',false,cur>=total-1));
-  pg.innerHTML=pills.join('');
+  pg.innerHTML=
+    `<button class="page-pill" ${cur===0?'disabled':''} onclick="_goToPage(${cur-1})">‹</button>`+
+    `<span class="page-label">Seite ${cur+1} von ${total}</span>`+
+    `<button class="page-pill" ${cur>=total-1?'disabled':''} onclick="_goToPage(${cur+1})">›</button>`;
 }
 function renderMediaGrid(){
   const grid=byId('mediaGrid'); if(!grid) return;
