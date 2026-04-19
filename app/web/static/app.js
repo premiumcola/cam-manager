@@ -65,9 +65,10 @@ function _renderLbLabels(){
   el.innerHTML=TL_LABELS.map(l=>{
     const isActive=active.has(l);
     const rawSvg=OBJ_SVG[l]||OBJ_SVG.alarm;
-    const svg=rawSvg.replace('width="16" height="16"','width="30" height="30"');
+    const svg=rawSvg.replace('width="16" height="16"','width="38" height="38"');
     const title=OBJ_LABEL[l]||l;
-    return `<span data-label="${l}" title="${title}" style="width:54px;height:54px;border-radius:50%;background:${isActive?'rgba(0,0,0,0.75)':'rgba(0,0,0,0.60)'};box-shadow:0 1px 6px rgba(0,0,0,0.5);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .15s,opacity .15s;opacity:${isActive?'1':'0.65'};border:2px solid ${isActive?'rgba(255,255,255,0.35)':'transparent'}">${svg}</span>`;
+    const c=colors[l]||colors.unknown;
+    return `<span data-label="${l}" title="${title}" style="width:54px;height:54px;border-radius:50%;background:${isActive?c+'30':'rgba(0,0,0,0.60)'};box-shadow:0 1px 8px rgba(0,0,0,0.55);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .15s,opacity .15s,border-color .15s;opacity:${isActive?'1':'0.6'};border:2px solid ${isActive?c+'cc':'rgba(255,255,255,0.08)'}">${svg}</span>`;
   }).join('');
   el.querySelectorAll('[data-label]').forEach(btn=>{
     btn.onclick=async()=>{
@@ -325,15 +326,15 @@ function renderDashboard(){
     const previewFps=(c.preview_fps||0)>0?c.preview_fps:null;
     const streamMode=c.stream_mode||'baseline';
 
-    // Brain SVG (13×13) — pulsing when Coral available
-    const brainCol=c.coral_available?'#93c5fd':'rgba(255,255,255,.25)';
-    const brainCls=c.coral_available?' class="cv-brain-pulse"':'';
-    const brainSVG=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="${brainCol}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${brainCls} aria-hidden="true"><path d="M12 2C8.5 2 6 4.5 6 7.5c0 1.5.5 2.8 1.4 3.8C6.5 12 6 13 6 14c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4 0-1-.5-2-1.4-2.7.9-1 1.4-2.3 1.4-3.8C18 4.5 15.5 2 12 2z"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>`;
+    // Object detection box SVG (13×13) — corner-bracket bounding box, amber when Coral active
+    const boxCol=c.coral_available?'#f59e0b':'rgba(255,255,255,.25)';
+    const boxCls=c.coral_available?' class="cv-obj-unfold"':'';
+    const brainSVG=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="${boxCol}" stroke-width="2.2" stroke-linecap="round"${boxCls} aria-hidden="true"><path d="M6 10V6h4"/><path d="M14 6h4v4"/><path d="M6 14v4h4"/><path d="M20 14v4h-4"/></svg>`;
 
-    // Motion SVG (13×13) — animated when stream active
-    const motCol=isActive?'#5eead4':'rgba(255,255,255,.25)';
-    const motCls=isActive?' class="cv-motion-wave"':'';
-    const motSVG=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="${motCol}" stroke-width="2.2" stroke-linecap="round"${motCls} aria-hidden="true"><circle cx="12" cy="12" r="3"/><line x1="5" y1="12" x2="7" y2="12"/><line x1="17" y1="12" x2="19" y2="12"/><line x1="12" y1="5" x2="12" y2="7"/><line x1="12" y1="17" x2="12" y2="19"/><line x1="8" y1="8" x2="9.4" y2="9.4"/><line x1="14.6" y1="14.6" x2="16" y2="16"/><line x1="16" y1="8" x2="14.6" y2="9.4"/><line x1="8" y1="16" x2="9.4" y2="14.6"/></svg>`;
+    // Motion running-person SVG (13×13) — stride silhouette, green when active
+    const motCol=isActive?'#22c55e':'rgba(255,255,255,.25)';
+    const motCls=isActive?' class="cv-runner-stride"':'';
+    const motSVG=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none"${motCls} aria-hidden="true"><circle cx="15" cy="4.5" r="2.5" fill="${motCol}"/><path d="M14 7L11 13.5" stroke="${motCol}" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M12 10L8.5 8.5" stroke="${motCol}" stroke-width="1.8" stroke-linecap="round"/><path d="M12 10L15.5 9" stroke="${motCol}" stroke-width="1.8" stroke-linecap="round"/><path d="M11 13.5L8.5 19.5" stroke="${motCol}" stroke-width="2" stroke-linecap="round"/><path d="M11 13.5L14.5 19" stroke="${motCol}" stroke-width="2" stroke-linecap="round"/></svg>`;
 
     // Timelapse filmstrip icon with bars + optional scan line
     const barCol=tlOn?'#d8b4fe':'rgba(255,255,255,.18)';
@@ -383,8 +384,8 @@ function renderDashboard(){
     <div class="cv-br">
       <div class="cv-pill ${tlOn?'cv-pill-tl':'cv-pill-tl-off'}">${tlIcon}Timelapse${tlOn?' aktiv':' aus'}</div>
       <div class="cv-split-badge">
-        <div class="cv-sb-half ${c.coral_available?'cv-sb-obj':'cv-sb-obj-off'}">${brainSVG} Objekte</div>
-        <div class="cv-sb-half ${isActive?'cv-sb-mot':'cv-sb-mot-off'}">${motSVG} Bewegung</div>
+        <div class="cv-sb-half ${c.coral_available?'cv-sb-obj':'cv-sb-obj-off'}">${brainSVG}<span class="cv-sb-label">Objekte</span></div>
+        <div class="cv-sb-half ${isActive?'cv-sb-mot':'cv-sb-mot-off'}">${motSVG}<span class="cv-sb-label">Bewegung</span></div>
       </div>
     </div>
 
@@ -2461,7 +2462,7 @@ function renderMediaOverview(){
   const _TL_CAT_ICON=`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="18" x2="8" y2="22"/><line x1="16" y1="18" x2="16" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`;
   const catCards=_CAT_DEFS.map(({label,name})=>{
     const clr=_CAT_COLORS[label]||'#4a7090';
-    const icon=label==='timelapse'?_TL_CAT_ICON:(OBJ_SVG[label]||'').replace('width="16" height="16"','width="20" height="20"');
+    const icon=label==='timelapse'?_TL_CAT_ICON.replace(/width="20" height="20"/,'width="24" height="24"'):(OBJ_SVG[label]||'').replace('width="16" height="16"','width="24" height="24"');
     return `<div class="moc-cat-card" onclick="openCategoryDrilldown('${esc(label)}')" style="border-bottom:2px solid ${clr}40">
       <div class="moc-cat-icon">${icon}</div>
       <div class="moc-cat-name">${esc(name)}</div>

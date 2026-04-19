@@ -50,9 +50,11 @@ class EventStore:
 
     def _filter_events(self, camera_id: str, label: str | None = None,
                        labels: list | None = None,
-                       start: str | None = None, end: str | None = None):
+                       start: str | None = None, end: str | None = None,
+                       media_only: bool = False):
         """Filter events for a camera. `labels` (list) takes precedence over `label` (str).
-        Multi-label filter uses OR logic: event matches if any of its labels is in the filter set."""
+        Multi-label filter uses OR logic: event matches if any of its labels is in the filter set.
+        media_only=True: skip metadata-only events (no snapshot/video file) — used by the viewer."""
         filter_set: set | None = None
         if labels:
             filter_set = set(labels)
@@ -66,6 +68,11 @@ class EventStore:
                 obj = json.loads(file.read_text(encoding="utf-8"))
             except Exception:
                 continue
+            if media_only:
+                has_media = (obj.get("snapshot_relpath") or obj.get("snapshot_url") or
+                             obj.get("video_relpath") or obj.get("video_url"))
+                if not has_media:
+                    continue
             t = obj.get("time", "")
             if start and t and t < start:
                 continue
@@ -83,14 +90,16 @@ class EventStore:
     def list_events(self, camera_id: str, label: str | None = None,
                     labels: list | None = None,
                     start: str | None = None, end: str | None = None,
-                    limit: int = 24, offset: int = 0):
-        items = self._filter_events(camera_id, label=label, labels=labels, start=start, end=end)
+                    limit: int = 24, offset: int = 0,
+                    media_only: bool = False):
+        items = self._filter_events(camera_id, label=label, labels=labels, start=start, end=end, media_only=media_only)
         return items[offset:offset + limit]
 
     def count_events(self, camera_id: str, label: str | None = None,
                      labels: list | None = None,
-                     start: str | None = None, end: str | None = None) -> int:
-        return len(self._filter_events(camera_id, label=label, labels=labels, start=start, end=end))
+                     start: str | None = None, end: str | None = None,
+                     media_only: bool = False) -> int:
+        return len(self._filter_events(camera_id, label=label, labels=labels, start=start, end=end, media_only=media_only))
 
     def stats_range(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None):
         from collections import Counter, defaultdict
@@ -276,11 +285,26 @@ class EventStore:
             log.info("[MediaScan] %d verwaiste Events bereinigt", orphans)
         return scanned
 
-    def cleanup_old(self, retention_days: int):
+    def cleanup_old(self, retention_days: int) -> int:
+        import logging as _log
+        log = _log.getLogger(__name__)
         cutoff = datetime.now() - timedelta(days=retention_days)
         removed = 0
+        if not self.events_dir.exists():
+            log.info("[cleanup] motion_detection/ not found, nothing to clean")
+            return 0
+        log.info(
+            "[cleanup] autoclean: retention=%dd cutoff=%s | "
+            "eligible: motion snapshots + event JSON (motion_detection/) | "
+            "protected: timelapse videos (timelapse/) — separate storage, never touched by autoclean",
+            retention_days, cutoff.strftime("%Y-%m-%d")
+        )
         for p in self.events_dir.rglob("*"):
             if p.is_file() and datetime.fromtimestamp(p.stat().st_mtime) < cutoff:
                 p.unlink(missing_ok=True)
                 removed += 1
+        if removed:
+            log.info("[cleanup] removed %d files (motion events + snapshots older than %dd)", removed, retention_days)
+        else:
+            log.info("[cleanup] nothing removed (all motion_detection/ files within %dd retention)", retention_days)
         return removed
