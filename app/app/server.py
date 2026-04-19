@@ -58,7 +58,9 @@ def _auto_detect_subnet() -> str:
 from .mqtt_service import MQTTService
 
 def _get_build_info() -> dict:
-    """Try git subprocess first (works in dev); fall back to committed buildinfo.json."""
+    """Return build info: try git subprocess (dev), then config/buildinfo.json
+    (volume-mounted in Docker — always current after docker restart), then the
+    baked-in app/buildinfo.json as last resort."""
     import subprocess, json as _json
     result: dict = {"commit": "dev", "date": "—", "count": "—"}
     try:
@@ -73,15 +75,22 @@ def _get_build_info() -> dict:
             ["git", "-C", str(repo_root), "rev-list", "--count", "HEAD"],
             text=True, timeout=4, stderr=subprocess.DEVNULL).strip()
         if commit:
-            result = {"commit": commit, "date": date, "count": count}
-            return result
+            return {"commit": commit, "date": date, "count": count}
     except Exception:
         pass
-    try:
-        bi = Path(__file__).parent / "buildinfo.json"
-        result = _json.loads(bi.read_text())
-    except Exception:
-        pass
+    # config/ is volume-mounted in Docker (./app/config:/app/config) so this file
+    # reflects the real current commit after every docker restart — update it on
+    # the host with:  git log -1 --format='{"commit":"%h","date":"%ci","count":COUNT}' > app/config/buildinfo.json
+    for bi in [
+        Path(__file__).resolve().parent.parent / "config" / "buildinfo.json",
+        Path(__file__).parent / "buildinfo.json",
+    ]:
+        try:
+            data = _json.loads(bi.read_text())
+            if data.get("commit"):
+                return data
+        except Exception:
+            pass
     return result
 
 
