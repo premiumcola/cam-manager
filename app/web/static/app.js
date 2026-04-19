@@ -250,17 +250,20 @@ function _mediaPeriodParams(){
   else{const d=new Date(now);d.setDate(d.getDate()-7);start=d.toISOString().slice(0,10)+'T00:00:00';}
   return `&start=${start}&end=${end}`;
 }
-function _dynPageSize(){
+// Single source of truth for page size: rows × dynamic column count.
+// Called before every load, page-change, delete, resize, and filter-change.
+function calcItemsPerPage(){
   const isMobile=window.innerWidth<=768;
   const GAP=10,MIN_CARD=160;
   const mediaEl=byId('media');
   let w=mediaEl&&mediaEl.clientWidth>MIN_CARD?mediaEl.clientWidth-24:window.innerWidth-(isMobile?24:320);
   w=Math.max(MIN_CARD+1,w);
+  // cols is dynamic: on wider viewports more columns appear automatically
   const cols=Math.max(1,Math.floor((w+GAP)/(MIN_CARD+GAP)));
-  // Use the row-count slider value; fall back to 4 rows on first load before DOM is ready
+  // rows come from the slider (default 4); clamped 2–8
   const rowSlider=byId('mediaRowSlider');
   const rows=rowSlider?Math.max(2,Math.min(8,parseInt(rowSlider.value)||4)):4;
-  return Math.max(cols,rows*cols);
+  return rows*cols;
 }
 let _cachedPageSize=0;
 async function loadMedia(){
@@ -268,7 +271,7 @@ async function loadMedia(){
   const labels=state.mediaLabels;
   const onlyTL=labels.size===1&&labels.has('timelapse');
   if(onlyTL){state.media=[];state._allMedia=[];state.mediaTotalPages=1;return;}
-  const ps=_dynPageSize(); _cachedPageSize=ps;
+  const ps=calcItemsPerPage(); _cachedPageSize=ps;
   const cams=state.mediaCamera?[state.mediaCamera]:state.cameras.map(c=>c.id);
   const periodParams=_mediaPeriodParams();
   // Build label filter param — exclude 'timelapse' (handled separately in grid)
@@ -2271,7 +2274,7 @@ byId('lightboxDelete').onclick=async()=>{
     await j(`/api/camera/${encodeURIComponent(camera_id)}/events/${encodeURIComponent(event_id)}`,{method:'DELETE'});
     // Remove from client-side pool and re-paginate so the current page refills
     state._allMedia=(state._allMedia||[]).filter(x=>x.event_id!==event_id);
-    const ps_lb=_dynPageSize();
+    const ps_lb=calcItemsPerPage();
     state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps_lb));
     state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
     state.media=state._allMedia.slice(state.mediaPage*ps_lb,(state.mediaPage+1)*ps_lb);
@@ -2510,7 +2513,7 @@ window.openCategoryDrilldown=async function(label){
   }
 };
 function _goToPage(n){
-  const ps=_dynPageSize();
+  const ps=calcItemsPerPage();
   const p=Math.max(0,Math.min(state.mediaTotalPages-1,n));
   if(p===state.mediaPage) return;
   state.mediaPage=p;
@@ -2650,7 +2653,10 @@ function syncMediaPills(){
       }
       state.mediaPage=0;
       syncMediaPills();
-      if(state.mediaCamera) loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();});
+      // Reload whenever the drilldown is open, regardless of which camera is active
+      if(byId('mediaDrilldown')?.style.display!=='none'){
+        loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();});
+      }
     });
   });
   syncMediaPills();
@@ -2663,7 +2669,7 @@ function syncMediaPills(){
   slider.addEventListener('input',()=>{
     valEl.textContent=slider.value;
     if(byId('mediaDrilldown')?.style.display!=='none'&&state._allMedia?.length>=0){
-      const ps=_dynPageSize(); _cachedPageSize=ps;
+      const ps=calcItemsPerPage(); _cachedPageSize=ps;
       state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps));
       state.mediaPage=0;
       state.media=state._allMedia.slice(0,ps);
@@ -2681,7 +2687,7 @@ window.deleteMediaCard=async(btn)=>{
     await j(`/api/camera/${encodeURIComponent(camId)}/events/${encodeURIComponent(eventId)}`,{method:'DELETE'});
     // Remove from pool, recalculate pages, re-slice so current page stays full
     state._allMedia=(state._allMedia||[]).filter(x=>x.event_id!==eventId);
-    const ps_d=_dynPageSize();
+    const ps_d=calcItemsPerPage();
     state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps_d));
     state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
     state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
@@ -3074,7 +3080,7 @@ window.addEventListener('resize',()=>{
   clearTimeout(_mediaResizeTimer);
   _mediaResizeTimer=setTimeout(()=>{
     if(byId('mediaDrilldown')?.style.display!=='none'){
-      const ns=_dynPageSize();
+      const ns=calcItemsPerPage();
       if(Math.abs(ns-_cachedPageSize)>=4){
         _cachedPageSize=ns;
         state.mediaTotalPages=Math.max(1,Math.ceil((state._allMedia||[]).length/ns));
