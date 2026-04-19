@@ -2383,7 +2383,7 @@ function _fmtMb(mb){
 // Archive icon — box with lid and latch
 const _ARCHIVE_ICON=`<svg width="13" height="12" viewBox="0 0 13 12" fill="none" aria-hidden="true" style="flex-shrink:0"><rect x="1" y="4.5" width="11" height="7" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="0.5" y="2" width="12" height="2.5" rx="1" stroke="currentColor" stroke-width="1.1"/><rect x="4.5" y="6.25" width="4" height="2" rx="0.75" stroke="currentColor" stroke-width="1"/></svg>`;
 // All-media multi-camera grid icon — 4 quads: TL=timelapse(violet), TR=motion(green), BL=person(blue), BR=object(amber)
-const _MOC_ALL_SVG=`<svg width="80" height="50" viewBox="0 0 80 50" fill="none" aria-hidden="true"><rect x="1" y="1" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="45" y="1" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="1" y="28" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="45" y="28" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><circle cx="6" cy="6" r="2" fill="#2a4460"/><circle cx="50" cy="6" r="2" fill="#2a4460"/><circle cx="6" cy="33" r="2" fill="#2a4460"/><circle cx="50" cy="33" r="2" fill="#2a4460"/><!-- TL: timelapse filmstrip (violet only) --><rect x="8" y="7" width="18" height="11" rx="1.5" stroke="#a855f7" stroke-width="1" fill="none" opacity=".75"/><line x1="11" y1="5.5" x2="11" y2="8" stroke="#a855f7" stroke-width=".9" opacity=".7"/><line x1="15" y1="5.5" x2="15" y2="8" stroke="#a855f7" stroke-width=".9" opacity=".7"/><line x1="19" y1="5.5" x2="19" y2="8" stroke="#a855f7" stroke-width=".9" opacity=".7"/><line x1="11" y1="16" x2="11" y2="18.5" stroke="#a855f7" stroke-width=".9" opacity=".7"/><line x1="15" y1="16" x2="15" y2="18.5" stroke="#a855f7" stroke-width=".9" opacity=".7"/><line x1="19" y1="16" x2="19" y2="18.5" stroke="#a855f7" stroke-width=".9" opacity=".7"/><line x1="8" y1="12.5" x2="26" y2="12.5" stroke="#a855f7" stroke-width=".8" opacity=".4"/><!-- TR: running person / motion (green) --><circle cx="64" cy="7" r="2" fill="#22c55e" opacity=".8"/><path d="M63.5 9L61 14L59 19" stroke="#22c55e" stroke-width="1.4" stroke-linecap="round" fill="none" opacity=".75"/><path d="M62 11L59.5 9.5" stroke="#22c55e" stroke-width="1.2" stroke-linecap="round" opacity=".7"/><path d="M62 11L65 10.5" stroke="#22c55e" stroke-width="1.2" stroke-linecap="round" opacity=".7"/><path d="M61 14L59 19" stroke="#22c55e" stroke-width="1.4" stroke-linecap="round" opacity=".75"/><path d="M61 14L64 19" stroke="#22c55e" stroke-width="1.4" stroke-linecap="round" opacity=".75"/><!-- BL: person detection (sky blue) --><circle cx="18" cy="34" r="2.8" fill="#60a5fa" opacity=".7"/><path d="M12 48C12 42 24 42 24 48" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" fill="none" opacity=".65"/><!-- BR: object box (amber) --><rect x="57" y="34" width="14" height="10" rx="1.5" fill="#f59e0b" opacity=".55"/><rect x="59.5" y="31.5" width="5" height="3" rx="1" fill="#f59e0b" opacity=".45"/><!-- Center connector --><circle cx="40" cy="25" r="5.5" fill="#1a2a40" stroke="#3a5878" stroke-width="1.2"/><polygon points="38,22.5 44,25 38,27.5" fill="#4a7090"/></svg>`;
+const _MOC_ALL_SVG=`<svg width="112" height="70" viewBox="0 0 80 50" fill="none" aria-hidden="true"><rect x="1" y="1" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="45" y="1" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="1" y="28" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="45" y="28" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><circle cx="6" cy="6" r="2" fill="#2a4460"/><circle cx="50" cy="6" r="2" fill="#2a4460"/><circle cx="6" cy="33" r="2" fill="#2a4460"/><circle cx="50" cy="33" r="2" fill="#2a4460"/><!-- TL: timelapse filmstrip (violet only) --><rect x="8" y="7" width="18" height="11" rx="1.5" stroke="#a855f7" stroke-width="1" fill="none" opacity=".75"/><line x1="11" y1="5.5" x2="11" y2="8" stroke="#a855f7" stroke-width=".9" opacity=".7"/><line x1="15" y1="5.5" x2="15" y2="8" stroke="#a855f7" stroke-width=".9" opacity=".7"/><line x1="19" y1="5.5" x2="19" y2="8" stroke="#a855f7" stroke-width=".9" opacity=".7"/><line x1="11" y1="16" x2="11" y2="18.5" stroke="#a855f7" stroke-width=".9" opacity=".7"/><line x1="15" y1="16" x2="15" y2="18.5" stroke="#a855f7" stroke-width=".9" opacity=".7"/><line x1="19" y1="16" x2="19" y2="18.5" stroke="#a855f7" stroke-width=".9" opacity=".7"/><line x1="8" y1="12.5" x2="26" y2="12.5" stroke="#a855f7" stroke-width=".8" opacity=".4"/><!-- TR: running person / motion (green) --><circle cx="64" cy="7" r="2" fill="#22c55e" opacity=".8"/><path d="M63.5 9L61 14L59 19" stroke="#22c55e" stroke-width="1.4" stroke-linecap="round" fill="none" opacity=".75"/><path d="M62 11L59.5 9.5" stroke="#22c55e" stroke-width="1.2" stroke-linecap="round" opacity=".7"/><path d="M62 11L65 10.5" stroke="#22c55e" stroke-width="1.2" stroke-linecap="round" opacity=".7"/><path d="M61 14L59 19" stroke="#22c55e" stroke-width="1.4" stroke-linecap="round" opacity=".75"/><path d="M61 14L64 19" stroke="#22c55e" stroke-width="1.4" stroke-linecap="round" opacity=".75"/><!-- BL: person detection (sky blue) --><circle cx="18" cy="34" r="2.8" fill="#60a5fa" opacity=".7"/><path d="M12 48C12 42 24 42 24 48" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" fill="none" opacity=".65"/><!-- BR: object box (amber) --><rect x="57" y="34" width="14" height="10" rx="1.5" fill="#f59e0b" opacity=".55"/><rect x="59.5" y="31.5" width="5" height="3" rx="1" fill="#f59e0b" opacity=".45"/><!-- Center connector --><circle cx="40" cy="25" r="5.5" fill="#1a2a40" stroke="#3a5878" stroke-width="1.2"/><polygon points="38,22.5 44,25 38,27.5" fill="#4a7090"/></svg>`;
 // Count chips for media overview cards
 function _mocChip(type,count,title){
   const icons={
@@ -2483,31 +2483,28 @@ function renderMediaOverview(){
     </div>`;
   }
 
-  // Category shortcuts section
+  // Category filter bar — full-width row below camera cards
   const _CAT_DEFS=[
-    {label:'motion',name:'Bewegung'},
-    {label:'person',name:'Person'},
-    {label:'cat',name:'Katze'},
-    {label:'bird',name:'Vogel'},
-    {label:'car',name:'Auto'},
-    {label:'timelapse',name:'Timelapse'},
+    {label:'motion', name:'Bewegung', clr:'#22c55e'},
+    {label:'person', name:'Person',   clr:'#7c4dff'},
+    {label:'cat',    name:'Katze',    clr:'#e91e8c'},
+    {label:'bird',   name:'Vogel',    clr:'#0ea5e9'},
+    {label:'car',    name:'Auto',     clr:'#f59e0b'},
+    {label:'timelapse',name:'Timelapse',clr:'#a855f7'},
   ];
-  const _CAT_COLORS={motion:'#22c55e',person:'#7c4dff',cat:'#e91e8c',bird:'#0ea5e9',car:'#f59e0b',timelapse:'#a855f7'};
-  const _TL_CAT_ICON=`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="18" x2="8" y2="22"/><line x1="16" y1="18" x2="16" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`;
-  const catCards=_CAT_DEFS.map(({label,name})=>{
-    const clr=_CAT_COLORS[label]||'#4a7090';
-    const icon=label==='timelapse'?_TL_CAT_ICON.replace(/width="20" height="20"/,'width="24" height="24"'):(OBJ_SVG[label]||'').replace('width="16" height="16"','width="24" height="24"');
-    return `<div class="moc-cat-card" onclick="openCategoryDrilldown('${esc(label)}')" style="border-bottom:2px solid ${clr}40">
-      <div class="moc-cat-icon">${icon}</div>
-      <div class="moc-cat-name">${esc(name)}</div>
-    </div>`;
+  const _TL_CAT_ICON=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="18" x2="8" y2="22"/><line x1="16" y1="18" x2="16" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`;
+  const catBtns=_CAT_DEFS.map(({label,name,clr})=>{
+    const icon=(label==='timelapse'?_TL_CAT_ICON:(OBJ_SVG[label]||'').replace('width="16" height="16"','width="18" height="18"'));
+    return `<button class="moc-cat-btn" onclick="openCategoryDrilldown('${esc(label)}')"
+      style="--cb:${clr};color:${clr};background:${clr}18">
+      ${icon}<span class="moc-cat-label">${esc(name)}</span>
+    </button>`;
   }).join('');
   const catSection=`<div class="moc-cat-section">
-    <div class="moc-archive-hdr"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true" style="flex-shrink:0"><rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" stroke-width="1.3"/></svg> Nach Kategorie</div>
-    <div class="moc-cat-grid">${catCards}</div>
+    <div class="moc-cat-bar">${catBtns}</div>
   </div>`;
 
-  ov.innerHTML=allCard+camCards+archivedHtml+catSection;
+  ov.innerHTML=`<div class="media-overview-grid">${allCard}${camCards}</div>`+archivedHtml+catSection;
 }
 window.openCategoryDrilldown=async function(label){
   state.mediaCamera=null;
