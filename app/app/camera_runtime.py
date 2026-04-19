@@ -78,13 +78,17 @@ class CameraRuntime:
         self.prev_gray = None
         self._error_streak = 0
         # Video recording state (ring pre-buffer + session tracking)
-        self._pre_buffer: deque = deque(maxlen=90)   # 3 s @ up to 30 fps
+        self._pre_buffer: deque = deque(maxlen=300)  # (frame, epoch_float) pairs; time-filtered to 3s on use
         self._recording: bool = False
         self._rec_frames: list = []
         self._rec_start_time: datetime | None = None
         self._last_motion_ts: datetime | None = None  # last frame with confirmed motion
         self._rec_event_meta: dict | None = None      # metadata captured at session start
         self._prev_good_frame = None                  # last accepted frame (MAD reference)
+        # Main-stream FPS measurement (rolling 5s window)
+        self._main_fps: float = 0.0
+        self._main_fps_frames: int = 0
+        self._main_fps_window_start: float = time.time()
         proc = self.global_cfg.get("processing", {})
         self.detector = CoralObjectDetector(proc.get("detection", {}))
         self.bird_classifier = BirdSpeciesClassifier(proc.get("bird_species", {}))
@@ -495,42 +499,84 @@ class CameraRuntime:
             "thumb_bytes": thumb_bytes,
         }
 
-    def _finalize_motion_clip(self, frames: list, meta: dict):
-        """Save MP4 clip, write event JSON, send Telegram. Runs in a daemon thread."""
+    def _finalize_motion_clip(self, frames: list, meta: dict, fps: float = 10.0):
+        """Save MP4 clip with ffmpeg faststart, verify integrity, write event JSON, send Telegram."""
+        import subprocess as _subp
         start_time: datetime = meta["time"]
         event_id: str = meta["event_id"]
         storage_root = Path(self.global_cfg["storage"]["root"])
         public_base = (self.global_cfg.get("server", {}).get("public_base_url") or "").rstrip("/")
 
-        # Save MP4 — skip corrupt frames by replacing with previous good frame
         vid_path = None
+        video_url = None
+        video_relpath = None
+        duration_s: float = 0.0
+        file_size_bytes: int = 0
         try:
             day_dir = storage_root / "motion_detection" / self.camera_id / start_time.strftime("%Y-%m-%d")
             day_dir.mkdir(parents=True, exist_ok=True)
             vid_path = day_dir / f"{event_id}.mp4"
-            interval = max(0.05, float(
-                self.global_cfg.get("processing", {}).get("motion", {}).get("frame_interval_ms", 150)
-            ) / 1000.0)
-            fps = max(5, min(25, int(round(1.0 / interval))))
+            fps_clamped = max(5.0, min(30.0, float(fps)))
             h, w = frames[0].shape[:2]
-            writer = cv2.VideoWriter(str(vid_path), cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+            writer = cv2.VideoWriter(str(vid_path), cv2.VideoWriter_fourcc(*'mp4v'), fps_clamped, (w, h))
             last_good = frames[0]
             for f in frames:
                 if self._is_frame_valid(f) and not self._is_frame_too_different(f, last_good):
                     writer.write(f)
                     last_good = f
                 else:
-                    writer.write(last_good)  # replace corrupt frame with last good
+                    writer.write(last_good)
             writer.release()
+
+            # Fix moov atom placement so browsers report correct duration
+            tmp_path = vid_path.with_name(vid_path.stem + '_fs.mp4')
+            try:
+                r = _subp.run(
+                    ['ffmpeg', '-y', '-i', str(vid_path), '-c', 'copy',
+                     '-movflags', '+faststart', str(tmp_path)],
+                    capture_output=True, timeout=60)
+                if r.returncode == 0 and tmp_path.exists() and tmp_path.stat().st_size > 1024:
+                    vid_path.unlink()
+                    tmp_path.rename(vid_path)
+                else:
+                    log.warning("[%s] ffmpeg faststart failed (rc=%d)", self.camera_id, r.returncode)
+                    if tmp_path.exists():
+                        tmp_path.unlink()
+            except Exception as fe:
+                log.warning("[%s] ffmpeg faststart error: %s", self.camera_id, fe)
+                try:
+                    if tmp_path.exists():
+                        tmp_path.unlink()
+                except Exception:
+                    pass
+
+            # Verify output: must exist, have size, and be a readable video with real duration
+            if not vid_path.exists() or vid_path.stat().st_size < 1024:
+                raise RuntimeError(
+                    f"clip empty/missing ({vid_path.stat().st_size if vid_path.exists() else 0} bytes)")
+            check = cv2.VideoCapture(str(vid_path))
+            fc = int(check.get(cv2.CAP_PROP_FRAME_COUNT))
+            cfps = check.get(cv2.CAP_PROP_FPS) or fps_clamped
+            check.release()
+            dur = fc / cfps if cfps > 0 else 0.0
+            if fc < 3 or dur < 0.3:
+                raise RuntimeError(f"clip broken: frames={fc} dur={dur:.2f}s")
+
+            duration_s = round(dur, 2)
+            file_size_bytes = vid_path.stat().st_size
             rel = vid_path.relative_to(storage_root)
             video_url = f"{public_base}/media/{rel.as_posix()}" if public_base else f"/media/{rel.as_posix()}"
             video_relpath = rel.as_posix()
-            log.info("[%s] Motion clip saved: %s (%d frames, %.1fs)",
-                     self.camera_id, vid_path.name, len(frames), len(frames) / fps)
+            log.info("[%s] Motion clip saved: %s (%d frames %.1fs @ %.1ffps %dKB)",
+                     self.camera_id, vid_path.name, len(frames), dur, fps_clamped,
+                     file_size_bytes // 1024)
         except Exception as e:
             log.error("[%s] Motion clip save error: %s", self.camera_id, e)
-            video_url = None
-            video_relpath = None
+            if vid_path is not None and vid_path.exists():
+                try:
+                    vid_path.unlink()
+                except Exception:
+                    pass
 
         # Write event JSON
         event = {
@@ -554,6 +600,8 @@ class CameraRuntime:
             "snapshot_relpath": None,
             "video_url": video_url,
             "video_relpath": video_relpath,
+            "duration_s": duration_s,
+            "file_size_bytes": file_size_bytes,
         }
         self.store.add_event(self.camera_id, event)
 
@@ -919,7 +967,7 @@ class CameraRuntime:
             interval = max(0.05, float(self.cfg.get("frame_interval_ms") or self.global_cfg.get("processing", {}).get("motion", {}).get("frame_interval_ms", 150)) / 1000.0)
         else:
             interval = max(1.0, float(self.cfg.get("snapshot_interval_s") or 3))
-        cooldown = int(self.global_cfg.get("processing", {}).get("event_cooldown_seconds", 25))
+        cooldown = max(10, int(self.global_cfg.get("processing", {}).get("event_cooldown_seconds", 10)))
         while self.running:
             # Timelapse threads may request a forced reconnect when they detect a stale stream
             if self._force_reconnect:
@@ -1011,7 +1059,16 @@ class CameraRuntime:
 
                 if self.cfg.get("rtsp_url"):
                     # ── RTSP: pre-buffer + per-session video recording ────────
-                    self._pre_buffer.append(proc_frame.copy())
+                    # Measure main-stream FPS over a rolling 5s window
+                    self._main_fps_frames += 1
+                    _fps_el = time.time() - self._main_fps_window_start
+                    if _fps_el >= 5.0:
+                        self._main_fps = round(self._main_fps_frames / _fps_el, 1)
+                        self._main_fps_frames = 0
+                        self._main_fps_window_start = time.time()
+
+                    # Pre-buffer: store (frame, timestamp) so we can time-filter to last 3 s
+                    self._pre_buffer.append((proc_frame.copy(), time.time()))
 
                     if has_motion:
                         self._last_motion_ts = now_dt
@@ -1021,23 +1078,29 @@ class CameraRuntime:
                             if has_person or elapsed >= cooldown:
                                 self._recording = True
                                 self._rec_start_time = now_dt
-                                self._rec_frames = list(self._pre_buffer)
+                                # Extract only the last 3 s of good frames from pre-buffer
+                                pre_cutoff = time.time() - 3.0
+                                self._rec_frames = [f for f, ts in self._pre_buffer if ts >= pre_cutoff]
                                 self._rec_event_meta = self._build_event_meta(
                                     now_dt, labels, detections, drawn, effective_bbox)
                                 self.last_event_at = now_dt
                                 self.event_counter_today += 1
-                                log.info("[%s] Motion recording started (labels=%s)", self.camera_id, labels)
+                                log.info("[%s] Motion recording started (labels=%s, prebuf=%d frames)",
+                                         self.camera_id, labels, len(self._rec_frames))
                         if self._recording:
                             self._rec_frames.append(proc_frame.copy())
 
                     elif self._recording:
-                        # Post-buffer: keep collecting until 2.5 s after last motion or 60 s cap
+                        # Post-buffer: keep collecting until 3 s after last motion or 60 s cap
                         self._rec_frames.append(proc_frame.copy())
                         since_last = (now_dt - self._last_motion_ts).total_seconds() if self._last_motion_ts else 999
                         since_start = (now_dt - self._rec_start_time).total_seconds() if self._rec_start_time else 0
-                        if since_last >= 2.5 or since_start >= 60:
+                        if since_last >= 3.0 or since_start >= 60:
                             frames_snap = self._rec_frames[:]
                             meta_snap = self._rec_event_meta
+                            # Compute actual FPS from recording duration and frame count
+                            measured_fps = (max(5.0, min(30.0, len(frames_snap) / since_start))
+                                            if since_start > 0.5 else (self._main_fps or 10.0))
                             self._recording = False
                             self._rec_frames = []
                             self._rec_start_time = None
@@ -1045,7 +1108,8 @@ class CameraRuntime:
                             self._rec_event_meta = None
                             if meta_snap and len(frames_snap) >= 3:
                                 threading.Thread(target=self._finalize_motion_clip,
-                                                 args=(frames_snap, meta_snap), daemon=True).start()
+                                                 args=(frames_snap, meta_snap, measured_fps),
+                                                 daemon=True).start()
 
                 else:
                     # ── Snapshot camera: save JPEG event (unchanged behaviour) ─
