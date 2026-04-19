@@ -4,9 +4,11 @@ app/config/config.yaml
 storage/settings.json
 app/storage/settings.json
 
-# Runtime storage - generated data
+# Runtime storage - generated data (all binary/media output)
 storage/events/
 storage/timelapse/
+storage/motion_detection/
+storage/timelapse_frames/
 app/storage/events/
 app/storage/timelapse/
 app/storage/
