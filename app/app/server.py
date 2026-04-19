@@ -613,7 +613,9 @@ def api_media_storage_stats():
         resolved_name = name_hint or cam_id
         cam_dir = events_dir / cam_id
         if cam_dir.exists():
-            for pattern in ("*.jpg", "*.jpeg"):
+            # Count all event media: photos (.jpg/.jpeg) AND video clips (.mp4).
+            # Timelapse .mp4s live under storage/timelapse/ (scanned below) — not here.
+            for pattern in ("*.jpg", "*.jpeg", "*.mp4"):
                 for p in cam_dir.rglob(pattern):
                     try:
                         size_bytes += p.stat().st_size
