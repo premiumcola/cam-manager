@@ -5,6 +5,10 @@ services:
       dockerfile: docker/Dockerfile
       cache_from:
         - tam-spy:latest
+      args:
+        BUILD_COMMIT: ${BUILD_COMMIT:-dev}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+        BUILD_COUNT: ${BUILD_COUNT:-0}
     image: tam-spy
     container_name: tam-spy
     restart: unless-stopped

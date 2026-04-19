@@ -1,5 +1,6 @@
 
 from __future__ import annotations
+import os
 from pathlib import Path
 from flask import Flask, jsonify, request, Response, send_from_directory, render_template
 from datetime import datetime, timedelta
@@ -58,11 +59,16 @@ def _auto_detect_subnet() -> str:
 from .mqtt_service import MQTTService
 
 def _get_build_info() -> dict:
-    """Return build info: try git subprocess (dev), then config/buildinfo.json
-    (volume-mounted in Docker — always current after docker restart), then the
-    baked-in app/buildinfo.json as last resort."""
+    """Return build info: ENV vars injected at build time → git subprocess (dev)
+    → volume-mounted config/buildinfo.json → baked-in app/buildinfo.json."""
     import subprocess, json as _json
-    result: dict = {"commit": "dev", "date": "—", "count": "—"}
+    env_commit = os.environ.get("BUILD_COMMIT", "").strip()
+    if env_commit and env_commit != "dev":
+        return {
+            "commit": env_commit,
+            "date": os.environ.get("BUILD_DATE", "—").strip(),
+            "count": os.environ.get("BUILD_COUNT", "—").strip(),
+        }
     try:
         repo_root = Path(__file__).resolve().parent.parent.parent
         commit = subprocess.check_output(
@@ -78,9 +84,6 @@ def _get_build_info() -> dict:
             return {"commit": commit, "date": date, "count": count}
     except Exception:
         pass
-    # config/ is volume-mounted in Docker (./app/config:/app/config) so this file
-    # reflects the real current commit after every docker restart — update it on
-    # the host with:  git log -1 --format='{"commit":"%h","date":"%ci","count":COUNT}' > app/config/buildinfo.json
     for bi in [
         Path(__file__).resolve().parent.parent / "config" / "buildinfo.json",
         Path(__file__).parent / "buildinfo.json",
@@ -91,7 +94,7 @@ def _get_build_info() -> dict:
                 return data
         except Exception:
             pass
-    return result
+    return {"commit": "dev", "date": "—", "count": "—"}
 
 
 _BUILD_INFO = _get_build_info()
