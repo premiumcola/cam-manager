@@ -183,7 +183,7 @@ class EventStore:
         }
 
     def delete_event(self, camera_id: str, event_id: str) -> dict:
-        """Delete event JSON and its snapshot file. Returns info about what was deleted."""
+        """Delete event JSON and its snapshot/video file. Returns info about what was deleted."""
         cam_dir = self._cam_dir(camera_id)
         matches = list(cam_dir.rglob(f"{event_id}.json"))
         event = None
@@ -200,10 +200,16 @@ class EventStore:
             if snap_path.exists():
                 snap_path.unlink(missing_ok=True)
                 snap_deleted = True
-        return {"json_deleted": event is not None, "snap_deleted": snap_deleted}
+        vid_deleted = False
+        if event and event.get("video_relpath"):
+            vid_path = self.root / event["video_relpath"]
+            if vid_path.exists():
+                vid_path.unlink(missing_ok=True)
+                vid_deleted = True
+        return {"json_deleted": event is not None, "snap_deleted": snap_deleted, "vid_deleted": vid_deleted}
 
     def purge_orphans(self) -> int:
-        """Delete event JSON files whose snapshot file no longer exists. Returns count removed."""
+        """Delete event JSON files whose media file no longer exists. Returns count removed."""
         removed = 0
         if not self.events_dir.exists():
             return 0
@@ -216,7 +222,11 @@ class EventStore:
                     removed += 1
                     continue
                 snap_rel = obj.get("snapshot_relpath")
-                if snap_rel and not (self.root / snap_rel).exists():
+                vid_rel = obj.get("video_relpath")
+                snap_missing = snap_rel and not (self.root / snap_rel).exists()
+                vid_missing = vid_rel and not (self.root / vid_rel).exists()
+                # Orphan: has a media reference that no longer exists on disk
+                if snap_missing or vid_missing:
                     jf.unlink(missing_ok=True)
                     removed += 1
         return removed

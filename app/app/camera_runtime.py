@@ -77,10 +77,14 @@ class CameraRuntime:
         self.connect_time = None
         self.prev_gray = None
         self._error_streak = 0
-        # Video recording state
-        self._motion_frames: list = []
-        self._motion_start_time: datetime | None = None
-        self._last_motion_time: datetime | None = None
+        # Video recording state (ring pre-buffer + session tracking)
+        self._pre_buffer: deque = deque(maxlen=90)   # 3 s @ up to 30 fps
+        self._recording: bool = False
+        self._rec_frames: list = []
+        self._rec_start_time: datetime | None = None
+        self._last_motion_ts: datetime | None = None  # last frame with confirmed motion
+        self._rec_event_meta: dict | None = None      # metadata captured at session start
+        self._prev_good_frame = None                  # last accepted frame (MAD reference)
         proc = self.global_cfg.get("processing", {})
         self.detector = CoralObjectDetector(proc.get("detection", {}))
         self.bird_classifier = BirdSpeciesClassifier(proc.get("bird_species", {}))
@@ -296,7 +300,12 @@ class CameraRuntime:
         return frame
 
     def _is_frame_valid(self, frame) -> bool:
-        """Reject corrupt, uniform-gray, white, pink-artifact, or near-black frames."""
+        """Reject corrupt, uniform-gray, white, pink-artifact, or near-black frames.
+        Also rejects frames with large solid-color quadrants (RTSP corruption pattern)
+        and frames with JPEG block artifacts (abnormally uniform 8×8 blocks).
+        False-positive analysis: cam-Werkstatt.rechts.oben fires heavily during cloud/sun
+        transitions and whenever H.265 decode produces solid magenta quadrants — both
+        pass the simple channel-mean test but fail quadrant-HSV and block-variance checks."""
         if frame is None or frame.size == 0:
             return False
         h, w = frame.shape[:2]
@@ -309,7 +318,6 @@ class CameraRuntime:
         b_ch, g_ch, r_ch = cv2.split(frame)
         mean_r = float(r_ch.mean())
         mean_g = float(g_ch.mean())
-        mean_b = float(b_ch.mean())
         # Reject H.265 pink/magenta corruption: dominant red channel + low green/blue
         if mean_r > 180 and mean_r > mean_g * 2:
             return False
@@ -320,7 +328,42 @@ class CameraRuntime:
         )
         if uniform > 0.4 * h * w:
             return False
+        # Quadrant solid-color check: reject if any quadrant is >60% high-saturation
+        # pink/magenta (H=135–165 in OpenCV's 0–179 scale, which maps 270–330°)
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        hh, hw = h // 2, w // 2
+        for qy, qx in [(0, 0), (0, hw), (hh, 0), (hh, hw)]:
+            q = hsv[qy:qy + hh, qx:qx + hw]
+            q_h, q_s, q_v = q[:, :, 0], q[:, :, 1], q[:, :, 2]
+            vivid = (q_s > 178) & (q_v > 127)
+            pink = vivid & (q_h >= 135) & (q_h <= 165)
+            qpix = hh * hw
+            if qpix > 0 and float(np.sum(pink)) / qpix > 0.60:
+                log.debug("[%s] Corrupt quadrant (pink/magenta >60%%), frame rejected", self.camera_id)
+                return False
+        # JPEG block-artifact check: if >50% of sampled 8×8 blocks have near-zero
+        # variance the image is a solid-fill decode artifact, not a real scene.
+        bs = 8
+        low_var = 0
+        total_blocks = 0
+        for by in range(0, h - bs, bs * 3):
+            for bx in range(0, w - bs, bs * 3):
+                blk = gray[by:by + bs, bx:bx + bs]
+                if float(np.var(blk)) < 2.0:
+                    low_var += 1
+                total_blocks += 1
+        if total_blocks > 0 and low_var > total_blocks * 0.50:
+            log.debug("[%s] Block-artifact frame rejected (%d/%d uniform blocks)",
+                      self.camera_id, low_var, total_blocks)
+            return False
         return True
+
+    def _is_frame_too_different(self, frame, prev_frame) -> bool:
+        """Return True if mean absolute difference vs previous frame exceeds 60 (glitch/corrupt)."""
+        if prev_frame is None or frame.shape != prev_frame.shape:
+            return False
+        mad = float(np.mean(np.abs(frame.astype(np.int16) - prev_frame.astype(np.int16))))
+        return mad > 60
 
     @staticmethod
     def _has_corrupt_strip(frame, strip_height: int = 60) -> bool:
@@ -335,7 +378,8 @@ class CameraRuntime:
     def _motion_detect(self, frame):
         """Returns (labels: list[str], motion_bbox: tuple|None).
         motion_bbox is (x, y, w, h) bounding rect of all motion combined.
-        Applies per-camera exclusion masks and motion_sensitivity threshold."""
+        Applies per-camera exclusion masks and motion_sensitivity threshold.
+        Brightness-normalises both frames before diff to suppress cloud/sun transitions."""
         proc = self.global_cfg.get("processing", {}).get("motion", {})
         if not proc.get("enabled", True):
             return [], None
@@ -350,9 +394,17 @@ class CameraRuntime:
         if self.prev_gray is None:
             self.prev_gray = gray
             return [], None
+        # Brightness normalisation: scale current frame to match previous mean so that
+        # gradual global illumination changes (clouds, day/night) don't produce diff.
+        mean_prev = float(np.mean(self.prev_gray))
+        mean_curr = float(np.mean(gray))
+        if mean_curr > 1:
+            scale = mean_prev / mean_curr
+            if 0.5 < scale < 2.0:  # only correct moderate shifts; ignore extreme jumps
+                gray = np.clip(gray.astype(np.float32) * scale, 0, 255).astype(np.uint8)
         diff = cv2.absdiff(self.prev_gray, gray)
         self.prev_gray = gray
-        _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+        _, thresh = cv2.threshold(diff, 28, 255, cv2.THRESH_BINARY)
         thresh = cv2.dilate(thresh, None, iterations=2)
         # Apply camera exclusion masks: zero out masked regions
         cam_masks = self.cfg.get("masks", [])
@@ -376,6 +428,11 @@ class CameraRuntime:
             min_area = int(base_min_area / max(0.1, sensitivity))
         else:
             min_area = int(proc.get("min_area", 3000))
+        # Minimum changed-pixel count: a global brightness shift produces many small
+        # changed pixels but no large contour — reject if total changed area < 1% of frame.
+        h_f2, w_f2 = thresh.shape[:2]
+        if int(np.sum(thresh > 0)) < int(h_f2 * w_f2 * 0.01):
+            return [], None
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         big = [c for c in contours if cv2.contourArea(c) >= min_area]
         if not big:
@@ -392,27 +449,178 @@ class CameraRuntime:
         groups = {g.get("id"): g for g in self.global_cfg.get("camera_groups", [])}
         return groups.get(self.cfg.get("group_id"), {})
 
-    def _save_motion_video(self, start_time: datetime, frames: list) -> str | None:
-        """Save buffered frames as MP4. Returns path or None."""
-        if not frames:
-            return None
+    def _build_event_meta(self, ts: datetime, labels: list, detections: list,
+                          drawn_frame, effective_bbox) -> dict:
+        """Snapshot of all event metadata at the moment motion recording starts."""
+        event_id = ts.strftime("%Y%m%d-%H%M%S-%f")
+        top_det = max(detections, key=lambda d: d.score, default=None)
+        cat_match = next((d.identity for d in detections if d.label == "cat" and d.identity), None)
+        person_match = next((d.identity for d in detections if d.label == "person" and d.identity), None)
+        bird_species = next((d.species for d in detections if d.label == "bird" and d.species), None)
+        group = self._group()
+        after_hours = is_in_schedule(self.cfg.get("schedule") or group.get("schedule") or {})
+        whitelisted = bool(person_match and (person_match in (self.cfg.get("whitelist_names") or [])))
+        if self.person_registry and person_match:
+            p = self.person_registry.get_profile(person_match) or {}
+            whitelisted = whitelisted or bool(p.get("whitelisted"))
+        level, notify = choose_alarm_level(group, list(sorted(set(labels))), after_hours, whitelisted)
+        # Encode thumbnail for Telegram (in memory, never written as JPEG to disk)
+        thumb_bytes = None
+        if drawn_frame is not None:
+            save_thumb = drawn_frame.copy()
+            if effective_bbox is not None:
+                mx, my, mw, mh = effective_bbox
+                cv2.rectangle(save_thumb, (mx, my), (mx + mw, my + mh), (0, 220, 0), 2)
+            h_px, w_px = save_thumb.shape[:2]
+            if w_px > 1280:
+                scale = 1280 / w_px
+                save_thumb = cv2.resize(save_thumb, (1280, int(h_px * scale)), interpolation=cv2.INTER_AREA)
+            ok, buf = cv2.imencode('.jpg', save_thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+            if ok:
+                thumb_bytes = buf.tobytes()
+        return {
+            "event_id": event_id,
+            "time": ts,
+            "labels": sorted(set(labels)),
+            "top_label": top_det.label if top_det else labels[0],
+            "detections": [d.to_dict() for d in detections],
+            "bird_species": bird_species,
+            "cat_name": cat_match,
+            "person_name": person_match,
+            "whitelisted": whitelisted,
+            "alarm_level": level,
+            "after_hours": after_hours,
+            "notify": notify,
+            "group": group,
+            "thumb_bytes": thumb_bytes,
+        }
+
+    def _finalize_motion_clip(self, frames: list, meta: dict):
+        """Save MP4 clip, write event JSON, send Telegram. Runs in a daemon thread."""
+        start_time: datetime = meta["time"]
+        event_id: str = meta["event_id"]
+        storage_root = Path(self.global_cfg["storage"]["root"])
+        public_base = (self.global_cfg.get("server", {}).get("public_base_url") or "").rstrip("/")
+
+        # Save MP4 — skip corrupt frames by replacing with previous good frame
+        vid_path = None
         try:
-            day_dir = Path(self.global_cfg["storage"]["root"]) / "motion_detection" / self.camera_id / start_time.strftime("%Y-%m-%d")
+            day_dir = storage_root / "motion_detection" / self.camera_id / start_time.strftime("%Y-%m-%d")
             day_dir.mkdir(parents=True, exist_ok=True)
-            event_id = start_time.strftime("%Y%m%d-%H%M%S-vid")
             vid_path = day_dir / f"{event_id}.mp4"
+            interval = max(0.05, float(
+                self.global_cfg.get("processing", {}).get("motion", {}).get("frame_interval_ms", 150)
+            ) / 1000.0)
+            fps = max(5, min(25, int(round(1.0 / interval))))
             h, w = frames[0].shape[:2]
-            interval = max(0.05, float(self.global_cfg.get("processing", {}).get("motion", {}).get("frame_interval_ms", 150)) / 1000.0)
-            fps = max(5, min(25, int(1.0 / interval)))
             writer = cv2.VideoWriter(str(vid_path), cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+            last_good = frames[0]
             for f in frames:
-                writer.write(f)
+                if self._is_frame_valid(f) and not self._is_frame_too_different(f, last_good):
+                    writer.write(f)
+                    last_good = f
+                else:
+                    writer.write(last_good)  # replace corrupt frame with last good
             writer.release()
-            log.info("[%s] Motion video saved: %s (%d frames, %.1fs)", self.camera_id, vid_path.name, len(frames), len(frames) / fps)
-            return str(vid_path)
+            rel = vid_path.relative_to(storage_root)
+            video_url = f"{public_base}/media/{rel.as_posix()}" if public_base else f"/media/{rel.as_posix()}"
+            video_relpath = rel.as_posix()
+            log.info("[%s] Motion clip saved: %s (%d frames, %.1fs)",
+                     self.camera_id, vid_path.name, len(frames), len(frames) / fps)
         except Exception as e:
-            log.error("[%s] Video save error: %s", self.camera_id, e)
-            return None
+            log.error("[%s] Motion clip save error: %s", self.camera_id, e)
+            video_url = None
+            video_relpath = None
+
+        # Write event JSON
+        event = {
+            "event_id": event_id,
+            "camera_id": self.camera_id,
+            "camera_name": self.cfg.get("name", self.camera_id),
+            "group_id": self.cfg.get("group_id"),
+            "camera_role": self.cfg.get("role"),
+            "armed": bool(self.cfg.get("armed", True)),
+            "after_hours": meta["after_hours"],
+            "alarm_level": meta["alarm_level"],
+            "time": start_time.isoformat(timespec="seconds"),
+            "labels": meta["labels"],
+            "top_label": meta["top_label"],
+            "bird_species": meta["bird_species"],
+            "cat_name": meta["cat_name"],
+            "person_name": meta["person_name"],
+            "whitelisted": meta["whitelisted"],
+            "detections": meta["detections"],
+            "snapshot_url": None,
+            "snapshot_relpath": None,
+            "video_url": video_url,
+            "video_relpath": video_relpath,
+        }
+        self.store.add_event(self.camera_id, event)
+
+        if self.mqtt and self.cfg.get("mqtt_enabled", True):
+            self.mqtt.publish(f"events/{self.camera_id}", event)
+
+        # Achievement unlock
+        bird_species = meta.get("bird_species")
+        if bird_species:
+            newly_unlocked = self._try_unlock_achievement(bird_species, bird_species)
+            if newly_unlocked and self.notifier:
+                try:
+                    ach_msg = (f"🏆 Neue Trophäe freigeschaltet: {bird_species}!\n"
+                               f"📷 Kamera: {self.cfg.get('name', self.camera_id)}")
+                    threading.Thread(target=self.notifier.send_alert_sync,
+                                     kwargs={"caption": ach_msg}, daemon=True).start()
+                except Exception:
+                    pass
+
+        # Telegram
+        notify = meta.get("notify", False)
+        _send_tg = notify and self.cfg.get("telegram_enabled", True)
+        if _send_tg:
+            tg_cfg = self.global_cfg.get("telegram", {})
+            tg_groups = tg_cfg.get("groups", {})
+            g_id = self.cfg.get("group_id")
+            if g_id and g_id in tg_groups:
+                gr = tg_groups[g_id]
+                if not gr.get("enabled", True):
+                    _send_tg = False
+                elif gr.get("objects") and not any(lbl in set(gr["objects"]) for lbl in meta["labels"]):
+                    _send_tg = False
+                elif gr.get("from") and gr.get("to"):
+                    if not is_in_schedule({"enabled": True, "start": gr["from"], "end": gr["to"]}):
+                        _send_tg = False
+        if _send_tg and self.notifier:
+            labels = meta["labels"]
+            cat_match = meta.get("cat_name")
+            person_match = meta.get("person_name")
+            whitelisted = meta.get("whitelisted", False)
+            level = meta.get("alarm_level")
+            time_str = start_time.isoformat(timespec="seconds")
+            if bird_species:
+                top_score = next((d.get("score") for d in meta["detections"]
+                                  if d.get("label") == "bird"), None)
+                score_pct = f"{top_score * 100:.0f}" if top_score else "?"
+                caption = (f"🐦 Vogel erkannt: {bird_species}\n"
+                           f"📷 Kamera: {self.cfg.get('name', self.camera_id)}\n"
+                           f"⏰ {time_str}\n📊 Sicherheit: {score_pct}%")
+            else:
+                details = []
+                if cat_match:
+                    details.append(f"🐈 {cat_match}")
+                if person_match:
+                    details.append(f"🧍 {person_match}{' (Whitelist)' if whitelisted else ''}")
+                caption = (f"{'🚨' if level == 'alarm' else 'ℹ️'} {', '.join(sorted(set(labels)))}\n"
+                           f"📷 {self.cfg.get('name', self.camera_id)}\n"
+                           f"📍 {self.cfg.get('location', '')}\n🕒 {time_str}")
+                if details:
+                    caption += "\n" + " · ".join(details)
+            self.notifier.send_alert_sync(
+                caption=caption,
+                jpeg_bytes=meta.get("thumb_bytes"),
+                snapshot_url=video_url,
+                dashboard_url=public_base,
+                camera_id=self.camera_id,
+            )
 
     def _try_unlock_achievement(self, species_name: str, species_label: str) -> bool:
         """Unlock achievement for a bird/animal species. Returns True if newly unlocked."""
@@ -791,139 +999,128 @@ class CameraRuntime:
                 drawn = draw_detections(proc_frame, detections)
                 with self.lock:
                     self.preview = drawn
-                # ── Video recording: buffer frames during motion ──────────────
-                has_motion_now = bool(labels)
-                now_t = datetime.now()
-                if has_motion_now:
-                    if self._motion_start_time is None:
-                        self._motion_start_time = now_t
-                    self._last_motion_time = now_t
-                    if self.cfg.get("rtsp_url"):
-                        dur_so_far = (now_t - self._motion_start_time).total_seconds()
-                        if dur_so_far <= 30:
-                            self._motion_frames.append(proc_frame.copy())
-                        elif len(self._motion_frames) >= 5:
-                            # > 30s segment – save and start fresh
-                            self._save_motion_video(self._motion_start_time, self._motion_frames)
-                            self._motion_frames = [proc_frame.copy()]
-                            self._motion_start_time = now_t
-                elif self._last_motion_time is not None:
-                    since_last = (now_t - self._last_motion_time).total_seconds()
-                    if since_last >= 30:
-                        motion_total = (self._last_motion_time - self._motion_start_time).total_seconds() if self._motion_start_time else 0
-                        if motion_total >= 10 and len(self._motion_frames) >= 5:
-                            self._save_motion_video(self._motion_start_time, self._motion_frames)
-                        self._motion_frames = []
-                        self._motion_start_time = None
-                        self._last_motion_time = None
+                # ── MAD glitch check vs previous accepted frame ───────────────
+                if self.cfg.get("rtsp_url") and self._is_frame_too_different(proc_frame, self._prev_good_frame):
+                    log.warning("[%s] Frame MAD>60 (glitch/corrupt), skipped", self.camera_id)
+                    time.sleep(interval)
+                    continue
+                self._prev_good_frame = proc_frame  # no copy — proc_frame is already a new array
 
-                # ── Event trigger: person bypasses cooldown ──────────────────
-                has_person = "person" in labels
-                elapsed = (datetime.now() - self.last_event_at).total_seconds()
-                if labels and (has_person or elapsed >= cooldown):
-                    self.last_event_at = datetime.now()
-                    self.event_counter_today += 1
-                    ts = datetime.now()
-                    event_id = ts.strftime("%Y%m%d-%H%M%S-%f")
-                    day_dir = Path(self.global_cfg["storage"]["root"]) / "motion_detection" / self.camera_id / ts.strftime("%Y-%m-%d")
-                    day_dir.mkdir(parents=True, exist_ok=True)
-                    snap_path = day_dir / f"{event_id}.jpg"
-                    # drawn is already based on proc_frame (bottom-cropped), so saved snapshot is clean
-                    save_frame = drawn.copy()
-                    # Draw green motion bounding box if motion was detected (coords match proc_frame)
-                    if effective_bbox is not None:
-                        mx, my, mw, mh = effective_bbox
-                        cv2.rectangle(save_frame, (mx, my), (mx + mw, my + mh), (0, 220, 0), 2)
-                    h_px, w_px = save_frame.shape[:2]
-                    if w_px > 1280:
-                        scale = 1280 / w_px
-                        save_frame = cv2.resize(save_frame, (1280, int(h_px * scale)), interpolation=cv2.INTER_AREA)
-                    cv2.imwrite(str(snap_path), save_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
-                    rel = snap_path.relative_to(Path(self.global_cfg["storage"]["root"]))
-                    public_base = (self.global_cfg.get("server", {}).get("public_base_url") or "").rstrip("/")
-                    snapshot_url = f"{public_base}/media/{rel.as_posix()}" if public_base else None
-                    top_det = max(detections, key=lambda d: d.score, default=None)
-                    cat_match = next((d.identity for d in detections if d.label == "cat" and d.identity), None)
-                    person_match = next((d.identity for d in detections if d.label == "person" and d.identity), None)
-                    bird_species = next((d.species for d in detections if d.label == "bird" and d.species), None)
-                    group = self._group()
-                    after_hours = is_in_schedule(self.cfg.get("schedule") or group.get("schedule") or {})
-                    whitelisted = bool(person_match and (person_match in (self.cfg.get("whitelist_names") or [])))
-                    if self.person_registry and person_match:
-                        p = self.person_registry.get_profile(person_match) or {}
-                        whitelisted = whitelisted or bool(p.get("whitelisted"))
-                    level, notify = choose_alarm_level(group, list(sorted(set(labels))), after_hours, whitelisted)
-                    event = {
-                        "event_id": event_id,
-                        "camera_id": self.camera_id,
-                        "camera_name": self.cfg.get("name", self.camera_id),
-                        "group_id": self.cfg.get("group_id"),
-                        "camera_role": self.cfg.get("role"),
-                        "armed": bool(self.cfg.get("armed", True)),
-                        "after_hours": after_hours,
-                        "alarm_level": level,
-                        "time": ts.isoformat(timespec="seconds"),
-                        "labels": sorted(set(labels)),
-                        "top_label": top_det.label if top_det else labels[0],
-                        "bird_species": bird_species,
-                        "cat_name": cat_match,
-                        "person_name": person_match,
-                        "whitelisted": whitelisted,
-                        "detections": [d.to_dict() for d in detections],
-                        "snapshot_url": snapshot_url,
-                        "snapshot_relpath": rel.as_posix(),
-                        "video_url": None,
-                    }
-                    self.store.add_event(self.camera_id, event)
-                    if self.mqtt and self.cfg.get("mqtt_enabled", True):
-                        self.mqtt.publish(f"events/{self.camera_id}", event)
-                    # Apply group-specific telegram rules
-                    _send_tg = notify and self.cfg.get("telegram_enabled", True)
-                    if _send_tg:
-                        tg_cfg = self.global_cfg.get("telegram", {})
-                        tg_groups = tg_cfg.get("groups", {})
-                        g_id = self.cfg.get("group_id")
-                        if g_id and g_id in tg_groups:
-                            gr = tg_groups[g_id]
-                            if not gr.get("enabled", True):
-                                _send_tg = False
-                            elif gr.get("objects") and not any(lbl in set(gr["objects"]) for lbl in labels):
-                                _send_tg = False
-                            elif gr.get("from") and gr.get("to"):
-                                if not is_in_schedule({"enabled": True, "start": gr["from"], "end": gr["to"]}):
+                now_dt = datetime.now()
+                has_motion = bool(labels)
+
+                if self.cfg.get("rtsp_url"):
+                    # ── RTSP: pre-buffer + per-session video recording ────────
+                    self._pre_buffer.append(proc_frame.copy())
+
+                    if has_motion:
+                        self._last_motion_ts = now_dt
+                        if not self._recording:
+                            has_person = "person" in labels
+                            elapsed = (now_dt - self.last_event_at).total_seconds()
+                            if has_person or elapsed >= cooldown:
+                                self._recording = True
+                                self._rec_start_time = now_dt
+                                self._rec_frames = list(self._pre_buffer)
+                                self._rec_event_meta = self._build_event_meta(
+                                    now_dt, labels, detections, drawn, effective_bbox)
+                                self.last_event_at = now_dt
+                                self.event_counter_today += 1
+                                log.info("[%s] Motion recording started (labels=%s)", self.camera_id, labels)
+                        if self._recording:
+                            self._rec_frames.append(proc_frame.copy())
+
+                    elif self._recording:
+                        # Post-buffer: keep collecting until 2.5 s after last motion or 60 s cap
+                        self._rec_frames.append(proc_frame.copy())
+                        since_last = (now_dt - self._last_motion_ts).total_seconds() if self._last_motion_ts else 999
+                        since_start = (now_dt - self._rec_start_time).total_seconds() if self._rec_start_time else 0
+                        if since_last >= 2.5 or since_start >= 60:
+                            frames_snap = self._rec_frames[:]
+                            meta_snap = self._rec_event_meta
+                            self._recording = False
+                            self._rec_frames = []
+                            self._rec_start_time = None
+                            self._last_motion_ts = None
+                            self._rec_event_meta = None
+                            if meta_snap and len(frames_snap) >= 3:
+                                threading.Thread(target=self._finalize_motion_clip,
+                                                 args=(frames_snap, meta_snap), daemon=True).start()
+
+                else:
+                    # ── Snapshot camera: save JPEG event (unchanged behaviour) ─
+                    has_person = "person" in labels
+                    elapsed = (now_dt - self.last_event_at).total_seconds()
+                    if labels and (has_person or elapsed >= cooldown):
+                        self.last_event_at = now_dt
+                        self.event_counter_today += 1
+                        ts = now_dt
+                        event_id = ts.strftime("%Y%m%d-%H%M%S-%f")
+                        day_dir = (Path(self.global_cfg["storage"]["root"]) / "motion_detection"
+                                   / self.camera_id / ts.strftime("%Y-%m-%d"))
+                        day_dir.mkdir(parents=True, exist_ok=True)
+                        snap_path = day_dir / f"{event_id}.jpg"
+                        save_frame = drawn.copy()
+                        if effective_bbox is not None:
+                            mx, my, mw, mh = effective_bbox
+                            cv2.rectangle(save_frame, (mx, my), (mx + mw, my + mh), (0, 220, 0), 2)
+                        h_px, w_px = save_frame.shape[:2]
+                        if w_px > 1280:
+                            scale = 1280 / w_px
+                            save_frame = cv2.resize(save_frame, (1280, int(h_px * scale)), interpolation=cv2.INTER_AREA)
+                        cv2.imwrite(str(snap_path), save_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
+                        rel = snap_path.relative_to(Path(self.global_cfg["storage"]["root"]))
+                        public_base = (self.global_cfg.get("server", {}).get("public_base_url") or "").rstrip("/")
+                        snapshot_url = f"{public_base}/media/{rel.as_posix()}" if public_base else None
+                        ev_meta = self._build_event_meta(ts, labels, detections, drawn, effective_bbox)
+                        event = {
+                            "event_id": event_id,
+                            "camera_id": self.camera_id,
+                            "camera_name": self.cfg.get("name", self.camera_id),
+                            "group_id": self.cfg.get("group_id"),
+                            "camera_role": self.cfg.get("role"),
+                            "armed": bool(self.cfg.get("armed", True)),
+                            "after_hours": ev_meta["after_hours"],
+                            "alarm_level": ev_meta["alarm_level"],
+                            "time": ts.isoformat(timespec="seconds"),
+                            "labels": ev_meta["labels"],
+                            "top_label": ev_meta["top_label"],
+                            "bird_species": ev_meta["bird_species"],
+                            "cat_name": ev_meta["cat_name"],
+                            "person_name": ev_meta["person_name"],
+                            "whitelisted": ev_meta["whitelisted"],
+                            "detections": ev_meta["detections"],
+                            "snapshot_url": snapshot_url,
+                            "snapshot_relpath": rel.as_posix(),
+                            "video_url": None,
+                            "video_relpath": None,
+                        }
+                        self.store.add_event(self.camera_id, event)
+                        if self.mqtt and self.cfg.get("mqtt_enabled", True):
+                            self.mqtt.publish(f"events/{self.camera_id}", event)
+                        _send_tg = ev_meta["notify"] and self.cfg.get("telegram_enabled", True)
+                        if _send_tg:
+                            tg_cfg = self.global_cfg.get("telegram", {})
+                            tg_groups = tg_cfg.get("groups", {})
+                            g_id = self.cfg.get("group_id")
+                            if g_id and g_id in tg_groups:
+                                gr = tg_groups[g_id]
+                                if not gr.get("enabled", True):
                                     _send_tg = False
-                    # Achievement unlock for first-time species detection
-                    if bird_species:
-                        newly_unlocked = self._try_unlock_achievement(bird_species, bird_species)
-                        if newly_unlocked and self.notifier:
-                            try:
-                                ach_msg = f"🏆 Neue Trophäe freigeschaltet: {bird_species}!\n📷 Kamera: {self.cfg.get('name', self.camera_id)}"
-                                import threading as _thr
-                                _thr.Thread(target=self.notifier.send_alert_sync, kwargs={"caption": ach_msg}, daemon=True).start()
-                            except Exception:
-                                pass
-                    if _send_tg:
-                        top_bird_score = next((d.score for d in detections if d.label == "bird" and d.species), None)
-                        if bird_species:
-                            # Spezielles Vogel-Format
-                            score_pct = f"{top_bird_score * 100:.0f}" if top_bird_score else "?"
-                            caption = (
-                                f"🐦 Vogel erkannt: {bird_species}\n"
-                                f"📷 Kamera: {self.cfg.get('name', self.camera_id)}\n"
-                                f"⏰ {event['time']}\n"
-                                f"📊 Sicherheit: {score_pct}%"
-                            )
-                        else:
-                            details = []
-                            if cat_match:
-                                details.append(f"🐈 {cat_match}")
-                            if person_match:
-                                details.append(f"🧍 {person_match}{' (Whitelist)' if whitelisted else ''}")
-                            caption = f"{'🚨' if level == 'alarm' else 'ℹ️'} {', '.join(sorted(set(labels)))}\n📷 {self.cfg.get('name', self.camera_id)}\n📍 {self.cfg.get('location', '')}\n🕒 {event['time']}"
-                            if details:
-                                caption += "\n" + " · ".join(details)
-                        with open(snap_path, "rb") as fh:
-                            self.notifier.send_alert_sync(caption=caption, jpeg_bytes=fh.read(), snapshot_url=snapshot_url, dashboard_url=public_base, camera_id=self.camera_id)
+                                elif gr.get("objects") and not any(lbl in set(gr["objects"]) for lbl in labels):
+                                    _send_tg = False
+                                elif gr.get("from") and gr.get("to"):
+                                    if not is_in_schedule({"enabled": True, "start": gr["from"], "end": gr["to"]}):
+                                        _send_tg = False
+                        if _send_tg and self.notifier:
+                            with open(snap_path, "rb") as fh:
+                                thumb = fh.read()
+                            self.notifier.send_alert_sync(
+                                caption=(f"ℹ️ {', '.join(ev_meta['labels'])}\n"
+                                         f"📷 {self.cfg.get('name', self.camera_id)}\n"
+                                         f"🕒 {event['time']}"),
+                                jpeg_bytes=thumb, snapshot_url=snapshot_url,
+                                dashboard_url=public_base, camera_id=self.camera_id)
                 self.last_error = None
             except Exception as e:
                 self._error_streak += 1
