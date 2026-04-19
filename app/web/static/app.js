@@ -253,14 +253,22 @@ function _mediaPeriodParams(){
 // Single source of truth for page size: rows × dynamic column count.
 // Called before every load, page-change, delete, resize, and filter-change.
 function calcItemsPerPage(){
-  const isMobile=window.innerWidth<=768;
   const GAP=10,MIN_CARD=160;
-  const mediaEl=byId('media');
-  let w=mediaEl&&mediaEl.clientWidth>MIN_CARD?mediaEl.clientWidth-24:window.innerWidth-(isMobile?24:320);
-  w=Math.max(MIN_CARD+1,w);
-  // cols is dynamic: on wider viewports more columns appear automatically
-  const cols=Math.max(1,Math.floor((w+GAP)/(MIN_CARD+GAP)));
-  // rows come from the slider (default 4); clamped 2–8
+  const grid=byId('mediaGrid');
+  let containerW=0,cardW=0;
+  if(grid){
+    const gr=grid.getBoundingClientRect();
+    if(gr.width>MIN_CARD) containerW=gr.width;
+    const firstCard=grid.querySelector('.media-card');
+    if(firstCard) cardW=firstCard.getBoundingClientRect().width;
+  }
+  if(!containerW){
+    const isMobile=window.innerWidth<=768;
+    const mediaEl=byId('media');
+    let w=mediaEl&&mediaEl.clientWidth>MIN_CARD?mediaEl.clientWidth-24:window.innerWidth-(isMobile?24:320);
+    containerW=Math.max(MIN_CARD+1,w);
+  }
+  const cols=cardW>0?Math.max(1,Math.floor(containerW/cardW)):Math.max(1,Math.floor((containerW+GAP)/(MIN_CARD+GAP)));
   const rowSlider=byId('mediaRowSlider');
   const rows=rowSlider?Math.max(2,Math.min(8,parseInt(rowSlider.value)||4)):4;
   return rows*cols;
