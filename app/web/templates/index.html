@@ -172,6 +172,11 @@
               <button class="media-pill" data-type="period" data-val="day">Heute</button>
               <button class="media-pill" data-type="period" data-val="week">7 Tage</button>
               <button class="media-pill" data-type="period" data-val="month">Monat</button>
+              <span class="filter-divider"></span>
+              <label style="display:inline-flex;align-items:center;gap:5px;cursor:default;padding:0 2px" title="Reihenanzahl">
+                <input type="range" id="mediaRowSlider" min="2" max="8" value="4" style="width:54px;accent-color:var(--accent)">
+                <span id="mediaRowVal" style="font-size:12px;color:var(--muted);min-width:10px;font-variant-numeric:tabular-nums">4</span>
+              </label>
             </div>
           </div>
           <div id="mediaGrid" class="media-grid"></div>

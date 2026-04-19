@@ -1,5 +1,5 @@
 
-const state={config:null,cameras:[],groups:[],timeline:null,media:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),mediaPeriod:'week',tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false};
+const state={config:null,cameras:[],groups:[],timeline:null,media:[],_allMedia:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),mediaPeriod:'week',tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false};
 let _hmTip=null; // fixed-position heatmap tooltip, bypasses overflow-x:auto clipping
 const STAT_MEDIA_DRILLDOWN=true;
 
@@ -257,40 +257,39 @@ function _dynPageSize(){
   let w=mediaEl&&mediaEl.clientWidth>MIN_CARD?mediaEl.clientWidth-24:window.innerWidth-(isMobile?24:320);
   w=Math.max(MIN_CARD+1,w);
   const cols=Math.max(1,Math.floor((w+GAP)/(MIN_CARD+GAP)));
-  const cardW=(w-(cols-1)*GAP)/cols;
-  const cardH=Math.round(cardW*10/16)+36;
-  const oh=(isMobile?56:0)+52+44+100+52+24;
-  const avail=window.innerHeight-oh;
-  const rows=Math.min(5,Math.max(1,Math.floor(avail/(cardH+GAP))));
-  return Math.max(6,rows*cols);
+  // Use the row-count slider value; fall back to 4 rows on first load before DOM is ready
+  const rowSlider=byId('mediaRowSlider');
+  const rows=rowSlider?Math.max(2,Math.min(8,parseInt(rowSlider.value)||4)):4;
+  return Math.max(cols,rows*cols);
 }
 let _cachedPageSize=0;
 async function loadMedia(){
   // Timelapse-only shortcut: no API call needed, renderMediaGrid uses window._tlItems
   const labels=state.mediaLabels;
   const onlyTL=labels.size===1&&labels.has('timelapse');
-  if(onlyTL){state.media=[];state.mediaTotalPages=1;return;}
-  const page=state.mediaPage||0;
+  if(onlyTL){state.media=[];state._allMedia=[];state.mediaTotalPages=1;return;}
   const ps=_dynPageSize(); _cachedPageSize=ps;
-  const offset=page*ps;
-  state.media=[];
   const cams=state.mediaCamera?[state.mediaCamera]:state.cameras.map(c=>c.id);
   const periodParams=_mediaPeriodParams();
   // Build label filter param — exclude 'timelapse' (handled separately in grid)
   const motionLabels=[...labels].filter(l=>l!=='timelapse');
   const labelParam=motionLabels.length===1?`&label=${encodeURIComponent(motionLabels[0])}`
     :motionLabels.length>1?`&labels=${encodeURIComponent(motionLabels.join(','))}`:'';
-  let totalCount=0;
+  // Fetch ALL matching items from every camera in one pass (no server-side offset).
+  // Pagination is done client-side on the merged+sorted list so that multi-camera
+  // views produce a consistent global order and every page is fully filled.
   const allItems=[];
   for(const camId of cams){
-    const data=await j(`/api/camera/${camId}/media?limit=${ps}&offset=${offset}${labelParam}${periodParams}`);
+    const data=await j(`/api/camera/${camId}/media?limit=9999&offset=0${labelParam}${periodParams}`);
     const items=data.items||[];
-    totalCount+=data.total_count||items.length;
     for(const item of items) allItems.push({...item,camera_id:camId});
   }
   allItems.sort((a,b)=>(b.time||'').localeCompare(a.time||''));
-  state.media=allItems;
-  state.mediaTotalPages=Math.max(1,Math.ceil(totalCount/ps));
+  state._allMedia=allItems;
+  state.mediaTotalPages=Math.max(1,Math.ceil(allItems.length/ps));
+  state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
+  const offset=(state.mediaPage||0)*ps;
+  state.media=allItems.slice(offset,offset+ps);
   state.mediaHasMore=false;
 }
 
@@ -2270,13 +2269,15 @@ byId('lightboxDelete').onclick=async()=>{
     await new Promise(r=>setTimeout(r,200));
     if(imgEl){imgEl.style.transform='';imgEl.style.opacity='';}
     await j(`/api/camera/${encodeURIComponent(camera_id)}/events/${encodeURIComponent(event_id)}`,{method:'DELETE'});
-    const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(event_id)}"]`);
-    if(card) card.remove();
-    state.media=(state.media||[]).filter(x=>x.event_id!==event_id);
-    if(!byId('mediaGrid').querySelector('.media-card')){
-      byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
-    }
+    // Remove from client-side pool and re-paginate so the current page refills
+    state._allMedia=(state._allMedia||[]).filter(x=>x.event_id!==event_id);
+    const ps_lb=_dynPageSize();
+    state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps_lb));
+    state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
+    state.media=state._allMedia.slice(state.mediaPage*ps_lb,(state.mediaPage+1)*ps_lb);
     _decrementMediaOverviewCount(camera_id);
+    renderMediaGrid();
+    renderMediaPagination();
     _lbIndex=Math.min(_lbIndex,(state.media||[]).length-1);
     if(_lbIndex<0) closeLightbox();
     else openLightbox(state.media[_lbIndex]);
@@ -2393,7 +2394,7 @@ function renderMediaOverview(){
       <div class="moc-storage-row">
         <div class="moc-counts">
           ${_mocChip('event',totalStats.event_count,'Ereignisse')}
-          ${_mocChip('snap',totalStats.jpg_count,'Snapshots')}
+          ${_mocChip('snap',totalStats.jpg_count,'Medien')}
           ${_mocChip('tl',totalStats.timelapse_count,'Timelapse')}
         </div>
         <div class="moc-storage-val">${_fmtMb(totalStats.size_mb)}</div>
@@ -2420,7 +2421,7 @@ function renderMediaOverview(){
         <div class="moc-storage-row">
           <div class="moc-counts">
             ${_mocChip('event',s.event_count||0,'Ereignisse')}
-            ${_mocChip('snap',s.jpg_count||0,'Snapshots')}
+            ${_mocChip('snap',s.jpg_count||0,'Medien')}
             ${_mocChip('tl',s.timelapse_count||0,'Timelapse')}
           </div>
           <div class="moc-storage-val">${_fmtMb(s.size_mb||0)}</div>
@@ -2445,7 +2446,7 @@ function renderMediaOverview(){
           <div class="moc-storage-row">
             <div class="moc-counts">
               ${a.event_count?_mocChip('event',a.event_count,'Ereignisse'):''}
-              ${a.jpg_count?_mocChip('snap',a.jpg_count,'Snapshots'):''}
+              ${a.jpg_count?_mocChip('snap',a.jpg_count,'Medien'):''}
               ${a.timelapse_count?_mocChip('tl',a.timelapse_count,'Timelapse'):''}
             </div>
             <div class="moc-storage-val" style="color:var(--muted)">${_fmtMb(a.size_mb||0)}</div>
@@ -2509,10 +2510,14 @@ window.openCategoryDrilldown=async function(label){
   }
 };
 function _goToPage(n){
+  const ps=_dynPageSize();
   const p=Math.max(0,Math.min(state.mediaTotalPages-1,n));
   if(p===state.mediaPage) return;
   state.mediaPage=p;
-  loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();});
+  // Re-slice from the cached all-items list — no new API call needed
+  state.media=(state._allMedia||[]).slice(p*ps,(p+1)*ps);
+  renderMediaGrid();
+  renderMediaPagination();
 }
 function renderMediaPagination(){
   const pg=byId('mediaPagination'); if(!pg) return;
@@ -2522,7 +2527,6 @@ function renderMediaPagination(){
   const pills=[];
   const mkPill=(n,label,active,disabled)=>`<button class="page-pill${active?' active':''}" ${disabled?'disabled':''} onclick="_goToPage(${n})">${label}</button>`;
   pills.push(mkPill(cur-1,'‹',false,cur===0));
-  // sliding window of pages with ellipsis
   const maxPills=7;
   let start=Math.max(0,cur-3);
   let end=Math.min(total-1,start+maxPills-3);
@@ -2531,8 +2535,6 @@ function renderMediaPagination(){
   for(let i=start;i<=end;i++) pills.push(mkPill(i,i+1,i===cur,false));
   if(end<total-1){if(end<total-2) pills.push(`<span class="page-pill" style="cursor:default;opacity:.4">…</span>`);pills.push(mkPill(total-1,total,false,false));}
   pills.push(mkPill(cur+1,'›',false,cur>=total-1));
-  // direct page jump input
-  if(total>5) pills.push(`<input type="number" min="1" max="${total}" value="${cur+1}" title="Zur Seite springen" style="width:52px;padding:4px 6px;border-radius:8px;border:1px solid #2a3f56;background:var(--surface);color:var(--text);font-size:13px;font-weight:600;text-align:center" onchange="const v=parseInt(this.value);if(!isNaN(v))_goToPage(v-1)" onclick="this.select()">`);
   pg.innerHTML=pills.join('');
 }
 function renderMediaGrid(){
@@ -2653,6 +2655,23 @@ function syncMediaPills(){
   });
   syncMediaPills();
 })();
+// ── Row-count slider ─────────────────────────────────────────────────────────
+(function(){
+  const slider=byId('mediaRowSlider');
+  const valEl=byId('mediaRowVal');
+  if(!slider||!valEl) return;
+  slider.addEventListener('input',()=>{
+    valEl.textContent=slider.value;
+    if(byId('mediaDrilldown')?.style.display!=='none'&&state._allMedia?.length>=0){
+      const ps=_dynPageSize(); _cachedPageSize=ps;
+      state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps));
+      state.mediaPage=0;
+      state.media=state._allMedia.slice(0,ps);
+      renderMediaGrid();
+      renderMediaPagination();
+    }
+  });
+})();
 window.deleteMediaCard=async(btn)=>{
   const card=btn.closest('.media-card');
   const eventId=card?.dataset.eventId;
@@ -2660,12 +2679,15 @@ window.deleteMediaCard=async(btn)=>{
   if(!eventId||!camId) return;
   try{
     await j(`/api/camera/${encodeURIComponent(camId)}/events/${encodeURIComponent(eventId)}`,{method:'DELETE'});
-    if(card) card.remove();
-    state.media=(state.media||[]).filter(x=>x.event_id!==eventId);
+    // Remove from pool, recalculate pages, re-slice so current page stays full
+    state._allMedia=(state._allMedia||[]).filter(x=>x.event_id!==eventId);
+    const ps_d=_dynPageSize();
+    state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps_d));
+    state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
+    state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
     _decrementMediaOverviewCount(camId);
-    if(!byId('mediaGrid').querySelector('.media-card')){
-      byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
-    }
+    renderMediaGrid();
+    renderMediaPagination();
   }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
 };
 window.deleteTLCard=async(camId,filename,eventId)=>{
@@ -3053,7 +3075,14 @@ window.addEventListener('resize',()=>{
   _mediaResizeTimer=setTimeout(()=>{
     if(byId('mediaDrilldown')?.style.display!=='none'){
       const ns=_dynPageSize();
-      if(Math.abs(ns-_cachedPageSize)>=4){state.mediaPage=0;loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();});}
+      if(Math.abs(ns-_cachedPageSize)>=4){
+        _cachedPageSize=ns;
+        state.mediaTotalPages=Math.max(1,Math.ceil((state._allMedia||[]).length/ns));
+        state.mediaPage=0;
+        state.media=(state._allMedia||[]).slice(0,ns);
+        renderMediaGrid();
+        renderMediaPagination();
+      }
     }
   },400);
 });
