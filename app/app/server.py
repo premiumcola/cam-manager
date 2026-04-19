@@ -617,12 +617,15 @@ def api_media_storage_stats():
     active_cams = get_effective_config().get("cameras", [])
     active_ids = {c["id"] for c in active_cams}
 
+    TRACKED_LABELS = {'person', 'cat', 'bird', 'car', 'motion'}
+
     def _cam_stats_dict(cam_id: str, name_hint: str = "") -> dict:
         size_bytes = 0
         jpg_count = 0
         json_count = 0
         latest_snap_url = None
         resolved_name = name_hint or cam_id
+        label_counts: dict = {}
         cam_dir = events_dir / cam_id
         if cam_dir.exists():
             # Count all event media: photos (.jpg/.jpeg) AND video clips (.mp4).
@@ -634,8 +637,9 @@ def api_media_storage_stats():
                         jpg_count += 1
                     except Exception:
                         pass
-            json_count = len(list(cam_dir.rglob("*.json")))
-            for jf in sorted(cam_dir.rglob("*.json"), reverse=True):
+            json_files = list(cam_dir.rglob("*.json"))
+            json_count = len(json_files)
+            for jf in sorted(json_files, reverse=True):
                 try:
                     ev = _json.loads(jf.read_text(encoding="utf-8"))
                     if resolved_name == cam_id:
@@ -643,8 +647,9 @@ def api_media_storage_stats():
                     rel = ev.get("snapshot_relpath")
                     if not latest_snap_url and rel and (storage_root / rel).exists():
                         latest_snap_url = f"/media/{rel}"
-                    if resolved_name != cam_id and latest_snap_url:
-                        break
+                    for lbl in ev.get("labels", []):
+                        if lbl in TRACKED_LABELS:
+                            label_counts[lbl] = label_counts.get(lbl, 0) + 1
                 except Exception:
                     continue
         tl_dir = tl_root / cam_id
@@ -665,6 +670,7 @@ def api_media_storage_stats():
             "event_count": json_count,
             "timelapse_count": tl_count,
             "latest_snap_url": latest_snap_url,
+            "label_counts": label_counts,
         }
 
     result = [_cam_stats_dict(c["id"], name_hint=c.get("name", c["id"])) for c in active_cams]

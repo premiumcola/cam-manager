@@ -57,6 +57,10 @@ function objBubble(label,size=22){
   const r=Math.max(6,Math.round(size*0.38));
   return `<span style="width:${size}px;height:${size}px;border-radius:${r}px;background:${c}40;border:1.5px solid ${c}80;backdrop-filter:blur(3px);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${svg}</span>`;
 }
+function objIconSvg(label,size=18){
+  const raw=OBJ_SVG[label]||OBJ_SVG.alarm;
+  return raw.replace('width="16" height="16"',`width="${size}" height="${size}"`);
+}
 const TL_LABELS=['person','cat','bird','car','motion','alarm'];
 function _renderLbLabels(){
   const el=byId('lightboxLabels');
@@ -486,7 +490,7 @@ function renderTimeline(){
   const leg=byId('tlLegend');
   if(leg){
     leg.innerHTML=`<span class="tl-leg-prefix">Filter:</span>`+
-      TL_LANES.map(l=>`<button class="cat-filter-btn${_tlActiveLanes.has(l)?' active':''}" data-lane="${l}" style="--cb:${CAT_COLORS[l]||'#8888aa'}"><span class="cfb-icon">${objBubble(l,18)}</span><span>${OBJ_LABEL[l]||l}</span></button>`).join('');
+      TL_LANES.map(l=>`<button class="cat-filter-btn${_tlActiveLanes.has(l)?' active':''}" data-lane="${l}" style="--cb:${CAT_COLORS[l]||'#8888aa'}"><span class="cfb-icon">${objIconSvg(l,18)}</span><span>${OBJ_LABEL[l]||l}</span></button>`).join('');
     leg.querySelectorAll('.cat-filter-btn[data-lane]').forEach(btn=>{
       btn.onclick=()=>{
         const lane=btn.dataset.lane;
@@ -2396,6 +2400,14 @@ function _mocChip(type,count,title){
   const txtClr=type==='tl'?'#c084fc':'var(--muted)';
   return `<span class="moc-count-chip" title="${title}" style="background:${clr};color:${txtClr}">${icons[type]||icons.event} ${count}</span>`;
 }
+function _mocLabelCounts(counts){
+  const LABELS=['person','cat','bird','car','motion'];
+  const items=LABELS.filter(l=>counts&&counts[l]>0).map(l=>
+    `<span class="moc-label-count-item" style="color:${CAT_COLORS[l]||'var(--muted)'}">${objIconSvg(l,13)} ${counts[l]}</span>`
+  );
+  if(!items.length) return '';
+  return `<div class="moc-label-counts">${items.join('')}</div>`;
+}
 function renderMediaOverview(){
   const ov=byId('mediaOverview'); if(!ov) return;
   const cams=state.cameras;
@@ -2403,12 +2415,17 @@ function renderMediaOverview(){
   const statsByid={};
   (state.mediaStats||[]).forEach(s=>{ statsByid[s.camera_id||s.id||s.name]=s; });
 
-  const totalStats=(state.mediaStats||[]).reduce((acc,s)=>({
-    size_mb:(acc.size_mb||0)+(s.size_mb||0),
-    event_count:(acc.event_count||0)+(s.event_count||0),
-    jpg_count:(acc.jpg_count||0)+(s.jpg_count||0),
-    timelapse_count:(acc.timelapse_count||0)+(s.timelapse_count||0)
-  }),{size_mb:0,event_count:0,jpg_count:0,timelapse_count:0});
+  const totalStats=(state.mediaStats||[]).reduce((acc,s)=>{
+    const lc={...acc.label_counts};
+    if(s.label_counts) Object.entries(s.label_counts).forEach(([k,v])=>{lc[k]=(lc[k]||0)+v;});
+    return {
+      size_mb:(acc.size_mb||0)+(s.size_mb||0),
+      event_count:(acc.event_count||0)+(s.event_count||0),
+      jpg_count:(acc.jpg_count||0)+(s.jpg_count||0),
+      timelapse_count:(acc.timelapse_count||0)+(s.timelapse_count||0),
+      label_counts:lc
+    };
+  },{size_mb:0,event_count:0,jpg_count:0,timelapse_count:0,label_counts:{}});
 
   const allCard=`<div class="moc-card" onclick="openAllMediaDrilldown()">
     <div class="moc-all-thumb">${_MOC_ALL_SVG}</div>
@@ -2423,6 +2440,7 @@ function renderMediaOverview(){
         </div>
         <div class="moc-storage-val">${_fmtMb(totalStats.size_mb)}</div>
       </div>
+      ${_mocLabelCounts(totalStats.label_counts)}
     </div>
   </div>`;
 
@@ -2450,6 +2468,7 @@ function renderMediaOverview(){
           </div>
           <div class="moc-storage-val">${_fmtMb(s.size_mb||0)}</div>
         </div>
+        ${_mocLabelCounts(s.label_counts||{})}
       </div>
     </div>`;
   }).join('');
@@ -2484,7 +2503,7 @@ function renderMediaOverview(){
     </div>`;
   }
 
-  // Category filter bar — full-width row below camera cards
+  // Category filter bar — full-width row above camera cards
   const _CAT_DEFS=[
     {label:'motion',    name:'Bewegung',  clr:CAT_COLORS.motion},
     {label:'person',    name:'Person',    clr:CAT_COLORS.person},
@@ -2504,7 +2523,7 @@ function renderMediaOverview(){
     <div class="moc-cat-bar">${catBtns}</div>
   </div>`;
 
-  ov.innerHTML=`<div class="media-overview-grid">${allCard}${camCards}</div>`+archivedHtml+catSection;
+  ov.innerHTML=catSection+`<div class="media-overview-grid">${allCard}${camCards}</div>`+archivedHtml;
 }
 window.openCategoryDrilldown=async function(label){
   state.mediaCamera=null;
@@ -2640,7 +2659,7 @@ function syncMediaPills(){
   document.querySelectorAll('.media-pill[data-label-key]').forEach(p=>{
     const key=p.dataset.labelKey;
     if(key&&OBJ_SVG[key]){
-      p.innerHTML=`<span class="cfb-icon" style="pointer-events:none">${objBubble(key,18)}</span><span style="pointer-events:none">${OBJ_LABEL[key]||key}</span>`;
+      p.innerHTML=`<span class="cfb-icon" style="pointer-events:none">${objIconSvg(key,18)}</span><span style="pointer-events:none">${OBJ_LABEL[key]||key}</span>`;
     }
   });
   document.querySelectorAll('.media-pill').forEach(p=>{

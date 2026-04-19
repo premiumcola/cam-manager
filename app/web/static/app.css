@@ -137,8 +137,11 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 .moc-archived:hover{opacity:.82;filter:saturate(.9);border-color:transparent}
 .moc-arch-thumb{background:#080c14;height:80px}
 /* Category filter bar */
-.moc-cat-section{margin-top:14px}
+.moc-cat-section{margin-bottom:14px}
 .moc-cat-bar{display:flex;gap:8px;flex-wrap:wrap}
+/* Per-type label counts on overview cards */
+.moc-label-counts{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.moc-label-count-item{display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700}
 /* Rescan button scan animation */
 #rescanMediaBtn.scanning svg{animation:spin 1s linear infinite;transform-origin:center}
 /* ── Unified category filter button ─────────────────────────────── */
