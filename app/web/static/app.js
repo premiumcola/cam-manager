@@ -2107,16 +2107,26 @@ function openLightbox(item){
   _lbItem=state.media[_lbIndex];
   _lbDeletePending=false;
   _lbResetToPhoto();
-  // reset delete button
   const delBtn=byId('lightboxDelete');
   if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↓</span><span style="font-size:22px;line-height:1">🗑</span>';delBtn.title=_lbItem.confirmed?'Bestätigt — trotzdem löschen?':'Löschen';}
   _updateLbConfirmBtn(_lbItem.confirmed);
+  // Show video player for motion clips, image for snapshots
+  const vidSrc=_lbItem.video_relpath?`/media/${_lbItem.video_relpath}`:(_lbItem.video_url||'');
   const imgSrc=_lbItem.snapshot_relpath?`/media/${_lbItem.snapshot_relpath}`:(_lbItem.snapshot_url||'');
-  byId('lightboxImg').src=imgSrc;
+  if(vidSrc){
+    const imgEl=byId('lightboxImg'); imgEl.style.display='none';
+    const videoEl=byId('lightboxVideo');
+    videoEl.style.display='block'; videoEl.src=vidSrc; videoEl.muted=true; videoEl.loop=true;
+    videoEl.load(); videoEl.play().catch(()=>{});
+    const confirmBtn=byId('lightboxConfirm'); if(confirmBtn) confirmBtn.style.display='none';
+  } else {
+    byId('lightboxImg').src=imgSrc;
+  }
   const confirmedBadge=_lbItem.confirmed?`<span style="background:#166534;color:#4ade80;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700">✓ Behalten</span>`:'';
   byId('lightboxMeta').innerHTML=`
     <span class="badge">${esc(_lbItem.camera_id||'')}</span>
     <span class="badge">${esc(_lbItem.time||'')}</span>
+    ${vidSrc?'<span class="badge">🎬 Video</span>':''}
     ${confirmedBadge}`;
   _renderLbLabels();
   byId('lightboxPrev').style.opacity=_lbIndex>0?'1':'0.2';
