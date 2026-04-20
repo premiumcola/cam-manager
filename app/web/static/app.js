@@ -1061,12 +1061,43 @@ function _setLiveViewStream(hd){
 function closeLiveView(){
   const modal=byId('liveViewModal'); if(!modal) return;
   const img=byId('liveViewImg'); if(img) img.src=''; // disconnect MJPEG stream → remove_viewer
+  if(document.fullscreenElement||document.webkitFullscreenElement){
+    (document.exitFullscreen||document.webkitExitFullscreen||function(){}).call(document).catch(()=>{});
+  }
   modal.classList.add('hidden');
   document.body.style.overflow='';
   _liveViewCamId=null;
 }
 window.openLiveView=openLiveView;
 window.closeLiveView=closeLiveView;
+
+// ── Fullscreen helpers ────────────────────────────────────────────────────────
+const _FS_EXPAND=`<svg viewBox="0 0 24 24" width="18" height="18" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>`;
+const _FS_COMPRESS=`<svg viewBox="0 0 24 24" width="18" height="18" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 0 2-2h3M3 16h3a2 2 0 0 0 2 2v3"/></svg>`;
+function _fsToggle(wrapEl,targetEl){
+  const fsEl=document.fullscreenElement||document.webkitFullscreenElement;
+  if(fsEl){
+    if(document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+    else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }else{
+    const req=targetEl.requestFullscreen||targetEl.webkitRequestFullscreen;
+    if(req) req.call(targetEl).catch(()=>{});
+    else wrapEl.classList.add('fake-fullscreen');
+  }
+}
+function _initFsBtn(btnId,wrapEl,getTarget){
+  const btn=byId(btnId); if(!btn||!wrapEl) return;
+  btn.innerHTML=_FS_EXPAND;
+  btn.addEventListener('click',e=>{e.stopPropagation();_fsToggle(wrapEl,getTarget());});
+  const update=()=>{
+    const fsEl=document.fullscreenElement||document.webkitFullscreenElement;
+    const isFs=!!(fsEl&&(fsEl===wrapEl||wrapEl.contains(fsEl)));
+    btn.innerHTML=isFs?_FS_COMPRESS:_FS_EXPAND;
+    if(!fsEl) wrapEl.classList.remove('fake-fullscreen');
+  };
+  document.addEventListener('fullscreenchange',update);
+  document.addEventListener('webkitfullscreenchange',update);
+}
 
 async function toggleTimelapse(camId,currentlyEnabled){
   const cam=(state.config?.cameras||[]).find(c=>c.id===camId)||(state.cameras||[]).find(c=>c.id===camId);
@@ -2206,6 +2237,9 @@ function openTLPlayer(item){
   document.body.style.overflow='hidden';
 }
 function closeLightbox(){
+  if(document.fullscreenElement||document.webkitFullscreenElement){
+    (document.exitFullscreen||document.webkitExitFullscreen||function(){}).call(document).catch(()=>{});
+  }
   byId('lightboxModal').classList.add('hidden');
   document.body.style.overflow='';
   _lbItem=null; _lbIndex=-1;
@@ -2232,6 +2266,8 @@ document.addEventListener('keydown',(e)=>{
 });
 byId('lightboxConfirm').innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↑</span><span style="font-size:22px;line-height:1">✓</span>';
 byId('lightboxDelete').innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↓</span><span style="font-size:22px;line-height:1">🗑</span>';
+_initFsBtn('liveViewFsBtn',byId('liveViewWrap'),()=>byId('liveViewWrap'));
+_initFsBtn('lightboxFsBtn',byId('lightboxMediaWrap'),()=>{const v=byId('lightboxVideo');return(v&&v.style.display!=='none')?v:byId('lightboxMediaWrap');});
 byId('lightboxConfirm').onclick=async()=>{
   if(!_lbItem) return;
   const{camera_id,event_id}=_lbItem;

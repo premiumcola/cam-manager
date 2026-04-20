@@ -696,6 +696,7 @@
         <div id="lightboxLabels" style="position:absolute;bottom:14px;left:14px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:auto;z-index:4"></div>
         <button id="lightboxConfirm" type="button" style="position:absolute;top:12px;right:12px;z-index:5">✓</button>
         <button id="lightboxDelete" type="button" style="position:absolute;bottom:68px;right:12px;z-index:5">🗑</button>
+        <button id="lightboxFsBtn" class="fullscreen-btn" title="Vollbild"></button>
       </div>
       <div id="lightboxMeta" style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center"></div>
     </div>
@@ -714,8 +715,9 @@
           <button class="close-btn" onclick="closeLiveView()" style="font-size:18px;padding:6px 12px">✕</button>
         </div>
       </div>
-      <div style="position:relative;border-radius:14px;overflow:hidden;background:#050d18;line-height:0">
+      <div id="liveViewWrap" style="position:relative;border-radius:14px;overflow:hidden;background:#050d18;line-height:0">
         <img id="liveViewImg" src="" alt="Live" style="width:100%;max-height:82vh;object-fit:contain;display:block" />
+        <button id="liveViewFsBtn" class="fullscreen-btn" title="Vollbild"></button>
       </div>
       <div style="font-size:11px;color:var(--muted);text-align:center">Vorschau: Sub-Stream (H.264, ~25fps) · HD: Haupt-Stream annotiert · ESC zum Schließen</div>
     </div>
