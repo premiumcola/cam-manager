@@ -33,8 +33,8 @@ function _resolveConfirm(val){
   if(_confirmResolve){_confirmResolve(val);_confirmResolve=null;}
 }
 // Wire confirm buttons after DOM ready (done at bottom of file)
-const colors={person:'#7c4dff',cat:'#e91e8c',bird:'#0ea5e9',car:'#f59e0b',motion:'#22c55e',alarm:'#ef4444',unknown:'#4a6477'};
-const OBJ_LABEL={person:'Person',cat:'Katze',bird:'Vogel',car:'Auto',motion:'Bewegung',alarm:'Alarm'};
+const colors={person:'#7c4dff',cat:'#e91e8c',bird:'#0ea5e9',car:'#f59e0b',motion:'#93c5fd',alarm:'#ef4444',unknown:'#4a6477',timelapse:'#c4b5fd',motion_objects:'#818cf8'};
+const OBJ_LABEL={person:'Person',cat:'Katze',bird:'Vogel',car:'Auto',motion:'Bewegung',alarm:'Alarm',timelapse:'Timelapse',motion_objects:'Motion · Objekte'};
 const OBJ_SVG={
   // Person: head circle + body arc — clean silhouette, purple
   person:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="7" r="4.5" fill="#7c4dff"/><path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#7c4dff" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>`,
@@ -44,10 +44,14 @@ const OBJ_SVG={
   bird:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M2 12C5.5 7 9.5 9 12 13C14.5 9 18.5 7 22 12" fill="#0ea5e9"/><ellipse cx="12" cy="15.5" rx="3.5" ry="2.5" fill="#0ea5e9"/><circle cx="17.5" cy="10.5" r="2" fill="#0ea5e9"/><circle cx="18.5" cy="10" r=".85" fill="#fff" opacity=".9"/><path d="M12 18v3" stroke="#0ea5e9" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   // Car: body + cab + wheels — amber, clear vehicle shape
   car:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="11" width="20" height="8" rx="2.5" fill="#f59e0b"/><rect x="6" y="7" width="11" height="5" rx="2" fill="#fbbf24"/><circle cx="7" cy="20" r="2.5" fill="#92400e"/><circle cx="17" cy="20" r="2.5" fill="#92400e"/><circle cx="7" cy="20" r="1.2" fill="#f59e0b"/><circle cx="17" cy="20" r="1.2" fill="#f59e0b"/><rect x="14.5" y="8" width="3" height="3.5" rx=".75" fill="rgba(0,0,0,.2)"/></svg>`,
-  // Motion: running person — leaning forward, arms + legs in stride, green
-  motion:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="15" cy="4.5" r="2.5" fill="#22c55e"/><path d="M14.5 7L11 14L8.5 20" stroke="#22c55e" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M12.5 10L9.5 8.5" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round"/><path d="M12.5 10L15.5 9" stroke="#22c55e" stroke-width="1.8" stroke-linecap="round"/><path d="M11 14L8.5 19.5" stroke="#22c55e" stroke-width="2" stroke-linecap="round"/><path d="M11 14L14.5 19" stroke="#22c55e" stroke-width="2" stroke-linecap="round"/></svg>`,
+  // Motion: horizontal sine wave 1.5 periods — light blue
+  motion:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M1 12 C4 5 7 5 9 12 C11 19 14 19 16 12 C18 5 21 5 23 12" stroke="#93c5fd" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>`,
   // Alarm: bell body + clapper dot + handle — red, classic bell shape
-  alarm:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3C7 3 4 7.5 4 12C4 17 7 19 7 19H17C17 19 20 17 20 12C20 7.5 17 3 12 3Z" fill="#ef4444"/><rect x="11" y="19" width="2" height="2.5" rx=".75" fill="#ef4444"/><rect x="9.5" y="21.5" width="5" height="1.5" rx=".75" fill="#ef4444"/><rect x="11.2" y="8" width="1.6" height="5.5" rx=".75" fill="#fff"/><circle cx="12" cy="15.5" r="1.1" fill="#fff"/></svg>`
+  alarm:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3C7 3 4 7.5 4 12C4 17 7 19 7 19H17C17 19 20 17 20 12C20 7.5 17 3 12 3Z" fill="#ef4444"/><rect x="11" y="19" width="2" height="2.5" rx=".75" fill="#ef4444"/><rect x="9.5" y="21.5" width="5" height="1.5" rx=".75" fill="#ef4444"/><rect x="11.2" y="8" width="1.6" height="5.5" rx=".75" fill="#fff"/><circle cx="12" cy="15.5" r="1.1" fill="#fff"/></svg>`,
+  // Timelapse: hourglass — top bar + filled top triangle + empty bottom triangle + bottom bar, purple
+  timelapse:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="4.5" y="2" width="15" height="2.5" rx="1.2" fill="#c4b5fd"/><path d="M5.5 4.5L12 13L18.5 4.5Z" fill="#c4b5fd" opacity=".75"/><path d="M5.5 19.5L12 11L18.5 19.5Z" stroke="#c4b5fd" stroke-width="1.5" stroke-linejoin="round" fill="none"/><rect x="4.5" y="19.5" width="15" height="2.5" rx="1.2" fill="#c4b5fd"/></svg>`,
+  // Motion+Objects: left sine wave + center divider + right wireframe 3D box — blue/indigo split
+  motion_objects:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M1 12 C2.5 7.5 4.5 7.5 6 12 C7.5 16.5 9.5 16.5 11 12" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round" fill="none"/><line x1="12.5" y1="5" x2="12.5" y2="19" stroke="#a5b4fc" stroke-width=".8" stroke-linecap="round"/><rect x="14.5" y="9.5" width="6" height="6" stroke="#818cf8" stroke-width="1.4" fill="none"/><path d="M14.5 9.5L16.5 7L22.5 7L22.5 13.5" stroke="#818cf8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/><line x1="20.5" y1="9.5" x2="22.5" y2="7" stroke="#818cf8" stroke-width="1.4" stroke-linecap="round"/><line x1="20.5" y1="15.5" x2="22.5" y2="13.5" stroke="#818cf8" stroke-width="1.4" stroke-linecap="round"/></svg>`
 };
 function objBubble(label,size=22){
   const raw=OBJ_SVG[label]||OBJ_SVG.alarm;
@@ -345,8 +349,8 @@ function renderDashboard(){
     const boxCls=c.coral_available?' class="cv-obj-unfold"':'';
     const brainSVG=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="${boxCol}" stroke-width="2.2" stroke-linecap="round"${boxCls} aria-hidden="true"><path d="M6 10V6h4"/><path d="M14 6h4v4"/><path d="M6 14v4h4"/><path d="M20 14v4h-4"/></svg>`;
 
-    // Motion running-person SVG (13×13) — stride silhouette, green when active
-    const motCol=isActive?'#22c55e':'rgba(255,255,255,.25)';
+    // Motion running-person SVG (13×13) — stride silhouette, blue when active
+    const motCol=isActive?'#93c5fd':'rgba(255,255,255,.25)';
     const motCls=isActive?' class="cv-runner-stride"':'';
     const motSVG=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none"${motCls} aria-hidden="true"><circle cx="15" cy="4.5" r="2.5" fill="${motCol}"/><path d="M14 7L11 13.5" stroke="${motCol}" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M12 10L8.5 8.5" stroke="${motCol}" stroke-width="1.8" stroke-linecap="round"/><path d="M12 10L15.5 9" stroke="${motCol}" stroke-width="1.8" stroke-linecap="round"/><path d="M11 13.5L8.5 19.5" stroke="${motCol}" stroke-width="2" stroke-linecap="round"/><path d="M11 13.5L14.5 19" stroke="${motCol}" stroke-width="2" stroke-linecap="round"/></svg>`;
 
@@ -394,13 +398,15 @@ function renderDashboard(){
       <div class="cv-pill ${c.armed?'cv-pill-alarm-on':'cv-pill-alarm-off'}">${shieldSm}${c.armed?'Alarm an':'Alarm aus'}</div>
     </div>
 
-    <!-- bottom-right: timelapse pill + split detection badge -->
+    <!-- bottom-left: always-visible icon bubbles (hides on hover) -->
+    <div class="cv-bl">
+      ${tlOn?`<span style="width:24px;height:24px;border-radius:8px;background:#c4b5fd20;border:1.5px solid #c4b5fd50;backdrop-filter:blur(3px);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${objIconSvg('timelapse',15)}</span>`:''}
+      ${(isActive||c.coral_available)?`<span style="padding:3px 7px;border-radius:18px;background:#818cf820;border:1.5px solid #818cf840;backdrop-filter:blur(3px);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${objIconSvg('motion_objects',15)}</span>`:''}
+    </div>
+    <!-- bottom-right: timelapse + motion·objects chips -->
     <div class="cv-br">
-      <div class="cv-pill ${tlOn?'cv-pill-tl':'cv-pill-tl-off'}">${tlIcon}Timelapse${tlOn?' aktiv':' aus'}</div>
-      <div class="cv-split-badge">
-        <div class="cv-sb-half ${c.coral_available?'cv-sb-obj':'cv-sb-obj-off'}">${brainSVG}<span class="cv-sb-label">Objekte</span></div>
-        <div class="cv-sb-half ${isActive?'cv-sb-mot':'cv-sb-mot-off'}">${motSVG}<span class="cv-sb-label">Bewegung</span></div>
-      </div>
+      <div class="cv-pill ${tlOn?'cv-pill-tl':'cv-pill-tl-off'}">${objIconSvg('timelapse',13)}Timelapse${tlOn?' aktiv':' aus'}</div>
+      <div class="cv-pill" style="${(isActive||c.coral_available)?'background:rgba(129,140,248,.18);border:1.5px solid rgba(129,140,248,.5);color:#e0e7ff':'background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);color:rgba(255,255,255,.4)'}">${objIconSvg('motion_objects',13)}<span>Motion · Objekte</span></div>
     </div>
 
     <!-- bottom: hover action buttons (icon + label) -->
@@ -427,7 +433,7 @@ function renderDashboard(){
 }
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
-const CAT_COLORS={alle:'#8888aa',motion:'#22c55e',person:'#a855f7',cat:'#ec4899',bird:'#06b6d4',car:'#f59e0b',timelapse:'#3b82f6'};
+const CAT_COLORS={alle:'#8888aa',motion:'#93c5fd',person:'#a855f7',cat:'#ec4899',bird:'#06b6d4',car:'#f59e0b',timelapse:'#c4b5fd'};
 const TL_LANES=['person','cat','bird','car','motion'];
 const GAP_MS=2*60*1000;
 let _tlActiveLanes=new Set(TL_LANES);
@@ -2512,7 +2518,7 @@ function renderMediaOverview(){
     {label:'car',       name:'Auto',      clr:CAT_COLORS.car},
     {label:'timelapse', name:'Timelapse', clr:CAT_COLORS.timelapse},
   ];
-  const _TL_CAT_ICON=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${CAT_COLORS.timelapse}" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="18" x2="8" y2="22"/><line x1="16" y1="18" x2="16" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`;
+  const _TL_CAT_ICON=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><rect x="4.5" y="2" width="15" height="2.5" rx="1.2" fill="${CAT_COLORS.timelapse}"/><path d="M5.5 4.5L12 13L18.5 4.5Z" fill="${CAT_COLORS.timelapse}" opacity=".75"/><path d="M5.5 19.5L12 11L18.5 19.5Z" stroke="${CAT_COLORS.timelapse}" stroke-width="1.5" stroke-linejoin="round" fill="none"/><rect x="4.5" y="19.5" width="15" height="2.5" rx="1.2" fill="${CAT_COLORS.timelapse}"/></svg>`;
   const catBtns=_CAT_DEFS.map(({label,name,clr})=>{
     const icon=(label==='timelapse'?_TL_CAT_ICON:(OBJ_SVG[label]||'').replace('width="16" height="16"','width="18" height="18"'));
     return `<button class="cat-filter-btn" onclick="openCategoryDrilldown('${esc(label)}')" style="--cb:${clr}">

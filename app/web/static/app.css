@@ -73,8 +73,10 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 .cv-pill-alarm-off{background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.2);color:rgba(255,255,255,.45)}
 @keyframes cv-alarm-glow{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}50%{box-shadow:0 0 6px 2px rgba(239,68,68,.25)}}
 
-/* ── Bottom-right: timelapse pill + split badge ───────────────────────────── */
+/* ── Bottom: status chips + always-visible icon strip ──────────────────────── */
 .cv-br{position:absolute;bottom:38px;right:9px;display:flex;flex-direction:column;gap:5px;align-items:flex-end;z-index:3;pointer-events:none}
+.cv-bl{position:absolute;bottom:10px;left:9px;display:flex;gap:5px;align-items:center;z-index:3;pointer-events:none;transition:opacity .18s}
+.cv-card:hover .cv-bl{opacity:0}
 /* Timelapse pill */
 .cv-pill-tl{background:rgba(168,85,247,.32);border:1.5px solid rgba(168,85,247,.78);color:#ede0ff}
 .cv-pill-tl-off{background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.28);color:rgba(255,255,255,.6)}
