@@ -703,23 +703,36 @@
   </div>
 
   <!-- Live view modal -->
-  <div id="liveViewModal" class="modal hidden" style="padding:12px;align-items:center;justify-content:center" onclick="if(event.target===this)closeLiveView()">
-    <div style="position:relative;width:min(96vw,1200px);display:flex;flex-direction:column;align-items:stretch;gap:8px">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span id="liveViewTitle" style="font-size:16px;font-weight:700;color:#fff"></span>
-          <span id="liveViewModeLabel" style="font-size:11px;font-weight:600;color:var(--muted);background:rgba(255,255,255,.08);padding:3px 8px;border-radius:999px">Vorschau · Sub-Stream</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <button id="liveViewHdBtn" class="cv-livebtn-hd" onclick="_setLiveViewStream(!_liveViewHd)" title="Hochauflösend (Haupt-Stream, annotiert)">HD</button>
-          <button class="close-btn" onclick="closeLiveView()" style="font-size:18px;padding:6px 12px">✕</button>
-        </div>
+  <div id="liveViewModal" class="modal hidden" style="position:fixed;inset:0;background:#000;z-index:1000;display:flex;align-items:center;justify-content:center;">
+    <div id="liveViewWrap" style="position:relative;width:100%;height:100dvh;display:flex;align-items:center;justify-content:center;background:#000;">
+      <img id="liveViewImg" src="" alt="Live"
+           style="max-width:100%;max-height:100dvh;object-fit:contain;display:block;cursor:pointer;" />
+
+      <!-- top-left: camera name -->
+      <div style="position:absolute;top:14px;left:14px;pointer-events:none;">
+        <span id="liveViewTitle"
+              style="font-size:15px;font-weight:600;color:#fff;background:rgba(0,0,0,0.5);padding:5px 12px;border-radius:20px;backdrop-filter:blur(4px)"></span>
       </div>
-      <div id="liveViewWrap" style="position:relative;border-radius:14px;overflow:hidden;background:#050d18;line-height:0">
-        <img id="liveViewImg" src="" alt="Live" style="width:100%;max-height:82vh;object-fit:contain;display:block" />
-        <button id="liveViewFsBtn" class="fullscreen-btn" title="Vollbild"></button>
+
+      <!-- top-right: close button -->
+      <button onclick="closeLiveView()"
+              style="position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,0.55);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+
+      <!-- bottom-left: SD/HD toggle + Fullscreen button -->
+      <div style="position:absolute;bottom:14px;left:14px;display:flex;gap:8px;align-items:center;">
+        <button id="liveViewHdBtn"
+                onclick="_setLiveViewStream(!_liveViewHd)"
+                style="height:36px;padding:0 14px;border-radius:18px;border:1px solid rgba(255,255,255,0.25);background:rgba(0,0,0,0.55);color:#fff;font-size:12px;font-weight:700;cursor:pointer;backdrop-filter:blur(4px);">
+          SD
+        </button>
+        <button id="liveViewFsBtn"
+                style="width:40px;height:40px;border-radius:10px;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.15);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+        </button>
       </div>
-      <div style="font-size:11px;color:var(--muted);text-align:center">Vorschau: Sub-Stream (H.264, ~25fps) · HD: Haupt-Stream annotiert · ESC zum Schließen</div>
     </div>
   </div>
 

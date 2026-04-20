@@ -1033,6 +1033,8 @@ function openLiveView(camId,camName){
   _liveViewCamId=camId; _liveViewHd=false;
   byId('liveViewTitle').textContent=camName||camId;
   _setLiveViewStream(false);
+  const imgEl=byId('liveViewImg');
+  if(imgEl) imgEl.onclick=e=>{e.stopPropagation();_fsToggle(byId('liveViewWrap'),byId('liveViewWrap'));};
   modal.classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
@@ -1045,12 +1047,10 @@ function _setLiveViewStream(hd){
   img.src=url;
   const hdBtn=byId('liveViewHdBtn');
   if(hdBtn){
-    hdBtn.textContent=hd?'◀ Vorschau':'HD';
-    hdBtn.title=hd?'Zurück zur Vorschau (Sub-Stream)':'Hochauflösend (Haupt-Stream, annotiert)';
-    hdBtn.classList.toggle('cv-livebtn-active',hd);
+    hdBtn.textContent=hd?'HD':'SD';
+    hdBtn.style.borderColor=hd?'#4ade80':'rgba(255,255,255,0.25)';
+    hdBtn.style.color=hd?'#4ade80':'#fff';
   }
-  const modeLabel=byId('liveViewModeLabel');
-  if(modeLabel) modeLabel.textContent=hd?'HD · Haupt-Stream':'Vorschau · Sub-Stream';
 }
 function closeLiveView(){
   const modal=byId('liveViewModal'); if(!modal) return;
@@ -1058,6 +1058,7 @@ function closeLiveView(){
   if(document.fullscreenElement||document.webkitFullscreenElement){
     (document.exitFullscreen||document.webkitExitFullscreen||function(){}).call(document).catch(()=>{});
   }
+  const wrap=byId('liveViewWrap'); if(wrap) wrap.classList.remove('fake-fullscreen');
   modal.classList.add('hidden');
   document.body.style.overflow='';
   _liveViewCamId=null;
@@ -1074,8 +1075,8 @@ function _fsToggle(wrapEl,targetEl){
     if(document.exitFullscreen) document.exitFullscreen().catch(()=>{});
     else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
   }else{
-    const req=targetEl.requestFullscreen||targetEl.webkitRequestFullscreen;
-    if(req) req.call(targetEl).catch(()=>{});
+    const req=targetEl.requestFullscreen||targetEl.webkitRequestFullscreen||targetEl.mozRequestFullScreen;
+    if(req) req.call(targetEl).catch(()=>{wrapEl.classList.add('fake-fullscreen');});
     else wrapEl.classList.add('fake-fullscreen');
   }
 }
