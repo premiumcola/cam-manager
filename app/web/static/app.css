@@ -68,10 +68,9 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 .cv-lp-row span{color:rgba(220,252,231,.75);line-height:1.4}
 .cv-lp-row small{font-size:9px;color:rgba(220,252,231,.5);display:block}
 .cv-lp-row strong{color:#fff;font-weight:700;white-space:nowrap}
-/* Alarm pill */
-.cv-pill-alarm-on{background:rgba(239,68,68,.25);border:1.5px solid rgba(239,68,68,.7);color:#fca5a5;animation:cv-alarm-glow 2.5s ease-in-out infinite}
-.cv-pill-alarm-off{background:rgba(255,255,255,.08);border:1.5px solid rgba(255,255,255,.2);color:rgba(255,255,255,.45)}
-@keyframes cv-alarm-glow{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}50%{box-shadow:0 0 6px 2px rgba(239,68,68,.25)}}
+/* Bell notification pill */
+.cv-pill-alarm-on{background:rgba(251,146,60,.15);border:1.5px solid rgba(251,146,60,.4);color:#fb923c}
+.cv-pill-alarm-off{background:rgba(120,120,140,.2);border:1.5px solid rgba(120,120,140,.3);color:#9ca3af}
 
 /* ── Bottom: status chips + always-visible icon strip ──────────────────────── */
 .cv-br{position:absolute;bottom:38px;right:9px;display:flex;flex-direction:column;gap:5px;align-items:flex-end;z-index:3;pointer-events:none}
@@ -100,7 +99,7 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 @keyframes cv-runner-stride{0%,100%{transform:translateY(0) translateX(0)}30%{transform:translateY(-1.5px) translateX(1.5px)}70%{transform:translateY(0) translateX(-.5px)}}
 
 /* ── Bottom action buttons (hover, icon + label) ─────────────────────────── */
-.cv-actions{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:center;align-items:center;gap:8px;padding:10px 12px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:3}
+.cv-actions{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:flex-start;align-items:center;gap:8px;padding:10px 14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:3}
 .cv-card:hover .cv-actions{opacity:1;pointer-events:auto}
 .cv-card:hover .cv-grad-bot{opacity:1}
 .cv-abt{display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(0,0,0,.6);border:1.5px solid rgba(255,255,255,.28);border-radius:12px;padding:8px 12px;cursor:pointer;color:#fff;font-size:11px;font-weight:600;min-width:62px;transition:background .15s,transform .1s}
