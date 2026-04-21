@@ -30,15 +30,24 @@ WORKDIR /app
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Optional Coral Python packages. pycoral only ships wheels for Python 3.7-3.9,
-# so on a Python 3.11 base these will fail cleanly — we log the skip and move on.
-# tflite-runtime is published more widely but may also lack a matching wheel.
-# Neither is strictly required: detectors.py runs in motion-only mode if both
-# imports fail at runtime.
+# tflite-runtime pinned to a known-good version. 2.14.0 was compiled against
+# NumPy 1.x (hence requirements.txt pins numpy<2), and it matches the model
+# opset of the google-coral/test_data COCO SSD MobileNet v2 bundle we ship
+# with. If this line fails to install the build should fail loudly so the
+# operator can diagnose — we deliberately do NOT suppress the error.
+RUN pip install --no-cache-dir tflite-runtime==2.14.0
+
+# pycoral 2.0 only publishes wheels for Python 3.7–3.9, so it cannot be
+# installed on the 3.11 base. We still try via the official Coral index so
+# any future build with 3.11 support lights up automatically, but we keep
+# this step optional because a clean install failure is the expected case on
+# 3.11. detectors.py reports "Coral TPU aktiv" at startup when pycoral ends
+# up importable, otherwise the tflite-runtime CPU fallback kicks in.
 RUN pip install --no-cache-dir --extra-index-url https://google-coral.github.io/py-repo \
-    "pycoral~=2.0" || echo "[build] pycoral unavailable — Coral TPU support disabled"
-RUN pip install --no-cache-dir tflite-runtime \
-    || echo "[build] tflite-runtime unavailable — CPU detection fallback disabled"
+        "pycoral~=2.0" \
+    || echo "[build] pycoral 2.0 does not ship a Python 3.11 wheel — "\
+            "Coral EdgeTPU acceleration is disabled. CPU inference via "\
+            "tflite-runtime remains available."
 
 # Copy app code after deps so code changes don't re-run pip
 COPY app/ /app/app/

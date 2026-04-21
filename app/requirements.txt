@@ -1,6 +1,8 @@
 flask==3.0.3
 opencv-python-headless==4.10.0.84
-numpy==2.1.1
+# numpy pinned to 1.x — tflite-runtime 2.14.0 is compiled against the
+# NumPy 1 C-API and raises "_ARRAY_API not found" under NumPy 2.
+numpy==1.26.4
 PyYAML==6.0.2
 python-telegram-bot==22.0
 requests==2.32.3

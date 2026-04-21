@@ -30,14 +30,29 @@ LABELS="coco_labels.example.txt"
 BASE="https://github.com/google-coral/test_data/raw/master"
 LABELS_URL="https://raw.githubusercontent.com/google-coral/test_data/master/coco_labels.txt"
 
+file_size() { wc -c < "$1" 2>/dev/null | tr -d ' \n' ; }
+
 download() {
-  local src="$1" dst="$2"
+  local src="$1" dst="$2" min_bytes="$3"
   if [ -f "$dst" ] && [ "$FORCE" -ne 1 ]; then
-    echo "  [skip] $(basename "$dst") already present"
-    return
+    local cur_size
+    cur_size=$(file_size "$dst")
+    if [ -n "$cur_size" ] && [ "$cur_size" -ge "$min_bytes" ]; then
+      echo "  [skip] $(basename "$dst") already present ($(du -h "$dst" | cut -f1))"
+      return
+    fi
+    echo "  [warn] $(basename "$dst") exists but is too small (${cur_size} bytes) — re-downloading"
+    rm -f "$dst"
   fi
   echo "  [get]  $src"
   curl --fail --location --silent --show-error -o "$dst" "$src"
+  local got
+  got=$(file_size "$dst")
+  if [ -z "$got" ] || [ "$got" -lt "$min_bytes" ]; then
+    echo "  [ERR]  $(basename "$dst") is only ${got:-0} bytes (expected >= ${min_bytes})" >&2
+    rm -f "$dst"
+    exit 1
+  fi
   echo "         → $dst ($(du -h "$dst" | cut -f1))"
 }
 
@@ -48,17 +63,17 @@ echo
 
 echo "-- Edge TPU model --"
 download "$BASE/ssd_mobilenet_v2_coco_quant_postprocess_edgetpu.tflite" \
-         "$MODELS_DIR/$EDGETPU_MODEL"
+         "$MODELS_DIR/$EDGETPU_MODEL" 4000000
 
 echo "-- CPU fallback model --"
 download "$BASE/ssd_mobilenet_v2_coco_quant_postprocess.tflite" \
-         "$MODELS_DIR/$CPU_MODEL"
+         "$MODELS_DIR/$CPU_MODEL" 4000000
 
 echo "-- COCO labels --"
 if [ -f "$CONFIG_DIR/$LABELS" ] && [ "$FORCE" -ne 1 ]; then
   echo "  [skip] $LABELS already present in $CONFIG_DIR"
 else
-  download "$LABELS_URL" "$CONFIG_DIR/$LABELS"
+  download "$LABELS_URL" "$CONFIG_DIR/$LABELS" 500
 fi
 
 echo
