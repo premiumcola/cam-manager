@@ -111,6 +111,8 @@ class CameraRuntime:
         # ── Viewer tracking (MJPEG stream connections) ────────────────────────
         self._live_viewers: int = 0
         self._viewers_lock = threading.Lock()
+        # ── Supervisor ───────────────────────────────────────────────────────
+        self._supervisor_restarts: int = 0
 
     @property
     def cfg(self):
@@ -126,6 +128,37 @@ class CameraRuntime:
         with self._viewers_lock:
             self._live_viewers = max(0, self._live_viewers - 1)
 
+    def _supervised(self, target, name: str):
+        """Run target in a restart loop with exponential backoff on crash.
+
+        Exits cleanly when target() returns while self.running is False.
+        Resets the backoff counter after 300 s of stable uptime so a
+        camera that ran fine for a long time doesn't keep the high delay.
+        """
+        attempt = 0
+        while self.running:
+            t_start = time.time()
+            try:
+                target()
+            except Exception as exc:
+                if not self.running:
+                    return
+                elapsed = time.time() - t_start
+                if elapsed >= 300:
+                    attempt = 0
+                wait = min(2 ** attempt, 60)
+                self._supervisor_restarts += 1
+                log.error(
+                    "[%s][supervisor] Thread '%s' crashed: %s — restarting in %ds",
+                    self.camera_id, name, exc, wait,
+                )
+                attempt += 1
+                deadline = time.time() + wait
+                while self.running and time.time() < deadline:
+                    time.sleep(0.5)
+            else:
+                return
+
     def start(self):
         self.running = True
         # Clean up stale frame directories from previous runs before starting
@@ -134,13 +167,21 @@ class CameraRuntime:
         except Exception as _e:
             log.warning("[%s] stale timelapse frame cleanup error: %s", self.camera_id, _e)
         # Main ingest loop — sole reader of self.capture (RTSP / HTTP snapshot)
-        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread = threading.Thread(
+            target=self._supervised, args=(self._loop, "loop"), daemon=True,
+        )
         self.thread.start()
         # Sub-stream preview loop — sole reader of self.preview_cap
-        threading.Thread(target=self._preview_loop, daemon=True).start()
+        threading.Thread(
+            target=self._supervised, args=(self._preview_loop, "preview_loop"), daemon=True,
+        ).start()
         # Per-profile timelapse threads — read from self.frame (no direct camera access)
         for prof_name in _PROFILES:
-            t = threading.Thread(target=self._timelapse_profile_loop, args=(prof_name,), daemon=True)
+            t = threading.Thread(
+                target=self._supervised,
+                args=(lambda pn=prof_name: self._timelapse_profile_loop(pn), f"timelapse_{prof_name}"),
+                daemon=True,
+            )
             t.start()
             self._tl_threads[prof_name] = t
         # Legacy loop for cameras with old timelapse.enabled=True and no profiles configured
@@ -1252,4 +1293,5 @@ class CameraRuntime:
             "preview_resolution": self._preview_resolution,
             "live_viewers": self._live_viewers,
             "stream_mode": "live" if self._live_viewers > 0 else "baseline",
+            "supervisor_restarts": self._supervisor_restarts,
         }
