@@ -2471,17 +2471,23 @@ function _fmtMb(mb){
 // Archive icon — box with lid and latch
 const _ARCHIVE_ICON=`<svg width="13" height="12" viewBox="0 0 13 12" fill="none" aria-hidden="true" style="flex-shrink:0"><rect x="1" y="4.5" width="11" height="7" rx="1.5" stroke="currentColor" stroke-width="1.3"/><rect x="0.5" y="2" width="12" height="2.5" rx="1" stroke="currentColor" stroke-width="1.1"/><rect x="4.5" y="6.25" width="4" height="2" rx="0.75" stroke="currentColor" stroke-width="1"/></svg>`;
 // All-media multi-camera grid icon — 4 quads: TL=timelapse(violet), TR=motion(blue), BL=person(blue), BR=object(amber)
-const _MOC_ALL_SVG=`<svg width="112" height="70" viewBox="0 0 80 50" fill="none" aria-hidden="true"><rect x="1" y="1" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="45" y="1" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="1" y="28" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="45" y="28" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><circle cx="6" cy="6" r="2" fill="#2a4460"/><circle cx="50" cy="6" r="2" fill="#2a4460"/><circle cx="6" cy="33" r="2" fill="#2a4460"/><circle cx="50" cy="33" r="2" fill="#2a4460"/><!-- TL: timelapse hourglass (violet) --><line x1="9" y1="7.5" x2="25" y2="7.5" stroke="#c4b5fd" stroke-width="1.2" stroke-linecap="round" opacity=".9"/><polygon points="9,8.5 25,8.5 17,13" fill="#c4b5fd" opacity=".75"/><polygon points="17,13 9,17 25,17" fill="#c4b5fd" opacity=".5"/><line x1="9" y1="17.5" x2="25" y2="17.5" stroke="#c4b5fd" stroke-width="1.2" stroke-linecap="round" opacity=".9"/><!-- TR: running person / motion (blue) --><circle cx="64" cy="7" r="2" fill="#93c5fd" opacity=".8"/><path d="M63.5 9L61 14L59 19" stroke="#93c5fd" stroke-width="1.4" stroke-linecap="round" fill="none" opacity=".75"/><path d="M62 11L59.5 9.5" stroke="#93c5fd" stroke-width="1.2" stroke-linecap="round" opacity=".7"/><path d="M62 11L65 10.5" stroke="#93c5fd" stroke-width="1.2" stroke-linecap="round" opacity=".7"/><path d="M61 14L59 19" stroke="#93c5fd" stroke-width="1.4" stroke-linecap="round" opacity=".75"/><path d="M61 14L64 19" stroke="#93c5fd" stroke-width="1.4" stroke-linecap="round" opacity=".75"/><!-- BL: person detection (sky blue) --><circle cx="18" cy="34" r="2.8" fill="#60a5fa" opacity=".7"/><path d="M12 48C12 42 24 42 24 48" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" fill="none" opacity=".65"/><!-- BR: object box (amber) --><rect x="57" y="34" width="14" height="10" rx="1.5" fill="#f59e0b" opacity=".55"/><rect x="59.5" y="31.5" width="5" height="3" rx="1" fill="#f59e0b" opacity=".45"/><!-- Center connector --><circle cx="40" cy="25" r="5.5" fill="#1a2a40" stroke="#3a5878" stroke-width="1.2"/><polygon points="38,22.5 44,25 38,27.5" fill="#4a7090"/></svg>`;
+const _MOC_ALL_SVG=`<svg width="140" height="88" viewBox="0 0 80 50" fill="none" aria-hidden="true"><rect x="1" y="1" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="45" y="1" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="1" y="28" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="45" y="28" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><circle cx="6" cy="6" r="2" fill="#2a4460"/><circle cx="50" cy="6" r="2" fill="#2a4460"/><circle cx="6" cy="33" r="2" fill="#2a4460"/><circle cx="50" cy="33" r="2" fill="#2a4460"/><!-- TL: timelapse hourglass (violet) --><line x1="9" y1="7.5" x2="25" y2="7.5" stroke="#c4b5fd" stroke-width="1.2" stroke-linecap="round" opacity=".9"/><polygon points="9,8.5 25,8.5 17,13" fill="#c4b5fd" opacity=".75"/><polygon points="17,13 9,17 25,17" fill="#c4b5fd" opacity=".5"/><line x1="9" y1="17.5" x2="25" y2="17.5" stroke="#c4b5fd" stroke-width="1.2" stroke-linecap="round" opacity=".9"/><!-- TR: running person / motion (blue) --><circle cx="64" cy="7" r="2" fill="#93c5fd" opacity=".8"/><path d="M63.5 9L61 14L59 19" stroke="#93c5fd" stroke-width="1.4" stroke-linecap="round" fill="none" opacity=".75"/><path d="M62 11L59.5 9.5" stroke="#93c5fd" stroke-width="1.2" stroke-linecap="round" opacity=".7"/><path d="M62 11L65 10.5" stroke="#93c5fd" stroke-width="1.2" stroke-linecap="round" opacity=".7"/><path d="M61 14L59 19" stroke="#93c5fd" stroke-width="1.4" stroke-linecap="round" opacity=".75"/><path d="M61 14L64 19" stroke="#93c5fd" stroke-width="1.4" stroke-linecap="round" opacity=".75"/><!-- BL: person detection (sky blue) --><circle cx="18" cy="34" r="2.8" fill="#60a5fa" opacity=".7"/><path d="M12 48C12 42 24 42 24 48" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" fill="none" opacity=".65"/><!-- BR: object box (amber) --><rect x="57" y="34" width="14" height="10" rx="1.5" fill="#f59e0b" opacity=".55"/><rect x="59.5" y="31.5" width="5" height="3" rx="1" fill="#f59e0b" opacity=".45"/><!-- Center connector --><circle cx="40" cy="25" r="5.5" fill="#1a2a40" stroke="#3a5878" stroke-width="1.2"/><polygon points="38,22.5 44,25 38,27.5" fill="#4a7090"/></svg>`;
 // Count chips for media overview cards
 function _mocChip(type,count,title){
   const icons={
-    event:`<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="3.8" stroke="#4a7090" stroke-width="1.3"/><path d="M5 3v2l1.5 1" stroke="#4a7090" stroke-width="1.1" stroke-linecap="round"/></svg>`,
-    snap:`<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="2.5" width="8" height="6" rx="1.5" stroke="#4a7090" stroke-width="1.2"/><circle cx="5" cy="5.5" r="1.6" fill="#4a7090"/><path d="M3.5 2.5l.4-1h2.2l.4 1" stroke="#4a7090" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    tl:`<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#c4b5fd" stroke-width="1" stroke-linecap="round"><line x1="2.5" y1="1" x2="7.5" y2="1"/><line x1="2.5" y1="9" x2="7.5" y2="9"/><polygon points="3,1.5 7,1.5 5,5" fill="#c4b5fd" opacity=".8"/><polygon points="5,5 3,8.5 7,8.5" stroke="#a855f7" stroke-width="1" fill="none"/></svg>`
+    event:`<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="3.8" stroke="#4a6477" stroke-width="1.3"/><path d="M5 3v2l1.5 1" stroke="#4a6477" stroke-width="1.1" stroke-linecap="round"/></svg>`,
+    snap:`<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="2.5" width="8" height="6" rx="1.5" stroke="#4a6477" stroke-width="1.2"/><circle cx="5" cy="5.5" r="1.6" fill="#4a6477"/><path d="M3.5 2.5l.4-1h2.2l.4 1" stroke="#4a6477" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    tl:`<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#c4b5fd" stroke-width="1" stroke-linecap="round"><line x1="2.5" y1="1" x2="7.5" y2="1"/><line x1="2.5" y1="9" x2="7.5" y2="9"/><polygon points="3,1.5 7,1.5 5,5" fill="#c4b5fd" opacity=".8"/><polygon points="5,5 3,8.5 7,8.5" stroke="#a855f7" stroke-width="1" fill="none"/></svg>`,
+    motion:objIconSvg('motion',10)
   };
-  const clr=type==='tl'?'rgba(168,85,247,.18)':'rgba(74,112,144,.14)';
-  const txtClr=type==='tl'?'#c084fc':'var(--muted)';
-  return `<span class="moc-count-chip" title="${title}" style="background:${clr};color:${txtClr}">${icons[type]||icons.event} ${count}</span>`;
+  const styles={
+    event: {bg:'rgba(255,255,255,.07)', color:'var(--muted)', radius:'6px'},
+    snap:  {bg:'rgba(255,255,255,.07)', color:'var(--muted)', radius:'6px'},
+    tl:    {bg:'rgba(168,85,247,.18)',  color:'#c084fc',       radius:'8px'},
+    motion:{bg:'rgba(147,197,253,.15)', color:'#93c5fd',       radius:'8px'},
+  };
+  const st=styles[type]||styles.event;
+  return `<span class="moc-count-chip" title="${title}" style="background:${st.bg};color:${st.color};border-radius:${st.radius}">${icons[type]||icons.event} ${count}</span>`;
 }
 function _mocLabelCounts(counts){
   const LABELS=['person','cat','bird','car','motion'];
@@ -2510,18 +2516,16 @@ function renderMediaOverview(){
     };
   },{size_mb:0,event_count:0,jpg_count:0,timelapse_count:0,label_counts:{}});
 
+  const thumbBadgeStyle='position:absolute;bottom:6px;right:6px;font-size:10px;font-weight:700;color:#e2e8f0;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);padding:2px 6px;border-radius:4px;z-index:2';
   const allCard=`<div class="moc-card" onclick="openAllMediaDrilldown()">
-    <div class="moc-all-thumb">${_MOC_ALL_SVG}</div>
+    <div class="moc-all-thumb">${_MOC_ALL_SVG}<div style="${thumbBadgeStyle}">${_fmtMb(totalStats.size_mb)}</div></div>
     <div class="moc-body">
       <div class="moc-name">Alle Medien</div>
       <div class="moc-desc">${cams.length} Kamera${cams.length!==1?'s':''} · Gesamtarchiv</div>
-      <div class="moc-storage-row">
-        <div class="moc-counts">
-          ${_mocChip('event',totalStats.event_count,'Ereignisse')}
-          ${_mocChip('snap',totalStats.jpg_count,'Medien')}
-          ${_mocChip('tl',totalStats.timelapse_count,'Timelapse')}
-        </div>
-        <div class="moc-storage-val">${_fmtMb(totalStats.size_mb)}</div>
+      <div class="moc-counts">
+        ${_mocChip('event',totalStats.event_count,'Ereignisse')}
+        ${_mocChip('motion',(totalStats.motion_count||totalStats.jpg_count||0),'Bewegung')}
+        ${_mocChip('tl',totalStats.timelapse_count,'Timelapse')}
       </div>
       ${_mocLabelCounts(totalStats.label_counts)}
     </div>
@@ -2531,25 +2535,23 @@ function renderMediaOverview(){
   const camCards=cams.map(c=>{
     const s=statsByid[c.id]||{};
     const icon=getCameraIcon(c.name||c.id);
-    const desc=[c.location,c.group_id].filter(Boolean).join(' · ')||'Kamera';
     const storedSnap=s.latest_snap_url||'';
     const liveSnap=`/api/camera/${encodeURIComponent(c.id)}/snapshot.jpg?t=${ts}`;
     const thumbSrc=storedSnap||liveSnap;
     const placeholderInner=`<span style="font-size:48px;opacity:.25">${icon}</span>`;
     const fallback=storedSnap?`this.onerror=function(){this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'${placeholderInner}',style:'display:flex;align-items:center;justify-content:center;width:100%;height:100%'}))};this.src='${liveSnap}'`
       :`this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'${placeholderInner}',style:'display:flex;align-items:center;justify-content:center;width:100%;height:100%'}))`;
+    const groupInline=c.group_id?` <em style="font-size:11px;color:var(--muted);font-weight:400">(${esc(c.group_id)})</em>`:'';
+    const locationDesc=c.location?`<div class="moc-desc">${esc(c.location)}</div>`:'';
     return `<div class="moc-card" onclick="openMediaDrilldown('${esc(c.id)}')">
-      <div class="moc-thumb"><img src="${esc(thumbSrc)}" alt="${esc(c.name)}" onerror="${esc(fallback)}" loading="lazy"/></div>
+      <div class="moc-thumb"><img src="${esc(thumbSrc)}" alt="${esc(c.name)}" onerror="${esc(fallback)}" loading="lazy"/><div style="${thumbBadgeStyle}">${_fmtMb(s.size_mb||0)}</div></div>
       <div class="moc-body">
-        <div class="moc-name">${icon} ${esc(c.name)}</div>
-        <div class="moc-desc">${esc(desc)}</div>
-        <div class="moc-storage-row">
-          <div class="moc-counts">
-            ${_mocChip('event',s.event_count||0,'Ereignisse')}
-            ${_mocChip('snap',s.jpg_count||0,'Medien')}
-            ${_mocChip('tl',s.timelapse_count||0,'Timelapse')}
-          </div>
-          <div class="moc-storage-val">${_fmtMb(s.size_mb||0)}</div>
+        <div class="moc-name">${icon} ${esc(c.name)}${groupInline}</div>
+        ${locationDesc}
+        <div class="moc-counts">
+          ${_mocChip('event',s.event_count||0,'Ereignisse')}
+          ${_mocChip('motion',(s.motion_count||s.jpg_count||0),'Bewegung')}
+          ${_mocChip('tl',s.timelapse_count||0,'Timelapse')}
         </div>
         ${_mocLabelCounts(s.label_counts||{})}
       </div>
@@ -2564,18 +2566,16 @@ function renderMediaOverview(){
       const thumbInner=a.latest_snap_url
         ?`<img src="${esc(a.latest_snap_url)}" alt="${esc(a.name)}" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(.45) brightness(.8)"/>`
         :`<span style="font-size:36px;opacity:.18">📦</span>`;
+      const archBadgeStyle='position:absolute;bottom:6px;right:6px;font-size:10px;font-weight:700;color:#a5bfce;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);padding:2px 6px;border-radius:4px;z-index:2';
       return `<div class="moc-card moc-archived" onclick="openMediaDrilldown('${esc(a.id)}')">
-        <div class="moc-thumb moc-arch-thumb">${thumbInner}</div>
+        <div class="moc-thumb moc-arch-thumb">${thumbInner}<div style="${archBadgeStyle}">${_fmtMb(a.size_mb||0)}</div></div>
         <div class="moc-body">
           <div class="moc-name" style="display:flex;align-items:center;gap:6px">${_ARCHIVE_ICON} <span>${esc(a.name)}</span></div>
           <div class="moc-desc">Archiviert · <code style="font-size:10px;opacity:.6">${esc(a.id)}</code></div>
-          <div class="moc-storage-row">
-            <div class="moc-counts">
-              ${a.event_count?_mocChip('event',a.event_count,'Ereignisse'):''}
-              ${a.jpg_count?_mocChip('snap',a.jpg_count,'Medien'):''}
-              ${a.timelapse_count?_mocChip('tl',a.timelapse_count,'Timelapse'):''}
-            </div>
-            <div class="moc-storage-val" style="color:var(--muted)">${_fmtMb(a.size_mb||0)}</div>
+          <div class="moc-counts">
+            ${a.event_count?_mocChip('event',a.event_count,'Ereignisse'):''}
+            ${(a.motion_count||a.jpg_count)?_mocChip('motion',(a.motion_count||a.jpg_count||0),'Bewegung'):''}
+            ${a.timelapse_count?_mocChip('tl',a.timelapse_count,'Timelapse'):''}
           </div>
         </div>
       </div>`;
