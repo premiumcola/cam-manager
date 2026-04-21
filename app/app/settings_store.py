@@ -6,6 +6,13 @@ import json
 import logging
 import yaml
 
+from .schema import (
+    validate_and_coerce,
+    CAMERA_SCHEMA,
+    GROUP_SCHEMA,
+    SECTION_SCHEMAS,
+)
+
 log = logging.getLogger(__name__)
 
 DEFAULT_GROUPS = [
@@ -227,6 +234,7 @@ class SettingsStore:
         return next((c for c in self.data.get("cameras", []) if c.get("id") == cam_id), None)
 
     def upsert_camera(self, camera: dict):
+        camera = validate_and_coerce(camera, CAMERA_SCHEMA)
         merged = self._default_camera(camera)
         existing = self.get_camera(merged["id"])
         if existing:
@@ -246,6 +254,7 @@ class SettingsStore:
         return False
 
     def upsert_group(self, group: dict):
+        group = validate_and_coerce(group, GROUP_SCHEMA)
         existing = next((g for g in self.data.get("camera_groups", []) if g.get("id") == group.get("id")), None)
         if existing:
             existing.update(group)
@@ -254,8 +263,12 @@ class SettingsStore:
         self.save()
 
     def update_section(self, section: str, payload: dict):
+        payload = payload or {}
+        section_schema = SECTION_SCHEMAS.get(section)
+        if section_schema:
+            payload = validate_and_coerce(payload, section_schema)
         current = self.data.setdefault(section, {})
-        current.update(payload or {})
+        current.update(payload)
         self.save()
 
     def log_action(self, action: dict):

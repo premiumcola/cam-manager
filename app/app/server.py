@@ -497,7 +497,10 @@ def api_groups():
 @app.post('/api/groups')
 def api_groups_save():
     payload = request.get_json(force=True) or {}
-    settings.upsert_group(payload)
+    try:
+        settings.upsert_group(payload)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 422
     rebuild_runtimes()
     return jsonify({"ok": True, "group": payload})
 
@@ -526,7 +529,10 @@ def api_settings_cameras_save():
             # Retain the existing persisted value; display-only URLs must not overwrite it.
             preserved = old_cfg.get(field, "")
             payload[field] = preserved
-    settings.upsert_camera(payload)
+    try:
+        settings.upsert_camera(payload)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 422
     # Only restart this camera's runtime when connection-relevant fields changed
     conn_changed = any(payload.get(f) != old_cfg.get(f) for f in _CONN_FIELDS)
     enabled_now = payload.get("enabled", True)
@@ -594,19 +600,22 @@ def api_settings_app():
 def api_settings_app_save():
     payload = request.get_json(force=True) or {}
     needs_rebuild = False
-    for sec in ("app", "server", "telegram", "ui", "storage"):
-        if sec in payload:
-            settings.update_section(sec, payload.get(sec) or {})
-    if "mqtt" in payload:
-        settings.update_section("mqtt", payload.get("mqtt") or {})
-        needs_rebuild = True
-    if "processing" in payload:
-        proc = payload["processing"]
-        settings.update_section("processing", {
-            "detection": {"mode": "coral" if proc.get("coral_enabled") else "none"},
-            "bird_species": {"enabled": bool(proc.get("bird_species_enabled"))},
-        })
-        needs_rebuild = True
+    try:
+        for sec in ("app", "server", "telegram", "ui", "storage"):
+            if sec in payload:
+                settings.update_section(sec, payload.get(sec) or {})
+        if "mqtt" in payload:
+            settings.update_section("mqtt", payload.get("mqtt") or {})
+            needs_rebuild = True
+        if "processing" in payload:
+            proc = payload["processing"]
+            settings.update_section("processing", {
+                "detection": {"mode": "coral" if proc.get("coral_enabled") else "none"},
+                "bird_species": {"enabled": bool(proc.get("bird_species_enabled"))},
+            })
+            needs_rebuild = True
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 422
     if needs_rebuild:
         rebuild_runtimes()
     return jsonify({"ok": True, "saved": True})
@@ -636,20 +645,23 @@ def api_settings_import():
 @app.post('/api/wizard/complete')
 def api_wizard_complete():
     payload = request.get_json(force=True) or {}
-    if payload.get("app"):
-        settings.update_section("app", payload["app"])
-    if payload.get("server"):
-        settings.update_section("server", payload["server"])
-    if payload.get("telegram"):
-        settings.update_section("telegram", payload["telegram"])
-    if payload.get("mqtt"):
-        settings.update_section("mqtt", payload["mqtt"])
-    for group in payload.get("camera_groups", []) or []:
-        settings.upsert_group(group)
-    for cam in payload.get("cameras", []) or []:
-        if cam.get("id"):
-            settings.upsert_camera(cam)
-    settings.update_section("ui", {"wizard_completed": True})
+    try:
+        if payload.get("app"):
+            settings.update_section("app", payload["app"])
+        if payload.get("server"):
+            settings.update_section("server", payload["server"])
+        if payload.get("telegram"):
+            settings.update_section("telegram", payload["telegram"])
+        if payload.get("mqtt"):
+            settings.update_section("mqtt", payload["mqtt"])
+        for group in payload.get("camera_groups", []) or []:
+            settings.upsert_group(group)
+        for cam in payload.get("cameras", []) or []:
+            if cam.get("id"):
+                settings.upsert_camera(cam)
+        settings.update_section("ui", {"wizard_completed": True})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 422
     rebuild_runtimes()
     return jsonify({"ok": True, "bootstrap": settings.bootstrap_state()})
 
@@ -931,7 +943,10 @@ def api_camera_arm(cam_id):
     if not cam:
         return jsonify({"ok": False, "error": "camera not found"}), 404
     cam["armed"] = bool(payload.get("armed", True))
-    settings.upsert_camera(cam)
+    try:
+        settings.upsert_camera(cam)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 422
     mqtt_service.publish(f"camera/{cam_id}/armed", {"armed": cam["armed"]}, retain=True)
     return jsonify({"ok": True, "camera": cam})
 
