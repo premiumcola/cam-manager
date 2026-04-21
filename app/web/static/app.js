@@ -2143,24 +2143,35 @@ byId('rescanMediaBtn')?.addEventListener('click',async()=>{
   finally{btn.disabled=false; btn.classList.remove('scanning');}
 });
 let _fixThumbsPoll=null;
-function _showFixThumbsBar(done,total,errors,finalMsg){
+let _fixThumbsLastDone=-1;
+function _showFixThumbsBar(done,total,finalMsg){
   let bar=byId('fixThumbsBar');
   if(!bar){
     bar=document.createElement('div');
     bar.id='fixThumbsBar';
-    bar.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:500;background:var(--panel);padding:10px 20px;border-top:1px solid rgba(255,255,255,.08);font-size:13px;color:var(--muted)';
-    bar.innerHTML=`<div style="position:absolute;top:0;left:0;right:0;height:3px;background:rgba(255,255,255,.05)"><div id="fixThumbsProgress" style="height:100%;background:var(--accent);width:0%;transition:width .25s ease"></div></div><span id="fixThumbsLabel">Thumbnails werden erzeugt: 0 / 0</span>`;
+    bar.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:500;background:var(--panel);border-top:1px solid rgba(255,255,255,.08);font-size:13px;color:var(--text)';
+    bar.innerHTML=`
+      <div id="ftp-prog-line" style="height:3px;background:var(--accent);width:0%;transition:width .3s ease"></div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 16px">
+        <span id="ftp-icon" style="font-size:16px;animation:spin 1.2s linear infinite;display:inline-block">⚙</span>
+        <span id="ftp-label" style="flex:1">Thumbnails werden erzeugt…</span>
+        <button onclick="(function(){const d=byId('ftp-details');if(d)d.style.display=d.style.display==='none'?'block':'none';})()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:4px 8px;border-radius:6px">▲ Details</button>
+        <button onclick="document.getElementById('fixThumbsBar').remove()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:4px 8px">✕</button>
+      </div>
+      <div id="ftp-details" style="display:none;padding:0 16px 10px;max-height:180px;overflow-y:auto;font-family:monospace;font-size:11px;color:var(--muted)"></div>`;
     document.body.appendChild(bar);
   }
-  const lbl=byId('fixThumbsLabel');
-  const prog=byId('fixThumbsProgress');
+  const pct=total>0?(done/total)*100:0;
+  const prog=byId('ftp-prog-line');
+  const lbl=byId('ftp-label');
+  const icon=byId('ftp-icon');
+  if(prog) prog.style.width=pct+'%';
   if(finalMsg){
     if(lbl) lbl.textContent=finalMsg;
-    if(prog) prog.style.width='100%';
+    if(icon){icon.textContent='✓';icon.style.animation='none';icon.style.color='var(--good)';}
+    if(prog) prog.style.background='var(--good)';
     return;
   }
-  const pct=total>0?(done/total)*100:0;
-  if(prog) prog.style.width=pct+'%';
   if(lbl) lbl.textContent=`Thumbnails werden erzeugt: ${done} / ${total}`;
 }
 function _hideFixThumbsBar(){
@@ -2169,15 +2180,28 @@ function _hideFixThumbsBar(){
 }
 function _startFixThumbsPoll(){
   if(_fixThumbsPoll) clearInterval(_fixThumbsPoll);
+  _fixThumbsLastDone=-1;
   _fixThumbsPoll=setInterval(async()=>{
     try{
       const s=await j('/api/media/fix-thumbnails/status');
-      _showFixThumbsBar(s.done||0,s.total||0,s.errors||0);
+      _showFixThumbsBar(s.done||0,s.total||0);
+      if((s.done||0)>_fixThumbsLastDone){
+        _fixThumbsLastDone=s.done||0;
+        const det=byId('ftp-details');
+        if(det){
+          const line=document.createElement('div');
+          line.style.cssText='padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)';
+          line.textContent=`✓ ${s.done}/${s.total} — ${new Date().toLocaleTimeString('de-DE')}`;
+          det.appendChild(line);
+          det.scrollTop=det.scrollHeight;
+        }
+      }
       if(!s.running){
         clearInterval(_fixThumbsPoll); _fixThumbsPoll=null;
         const done=s.done||0, errs=s.errors||0;
-        _showFixThumbsBar(s.total||0,s.total||0,errs,`✓ ${done-errs} Thumbnails erzeugt, ${errs} Fehler`);
-        setTimeout(_hideFixThumbsBar,4000);
+        const msg=errs>0?`✓ ${done-errs} Thumbnails erzeugt, ${errs} Fehler`:`✓ ${done} Thumbnails erzeugt`;
+        _showFixThumbsBar(done,s.total||0,msg);
+        setTimeout(_hideFixThumbsBar,12000);
         try{renderMediaGrid();}catch(_){}
       }
     }catch(_){ /* transient — keep polling */ }
@@ -2187,7 +2211,6 @@ byId('fixThumbsBtn')?.addEventListener('click',async()=>{
   const btn=byId('fixThumbsBtn');
   if(btn.disabled) return;
   btn.disabled=true; btn.classList.add('scanning');
-  showToast('Starte Thumbnail-Erzeugung...','info');
   try{
     const r=await j('/api/media/fix-thumbnails',{method:'POST'});
     if(!r.ok){
@@ -2195,10 +2218,10 @@ byId('fixThumbsBtn')?.addEventListener('click',async()=>{
       return;
     }
     if((r.total||0)===0&&!r.already_running){
-      _showFixThumbsBar(0,0,0,'✓ Alle Thumbnails vorhanden');
-      setTimeout(_hideFixThumbsBar,4000);
+      _showFixThumbsBar(0,0,'✓ Alle Thumbnails vorhanden');
+      setTimeout(_hideFixThumbsBar,12000);
     }else{
-      _showFixThumbsBar(r.done||0,r.total||0,r.errors||0);
+      _showFixThumbsBar(r.done||0,r.total||0);
       _startFixThumbsPoll();
     }
   }catch(e){showToast('Fehler: '+e.message,'error');}

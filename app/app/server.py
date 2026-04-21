@@ -914,17 +914,24 @@ def api_media_fix_thumbnails():
                     continue
                 cap = cv2.VideoCapture(str(vid_path))
                 total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                if total_frames > 2:
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 2)
+                # Seek to ~1/3 of the clip — the first frame of motion clips is
+                # often a dark/gray warm-up frame.
+                if total_frames > 3:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 3)
                 ok, frame = cap.read()
                 cap.release()
                 if not ok or frame is None:
                     log_t.warning("[fix-thumbs] no readable frame in %s", vid_path.name)
                     err = True
                     continue
+                # Downscale to max 640px wide so thumbs stay small on disk
+                tw = frame.shape[1]
+                if tw > 640:
+                    scale = 640 / tw
+                    frame = cv2.resize(frame, (640, int(frame.shape[0] * scale)))
                 snap_path = vid_path.with_suffix(".jpg")
                 if not cv2.imwrite(str(snap_path), frame,
-                                   [int(cv2.IMWRITE_JPEG_QUALITY), 85]):
+                                   [int(cv2.IMWRITE_JPEG_QUALITY), 82]):
                     log_t.warning("[fix-thumbs] imwrite failed for %s", snap_path.name)
                     err = True
                     continue
