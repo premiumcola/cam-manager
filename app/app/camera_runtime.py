@@ -648,6 +648,25 @@ class CameraRuntime:
             rel = vid_path.relative_to(storage_root)
             video_url = f"{public_base}/media/{rel.as_posix()}" if public_base else f"/media/{rel.as_posix()}"
             video_relpath = rel.as_posix()
+            # Extract a representative thumbnail frame (~1/3 into the clip) and
+            # downscale to max 640px wide. The motion card + lightbox both use
+            # snapshot_relpath as their preview image.
+            thumb_path = day_dir / f"{event_id}.jpg"
+            try:
+                check_thumb = cv2.VideoCapture(str(vid_path))
+                total_f = int(check_thumb.get(cv2.CAP_PROP_FRAME_COUNT))
+                if total_f > 0:
+                    check_thumb.set(cv2.CAP_PROP_POS_FRAMES, min(total_f // 3, total_f - 1))
+                ok_th, frame_th = check_thumb.read()
+                check_thumb.release()
+                if ok_th and frame_th is not None:
+                    tw = frame_th.shape[1]
+                    if tw > 640:
+                        scale = 640 / tw
+                        frame_th = cv2.resize(frame_th, (640, int(frame_th.shape[0] * scale)))
+                    cv2.imwrite(str(thumb_path), frame_th, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            except Exception as _te:
+                log.debug("[%s] motion thumb failed: %s", self.camera_id, _te)
             log.info("[%s] Motion clip saved: %s (%d frames %.1fs @ %.1ffps %dKB)",
                      self.camera_id, vid_path.name, len(frames), dur, fps_clamped,
                      file_size_bytes // 1024)
@@ -688,6 +707,16 @@ class CameraRuntime:
                 except Exception:
                     pass
 
+        # Resolve thumbnail path (may have been created above after a successful encode)
+        thumb_rel = None
+        thumb_url = None
+        try:
+            if 'thumb_path' in locals() and thumb_path.exists():
+                thumb_rel = thumb_path.relative_to(storage_root).as_posix()
+                thumb_url = f"{public_base}/media/{thumb_rel}" if public_base else f"/media/{thumb_rel}"
+        except Exception:
+            pass
+
         # Write event JSON
         event = {
             "event_id": event_id,
@@ -706,8 +735,9 @@ class CameraRuntime:
             "person_name": meta["person_name"],
             "whitelisted": meta["whitelisted"],
             "detections": meta["detections"],
-            "snapshot_url": None,
-            "snapshot_relpath": None,
+            "snapshot_url": thumb_url,
+            "snapshot_relpath": thumb_rel,
+            "thumb_url": thumb_url,
             "video_url": video_url,
             "video_relpath": video_relpath,
             "duration_s": duration_s,
@@ -888,7 +918,28 @@ class CameraRuntime:
             size_mb = round(out_path.stat().st_size / 1024 / 1024, 2) if out_path.exists() else 0
             log_tl.info("[%s][timelapse] encoded %s: %d frames → %ds video in %.1fs real time (%.1f MB)",
                         self.camera_id, out_path.name, n, target_s, elapsed, size_mb)
-            # Write sidecar JSON next to the video — NOT in EventStore
+            # Extract a thumbnail from the middle frame of the finished video
+            thumb_path = out_dir / f"{stem}.jpg"
+            if not thumb_path.exists():
+                try:
+                    import cv2 as _cv2
+                    cap = _cv2.VideoCapture(str(out_path))
+                    total = int(cap.get(_cv2.CAP_PROP_FRAME_COUNT))
+                    if total > 0:
+                        cap.set(_cv2.CAP_PROP_POS_FRAMES, total // 2)
+                    ok_t, frame_t = cap.read()
+                    cap.release()
+                    if ok_t and frame_t is not None:
+                        tw = frame_t.shape[1]
+                        if tw > 640:
+                            scale = 640 / tw
+                            frame_t = _cv2.resize(frame_t, (640, int(frame_t.shape[0] * scale)))
+                        _cv2.imwrite(str(thumb_path), frame_t,
+                                     [int(_cv2.IMWRITE_JPEG_QUALITY), 82])
+                except Exception as _te:
+                    log_tl.debug("[%s][timelapse] thumb failed: %s", self.camera_id, _te)
+            # Write sidecar JSON next to the video — kept as fast index for the
+            # /api/camera/<id>/timelapse/list endpoint
             try:
                 meta = {
                     "event_id": f"tl_{stem}",
@@ -909,6 +960,39 @@ class CameraRuntime:
                 log_tl.debug("[%s][timelapse] sidecar JSON written: %s", self.camera_id, meta_path.name)
             except Exception as e:
                 log_tl.warning("[%s][timelapse] sidecar write failed: %s", self.camera_id, e)
+            # Register a unified EventStore entry so the media grid and filters
+            # treat timelapse like any other event.
+            try:
+                public_base = (self.global_cfg.get("server", {}).get("public_base_url") or "").rstrip("/")
+                video_rel = f"timelapse/{self.camera_id}/{out_path.name}"
+                thumb_rel = f"timelapse/{self.camera_id}/{stem}.jpg" if thumb_path.exists() else None
+                tl_event = {
+                    "event_id": f"tl_{stem}",
+                    "camera_id": self.camera_id,
+                    "camera_name": self.cfg.get("name", self.camera_id),
+                    "type": "timelapse",
+                    "labels": ["timelapse"],
+                    "top_label": "timelapse",
+                    "time": datetime.now().isoformat(timespec="seconds"),
+                    "profile": profile_name,
+                    "window_key": window_key,
+                    "period_s": period_s,
+                    "target_s": target_s,
+                    "frame_count": n,
+                    "filename": out_path.name,
+                    "video_relpath": video_rel,
+                    "video_url": f"{public_base}/media/{video_rel}" if public_base else f"/media/{video_rel}",
+                    "snapshot_relpath": thumb_rel,
+                    "snapshot_url": (f"{public_base}/media/{thumb_rel}" if public_base else f"/media/{thumb_rel}") if thumb_rel else None,
+                    "thumb_url": (f"{public_base}/media/{thumb_rel}" if public_base else f"/media/{thumb_rel}") if thumb_rel else None,
+                    "size_mb": size_mb,
+                    "duration_s": 0.0,
+                    "file_size_bytes": out_path.stat().st_size if out_path.exists() else 0,
+                }
+                self.store.add_event(self.camera_id, tl_event)
+                log_tl.info("[%s][timelapse] event registered: %s", self.camera_id, tl_event["event_id"])
+            except Exception as e:
+                log_tl.warning("[%s][timelapse] EventStore register failed: %s", self.camera_id, e)
         else:
             log_tl.warning("[%s][timelapse] encode failed for window %s/%s", self.camera_id, profile_name, window_key)
 

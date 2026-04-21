@@ -404,6 +404,80 @@ def _generate_missing_thumbnails():
 _generate_missing_thumbnails()
 
 
+def _migrate_timelapse_to_eventstore():
+    """Register existing timelapse sidecars as unified EventStore entries.
+    Walks storage/timelapse/<cam>/*.json; for each sidecar that has no matching
+    motion_detection/<cam>/tl_<stem>.json yet, builds a tl_event dict and calls
+    store.add_event(). Safe to re-run; skips entries that already exist."""
+    import threading, json as _json
+    def _do():
+        log = logging.getLogger(__name__)
+        tl_root = storage_root / "timelapse"
+        if not tl_root.exists():
+            return
+        cfg = settings.export_effective_config(base_cfg)
+        public_base = (cfg.get("server", {}).get("public_base_url") or "").rstrip("/")
+        registered = 0
+        for cam_dir in tl_root.iterdir():
+            if not cam_dir.is_dir():
+                continue
+            cam_id = cam_dir.name
+            event_cam_dir = store.events_dir / cam_id
+            existing_ids: set = set()
+            if event_cam_dir.exists():
+                for jf in event_cam_dir.rglob("*.json"):
+                    existing_ids.add(jf.stem)
+            for sc in cam_dir.glob("*.json"):
+                try:
+                    meta = _json.loads(sc.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                stem = sc.stem
+                event_id = f"tl_{stem}"
+                if event_id in existing_ids:
+                    continue
+                mp4 = cam_dir / f"{stem}.mp4"
+                if not mp4.exists():
+                    continue
+                thumb = cam_dir / f"{stem}.jpg"
+                video_rel = f"timelapse/{cam_id}/{mp4.name}"
+                thumb_rel = f"timelapse/{cam_id}/{thumb.name}" if thumb.exists() else None
+                tl_event = {
+                    "event_id": event_id,
+                    "camera_id": cam_id,
+                    "camera_name": cam_id,
+                    "type": "timelapse",
+                    "labels": ["timelapse"],
+                    "top_label": "timelapse",
+                    "time": meta.get("time") or datetime.now().isoformat(timespec="seconds"),
+                    "profile": meta.get("profile"),
+                    "window_key": meta.get("window_key"),
+                    "period_s": meta.get("period_s", 0),
+                    "target_s": meta.get("target_s", 0),
+                    "frame_count": meta.get("frame_count", 0),
+                    "filename": mp4.name,
+                    "video_relpath": video_rel,
+                    "video_url": f"{public_base}/media/{video_rel}" if public_base else f"/media/{video_rel}",
+                    "snapshot_relpath": thumb_rel,
+                    "snapshot_url": (f"{public_base}/media/{thumb_rel}" if public_base else f"/media/{thumb_rel}") if thumb_rel else None,
+                    "thumb_url": (f"{public_base}/media/{thumb_rel}" if public_base else f"/media/{thumb_rel}") if thumb_rel else None,
+                    "size_mb": meta.get("size_mb", 0),
+                    "duration_s": 0.0,
+                    "file_size_bytes": mp4.stat().st_size if mp4.exists() else 0,
+                }
+                try:
+                    store.add_event(cam_id, tl_event)
+                    registered += 1
+                except Exception as e:
+                    log.warning("[migration] timelapse register failed for %s: %s", stem, e)
+        if registered:
+            log.info("[migration] registered %d timelapse events in EventStore", registered)
+    threading.Thread(target=_do, daemon=True).start()
+
+
+_migrate_timelapse_to_eventstore()
+
+
 @app.get('/')
 def index():
     return render_template('index.html')
@@ -1347,6 +1421,11 @@ def api_camera_timelapse_delete(cam_id, filename):
                 companion.unlink()
             except Exception:
                 pass
+    # And remove the unified EventStore entry so the media grid stays in sync
+    try:
+        store.delete_event_by_id(cam_id, f"tl_{mp4.stem}")
+    except Exception:
+        pass
     return jsonify({"ok": True})
 
 

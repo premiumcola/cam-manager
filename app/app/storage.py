@@ -48,10 +48,23 @@ class EventStore:
         matches[0].write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return True
 
+    def delete_event_by_id(self, camera_id: str, event_id: str) -> bool:
+        """Remove every event-JSON matching `<event_id>.json` under the camera tree.
+        Returns True if at least one file was unlinked."""
+        cam_dir = self._cam_dir(camera_id)
+        matches = list(cam_dir.rglob(f"{event_id}.json"))
+        for m in matches:
+            try:
+                m.unlink()
+            except Exception:
+                pass
+        return bool(matches)
+
     def _filter_events(self, camera_id: str, label: str | None = None,
                        labels: list | None = None,
                        start: str | None = None, end: str | None = None,
-                       media_only: bool = False):
+                       media_only: bool = False,
+                       type: str | None = None):
         """Filter events for a camera. `labels` (list) takes precedence over `label` (str).
         Multi-label filter uses OR logic: event matches if any of its labels is in the filter set.
         media_only=True: skip metadata-only events (no snapshot/video file) — used by the viewer."""
@@ -78,6 +91,8 @@ class EventStore:
                 continue
             if end and t and t > end:
                 continue
+            if type is not None and obj.get("type") != type:
+                continue
             if filter_set:
                 evt_labels = set(obj.get("labels", []))
                 extras = {obj.get("cat_name"), obj.get("bird_species")} - {None}
@@ -91,8 +106,10 @@ class EventStore:
                     labels: list | None = None,
                     start: str | None = None, end: str | None = None,
                     limit: int = 24, offset: int = 0,
-                    media_only: bool = False):
-        items = self._filter_events(camera_id, label=label, labels=labels, start=start, end=end, media_only=media_only)
+                    media_only: bool = False,
+                    type: str | None = None):
+        items = self._filter_events(camera_id, label=label, labels=labels,
+                                    start=start, end=end, media_only=media_only, type=type)
         return items[offset:offset + limit]
 
     def count_events(self, camera_id: str, label: str | None = None,

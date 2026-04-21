@@ -280,7 +280,6 @@ function calcItemsPerPage(){
 }
 function updateAvailableLabelPills(){
   const available=new Set((state._allMedia||[]).flatMap(item=>item.labels||[]));
-  if((window._tlItems||[]).length>0) available.add('timelapse');
   document.querySelectorAll('.media-pill[data-type="label"]').forEach(p=>{
     const val=p.dataset.val;
     if(!val) return;  // "Alle" (empty val) always visible
@@ -290,17 +289,14 @@ function updateAvailableLabelPills(){
 }
 let _cachedPageSize=0;
 async function loadMedia(){
-  // Timelapse-only shortcut: no API call needed, renderMediaGrid uses window._tlItems
   const labels=state.mediaLabels;
-  const onlyTL=labels.size===1&&labels.has('timelapse');
-  if(onlyTL){state.media=[];state._allMedia=[];state.mediaTotalPages=1;return;}
   const ps=calcItemsPerPage(); _cachedPageSize=ps;
   const cams=state.mediaCamera?[state.mediaCamera]:state.cameras.map(c=>c.id);
   const periodParams=_mediaPeriodParams();
-  // Build label filter param — exclude 'timelapse' (handled separately in grid)
-  const motionLabels=[...labels].filter(l=>l!=='timelapse');
-  const labelParam=motionLabels.length===1?`&label=${encodeURIComponent(motionLabels[0])}`
-    :motionLabels.length>1?`&labels=${encodeURIComponent(motionLabels.join(','))}`:'';
+  // Unified filter — EventStore now holds both motion and timelapse events.
+  const allLabels=[...labels];
+  const labelParam=allLabels.length===1?`&label=${encodeURIComponent(allLabels[0])}`
+    :allLabels.length>1?`&labels=${encodeURIComponent(allLabels.join(','))}`:'';
   // Fetch ALL matching items from every camera in one pass (no server-side offset).
   // Pagination is done client-side on the merged+sorted list so that multi-camera
   // views produce a consistent global order and every page is fully filled.
@@ -2304,11 +2300,8 @@ function openLightbox(item){
   document.body.style.overflow='hidden';
 }
 function _tlNavItems(){
-  // When in the timelapse filter, navigation items are _tlItems; otherwise state.media
-  if(state.mediaLabels.has('timelapse')&&state.mediaLabels.size===1) return window._tlItems||[];
-  return (state.media||[]).filter(x=>x.type==='timelapse').length>0
-    ? (window._tlItems||[])
-    : (state.media||[]);
+  // Timelapse + motion events share state._allMedia now — navigation is uniform.
+  return state._allMedia||[];
 }
 function _tlPeriodLabel(item){
   if(item.period_s>0){
@@ -2333,7 +2326,7 @@ function openTLPlayer(item){
   _lbDeletePending=false;
   const imgEl=byId('lightboxImg'); imgEl.style.display='none';
   const videoEl=byId('lightboxVideo');
-  const videoSrc=item.url||(item.relpath?'/media/'+item.relpath:'');
+  const videoSrc=(item.video_relpath?'/media/'+item.video_relpath:'')||item.video_url||item.url||(item.relpath?'/media/'+item.relpath:'');
   videoEl.style.display='block'; videoEl.src=videoSrc; videoEl.load(); videoEl.play().catch(()=>{});
   const confirmBtn=byId('lightboxConfirm'); if(confirmBtn) confirmBtn.style.display='none';
   const labGrad=byId('lightboxLabelsGrad'); if(labGrad) labGrad.style.display='none';
@@ -2445,7 +2438,7 @@ byId('lightboxDelete').onclick=async()=>{
       await j(`/api/camera/${encodeURIComponent(_lbItem.camera_id)}/timelapse/${encodeURIComponent(filename)}`,{method:'DELETE'});
       const deletedId=_lbItem.event_id;
       state.media=(state.media||[]).filter(x=>x.event_id!==deletedId);
-      window._tlItems=(window._tlItems||[]).filter(x=>x.event_id!==deletedId);
+      state._allMedia=(state._allMedia||[]).filter(x=>x.event_id!==deletedId);
       renderMediaGrid();
       const nav=_tlNavItems();
       const nextIdx=Math.min(_lbIndex,nav.length-1);
@@ -2747,24 +2740,11 @@ window.openCategoryDrilldown=async function(label){
   state.mediaCamera=null;
   state.mediaLabels=new Set(label?[label]:[]);
   state.mediaPeriod='week'; state.mediaPage=0;
-  window._tlItems=[];
   syncMediaPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
-  if(label==='timelapse'){
-    const tlAll=[];
-    for(const c of state.cameras){
-      const tlData=await fetch(`/api/camera/${encodeURIComponent(c.id)}/timelapse/list`).then(r=>r.json()).catch(()=>({ok:false,files:[]}));
-      if(tlData.ok&&tlData.files&&tlData.files.length){
-        tlAll.push(...tlData.files.map(f=>({...f,labels:['timelapse']})));
-      }
-    }
-    window._tlItems=tlAll;
-    renderMediaGrid();
-  }else{
-    await loadMedia();
-    renderMediaGrid();
-  }
+  await loadMedia();
+  renderMediaGrid();
 };
 function _goToPage(n){
   const ps=calcItemsPerPage();
@@ -2788,31 +2768,9 @@ function renderMediaPagination(){
 }
 function renderMediaGrid(){
   const grid=byId('mediaGrid'); if(!grid) return;
-  const tl=window._tlItems||[];
-  const labels=state.mediaLabels;
-  const onlyTL=labels.size===1&&labels.has('timelapse');
-  const hasTL=labels.has('timelapse');
-  let items;
-  if(onlyTL){
-    items=tl;
-  } else if(labels.size===0&&tl.length){
-    // No filter — merge TL + motion events, sorted by time
-    const merged=[...tl,...(state.media||[])].sort((a,b)=>{
-      const at=a.mtime||(a.time?new Date(a.time).getTime()/1000:0);
-      const bt=b.mtime||(b.time?new Date(b.time).getTime()/1000:0);
-      return bt-at;
-    });
-    items=merged;
-  } else if(hasTL&&labels.size>1){
-    // TL + other filters: merge TL + filtered motion events
-    items=[...tl,...(state.media||[])].sort((a,b)=>{
-      const at=a.mtime||(a.time?new Date(a.time).getTime()/1000:0);
-      const bt=b.mtime||(b.time?new Date(b.time).getTime()/1000:0);
-      return bt-at;
-    });
-  } else {
-    items=state.media||[];
-  }
+  // Unified stream: EventStore now contains motion + timelapse events, so no
+  // separate tl list needs to be merged here.
+  const items=state.media||[];
   // Light slide-in on page change
   grid.style.opacity='0';grid.style.transform='translateX(10px)';
   grid.innerHTML=items.map(mediaCardHTML).join('')||'<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
@@ -2861,41 +2819,25 @@ window._tlItems=[];
 async function openAllMediaDrilldown(){
   state.mediaCamera=null;
   state.mediaLabels=new Set(); state.mediaPeriod='week'; state.mediaPage=0;
-  window._tlItems=[];
   syncMediaPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
   await loadMedia();
-  const tlAll=[];
-  for(const c of state.cameras){
-    const tlData=await fetch(`/api/camera/${encodeURIComponent(c.id)}/timelapse/list`).then(r=>r.json()).catch(()=>({ok:false,files:[]}));
-    if(tlData.ok&&tlData.files&&tlData.files.length){
-      tlAll.push(...tlData.files.map(f=>({...f,labels:['timelapse']})));
-    }
-  }
-  window._tlItems=tlAll;
   renderMediaGrid();
 }
 window.openAllMediaDrilldown=openAllMediaDrilldown;
 async function openMediaDrilldown(camId){
   state.mediaCamera=camId;
   state.mediaLabels=new Set(); state.mediaPeriod='week'; state.mediaPage=0;
-  window._tlItems=[];
   syncMediaPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
   document.querySelectorAll('.moc-card').forEach(c=>c.classList.toggle('moc-active',c.onclick?.toString().includes(`'${camId}'`)));
-  const [,tlData]=await Promise.all([
-    loadMedia(),
-    fetch(`/api/camera/${encodeURIComponent(camId)}/timelapse/list`).then(r=>r.json()).catch(()=>({ok:false,files:[]}))
-  ]);
-  if(tlData.ok && tlData.files && tlData.files.length){
-    window._tlItems=tlData.files.map(f=>({...f,labels:['timelapse']}));
-  }
+  await loadMedia();
   renderMediaGrid();
 }
 function closeMediaDrilldown(){
-  state.mediaCamera=null; state.media=[]; window._tlItems=[];
+  state.mediaCamera=null; state.media=[];
   byId('mediaDrilldown').style.display='none';
   byId('mediaOverview').style.display='';
 }
@@ -2993,10 +2935,16 @@ window.deleteMediaCard=async(btn)=>{
 window.deleteTLCard=async(camId,filename,eventId)=>{
   try{
     await j(`/api/camera/${encodeURIComponent(camId)}/timelapse/${encodeURIComponent(filename)}`,{method:'DELETE'});
+    // Remove the unified EventStore entry too (server also does this as a backstop)
+    if(eventId){
+      try{
+        await j(`/api/camera/${encodeURIComponent(camId)}/events/${encodeURIComponent(eventId)}`,{method:'DELETE'});
+      }catch(_){ /* already cleaned by server */ }
+    }
     const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(eventId)}"]`);
     if(card) card.remove();
     state.media=(state.media||[]).filter(x=>x.event_id!==eventId);
-    window._tlItems=(window._tlItems||[]).filter(x=>x.event_id!==eventId);
+    state._allMedia=(state._allMedia||[]).filter(x=>x.event_id!==eventId);
     if(!byId('mediaGrid').querySelector('.media-card')){
       byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
     }
