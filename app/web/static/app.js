@@ -2071,8 +2071,17 @@ byId('wizFinish').onclick=()=>finishWizard();
     e.preventDefault();
     const target=document.querySelector(a.getAttribute('href'));
     if(!target) return;
-    const shellPaddingTop=parseInt(getComputedStyle(document.querySelector('.shell')).paddingTop)||0;
     target.scrollIntoView({behavior:'smooth',block:'start'});
+    // One-shot offset correction: if scroll-margin + padding still leaves a gap,
+    // nudge to the top. Needed mainly for sections late in the flow.
+    setTimeout(()=>{
+      const el=document.querySelector(a.getAttribute('href'));
+      if(!el) return;
+      const rect=el.getBoundingClientRect();
+      if(rect.top>12){
+        window.scrollBy({top:rect.top-8,behavior:'smooth'});
+      }
+    },420);
   }));
 })();
 
@@ -2144,6 +2153,7 @@ byId('rescanMediaBtn')?.addEventListener('click',async()=>{
 });
 let _fixThumbsPoll=null;
 let _fixThumbsLastDone=-1;
+let _shownThumbFiles=new Set();
 function _showFixThumbsBar(done,total,finalMsg){
   let bar=byId('fixThumbsBar');
   if(!bar){
@@ -2158,7 +2168,7 @@ function _showFixThumbsBar(done,total,finalMsg){
         <button onclick="(function(){const d=byId('ftp-details');if(d)d.style.display=d.style.display==='none'?'block':'none';})()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:4px 8px;border-radius:6px">▲ Details</button>
         <button onclick="document.getElementById('fixThumbsBar').remove()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:4px 8px">✕</button>
       </div>
-      <div id="ftp-details" style="display:none;padding:0 16px 10px;max-height:180px;overflow-y:auto;font-family:monospace;font-size:11px;color:var(--muted)"></div>`;
+      <div id="ftp-details" style="display:none;padding:0 16px 10px;max-height:260px;overflow-y:auto;font-family:monospace;font-size:11px;color:var(--muted)"></div>`;
     document.body.appendChild(bar);
   }
   const pct=total>0?(done/total)*100:0;
@@ -2185,17 +2195,20 @@ function _startFixThumbsPoll(){
     try{
       const s=await j('/api/media/fix-thumbnails/status');
       _showFixThumbsBar(s.done||0,s.total||0);
-      if((s.done||0)>_fixThumbsLastDone){
-        _fixThumbsLastDone=s.done||0;
-        const det=byId('ftp-details');
-        if(det){
+      // Append per-filename log lines for any newly completed files
+      const det=byId('ftp-details');
+      if(det && Array.isArray(s.recent)){
+        s.recent.forEach(fname=>{
+          if(_shownThumbFiles.has(fname)) return;
+          _shownThumbFiles.add(fname);
           const line=document.createElement('div');
-          line.style.cssText='padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)';
-          line.textContent=`✓ ${s.done}/${s.total} — ${new Date().toLocaleTimeString('de-DE')}`;
+          line.style.cssText='padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+          line.textContent='✓ '+fname;
           det.appendChild(line);
           det.scrollTop=det.scrollHeight;
-        }
+        });
       }
+      _fixThumbsLastDone=s.done||0;
       if(!s.running){
         clearInterval(_fixThumbsPoll); _fixThumbsPoll=null;
         const done=s.done||0, errs=s.errors||0;
@@ -2211,6 +2224,7 @@ byId('fixThumbsBtn')?.addEventListener('click',async()=>{
   const btn=byId('fixThumbsBtn');
   if(btn.disabled) return;
   btn.disabled=true; btn.classList.add('scanning');
+  _shownThumbFiles=new Set();
   try{
     const r=await j('/api/media/fix-thumbnails',{method:'POST'});
     if(!r.ok){
@@ -3130,7 +3144,8 @@ function _medalSVG(achId, tier, birdSvg, isUnlocked){
   let bird='';
   if(birdSvg){
     const filter=isUnlocked?'':'style="filter:grayscale(1) brightness(0.28)"';
-    bird=birdSvg.replace('<svg ',`<svg x="16" y="16" width="68" height="68" ${filter} `);
+    // Slight overflow so the animal visually pops out of the medal rim
+    bird=birdSvg.replace('<svg ',`<svg x="10" y="10" width="80" height="80" ${filter} `);
   }
   return `<svg viewBox="0 0 100 100" width="92" height="92" xmlns="http://www.w3.org/2000/svg">
     <defs>
@@ -3179,12 +3194,17 @@ function renderAchievements(){
       :'';
     const badge=isUnlocked
       ?`<span class="medal-count-badge ${tier}">${count}×</span>`
-      :(iconSvg?`<span class="medal-lock-badge">🔒</span>`:'');
+      :(iconSvg?`<div class="medal-lock-overlay"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="3"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>`:'');
     // count label
     const countColors={bronze:'#d4894a',silver:'#90a8be',gold:'#d4a820'};
     const countLabel=isUnlocked
       ?`<div class="medal-count" style="color:${countColors[tier]||'#d4a820'}">${count}×</div>`
       :`<div class="medal-count locked-text">nicht entdeckt</div>`;
+    // Split "Eichhörnchen (rot)" → base name + muted variant suffix
+    const nameParts=a.name.match(/^(.+?)\s*(\(.+\))?$/);
+    const baseName=nameParts?.[1]||a.name;
+    const variantSuffix=nameParts?.[2]||'';
+    const nameHtml=`${esc(baseName)}${variantSuffix?`<span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);font-style:italic;margin-left:3px">${esc(variantSuffix)}</span>`:''}`;
     const clickable=isUnlocked?`onclick="openAchievementDrilldown('${esc(a.id)}','${esc(a.name)}')" style="cursor:pointer"`:'';
     return `<div class="ach-card ${tier}" ${clickable}>
       <div class="medal-wrap">
@@ -3192,7 +3212,7 @@ function renderAchievements(){
         ${emojiOverlay}
         ${badge}
       </div>
-      <div class="medal-name">${esc(a.name)}</div>
+      <div class="medal-name">${nameHtml}</div>
       ${countLabel}
     </div>`;
   }).join('');

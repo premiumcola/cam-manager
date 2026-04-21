@@ -865,7 +865,7 @@ def api_media_rescan():
 
 
 import threading as _threading_fix
-_thumb_task = {"running": False, "done": 0, "total": 0, "errors": 0}
+_thumb_task = {"running": False, "done": 0, "total": 0, "errors": 0, "recent": []}
 _fix_thumbs_lock = _threading_fix.Lock()
 
 
@@ -899,6 +899,7 @@ def api_media_fix_thumbnails():
         _thumb_task["total"] = len(todo)
         _thumb_task["done"] = 0
         _thumb_task["errors"] = 0
+        _thumb_task["recent"] = []
         _thumb_task["running"] = True
 
     public_base = (get_effective_config().get("server", {}).get("public_base_url") or "").rstrip("/")
@@ -943,6 +944,10 @@ def api_media_fix_thumbnails():
                 jf.write_text(_json.dumps(ev, ensure_ascii=False, indent=2),
                               encoding="utf-8")
                 log_t.info("[fix-thumbs] %s -> %s", vid_path.name, snap_path.name)
+                with _fix_thumbs_lock:
+                    _thumb_task["recent"].append(vid_path.name)
+                    if len(_thumb_task["recent"]) > 50:
+                        _thumb_task["recent"].pop(0)
             except Exception as e:
                 log_t.warning("[fix-thumbs] error on %s: %s", jf.name, e)
                 err = True
