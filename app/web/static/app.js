@@ -394,11 +394,6 @@ function renderDashboard(){
       <div class="cv-pill ${c.armed?'cv-pill-alarm-on':'cv-pill-alarm-off'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})" style="cursor:pointer">${c.armed?bellOn:bellOff}${c.armed?'Benachrichtigung':'Stumm'}</div>
     </div>
 
-    <!-- bottom-left: always-visible icon bubbles (hides on hover) -->
-    <div class="cv-bl">
-      ${tlOn?`<span style="width:24px;height:24px;border-radius:8px;background:#c4b5fd20;border:1.5px solid #c4b5fd50;backdrop-filter:blur(3px);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${objIconSvg('timelapse',15)}</span>`:''}
-      ${(isActive||c.coral_available)?`<span style="padding:3px 7px;border-radius:18px;background:#818cf820;border:1.5px solid #818cf840;backdrop-filter:blur(3px);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">${objIconSvg('motion_objects',15)}</span>`:''}
-    </div>
     <!-- bottom-right: timelapse + motion·objects chips -->
     <div class="cv-br">
       <div class="cv-pill ${tlOn?'cv-pill-tl':'cv-pill-tl-off'}">${objIconSvg('timelapse',13)}Timelapse${tlOn?' aktiv':' aus'}</div>
@@ -2381,7 +2376,7 @@ function mediaCardHTML(item){
           ${durLabel?`<div style="${badgeStyle}">${esc(durLabel)}</div>`:''}
           ${sizeText?`<div style="${badgeSubStyle}">${esc(sizeText)}</div>`:''}
         </div>`:''}
-        <div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge">${_TL_FILMSTRIP}Timelapse</span></div>
+        <div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge">${objIconSvg('timelapse',12)}Timelapse</span></div>
         <div class="mmc-actions" style="z-index:3">
           <button class="mmc-btn mmc-delete" title="Löschen" onclick="event.stopPropagation();window.deleteTLCard('${esc(item.camera_id||'')}','${esc(item.filename||'')}','${esc(item.event_id||'')}')">✕</button>
         </div>
@@ -2549,9 +2544,8 @@ function renderMediaOverview(){
     {label:'car',       name:'Auto',      clr:CAT_COLORS.car},
     {label:'timelapse', name:'Timelapse', clr:CAT_COLORS.timelapse},
   ];
-  const _TL_CAT_ICON=`<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${CAT_COLORS.timelapse}" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><line x1="6" y1="3" x2="18" y2="3"/><line x1="6" y1="21" x2="18" y2="21"/><polygon points="7,4 17,4 12,12" fill="${CAT_COLORS.timelapse}" opacity=".8"/><polygon points="12,12 7,20 17,20" fill="${CAT_COLORS.timelapse}" opacity=".5"/></svg>`;
   const catBtns=_CAT_DEFS.map(({label,name,clr})=>{
-    const icon=(label==='timelapse'?_TL_CAT_ICON:(OBJ_SVG[label]||'').replace('width="16" height="16"','width="18" height="18"'));
+    const icon=(label==='timelapse'?objIconSvg('timelapse',18):(OBJ_SVG[label]||'').replace('width="16" height="16"','width="18" height="18"'));
     return `<button class="cat-filter-btn" onclick="openCategoryDrilldown('${esc(label)}')" style="--cb:${clr}">
       <span class="cfb-icon">${icon}</span><span>${esc(name)}</span>
     </button>`;
