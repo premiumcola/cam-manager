@@ -261,33 +261,21 @@ function _mediaPeriodParams(){
 // Single source of truth for page size: rows × dynamic column count.
 // Called before every load, page-change, delete, resize, and filter-change.
 let _lastKnownCols=0;
+const _MEDIA_ROWS=4;
 function calcItemsPerPage(){
-  const GAP=10,MIN_CARD=160;
   const grid=byId('mediaGrid');
-  let containerW=0,cardW=0;
+  let containerW=0;
   if(grid){
     const gr=grid.getBoundingClientRect();
-    if(gr.width>MIN_CARD) containerW=gr.width;
-    const firstCard=grid.querySelector('.media-card');
-    if(firstCard) cardW=firstCard.getBoundingClientRect().width;
+    if(gr.width>0) containerW=gr.width;
   }
   if(!containerW){
     const isMobile=window.innerWidth<=768;
     const mediaEl=byId('media');
-    let w=mediaEl&&mediaEl.clientWidth>MIN_CARD?mediaEl.clientWidth-24:window.innerWidth-(isMobile?24:320);
-    containerW=Math.max(MIN_CARD+1,w);
+    containerW=Math.max(161,mediaEl&&mediaEl.clientWidth>160?mediaEl.clientWidth-24:window.innerWidth-(isMobile?24:320));
   }
-  let cols;
-  if(_lastKnownCols>0){
-    cols=_lastKnownCols;
-  } else if(cardW>0){
-    cols=Math.max(1,Math.floor(containerW/cardW));
-  } else {
-    cols=Math.max(1,Math.floor((containerW+GAP)/(MIN_CARD+GAP)));
-  }
-  const rowSlider=byId('mediaRowSlider');
-  const rows=rowSlider?Math.max(2,Math.min(8,parseInt(rowSlider.value)||4)):4;
-  return rows*cols;
+  const cols=_lastKnownCols||Math.max(1,Math.floor((containerW+10)/(160+10)));
+  return _MEDIA_ROWS*cols;
 }
 function updateAvailableLabelPills(){
   const available=new Set((state._allMedia||[]).flatMap(item=>item.labels||[]));
@@ -2152,20 +2140,65 @@ byId('rescanMediaBtn')?.addEventListener('click',async()=>{
   }catch(e){showToast('Fehler beim Scan: '+e.message,'error');}
   finally{btn.disabled=false; btn.classList.remove('scanning');}
 });
-byId('reencodeMediaBtn')?.addEventListener('click',async()=>{
-  const btn=byId('reencodeMediaBtn');
+let _fixThumbsPoll=null;
+function _showFixThumbsBar(done,total,finalMsg){
+  let bar=byId('fixThumbsBar');
+  if(!bar){
+    bar=document.createElement('div');
+    bar.id='fixThumbsBar';
+    bar.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:500;background:var(--panel);padding:10px 20px;box-shadow:0 -4px 12px rgba(0,0,0,.35);font-size:13px;color:var(--muted)';
+    bar.innerHTML=`<div style="position:absolute;top:0;left:0;right:0;height:3px;background:rgba(255,255,255,.05)"><div id="fixThumbsProgress" style="height:100%;background:var(--accent);width:0%;transition:width .25s ease"></div></div><span id="fixThumbsLabel">⧗ Thumbnails werden erzeugt…</span>`;
+    document.body.appendChild(bar);
+  }
+  const lbl=byId('fixThumbsLabel');
+  const prog=byId('fixThumbsProgress');
+  if(finalMsg){
+    if(lbl) lbl.textContent=finalMsg;
+    if(prog) prog.style.width='100%';
+    return;
+  }
+  const pct=total>0?(done/total)*100:0;
+  if(prog) prog.style.width=pct+'%';
+  if(lbl) lbl.textContent=`⧗ Thumbnails werden erzeugt… ${done} / ${total}`;
+}
+function _hideFixThumbsBar(){
+  const bar=byId('fixThumbsBar');
+  if(bar) bar.remove();
+}
+function _startFixThumbsPoll(){
+  if(_fixThumbsPoll) clearInterval(_fixThumbsPoll);
+  _fixThumbsPoll=setInterval(async()=>{
+    try{
+      const s=await j('/api/media/fix-thumbnails/status');
+      _showFixThumbsBar(s.done||0,s.total||0);
+      if(!s.running){
+        clearInterval(_fixThumbsPoll); _fixThumbsPoll=null;
+        _showFixThumbsBar(s.total||0,s.total||0,`✓ ${s.done||0} Thumbnails erzeugt`);
+        setTimeout(_hideFixThumbsBar,3000);
+        try{await loadAll();}catch(_){}
+      }
+    }catch(_){ /* transient — keep polling */ }
+  },2000);
+}
+byId('fixThumbsBtn')?.addEventListener('click',async()=>{
+  const btn=byId('fixThumbsBtn');
   if(btn.disabled) return;
   btn.disabled=true; btn.classList.add('scanning');
-  showToast('Kodierung läuft...','info');
+  showToast('Starte Thumbnail-Erzeugung...','info');
   try{
-    const r=await j('/api/media/reencode',{method:'POST'});
-    if(r.ok){
-      showToast(`${r.reencoded||0} Videos neu kodiert (${r.skipped||0} bereits H.264, ${r.failed||0} fehlgeschlagen).`,'success');
-      await loadAll();
-    }else{
-      showToast('Re-Encoding fehlgeschlagen: '+(r.error||'unbekannt'),'error');
+    const r=await j('/api/media/fix-thumbnails',{method:'POST'});
+    if(!r.ok){
+      showToast('Thumbnail-Erzeugung: '+(r.error||'Fehler'),'error');
+      return;
     }
-  }catch(e){showToast('Fehler beim Re-Encoding: '+e.message,'error');}
+    if((r.total||0)===0){
+      _showFixThumbsBar(0,0,'✓ Alle Thumbnails vorhanden');
+      setTimeout(_hideFixThumbsBar,3000);
+    }else{
+      _showFixThumbsBar(0,r.total||0);
+      _startFixThumbsPoll();
+    }
+  }catch(e){showToast('Fehler: '+e.message,'error');}
   finally{btn.disabled=false; btn.classList.remove('scanning');}
 });
 
@@ -2575,14 +2608,6 @@ function _mocChip(type,count,title){
   const st=styles[type]||styles.event;
   return `<span class="moc-count-chip" title="${title}" style="background:${st.bg};color:${st.color};border-radius:${st.radius}">${icons[type]||icons.event} ${count}</span>`;
 }
-function _mocLabelCounts(counts){
-  const LABELS=['person','cat','bird','car','motion'];
-  const items=LABELS.filter(l=>counts&&counts[l]>0).map(l=>
-    `<span class="moc-label-count-item" style="color:${CAT_COLORS[l]||'var(--muted)'}">${objIconSvg(l,13)} ${counts[l]}</span>`
-  );
-  if(!items.length) return '';
-  return `<div class="moc-label-counts">${items.join('')}</div>`;
-}
 function renderMediaOverview(){
   const ov=byId('mediaOverview'); if(!ov) return;
   const cams=state.cameras;
@@ -2609,11 +2634,9 @@ function renderMediaOverview(){
       <div class="moc-name">Alle Medien</div>
       <div class="moc-desc">${cams.length} Kamera${cams.length!==1?'s':''} · Gesamtarchiv</div>
       <div class="moc-counts">
-        ${_mocChip('event',totalStats.event_count,'Ereignisse')}
-        ${_mocChip('motion',(totalStats.motion_count||totalStats.jpg_count||0),'Bewegung')}
-        ${_mocChip('tl',totalStats.timelapse_count,'Timelapse')}
+        ${_mocChip('motion',totalStats.event_count||0,'Bewegung')}
+        ${_mocChip('tl',totalStats.timelapse_count||0,'Timelapse')}
       </div>
-      ${_mocLabelCounts(totalStats.label_counts)}
     </div>
   </div>`;
 
@@ -2635,11 +2658,9 @@ function renderMediaOverview(){
         <div class="moc-name">${icon} ${esc(c.name)}${groupInline}</div>
         ${locationDesc}
         <div class="moc-counts">
-          ${_mocChip('event',s.event_count||0,'Ereignisse')}
-          ${_mocChip('motion',(s.motion_count||s.jpg_count||0),'Bewegung')}
+          ${_mocChip('motion',s.event_count||0,'Bewegung')}
           ${_mocChip('tl',s.timelapse_count||0,'Timelapse')}
         </div>
-        ${_mocLabelCounts(s.label_counts||{})}
       </div>
     </div>`;
   }).join('');
@@ -2659,8 +2680,7 @@ function renderMediaOverview(){
           <div class="moc-name" style="display:flex;align-items:center;gap:6px">${_ARCHIVE_ICON} <span>${esc(a.name)}</span></div>
           <div class="moc-desc">Archiviert · <code style="font-size:10px;opacity:.6">${esc(a.id)}</code></div>
           <div class="moc-counts">
-            ${a.event_count?_mocChip('event',a.event_count,'Ereignisse'):''}
-            ${(a.motion_count||a.jpg_count)?_mocChip('motion',(a.motion_count||a.jpg_count||0),'Bewegung'):''}
+            ${a.event_count?_mocChip('motion',a.event_count,'Bewegung'):''}
             ${a.timelapse_count?_mocChip('tl',a.timelapse_count,'Timelapse'):''}
           </div>
         </div>
@@ -2780,8 +2800,7 @@ function renderMediaGrid(){
     if(actualW<=0||containerW<=0) return;
     const actualCols=Math.max(1,Math.round(containerW/actualW));
     if(actualCols!==_lastKnownCols) _lastKnownCols=actualCols;
-    const rows=parseInt(byId('mediaRowSlider')?.value||'4');
-    const correctPs=rows*actualCols;
+    const correctPs=_MEDIA_ROWS*actualCols;
     if(correctPs!==_cachedPageSize&&state._allMedia&&state._allMedia.length){
       _cachedPageSize=correctPs;
       state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/correctPs));
@@ -2879,22 +2898,33 @@ function syncMediaPills(){
   });
   syncMediaPills();
 })();
-// ── Row-count slider ─────────────────────────────────────────────────────────
+// ── Media grid resize observer ───────────────────────────────────────────────
 (function(){
-  const slider=byId('mediaRowSlider');
-  const valEl=byId('mediaRowVal');
-  if(!slider||!valEl) return;
-  slider.addEventListener('input',()=>{
-    valEl.textContent=slider.value;
-    if(byId('mediaDrilldown')?.style.display!=='none'&&state._allMedia?.length>=0){
-      const ps=calcItemsPerPage(); _cachedPageSize=ps;
-      state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps));
-      state.mediaPage=0;
-      state.media=state._allMedia.slice(0,ps);
-      renderMediaGrid();
-      renderMediaPagination();
-    }
+  const grid=byId('mediaGrid');
+  if(!grid||typeof ResizeObserver==='undefined') return;
+  let lastW=0;
+  const ro=new ResizeObserver(entries=>{
+    const w=entries[0]?.contentRect?.width||0;
+    if(!w||Math.abs(w-lastW)<160) return;
+    lastW=w;
+    if(byId('mediaDrilldown')?.style.display==='none') return;
+    const firstCard=grid.querySelector('.media-card');
+    if(!firstCard) return;
+    const cardW=firstCard.getBoundingClientRect().width;
+    if(cardW<=0) return;
+    const newCols=Math.max(1,Math.floor(w/cardW));
+    if(newCols===_lastKnownCols) return;
+    _lastKnownCols=newCols;
+    if(!state._allMedia?.length) return;
+    const ps=calcItemsPerPage();
+    _cachedPageSize=ps;
+    state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps));
+    state.mediaPage=0;
+    state.media=state._allMedia.slice(0,ps);
+    renderMediaGrid();
+    renderMediaPagination();
   });
+  ro.observe(grid);
 })();
 window.deleteMediaCard=async(btn)=>{
   const card=btn.closest('.media-card');

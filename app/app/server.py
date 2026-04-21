@@ -767,50 +767,81 @@ def api_media_rescan():
         return jsonify({"ok": False, "error": traceback.format_exc()}), 500
 
 
-@app.post('/api/media/reencode')
-def api_media_reencode():
-    """Scan motion_detection/*.mp4 and re-encode non-H.264 files in place via ffmpeg."""
-    import subprocess as _sp
+import threading as _threading_fix
+_fix_thumbs_state = {"done": 0, "total": 0, "running": False}
+_fix_thumbs_lock = _threading_fix.Lock()
+
+
+@app.post('/api/media/fix-thumbnails')
+def api_media_fix_thumbnails():
+    """Scan all motion_detection event JSONs; for each event with video_relpath
+    but no snapshot_relpath, extract the first frame and save it as a thumbnail.
+    Runs in a background thread, progress via GET /api/media/fix-thumbnails/status."""
+    import json as _json
+    log_t = logging.getLogger(__name__)
     events_root = storage_root / "motion_detection"
-    reencoded = 0
-    failed = 0
-    skipped = 0
-    if not events_root.exists():
-        return jsonify({"ok": True, "reencoded": 0, "failed": 0, "skipped": 0})
-    log_r = logging.getLogger(__name__)
-    for mp4 in events_root.rglob("*.mp4"):
-        try:
-            probe = _sp.run(
-                ['ffprobe', '-v', 'error', '-select_streams', 'v:0',
-                 '-show_entries', 'stream=codec_name',
-                 '-of', 'default=noprint_wrappers=1:nokey=1', str(mp4)],
-                capture_output=True, timeout=15)
-            codec = probe.stdout.decode(errors='replace').strip()
-            if codec == 'h264':
-                skipped += 1
+    todo: list = []
+    if events_root.exists():
+        for jf in events_root.rglob("*.json"):
+            try:
+                ev = _json.loads(jf.read_text(encoding="utf-8"))
+                if ev.get("video_relpath") and not ev.get("snapshot_relpath"):
+                    todo.append((jf, ev))
+            except Exception:
                 continue
-            log_r.info("[Reencode] %s (codec=%s) -> h264", mp4.name, codec or '?')
-            tmp = mp4.with_name(mp4.stem + '_reenc.mp4')
-            r = _sp.run(
-                ['ffmpeg', '-y', '-i', str(mp4),
-                 '-vcodec', 'libx264', '-preset', 'fast', '-crf', '23',
-                 '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an',
-                 str(tmp)],
-                capture_output=True, timeout=120)
-            if r.returncode == 0 and tmp.exists() and tmp.stat().st_size > 1024:
-                mp4.unlink()
-                tmp.rename(mp4)
-                reencoded += 1
-            else:
-                log_r.error("[Reencode] failed for %s: %s", mp4.name,
-                            r.stderr.decode(errors='replace')[-400:])
-                if tmp.exists():
-                    tmp.unlink()
-                failed += 1
-        except Exception as e:
-            log_r.error("[Reencode] error on %s: %s", mp4.name, e)
-            failed += 1
-    return jsonify({"ok": True, "reencoded": reencoded, "failed": failed, "skipped": skipped})
+
+    with _fix_thumbs_lock:
+        if _fix_thumbs_state["running"]:
+            return jsonify({"ok": False, "error": "already running",
+                            **_fix_thumbs_state}), 409
+        _fix_thumbs_state["total"] = len(todo)
+        _fix_thumbs_state["done"] = 0
+        _fix_thumbs_state["running"] = True
+
+    public_base = (get_effective_config().get("server", {}).get("public_base_url") or "").rstrip("/")
+
+    def _worker():
+        for jf, ev in todo:
+            try:
+                vid_rel = ev.get("video_relpath") or ""
+                vid_path = storage_root / vid_rel
+                if not vid_path.exists():
+                    continue
+                cap = cv2.VideoCapture(str(vid_path))
+                ok, frame = cap.read()
+                cap.release()
+                if not ok or frame is None:
+                    log_t.warning("[fix-thumbs] no readable frame in %s", vid_path.name)
+                    continue
+                snap_path = vid_path.with_suffix(".jpg")
+                if not cv2.imwrite(str(snap_path), frame,
+                                   [int(cv2.IMWRITE_JPEG_QUALITY), 85]):
+                    log_t.warning("[fix-thumbs] imwrite failed for %s", snap_path.name)
+                    continue
+                snap_rel = snap_path.relative_to(storage_root).as_posix()
+                snap_url = f"{public_base}/media/{snap_rel}" if public_base else f"/media/{snap_rel}"
+                ev["snapshot_relpath"] = snap_rel
+                ev["snapshot_url"] = snap_url
+                ev["thumb_url"] = snap_url
+                jf.write_text(_json.dumps(ev, ensure_ascii=False, indent=2),
+                              encoding="utf-8")
+                log_t.info("[fix-thumbs] %s -> %s", vid_path.name, snap_path.name)
+            except Exception as e:
+                log_t.warning("[fix-thumbs] error on %s: %s", jf.name, e)
+            finally:
+                with _fix_thumbs_lock:
+                    _fix_thumbs_state["done"] += 1
+        with _fix_thumbs_lock:
+            _fix_thumbs_state["running"] = False
+
+    _threading_fix.Thread(target=_worker, daemon=True).start()
+    return jsonify({"ok": True, "total": len(todo), "task_id": "fix-thumbs"})
+
+
+@app.get('/api/media/fix-thumbnails/status')
+def api_media_fix_thumbnails_status():
+    with _fix_thumbs_lock:
+        return jsonify(dict(_fix_thumbs_state))
 
 
 @app.post('/api/media/purge-orphans')
