@@ -1,6 +1,7 @@
 
 from __future__ import annotations
 import os
+import copy as _copy
 from pathlib import Path
 from flask import Flask, jsonify, request, Response, send_from_directory, render_template
 from datetime import datetime, timedelta
@@ -130,6 +131,7 @@ timelapse_builder = TimelapseBuilder(storage_root)
 mqtt_service = None
 telegram_service = None
 runtimes: dict[str, CameraRuntime] = {}
+_runtime_cfgs: dict[str, dict] = {}  # cam_id → deep copy of camera cfg at runtime start
 
 
 def get_effective_config():
@@ -148,19 +150,62 @@ def rebuild_services():
     telegram_service.start_polling()
 
 
+def _compute_camera_diff(
+    current_ids: set,
+    current_cfgs: dict,
+    new_cam_cfgs: dict,
+) -> tuple:
+    """Return (to_remove, to_add, to_restart) sets based on camera config diff."""
+    new_ids = set(new_cam_cfgs)
+    to_remove = set(current_ids) - new_ids
+    to_add = new_ids - set(current_ids)
+    to_restart = {
+        cam_id for cam_id in set(current_ids) & new_ids
+        if current_cfgs.get(cam_id) != new_cam_cfgs.get(cam_id)
+    }
+    return to_remove, to_add, to_restart
+
+
+def restart_single_camera(cam_id: str):
+    """Stop and restart one camera runtime with fresh config."""
+    existing = runtimes.pop(cam_id, None)
+    if existing:
+        existing.stop()
+    _runtime_cfgs.pop(cam_id, None)
+    cam_cfg = get_camera_cfg(cam_id)
+    if cam_cfg and cam_cfg.get("enabled", True):
+        rt = CameraRuntime(cam_id, get_camera_cfg, cfg, store, telegram_service,
+                           mqtt=mqtt_service, cat_registry=cat_registry,
+                           person_registry=person_registry)
+        runtimes[cam_id] = rt
+        _runtime_cfgs[cam_id] = _copy.deepcopy(cam_cfg)
+        rt.start()
+
+
 def rebuild_runtimes():
     global cfg
-    for rt in list(runtimes.values()):
-        rt.stop()
-    runtimes.clear()
     cfg = get_effective_config()
     rebuild_services()
     mqtt_service.publish("status/reload", {"time": datetime.now().isoformat(timespec="seconds")})
+
+    new_cam_cfgs: dict = {}
     for cam in cfg.get("cameras", []):
         if cam.get("enabled", True):
-            rt = CameraRuntime(cam["id"], get_camera_cfg, cfg, store, telegram_service, mqtt=mqtt_service, cat_registry=cat_registry, person_registry=person_registry)
-            runtimes[cam["id"]] = rt
-            rt.start()
+            cam_cfg = get_camera_cfg(cam["id"])
+            if cam_cfg:
+                new_cam_cfgs[cam["id"]] = cam_cfg
+
+    to_remove, to_add, to_restart = _compute_camera_diff(
+        set(runtimes.keys()), _runtime_cfgs, new_cam_cfgs
+    )
+
+    for cam_id in to_remove:
+        rt = runtimes.pop(cam_id)
+        rt.stop()
+        _runtime_cfgs.pop(cam_id, None)
+
+    for cam_id in to_restart | to_add:
+        restart_single_camera(cam_id)
 
 
 rebuild_runtimes()
