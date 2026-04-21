@@ -24,11 +24,19 @@ mqtt:
 
 processing:
   event_cooldown_seconds: 25
+  # Motion recording: ffmpeg records the RTSP stream directly via stream-copy
+  # (no CPU re-encode during capture). A background thread transcodes the raw
+  # file to browser-compatible H.264 after the clip ends.
+  clip_max_duration_s: 120        # maximum clip length in seconds
+  post_motion_tail_s: 3           # seconds of quiet before clip ends
   motion:
     enabled: true
     min_area: 1800
     cooldown_seconds: 25
     blur_size: 21
+    # frame_interval_ms only controls how often OpenCV samples a frame for
+    # MOTION DETECTION; it no longer affects recorded video quality because
+    # ffmpeg captures the RTSP stream independently at the camera's native FPS.
     frame_interval_ms: 350
   detection:
     mode: coral

@@ -2298,7 +2298,11 @@ function openLightbox(item){
   const vidSrc=_lbItem.video_relpath?`/media/${_lbItem.video_relpath}`:(_lbItem.video_url||'');
   const imgSrc=_lbItem.snapshot_relpath?`/media/${_lbItem.snapshot_relpath}`:(_lbItem.snapshot_url||'');
   const hasVideoLabel=(_lbItem.labels||[]).some(l=>['motion','car','person','cat','bird'].includes(l));
-  if(vidSrc){
+  const pendingMsg=_lbItem.status==='recording'?'Video wird aufgenommen…':_lbItem.status==='processing'?'Video wird verarbeitet…':null;
+  if(pendingMsg){
+    _lbShowError(pendingMsg);
+    const confirmBtn=byId('lightboxConfirm'); if(confirmBtn) confirmBtn.style.display='none';
+  } else if(vidSrc){
     const imgEl=byId('lightboxImg'); imgEl.style.display='none';
     const videoEl=byId('lightboxVideo');
     videoEl.style.display='block'; videoEl.src=vidSrc; videoEl.muted=true; videoEl.loop=true;
@@ -2580,6 +2584,7 @@ function mediaCardHTML(item){
       </div>
     </article>`;
   }
+  const isProcessing=item.status==='recording'||item.status==='processing';
   const hasVideo=!!(item.video_relpath||item.video_url);
   const showPlayer=hasVideo||!!item.encode_error;
   const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
@@ -2599,7 +2604,15 @@ function mediaCardHTML(item){
   const vidTime=fmtMediaTimeOnly(item.time||'');
   const vidDur=fmtDur(item.duration_s);
   const vidSize=fmtByt(item.file_size_bytes);
-  const mediaInner=showPlayer
+  const procMsg=item.status==='recording'?'wird aufgenommen…':'wird verarbeitet…';
+  const processingInner=`<div style="position:absolute;inset:0;background:#0a0e1a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px">
+        <div style="width:42px;height:42px;border:3px solid ${hexToRgba(colors.motion,0.2)};border-top-color:${colors.motion};border-radius:50%;animation:spin 1s linear infinite"></div>
+        <div style="font-size:11px;color:${colors.motion};font-weight:600">${procMsg}</div>
+      </div>
+      ${motionBadge}`;
+  const mediaInner=isProcessing
+    ?processingInner
+    :showPlayer
     ?`<div style="position:absolute;inset:0;background:#0a0e1a;display:flex;align-items:center;justify-content:center">
         <div class="mmc-play-btn" style="background:${playBg};border:1.5px solid ${playBorder}"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="color:${accent};margin-left:3px"><polygon points="5,3 19,12 5,21"/></svg></div>
       </div>
@@ -2789,6 +2802,21 @@ function renderMediaPagination(){
     `<span class="page-label">Seite ${cur+1} von ${total}</span>`+
     `<button class="page-pill" ${cur>=total-1?'disabled':''} onclick="_goToPage(${cur+1})">›</button>`;
 }
+let _processingPoll=null;
+function _ensureProcessingPoll(){
+  const pending=(state.media||[]).some(x=>x&&(x.status==='recording'||x.status==='processing'));
+  if(pending&&!_processingPoll){
+    _processingPoll=setInterval(async()=>{
+      try{
+        await loadMedia();
+        renderMediaGrid();
+      }catch(_){ /* keep polling */ }
+    },3000);
+  }else if(!pending&&_processingPoll){
+    clearInterval(_processingPoll);
+    _processingPoll=null;
+  }
+}
 function renderMediaGrid(){
   const grid=byId('mediaGrid'); if(!grid) return;
   // Unified stream: EventStore now contains motion + timelapse events, so no
@@ -2802,6 +2830,8 @@ function renderMediaGrid(){
   window._openMediaItem=id=>{const item=items.find(x=>x.event_id===id); if(item) openLightbox(item);};
   // Refresh label-pill visibility against current data
   updateAvailableLabelPills();
+  // Poll for pending recording/processing items until every visible card is ready
+  _ensureProcessingPoll();
   // Cache-bust any card whose item has a snapshot_relpath but whose <img> is
   // empty or broken — covers freshly-generated thumbnails that the browser
   // may have cached as 404 from an earlier render pass.

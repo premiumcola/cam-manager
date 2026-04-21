@@ -4,6 +4,8 @@ import time
 import threading
 import logging
 import json as _json_mod
+import shutil as _shutil
+import subprocess as _subprocess
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +13,16 @@ import requests
 import numpy as np
 from .detectors import CoralObjectDetector, BirdSpeciesClassifier, draw_detections
 from .event_logic import is_in_schedule, choose_alarm_level
+
+# Does this container have an ffmpeg binary? If so, motion recording uses the
+# fast stream-copy path (direct RTSP → mp4, no CPU re-encode). Otherwise we
+# fall back to the OpenCV frame-buffer approach, which loses timestamps.
+_FFMPEG_AVAILABLE = _shutil.which('ffmpeg') is not None
+if not _FFMPEG_AVAILABLE:
+    logging.getLogger(__name__).warning(
+        "ffmpeg binary not found — motion recording falls back to OpenCV frame buffer "
+        "(playback speed may be incorrect)"
+    )
 
 # Species name → achievement ID mapping (German species names → normalised IDs)
 _SPECIES_TO_ACH_ID = {
@@ -80,11 +92,16 @@ class CameraRuntime:
         # Video recording state (ring pre-buffer + session tracking)
         self._pre_buffer: deque = deque(maxlen=300)  # (frame, epoch_float) pairs; time-filtered to 3s on use
         self._recording: bool = False
-        self._rec_frames: list = []
+        self._rec_frames: list = []                  # OpenCV fallback only
         self._rec_start_time: datetime | None = None
         self._last_motion_ts: datetime | None = None  # last frame with confirmed motion
         self._rec_event_meta: dict | None = None      # metadata captured at session start
         self._rec_corrupt_frames: int = 0             # invalid frames rejected during current clip
+        # ffmpeg stream-copy recording state (preferred path)
+        self._ffmpeg_proc = None                      # running Popen, or None
+        self._ffmpeg_out_path: Path | None = None     # raw stream-copy file
+        self._ffmpeg_start_time: datetime | None = None
+        self._rec_event_id: str | None = None         # event_id of the currently-recording clip
         self._prev_good_frame = None                  # last accepted frame (MAD reference)
         # Main-stream FPS measurement (rolling 5s window)
         self._main_fps: float = 0.0
@@ -595,6 +612,258 @@ class CameraRuntime:
         except Exception as e:
             log.error('[%s] ffmpeg pipe error: %s', self.camera_id, e)
             return False
+
+    def _write_recording_event_stub(self, event_id: str, meta: dict,
+                                    start_time: datetime, status: str = "recording"):
+        """Write the event JSON for a clip whose encode is still in flight.
+        Video fields are null; the frontend shows a 'recording'/'processing' state."""
+        event = {
+            "event_id": event_id,
+            "camera_id": self.camera_id,
+            "camera_name": self.cfg.get("name", self.camera_id),
+            "group_id": self.cfg.get("group_id"),
+            "camera_role": self.cfg.get("role"),
+            "armed": bool(self.cfg.get("armed", True)),
+            "after_hours": meta["after_hours"],
+            "alarm_level": meta["alarm_level"],
+            "time": start_time.isoformat(timespec="seconds"),
+            "labels": meta["labels"],
+            "top_label": meta["top_label"],
+            "bird_species": meta["bird_species"],
+            "cat_name": meta["cat_name"],
+            "person_name": meta["person_name"],
+            "whitelisted": meta["whitelisted"],
+            "detections": meta["detections"],
+            "snapshot_url": None,
+            "snapshot_relpath": None,
+            "thumb_url": None,
+            "video_url": None,
+            "video_relpath": None,
+            "duration_s": 0.0,
+            "file_size_bytes": 0,
+            "status": status,
+        }
+        self.store.add_event(self.camera_id, event)
+
+    def _start_ffmpeg_recording(self, start_time: datetime, meta: dict) -> bool:
+        """Launch an ffmpeg subprocess that stream-copies the RTSP feed to disk.
+        Returns True on success, False to let the caller fall back to OpenCV."""
+        storage_root = Path(self.global_cfg["storage"]["root"])
+        day_dir = storage_root / "motion_detection" / self.camera_id / start_time.strftime("%Y-%m-%d")
+        day_dir.mkdir(parents=True, exist_ok=True)
+        event_id = start_time.strftime("%Y%m%d-%H%M%S-%f")
+        raw_path = day_dir / f"{event_id}.raw.mp4"
+        rtsp_url = self.cfg.get("rtsp_url")
+        if not rtsp_url:
+            return False
+        cmd = [
+            'ffmpeg', '-y', '-rtsp_transport', 'tcp',
+            '-i', rtsp_url,
+            '-c', 'copy',
+            '-movflags', '+frag_keyframe+empty_moov',
+            str(raw_path),
+        ]
+        try:
+            proc = _subprocess.Popen(
+                cmd,
+                stdin=_subprocess.PIPE,
+                stdout=_subprocess.DEVNULL,
+                stderr=_subprocess.PIPE,
+            )
+        except FileNotFoundError:
+            log.warning("[%s] ffmpeg not found — using OpenCV frame buffer "
+                        "(playback speed may be incorrect)", self.camera_id)
+            return False
+        except Exception as e:
+            log.error("[%s] ffmpeg spawn failed: %s", self.camera_id, e)
+            return False
+        self._ffmpeg_proc = proc
+        self._ffmpeg_out_path = raw_path
+        self._ffmpeg_start_time = start_time
+        self._rec_event_id = event_id
+        # Persist a 'recording' stub so the dashboard can show the clip immediately
+        try:
+            self._write_recording_event_stub(event_id, meta, start_time, status="recording")
+        except Exception as e:
+            log.warning("[%s] recording stub write failed: %s", self.camera_id, e)
+        log.info("[%s] Recording started via ffmpeg (%s)", self.camera_id, raw_path.name)
+        return True
+
+    def _stop_ffmpeg_and_queue_reencode(self):
+        """Stop the running ffmpeg subprocess gracefully, then kick off a background
+        thread that re-encodes the raw stream-copy to browser-friendly H.264."""
+        proc = self._ffmpeg_proc
+        raw_path = self._ffmpeg_out_path
+        event_id = self._rec_event_id
+        meta = self._rec_event_meta
+        start_time = self._ffmpeg_start_time
+        # Reset state so a new recording can start immediately
+        self._ffmpeg_proc = None
+        self._ffmpeg_out_path = None
+        self._ffmpeg_start_time = None
+        self._rec_event_id = None
+        if proc is None:
+            return
+        try:
+            if proc.stdin and not proc.stdin.closed:
+                try:
+                    proc.stdin.write(b'q\n')
+                    proc.stdin.flush()
+                except Exception:
+                    pass
+            try:
+                proc.wait(timeout=5)
+            except _subprocess.TimeoutExpired:
+                log.warning("[%s] ffmpeg did not exit on 'q', terminating", self.camera_id)
+                proc.terminate()
+                try:
+                    proc.wait(timeout=3)
+                except _subprocess.TimeoutExpired:
+                    proc.kill()
+        except Exception as e:
+            log.warning("[%s] ffmpeg stop error: %s", self.camera_id, e)
+        log.info("[%s] Recording stopped (%s), queuing re-encode", self.camera_id,
+                 raw_path.name if raw_path else "?")
+        if raw_path is None or event_id is None or meta is None or start_time is None:
+            return
+        # Update status → processing so the UI shows the intermediate state
+        try:
+            ev = self.store.get_event(self.camera_id, event_id) or {}
+            ev["status"] = "processing"
+            self.store.update_event(self.camera_id, event_id, ev)
+        except Exception:
+            pass
+        threading.Thread(
+            target=self._reencode_motion_clip,
+            args=(raw_path, event_id, meta, start_time),
+            daemon=True,
+        ).start()
+
+    def _reencode_motion_clip(self, raw_path: Path, event_id: str, meta: dict,
+                              start_time: datetime):
+        """Background: transcode raw stream-copy → browser-friendly H.264.
+        On success: delete the raw file, set video_url/snapshot/thumb/status=ready.
+        On failure: keep raw as fallback, set encode_error on the event."""
+        storage_root = Path(self.global_cfg["storage"]["root"])
+        public_base = (self.global_cfg.get("server", {}).get("public_base_url") or "").rstrip("/")
+        day_dir = raw_path.parent
+        vid_path = day_dir / f"{event_id}.mp4"
+
+        video_url = None
+        video_relpath = None
+        duration_s = 0.0
+        file_size_bytes = 0
+        encode_error = None
+        try:
+            if not raw_path.exists() or raw_path.stat().st_size < 1024:
+                raise RuntimeError(f"raw clip missing/empty ({raw_path.stat().st_size if raw_path.exists() else 0} bytes)")
+            cmd = [
+                'ffmpeg', '-y', '-i', str(raw_path),
+                '-vcodec', 'libx264', '-preset', 'fast', '-crf', '22',
+                '-pix_fmt', 'yuv420p',
+                '-movflags', '+faststart',
+                '-an',
+                str(vid_path),
+            ]
+            r = _subprocess.run(cmd, capture_output=True, timeout=300)
+            if r.returncode != 0 or not vid_path.exists() or vid_path.stat().st_size < 1024:
+                stderr_text = (r.stderr or b'').decode('utf-8', errors='replace')
+                raise RuntimeError(f"ffmpeg re-encode rc={r.returncode}: {stderr_text[-300:]}")
+            # Verify
+            check = cv2.VideoCapture(str(vid_path))
+            fc = int(check.get(cv2.CAP_PROP_FRAME_COUNT))
+            cfps = check.get(cv2.CAP_PROP_FPS) or 0.0
+            check.release()
+            duration_s = round(fc / cfps, 2) if cfps > 0 else 0.0
+            file_size_bytes = vid_path.stat().st_size
+            rel = vid_path.relative_to(storage_root)
+            video_url = f"{public_base}/media/{rel.as_posix()}" if public_base else f"/media/{rel.as_posix()}"
+            video_relpath = rel.as_posix()
+            # Delete raw on success
+            try:
+                raw_path.unlink()
+            except Exception:
+                pass
+            log.info("[%s] Re-encode complete: %s (%.1fs %dKB)",
+                     self.camera_id, vid_path.name, duration_s, file_size_bytes // 1024)
+        except Exception as e:
+            log.error("[%s] Re-encode failed: %s", self.camera_id, e)
+            encode_error = str(e)
+            # Fallback: raw may still be playable — expose it if so
+            if raw_path.exists() and raw_path.stat().st_size > 1024:
+                rel = raw_path.relative_to(storage_root)
+                video_url = f"{public_base}/media/{rel.as_posix()}" if public_base else f"/media/{rel.as_posix()}"
+                video_relpath = rel.as_posix()
+                file_size_bytes = raw_path.stat().st_size
+
+        # Thumbnail from whichever file is present
+        thumb_source = vid_path if vid_path.exists() else (raw_path if raw_path.exists() else None)
+        thumb_rel = None
+        thumb_url = None
+        if thumb_source is not None:
+            thumb_path = day_dir / f"{event_id}.jpg"
+            try:
+                cap = cv2.VideoCapture(str(thumb_source))
+                total_f = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                if total_f > 3:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, total_f // 3)
+                ok_th, frame_th = cap.read()
+                cap.release()
+                if ok_th and frame_th is not None:
+                    tw = frame_th.shape[1]
+                    if tw > 640:
+                        scale = 640 / tw
+                        frame_th = cv2.resize(frame_th, (640, int(frame_th.shape[0] * scale)))
+                    if cv2.imwrite(str(thumb_path), frame_th, [int(cv2.IMWRITE_JPEG_QUALITY), 75]):
+                        thumb_rel = thumb_path.relative_to(storage_root).as_posix()
+                        thumb_url = f"{public_base}/media/{thumb_rel}" if public_base else f"/media/{thumb_rel}"
+            except Exception as _te:
+                log.debug("[%s] motion thumb (post-encode) failed: %s", self.camera_id, _te)
+
+        # Update the event JSON: transition from 'processing' → 'ready' (or 'error')
+        try:
+            ev = self.store.get_event(self.camera_id, event_id) or {}
+            ev["video_url"] = video_url
+            ev["video_relpath"] = video_relpath
+            ev["duration_s"] = duration_s
+            ev["file_size_bytes"] = file_size_bytes
+            ev["snapshot_url"] = thumb_url
+            ev["snapshot_relpath"] = thumb_rel
+            ev["thumb_url"] = thumb_url
+            ev["status"] = "ready" if video_url else "error"
+            if encode_error:
+                ev["encode_error"] = encode_error
+            self.store.update_event(self.camera_id, event_id, ev)
+        except Exception as e:
+            log.warning("[%s] event JSON update failed: %s", self.camera_id, e)
+
+        # MQTT + Telegram (best-effort, only when we actually produced a video)
+        if video_url and self.mqtt and self.cfg.get("mqtt_enabled", True):
+            try:
+                self.mqtt.publish(f"events/{self.camera_id}", {
+                    "event_id": event_id,
+                    "labels": meta["labels"],
+                    "time": start_time.isoformat(timespec="seconds"),
+                    "video_url": video_url,
+                    "snapshot_url": thumb_url,
+                })
+            except Exception:
+                pass
+        notify = meta.get("notify", False)
+        if video_url and notify and self.notifier and self.cfg.get("telegram_enabled", True):
+            try:
+                caption = (f"📷 {self.cfg.get('name', self.camera_id)}\n"
+                           f"🕒 {start_time.isoformat(timespec='seconds')}\n"
+                           f"🏷 {', '.join(meta['labels'])}")
+                threading.Thread(target=self.notifier.send_alert_sync,
+                                 kwargs={
+                                     "caption": caption,
+                                     "jpeg_bytes": meta.get("thumb_bytes"),
+                                     "snapshot_url": thumb_url,
+                                     "camera_id": self.camera_id,
+                                 }, daemon=True).start()
+            except Exception as e:
+                log.debug("[%s] telegram alert skipped: %s", self.camera_id, e)
 
     def _finalize_motion_clip(self, frames: list, meta: dict, fps: float = 10.0):
         """Save MP4 clip (H.264 via ffmpeg, mp4v fallback), verify, write event JSON, send Telegram."""
@@ -1271,8 +1540,13 @@ class CameraRuntime:
                         self._main_fps_frames = 0
                         self._main_fps_window_start = time.time()
 
-                    # Pre-buffer: store (frame, timestamp) so we can time-filter to last 3 s
-                    self._pre_buffer.append((proc_frame.copy(), time.time()))
+                    # Clip boundary knobs (configurable); ffmpeg stream-copy ignores pre-buffer
+                    _clip_max = int(self.global_cfg.get("processing", {}).get("clip_max_duration_s", 120))
+                    _post_tail = float(self.global_cfg.get("processing", {}).get("post_motion_tail_s", 3.0))
+                    ffmpeg_mode = bool(self._ffmpeg_proc) or (_FFMPEG_AVAILABLE and not self._recording)
+                    # Pre-buffer only matters for the OpenCV fallback path
+                    if not _FFMPEG_AVAILABLE:
+                        self._pre_buffer.append((proc_frame.copy(), time.time()))
 
                     if has_motion:
                         self._last_motion_ts = now_dt
@@ -1280,45 +1554,68 @@ class CameraRuntime:
                             has_person = "person" in labels
                             elapsed = (now_dt - self.last_event_at).total_seconds()
                             if has_person or elapsed >= cooldown:
-                                self._recording = True
-                                self._rec_start_time = now_dt
-                                self._rec_corrupt_frames = 0
-                                # Extract only the last 3 s of good frames from pre-buffer
-                                pre_cutoff = time.time() - 3.0
-                                self._rec_frames = [f for f, ts in self._pre_buffer if ts >= pre_cutoff]
-                                self._rec_event_meta = self._build_event_meta(
+                                rec_meta = self._build_event_meta(
                                     now_dt, labels, detections, drawn, effective_bbox)
-                                self.last_event_at = now_dt
-                                self.event_counter_today += 1
-                                log.info("[%s] Motion recording started (labels=%s, prebuf=%d frames)",
-                                         self.camera_id, labels, len(self._rec_frames))
-                        if self._recording:
+                                started = False
+                                if _FFMPEG_AVAILABLE:
+                                    started = self._start_ffmpeg_recording(now_dt, rec_meta)
+                                if started:
+                                    self._recording = True
+                                    self._rec_start_time = now_dt
+                                    self._rec_corrupt_frames = 0
+                                    self._rec_event_meta = rec_meta
+                                    self.last_event_at = now_dt
+                                    self.event_counter_today += 1
+                                else:
+                                    # OpenCV fallback (legacy path)
+                                    self._recording = True
+                                    self._rec_start_time = now_dt
+                                    self._rec_corrupt_frames = 0
+                                    pre_cutoff = time.time() - 3.0
+                                    self._rec_frames = [f for f, ts in self._pre_buffer if ts >= pre_cutoff]
+                                    self._rec_event_meta = rec_meta
+                                    self.last_event_at = now_dt
+                                    self.event_counter_today += 1
+                                    log.info("[%s] Motion recording started (OpenCV, labels=%s, prebuf=%d frames)",
+                                             self.camera_id, labels, len(self._rec_frames))
+                        # Append frames only in OpenCV mode — ffmpeg records itself
+                        if self._recording and self._ffmpeg_proc is None:
                             self._rec_frames.append(proc_frame.copy())
 
                     elif self._recording:
-                        # Post-buffer: keep collecting until 3 s after last motion or 60 s cap
-                        self._rec_frames.append(proc_frame.copy())
                         since_last = (now_dt - self._last_motion_ts).total_seconds() if self._last_motion_ts else 999
                         since_start = (now_dt - self._rec_start_time).total_seconds() if self._rec_start_time else 0
-                        if since_last >= 3.0 or since_start >= 60:
-                            frames_snap = self._rec_frames[:]
-                            meta_snap = self._rec_event_meta
-                            # Compute actual FPS from recording duration and frame count
-                            measured_fps = (max(5.0, min(30.0, len(frames_snap) / since_start))
-                                            if since_start > 0.5 else (self._main_fps or 10.0))
-                            self._recording = False
-                            self._rec_frames = []
-                            self._rec_start_time = None
-                            self._last_motion_ts = None
-                            self._rec_event_meta = None
+                        # In OpenCV mode we keep accumulating tail frames
+                        if self._ffmpeg_proc is None:
+                            self._rec_frames.append(proc_frame.copy())
+                        if since_last >= _post_tail or since_start >= _clip_max:
                             if self._rec_corrupt_frames > 5:
                                 log.warning("[%s] %d corrupt frames rejected in this clip",
                                             self.camera_id, self._rec_corrupt_frames)
-                            self._rec_corrupt_frames = 0
-                            if meta_snap and len(frames_snap) >= 3:
-                                threading.Thread(target=self._finalize_motion_clip,
-                                                 args=(frames_snap, meta_snap, measured_fps),
-                                                 daemon=True).start()
+                            if self._ffmpeg_proc is not None:
+                                # ffmpeg mode: stop subprocess + queue re-encode
+                                self._stop_ffmpeg_and_queue_reencode()
+                                self._recording = False
+                                self._rec_start_time = None
+                                self._last_motion_ts = None
+                                self._rec_event_meta = None
+                                self._rec_corrupt_frames = 0
+                            else:
+                                # OpenCV fallback: finalize from frame buffer
+                                frames_snap = self._rec_frames[:]
+                                meta_snap = self._rec_event_meta
+                                measured_fps = (max(5.0, min(30.0, len(frames_snap) / since_start))
+                                                if since_start > 0.5 else (self._main_fps or 10.0))
+                                self._recording = False
+                                self._rec_frames = []
+                                self._rec_start_time = None
+                                self._last_motion_ts = None
+                                self._rec_event_meta = None
+                                self._rec_corrupt_frames = 0
+                                if meta_snap and len(frames_snap) >= 3:
+                                    threading.Thread(target=self._finalize_motion_clip,
+                                                     args=(frames_snap, meta_snap, measured_fps),
+                                                     daemon=True).start()
 
                 else:
                     # ── Snapshot camera: save JPEG event (unchanged behaviour) ─
