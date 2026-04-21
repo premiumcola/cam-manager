@@ -54,8 +54,8 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 /* Live dot */
 .cv-pdot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
 /* Expanding live capsule */
-.cv-pill-live-wrap{--lp-collapsed-w:60px;--lp-expanded-w:210px;position:relative;border-radius:14px;border:1.5px solid rgba(34,197,94,.55);background:rgba(34,197,94,.18);color:#c8f5e0;font-size:11px;font-weight:700;cursor:default;overflow:hidden;backdrop-filter:blur(8px);width:var(--lp-collapsed-w);max-height:28px;transition:width .28s ease,max-height .28s ease;align-self:flex-end}
-.cv-pill-live-wrap.cv-lp-open{width:var(--lp-expanded-w);max-height:200px}
+.cv-pill-live-wrap{--lp-collapsed-w:100px;--lp-expanded-w:210px;position:relative;border-radius:14px;border:1.5px solid rgba(34,197,94,.55);background:rgba(34,197,94,.18);color:#c8f5e0;font-size:11px;font-weight:700;cursor:default;overflow:hidden;backdrop-filter:blur(8px);max-width:var(--lp-collapsed-w);max-height:28px;transition:max-width .28s ease,max-height .28s ease;margin-left:auto}
+.cv-pill-live-wrap.cv-lp-open{max-width:var(--lp-expanded-w);max-height:200px}
 .cv-live-off{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.35)}
 .cv-live-collapsed{display:flex;align-items:center;gap:5px;padding:4px 6px 4px 7px;white-space:nowrap;opacity:1;transform:translateY(0);transition:opacity .18s ease,transform .28s ease}
 .cv-pill-live-wrap.cv-lp-open .cv-live-collapsed{opacity:0;transform:translateY(-4px);pointer-events:none;max-height:0;padding:0;overflow:hidden}
@@ -227,7 +227,6 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .cam-diag-val.warn{color:#f59e0b}
 .cam-diag-val.bad{color:var(--danger)}
 /* Live view: stream mode badges in live pill */
-.cv-fps-badge{font-size:9px;font-weight:700;background:rgba(34,197,94,.18);color:#4ade80;border-radius:999px;padding:0 5px;line-height:16px;margin-left:2px;font-variant-numeric:tabular-nums}
 .cv-stream-mode{font-size:11px;font-variant-numeric:tabular-nums}
 .cv-mode-live{color:#4ade80}
 .cv-mode-base{color:var(--muted)}

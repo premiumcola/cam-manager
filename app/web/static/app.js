@@ -378,7 +378,8 @@ function renderDashboard(){
         <div class="cv-live-collapsed">
           <div class="cv-pdot"></div>
           <span>Live</span>
-          ${previewFps?`<span class="cv-fps-badge">${previewFps}</span>`:''}
+          ${previewFps?`<span style="color:rgba(134,239,172,.55);font-size:10px;font-weight:400;margin-left:4px">${previewFps}</span>`:''}
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="rgba(200,245,224,.55)" stroke-width="1.8" stroke-linecap="round" style="margin-left:auto;flex-shrink:0"><path d="M3 4.5l3 3 3-3"/></svg>
         </div>
         <div class="cv-live-expanded">
           <div class="cv-live-exp-header">
