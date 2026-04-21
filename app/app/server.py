@@ -1631,10 +1631,16 @@ def api_coral_test():
         rt = runtimes.get(cam_id)
         if rt is not None:
             with rt.lock:
-                if rt.frame is not None:
-                    frame = rt.frame.copy()
+                # Prefer the clean H.264 sub-stream frame. The main-stream
+                # rt.frame is OpenCV's software H.265 decode output, which is
+                # riddled with pink/magenta artifacts and unusable for a
+                # visual sanity check of Coral detection results.
+                if getattr(rt, '_preview_frame', None) is not None:
+                    frame = rt._preview_frame.copy()
                 elif rt.preview is not None:
                     frame = rt.preview.copy()
+                elif rt.frame is not None:
+                    frame = rt.frame.copy()
             if frame is not None:
                 source = "camera"
                 cam_cfg = settings.get_camera(cam_id) or {}
@@ -1696,6 +1702,91 @@ def api_coral_test():
         "image_b64": image_b64,
         "usb_info": usb_info,
     })
+
+
+_MODELS_DIR = Path("/app/models")
+
+
+def _describe_tflite(filename: str) -> str:
+    """Return a human-readable description based on common filename patterns.
+    Pure heuristics — we never crack the model file itself."""
+    low = filename.lower()
+    if ('ssd' in low and 'mobilenet' in low) or 'mobilenet_ssd' in low:
+        return "General object detection (COCO 90 classes)"
+    if 'bird' in low or 'bavarian' in low or 'inat' in low:
+        return "Bird species classification"
+    if 'efficientdet' in low:
+        return "General object detection (EfficientDet)"
+    if 'classifier' in low or 'classification' in low:
+        return "Image classifier"
+    if 'posenet' in low or 'pose' in low:
+        return "Human pose estimation"
+    if 'deeplab' in low or 'segment' in low:
+        return "Semantic segmentation"
+    return "Custom model"
+
+
+@app.get('/api/coral/models')
+def api_coral_models():
+    """List every .tflite model present in /app/models/, annotated with size
+    and a filename-derived description. Flags which one is currently loaded."""
+    eff = get_effective_config()
+    current = ((eff.get("processing") or {}).get("detection") or {}).get("model_path")
+    items: list = []
+    if _MODELS_DIR.exists():
+        for p in sorted(_MODELS_DIR.glob("*.tflite")):
+            try:
+                size = p.stat().st_size
+            except Exception:
+                size = 0
+            items.append({
+                "filename": p.name,
+                "path": str(p),
+                "size_bytes": size,
+                "size_mb": round(size / 1048576, 2),
+                "description": _describe_tflite(p.name),
+                "edgetpu": "_edgetpu" in p.name.lower(),
+                "active": str(p) == current,
+            })
+    return jsonify({"ok": True, "models": items, "current": current,
+                    "models_dir": str(_MODELS_DIR)})
+
+
+@app.post('/api/coral/models/select')
+def api_coral_models_select():
+    """Switch the active detection model. The incoming path must live inside
+    /app/models/; anything else is rejected to stop directory-traversal
+    abuse. Writes through SettingsStore and triggers a runtime rebuild so
+    the new detector loads on every camera."""
+    payload = request.get_json(silent=True) or {}
+    raw_path = (payload.get("path") or "").strip()
+    if not raw_path:
+        return jsonify({"ok": False, "error": "path required"}), 400
+    try:
+        target = Path(raw_path).resolve()
+        target.relative_to(_MODELS_DIR.resolve())
+    except Exception:
+        return jsonify({"ok": False, "error": "path must be inside /app/models"}), 400
+    if not target.exists() or target.suffix.lower() != ".tflite":
+        return jsonify({"ok": False, "error": "model not found"}), 404
+
+    proc = settings.data.setdefault("processing", {})
+    det = proc.setdefault("detection", {})
+    det["model_path"] = str(target)
+    det["mode"] = "coral"
+    # cpu_model_path auto-derives the non-_edgetpu variant; keep in sync so
+    # the CPU fallback picks up the matching model when pycoral is missing.
+    cpu_candidate = str(target).replace("_edgetpu.tflite", ".tflite")
+    if cpu_candidate != str(target) and Path(cpu_candidate).exists():
+        det["cpu_model_path"] = cpu_candidate
+    else:
+        det.pop("cpu_model_path", None)
+    settings.save()
+    try:
+        rebuild_runtimes()
+    except Exception as e:
+        logging.getLogger(__name__).warning("Coral model switch: rebuild_runtimes failed: %s", e)
+    return jsonify({"ok": True, "path": str(target)})
 
 
 @app.get('/api/system')

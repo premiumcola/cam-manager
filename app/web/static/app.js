@@ -1219,6 +1219,7 @@ function hydrateSettings(){
   // Coral device info from /api/system (async, non-blocking)
   _updateCoralDeviceInfo();
   _populateCoralTestCameras();
+  _loadCoralModels();
   // Hydrate media settings form
   const storageSec=state.config.storage||{};
   const rdVal=storageSec.retention_days||14;
@@ -1766,6 +1767,60 @@ async function _runCoralTest(){
   }
 }
 byId('coralTestBtn')?.addEventListener('click',_runCoralTest);
+
+async function _loadCoralModels(){
+  const list=byId('coralModelsList'); if(!list) return;
+  list.innerHTML='<div class="field-help" style="color:var(--muted)">Lade Modelle…</div>';
+  try{
+    const r=await j('/api/coral/models');
+    const models=r.models||[];
+    if(!models.length){
+      list.innerHTML=`<div class="field-help">Keine Modelle in <code>${esc(r.models_dir||'/app/models')}</code> gefunden.</div>`;
+      return;
+    }
+    list.innerHTML=models.map(m=>{
+      const badge=m.edgetpu
+        ? '<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(77,204,133,.15);color:#4ade80;letter-spacing:.04em">EDGETPU</span>'
+        : '<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(250,204,21,.12);color:#facc15;letter-spacing:.04em">CPU</span>';
+      const activeBg=m.active?'rgba(77,204,133,.08)':'var(--surface)';
+      const activeBorder=m.active?'1.5px solid rgba(77,204,133,.55)':'1px solid rgba(255,255,255,0.06)';
+      const activeMark=m.active?'<span style="color:#4ade80;font-weight:800;margin-left:auto;font-size:11px">● aktiv</span>':'';
+      return `<div class="coral-model-card" data-path="${esc(m.path)}" style="background:${activeBg};border:${activeBorder};border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:${m.active?'default':'pointer'};transition:background .15s">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <code style="font-size:12px;font-weight:700;color:var(--text)">${esc(m.filename)}</code>
+          ${badge}
+          <span style="font-size:10px;color:var(--muted);margin-left:4px">${m.size_mb} MB</span>
+          ${activeMark}
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">${esc(m.description)}</div>
+      </div>`;
+    }).join('');
+    list.querySelectorAll('.coral-model-card').forEach(card=>{
+      card.addEventListener('click',async()=>{
+        const p=card.dataset.path;
+        if(!p||card.style.cursor==='default') return;
+        card.style.opacity='0.6';
+        try{
+          const r=await j('/api/coral/models/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:p})});
+          if(r.ok){
+            showToast('Modell aktiviert · Coral wird neu gestartet','success');
+            await _loadCoralModels();
+            await _updateCoralDeviceInfo();
+          }else{
+            showToast('Modellwechsel fehlgeschlagen: '+(r.error||'?'),'error');
+          }
+        }catch(e){
+          showToast('Modellwechsel fehlgeschlagen: '+e.message,'error');
+        }finally{
+          card.style.opacity='';
+        }
+      });
+    });
+  }catch(e){
+    list.innerHTML=`<div style="color:#fca5a5">Fehler beim Laden: ${esc(String(e))}</div>`;
+  }
+}
+byId('coralModelsReload')?.addEventListener('click',_loadCoralModels);
 function _makeSquirrelHTML(){
   const msg=_RELOAD_MSGS[Math.floor(Math.random()*_RELOAD_MSGS.length)];
   const bigSvg=_SQ_SVG.replace('width="40" height="32"','width="82" height="76"');
@@ -2721,10 +2776,14 @@ function mediaCardHTML(item){
         <div style="font-size:11px;color:${colors.motion};font-weight:600">${procMsg}</div>
       </div>
       ${motionBadge}`;
+  const videoThumbEl=(showPlayer&&imgSrc)
+    ? `<img src="${esc(imgSrc)}" alt="preview" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.7" loading="lazy" onerror="this.remove()">`
+    : '';
   const mediaInner=isProcessing
     ?processingInner
     :showPlayer
-    ?`<div style="position:absolute;inset:0;background:#0a0e1a;display:flex;align-items:center;justify-content:center">
+    ?`<div style="position:absolute;inset:0;background:#0a0e1a">${videoThumbEl}</div>
+      <div style="position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center">
         <div class="mmc-play-btn" style="background:${playBg};border:1.5px solid ${playBorder}"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="color:${accent};margin-left:3px"><polygon points="5,3 19,12 5,21"/></svg></div>
       </div>
       ${(vidDate||vidTime)?`<div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none">
