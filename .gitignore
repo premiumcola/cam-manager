@@ -30,6 +30,10 @@ env/
 .env
 .env.*
 
+# Local-dev docker-compose overrides (e.g. to disable Coral USB passthrough
+# on hosts without /dev/bus/usb like Windows Docker Desktop).
+docker-compose.override.yml
+
 # OS / editor
 .DS_Store
 Thumbs.db

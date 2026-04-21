@@ -1607,6 +1607,97 @@ def api_achievements_unlock():
 
 
 # ── System info ──────────────────────────────────────────────────────────────
+@app.post('/api/coral/test')
+def api_coral_test():
+    """Run a single object-detection inference for the user to verify the
+    Coral/CPU pipeline. Uses a live frame from the requested camera when
+    available, otherwise a synthetic test pattern. Returns the annotated
+    frame as base64, the detector mode + reason, inference time in ms,
+    and the matching lsusb line."""
+    import base64 as _b64, time as _time, subprocess as _sp
+    from .detectors import CoralObjectDetector, Detection, draw_detections
+    payload = request.get_json(silent=True) or {}
+    cam_id = (payload.get("camera_id") or "").strip() or None
+
+    # Detection config from the effective runtime config
+    eff = get_effective_config()
+    det_cfg = (eff.get("processing", {}) or {}).get("detection", {}) or {}
+
+    # Source frame: camera runtime → snapshot; otherwise a test pattern
+    frame = None
+    source = "test_pattern"
+    camera_name = None
+    if cam_id:
+        rt = runtimes.get(cam_id)
+        if rt is not None:
+            with rt.lock:
+                if rt.frame is not None:
+                    frame = rt.frame.copy()
+                elif rt.preview is not None:
+                    frame = rt.preview.copy()
+            if frame is not None:
+                source = "camera"
+                cam_cfg = settings.get_camera(cam_id) or {}
+                camera_name = cam_cfg.get("name", cam_id)
+    if frame is None:
+        import numpy as _np
+        frame = _np.zeros((300, 300, 3), dtype=_np.uint8)
+        frame[50:150, 50:150] = (255, 120, 0)
+        frame[150:250, 100:200] = (80, 200, 0)
+        frame[80:120, 200:280] = (50, 100, 180)
+
+    # Fresh detector per test so the result always reflects the current config
+    detector = CoralObjectDetector(det_cfg)
+
+    detections: list = []
+    infer_ms = 0.0
+    err_msg = None
+    if detector.available:
+        try:
+            t0 = _time.perf_counter()
+            detections = detector.detect_frame(frame)
+            infer_ms = round((_time.perf_counter() - t0) * 1000, 1)
+        except Exception as e:
+            err_msg = str(e)
+
+    annotated = draw_detections(frame, detections)
+    # Keep the preview small for transport (max width 640, JPEG q=80)
+    h, w = annotated.shape[:2]
+    if w > 640:
+        scale = 640 / w
+        annotated = cv2.resize(annotated, (640, int(h * scale)))
+    ok, buf = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+    image_b64 = ("data:image/jpeg;base64," + _b64.b64encode(buf.tobytes()).decode('ascii')) if ok else None
+
+    # lsusb line for the Coral stick (best-effort)
+    usb_info = None
+    try:
+        lsusb = _sp.check_output(['lsusb'], text=True, timeout=3, stderr=_sp.DEVNULL)
+        for line in lsusb.splitlines():
+            low = line.lower()
+            if 'google' in low or 'coral' in low or '18d1' in low or '1a6e' in low:
+                usb_info = line.strip()
+                break
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok": True,
+        "detector_mode": detector.mode,
+        "detector_available": detector.available,
+        "detector_reason": detector.reason,
+        "model_path": det_cfg.get("model_path"),
+        "source": source,
+        "camera_id": cam_id,
+        "camera_name": camera_name,
+        "inference_ms": infer_ms,
+        "inference_error": err_msg,
+        "detections": [d.to_dict() for d in detections],
+        "image_b64": image_b64,
+        "usb_info": usb_info,
+    })
+
+
 @app.get('/api/system')
 def api_system():
     import time as _time

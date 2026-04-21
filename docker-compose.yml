@@ -19,6 +19,10 @@ services:
       - ./app/web:/app/web
       - ./storage:/app/storage
       - ./models:/app/models
+    # Pass every USB device through so the Coral Edge TPU is visible inside
+    # the container. Harmless when no Coral stick is plugged in.
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
     environment:
       - TZ=Europe/Berlin
 

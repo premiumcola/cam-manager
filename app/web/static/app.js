@@ -1218,6 +1218,7 @@ function hydrateSettings(){
   }
   // Coral device info from /api/system (async, non-blocking)
   _updateCoralDeviceInfo();
+  _populateCoralTestCameras();
   // Hydrate media settings form
   const storageSec=state.config.storage||{};
   const rdVal=storageSec.retention_days||14;
@@ -1719,6 +1720,52 @@ async function _updateCoralDeviceInfo(){
     }
   }catch(e){panel.innerHTML='';}
 }
+function _populateCoralTestCameras(){
+  const sel=byId('coralTestCamSel'); if(!sel) return;
+  const cams=state.cameras||[];
+  const current=sel.value;
+  sel.innerHTML='<option value="">Testbild (ohne Kamera)</option>'+
+    cams.map(c=>`<option value="${esc(c.id)}">${esc(c.name||c.id)}</option>`).join('');
+  if(current&&[...sel.options].some(o=>o.value===current)) sel.value=current;
+}
+async function _runCoralTest(){
+  const btn=byId('coralTestBtn'); const out=byId('coralTestResult');
+  if(!btn||!out) return;
+  const camId=byId('coralTestCamSel')?.value||'';
+  btn.disabled=true; const orig=btn.textContent; btn.textContent='Teste…';
+  out.innerHTML='<div class="field-help" style="color:var(--muted)">Führe Inferenz aus…</div>';
+  try{
+    const r=await j('/api/coral/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({camera_id:camId||undefined})});
+    const mode=r.detector_mode||'motion_only';
+    const modeColor=mode==='coral'?'#4ade80':mode==='cpu'?'#facc15':'rgba(255,255,255,0.4)';
+    const modeLabel=mode==='coral'?'Coral TPU (EdgeTPU)':mode==='cpu'?'CPU-Fallback (tflite-runtime)':'Nur Bewegungserkennung';
+    const src=r.source==='camera'?`Live-Frame: ${esc(r.camera_name||r.camera_id||'?')}`:'Test-Muster (keine Kamera gewählt/aktiv)';
+    const dets=r.detections||[];
+    const detHtml=dets.length
+      ? `<div style="display:flex;flex-direction:column;gap:3px;margin-top:6px">${dets.map(d=>`<div style="font-size:12px"><code>${esc(d.label)}</code> — ${(d.score*100).toFixed(1)}%</div>`).join('')}</div>`
+      : '<div class="field-help" style="margin-top:6px">Keine Objekte erkannt.</div>';
+    const img=r.image_b64?`<img src="${r.image_b64}" style="display:block;max-height:300px;width:auto;border-radius:8px;margin-top:8px;background:#0a0e1a">`:'';
+    const errRow=r.inference_error?`<div style="color:#fca5a5;margin-top:6px;font-size:12px">Inferenz-Fehler: ${esc(r.inference_error)}</div>`:'';
+    out.innerHTML=`
+      <div style="background:var(--surface);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:${modeColor}">● ${esc(modeLabel)}</span>
+          ${r.inference_ms>0?`<span style="font-size:11px;color:var(--muted)">${r.inference_ms} ms</span>`:''}
+          <span style="font-size:11px;color:var(--muted);margin-left:auto">${esc(src)}</span>
+        </div>
+        ${r.detector_reason&&r.detector_reason!=='ok'?`<div class="field-help" style="margin-top:4px;font-family:monospace">${esc(r.detector_reason)}</div>`:''}
+        ${r.usb_info?`<div class="field-help" style="margin-top:4px;color:#a78bfa">🔌 ${esc(r.usb_info)}</div>`:''}
+        ${errRow}
+        ${img}
+        ${detHtml}
+      </div>`;
+  }catch(e){
+    out.innerHTML=`<div style="color:#fca5a5">Test fehlgeschlagen: ${esc(String(e))}</div>`;
+  }finally{
+    btn.disabled=false; btn.textContent=orig;
+  }
+}
+byId('coralTestBtn')?.addEventListener('click',_runCoralTest);
 function _makeSquirrelHTML(){
   const msg=_RELOAD_MSGS[Math.floor(Math.random()*_RELOAD_MSGS.length)];
   const bigSvg=_SQ_SVG.replace('width="40" height="32"','width="82" height="76"');
