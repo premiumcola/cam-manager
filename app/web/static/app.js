@@ -2346,7 +2346,7 @@ function fmtMediaTime(ts){
     return d.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
   }catch{return ts;}
 }
-const _TL_FILMSTRIP=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="18" x2="8" y2="22"/><line x1="16" y1="18" x2="16" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/></svg>`;
+const _TL_FILMSTRIP=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><line x1="6" y1="3" x2="18" y2="3"/><line x1="6" y1="21" x2="18" y2="21"/><polygon points="7,4 17,4 12,12" fill="#c4b5fd" opacity=".8"/><polygon points="12,12 7,20 17,20" fill="#c4b5fd" opacity=".5"/></svg>`;
 function mediaCardHTML(item){
   const isTL=item.type==='timelapse';
   if(isTL){
@@ -2426,7 +2426,7 @@ function _mocChip(type,count,title){
   const icons={
     event:`<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="3.8" stroke="#4a7090" stroke-width="1.3"/><path d="M5 3v2l1.5 1" stroke="#4a7090" stroke-width="1.1" stroke-linecap="round"/></svg>`,
     snap:`<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="2.5" width="8" height="6" rx="1.5" stroke="#4a7090" stroke-width="1.2"/><circle cx="5" cy="5.5" r="1.6" fill="#4a7090"/><path d="M3.5 2.5l.4-1h2.2l.4 1" stroke="#4a7090" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
-    tl:`<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="1.5" width="8" height="7" rx="1.5" stroke="#a855f7" stroke-width="1.2"/><line x1="3.5" y1="1" x2="3.5" y2="2.5" stroke="#a855f7" stroke-width="1"/><line x1="6.5" y1="1" x2="6.5" y2="2.5" stroke="#a855f7" stroke-width="1"/><line x1="3.5" y1="7.5" x2="3.5" y2="9" stroke="#a855f7" stroke-width="1"/><line x1="6.5" y1="7.5" x2="6.5" y2="9" stroke="#a855f7" stroke-width="1"/></svg>`
+    tl:`<svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="#c4b5fd" stroke-width="1" stroke-linecap="round"><line x1="2.5" y1="1" x2="7.5" y2="1"/><line x1="2.5" y1="9" x2="7.5" y2="9"/><polygon points="3,1.5 7,1.5 5,5" fill="#c4b5fd" opacity=".8"/><polygon points="5,5 3,8.5 7,8.5" stroke="#a855f7" stroke-width="1" fill="none"/></svg>`
   };
   const clr=type==='tl'?'rgba(168,85,247,.18)':'rgba(74,112,144,.14)';
   const txtClr=type==='tl'?'#c084fc':'var(--muted)';
