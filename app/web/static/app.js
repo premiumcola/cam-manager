@@ -1197,6 +1197,11 @@ async function updateSystemPanel(){
     const commit=b.commit||'dev';
     const date=b.date||'—';
     const count=b.count||'—';
+    const countEl=byId('heroBuildCount');
+    if(countEl&&b.count&&b.count!=='—'){
+      const url='https://github.com/premiumcola/cam-manager/commits/main/';
+      countEl.innerHTML=`Build <a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none">#${esc(String(b.count))}</a> · ${esc(b.date||'')}`;
+    }
     const memUsed=s.mem_used_mb||0;
     const memTotal=s.mem_total_mb||0;
     const procMem=s.proc_mem_mb||0;

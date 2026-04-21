@@ -84,6 +84,7 @@ class CameraRuntime:
         self._rec_start_time: datetime | None = None
         self._last_motion_ts: datetime | None = None  # last frame with confirmed motion
         self._rec_event_meta: dict | None = None      # metadata captured at session start
+        self._rec_corrupt_frames: int = 0             # invalid frames rejected during current clip
         self._prev_good_frame = None                  # last accepted frame (MAD reference)
         # Main-stream FPS measurement (rolling 5s window)
         self._main_fps: float = 0.0
@@ -236,6 +237,7 @@ class CameraRuntime:
             # TCP + software decode to prevent H.265 tile-split pink artifact.
             os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp|hwaccel;none"
             cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
+            cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 8000)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
             _RES_MAP = {"720p": (1280, 720), "1080p": (1920, 1080), "4k": (3840, 2160)}
             _res = self.cfg.get("resolution", "auto")
@@ -328,9 +330,13 @@ class CameraRuntime:
             b = float(frame[:, :, 0].mean())
             if r > b * 2.5 and r > 150:
                 log.debug("[%s] Pink frame discarded (R=%.0f B=%.0f)", self.camera_id, r, b)
-                ok2, frame2 = self.capture.read()
-                if ok2 and frame2 is not None:
-                    return frame2
+                for _ in range(3):
+                    ok2, frame2 = self.capture.read()
+                    if ok2 and frame2 is not None:
+                        r2 = float(frame2[:, :, 2].mean())
+                        b2 = float(frame2[:, :, 0].mean())
+                        if not (r2 > b2 * 2.5 and r2 > 150):
+                            return frame2
                 raise RuntimeError(f"Kamera {self.camera_id}: Frame nach Pink-Discard fehlgeschlagen")
             return frame
         url = self.cfg.get("snapshot_url")
@@ -874,11 +880,14 @@ class CameraRuntime:
         builder = _TLB(storage_root)
         stem = builder.make_output_name(window_key, profile_name, period_s, target_s)
         out_path = out_dir / f"{stem}.mp4"
+        _t0 = time.monotonic()
         path = builder._write_video(images, out_path, target_s, target_fps)
+        elapsed = time.monotonic() - _t0
 
         if path:
             size_mb = round(out_path.stat().st_size / 1024 / 1024, 2) if out_path.exists() else 0
-            log_tl.info("[%s][timelapse] video created: %s (%.1f MB)", self.camera_id, out_path.name, size_mb)
+            log_tl.info("[%s][timelapse] encoded %s: %d frames → %ds video in %.1fs real time (%.1f MB)",
+                        self.camera_id, out_path.name, n, target_s, elapsed, size_mb)
             # Write sidecar JSON next to the video — NOT in EventStore
             try:
                 meta = {
@@ -1044,6 +1053,9 @@ class CameraRuntime:
                         # Don't advance _last_frame_ts so we keep detecting stale each interval
                     else:
                         _last_frame_ts = frame_ts
+                        if self._stale_streak > 0:
+                            log_cam.info("[%s][%s] stream recovered after %d stale intervals",
+                                         self.camera_id, profile_name, self._stale_streak)
                         self._stale_streak = 0  # reset streak on any fresh frame
                         # Validate frame quality before saving — reject corrupted/blank frames
                         from .timelapse import TimelapseBuilder as _TLB_check
@@ -1112,6 +1124,8 @@ class CameraRuntime:
                     continue
                 # Quality gate: skip corrupt/uniform/artifact frames for events only
                 if not self._is_frame_valid(proc_frame):
+                    if self._recording:
+                        self._rec_corrupt_frames += 1
                     time.sleep(interval)
                     continue
                 # Stream warmup: ignore first 3 s after connect to skip transition frames
@@ -1184,6 +1198,7 @@ class CameraRuntime:
                             if has_person or elapsed >= cooldown:
                                 self._recording = True
                                 self._rec_start_time = now_dt
+                                self._rec_corrupt_frames = 0
                                 # Extract only the last 3 s of good frames from pre-buffer
                                 pre_cutoff = time.time() - 3.0
                                 self._rec_frames = [f for f, ts in self._pre_buffer if ts >= pre_cutoff]
@@ -1212,6 +1227,10 @@ class CameraRuntime:
                             self._rec_start_time = None
                             self._last_motion_ts = None
                             self._rec_event_meta = None
+                            if self._rec_corrupt_frames > 5:
+                                log.warning("[%s] %d corrupt frames rejected in this clip",
+                                            self.camera_id, self._rec_corrupt_frames)
+                            self._rec_corrupt_frames = 0
                             if meta_snap and len(frames_snap) >= 3:
                                 threading.Thread(target=self._finalize_motion_clip,
                                                  args=(frames_snap, meta_snap, measured_fps),
@@ -1308,7 +1327,9 @@ class CameraRuntime:
                     pass
                 self.capture = None
                 self._reconnect_count += 1
-                time.sleep(5.0)
+                # Short backoff for transient dropouts, longer for persistent failures
+                sleep_t = 2.0 if self._error_streak <= 3 else min(30.0, 5.0 * (self._error_streak // 5 + 1))
+                time.sleep(sleep_t)
             time.sleep(interval)
 
     def snapshot_jpeg(self, quality=88):

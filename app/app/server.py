@@ -101,6 +101,29 @@ def _get_build_info() -> dict:
 _BUILD_INFO = _get_build_info()
 
 
+def _fetch_github_commit_count():
+    """One-shot background fetch of the live commit count from GitHub.
+    Git isn't present inside the container, so buildinfo.json is frozen at build time.
+    Pulling the real count from the public API keeps the dashboard in sync."""
+    import threading as _thr, urllib.request as _ur, re as _re
+    def _do():
+        global _BUILD_INFO
+        try:
+            url = 'https://api.github.com/repos/premiumcola/cam-manager/commits?per_page=1'
+            req = _ur.Request(url, headers={'User-Agent': 'tam-spy'})
+            with _ur.urlopen(req, timeout=8) as r:
+                link = r.headers.get('Link', '') or ''
+                m = _re.search(r'page=(\d+)>; rel="last"', link)
+                if m:
+                    _BUILD_INFO = {**_BUILD_INFO, 'count': m.group(1)}
+        except Exception as e:
+            logging.getLogger(__name__).debug('GitHub commit count fetch failed: %s', e)
+    _thr.Thread(target=_do, daemon=True).start()
+
+
+_fetch_github_commit_count()
+
+
 base_cfg = load_config()
 storage_root = Path(base_cfg["storage"]["root"])
 web_root = Path(__file__).resolve().parent.parent / "web"
