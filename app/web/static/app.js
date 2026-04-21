@@ -260,6 +260,7 @@ function _mediaPeriodParams(){
 }
 // Single source of truth for page size: rows × dynamic column count.
 // Called before every load, page-change, delete, resize, and filter-change.
+let _lastKnownCols=0;
 function calcItemsPerPage(){
   const GAP=10,MIN_CARD=160;
   const grid=byId('mediaGrid');
@@ -276,10 +277,27 @@ function calcItemsPerPage(){
     let w=mediaEl&&mediaEl.clientWidth>MIN_CARD?mediaEl.clientWidth-24:window.innerWidth-(isMobile?24:320);
     containerW=Math.max(MIN_CARD+1,w);
   }
-  const cols=cardW>0?Math.max(1,Math.floor(containerW/cardW)):Math.max(1,Math.floor((containerW+GAP)/(MIN_CARD+GAP)));
+  let cols;
+  if(_lastKnownCols>0){
+    cols=_lastKnownCols;
+  } else if(cardW>0){
+    cols=Math.max(1,Math.floor(containerW/cardW));
+  } else {
+    cols=Math.max(1,Math.floor((containerW+GAP)/(MIN_CARD+GAP)));
+  }
   const rowSlider=byId('mediaRowSlider');
   const rows=rowSlider?Math.max(2,Math.min(8,parseInt(rowSlider.value)||4)):4;
   return rows*cols;
+}
+function updateAvailableLabelPills(){
+  const available=new Set((state._allMedia||[]).flatMap(item=>item.labels||[]));
+  if((window._tlItems||[]).length>0) available.add('timelapse');
+  document.querySelectorAll('.media-pill[data-type="label"]').forEach(p=>{
+    const val=p.dataset.val;
+    if(!val) return;  // "Alle" (empty val) always visible
+    p.style.display=available.has(val)?'':'none';
+  });
+  return available;
 }
 let _cachedPageSize=0;
 async function loadMedia(){
@@ -305,6 +323,15 @@ async function loadMedia(){
   }
   allItems.sort((a,b)=>(b.time||'').localeCompare(a.time||''));
   state._allMedia=allItems;
+  // If the active label filter has no matching items (period change etc.),
+  // drop it and reload once with the cleaned filter.
+  const availNow=new Set(allItems.flatMap(item=>item.labels||[]));
+  const toClear=[...state.mediaLabels].filter(l=>l!=='timelapse'&&!availNow.has(l));
+  if(toClear.length){
+    toClear.forEach(l=>state.mediaLabels.delete(l));
+    syncMediaPills();
+    return loadMedia();
+  }
   state.mediaTotalPages=Math.max(1,Math.ceil(allItems.length/ps));
   state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
   const offset=(state.mediaPage||0)*ps;
@@ -482,11 +509,29 @@ function renderTimeline(){
   const lbl=byId('tlRangeLabel');
   if(lbl) lbl.textContent=hours<24?`letzte ${hours}h`:`${Math.round(hours/24)} Tage`;
 
+  // Compute which labels have events in the visible range
+  const _tlTmpMax=now;
+  let _tlTmpMin=now-hours*3600000;
+  if(earliestMs&&earliestMs>_tlTmpMin) _tlTmpMin=earliestMs;
+  const labelsInRange=new Set();
+  tracks.forEach(tr=>{
+    (tr.points||[]).forEach(p=>{
+      const t=new Date(p.time).getTime();
+      if(!t||t<_tlTmpMin||t>_tlTmpMax) return;
+      (p.labels||[]).forEach(l=>labelsInRange.add(l));
+      if(p.top_label) labelsInRange.add(p.top_label);
+    });
+  });
+
   // Legend as filter pills (TASK 5) — render before tracks so pills are always visible
   const leg=byId('tlLegend');
   if(leg){
     leg.innerHTML=`<span class="tl-leg-prefix">Filter:</span>`+
-      TL_LANES.map(l=>`<button class="cat-filter-btn${_tlActiveLanes.has(l)?' active':''}" data-lane="${l}" style="--cb:${CAT_COLORS[l]||'#8888aa'}"><span class="cfb-icon">${objIconSvg(l,18)}</span><span>${OBJ_LABEL[l]||l}</span></button>`).join('');
+      TL_LANES.map(l=>{
+        const empty=!labelsInRange.has(l);
+        const cls=`cat-filter-btn${_tlActiveLanes.has(l)?' active':''}${empty?' tl-lane-btn-empty':''}`;
+        return `<button class="${cls}" data-lane="${l}" style="--cb:${CAT_COLORS[l]||'#8888aa'}"><span class="cfb-icon">${objIconSvg(l,18)}</span><span>${OBJ_LABEL[l]||l}</span></button>`;
+      }).join('');
     leg.querySelectorAll('.cat-filter-btn[data-lane]').forEach(btn=>{
       btn.onclick=()=>{
         const lane=btn.dataset.lane;
@@ -2107,6 +2152,22 @@ byId('rescanMediaBtn')?.addEventListener('click',async()=>{
   }catch(e){showToast('Fehler beim Scan: '+e.message,'error');}
   finally{btn.disabled=false; btn.classList.remove('scanning');}
 });
+byId('reencodeMediaBtn')?.addEventListener('click',async()=>{
+  const btn=byId('reencodeMediaBtn');
+  if(btn.disabled) return;
+  btn.disabled=true; btn.classList.add('scanning');
+  showToast('Kodierung läuft...','info');
+  try{
+    const r=await j('/api/media/reencode',{method:'POST'});
+    if(r.ok){
+      showToast(`${r.reencoded||0} Videos neu kodiert (${r.skipped||0} bereits H.264, ${r.failed||0} fehlgeschlagen).`,'success');
+      await loadAll();
+    }else{
+      showToast('Re-Encoding fehlgeschlagen: '+(r.error||'unbekannt'),'error');
+    }
+  }catch(e){showToast('Fehler beim Re-Encoding: '+e.message,'error');}
+  finally{btn.disabled=false; btn.classList.remove('scanning');}
+});
 
 // ── Lightbox / Media viewer ───────────────────────────────────────────────────
 let _lbItem=null;
@@ -2708,6 +2769,28 @@ function renderMediaGrid(){
   requestAnimationFrame(()=>{grid.style.transition='opacity .18s ease,transform .18s ease';grid.style.opacity='1';grid.style.transform='';});
   renderMediaPagination();
   window._openMediaItem=id=>{const item=items.find(x=>x.event_id===id); if(item) openLightbox(item);};
+  // Refresh label-pill visibility against current data
+  updateAvailableLabelPills();
+  // Post-render column correction: measure actual card width, recompute page size if off
+  requestAnimationFrame(()=>{
+    const firstCard=grid.querySelector('.media-card');
+    if(!firstCard) return;
+    const actualW=firstCard.getBoundingClientRect().width;
+    const containerW=grid.getBoundingClientRect().width;
+    if(actualW<=0||containerW<=0) return;
+    const actualCols=Math.max(1,Math.round(containerW/actualW));
+    if(actualCols!==_lastKnownCols) _lastKnownCols=actualCols;
+    const rows=parseInt(byId('mediaRowSlider')?.value||'4');
+    const correctPs=rows*actualCols;
+    if(correctPs!==_cachedPageSize&&state._allMedia&&state._allMedia.length){
+      _cachedPageSize=correctPs;
+      state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/correctPs));
+      state.mediaPage=0;
+      state.media=state._allMedia.slice(0,correctPs);
+      renderMediaGrid();
+      renderMediaPagination();
+    }
+  });
 }
 window._tlItems=[];
 async function openAllMediaDrilldown(){

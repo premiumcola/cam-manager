@@ -540,9 +540,58 @@ class CameraRuntime:
             "thumb_bytes": thumb_bytes,
         }
 
+    def _write_clip_ffmpeg(self, frames, fps, out_path) -> bool:
+        """Encode raw BGR frames to H.264/mp4 via ffmpeg pipe.
+
+        Browsers cannot decode the mp4v codec cv2.VideoWriter produces.
+        Piping raw BGR into libx264 yields a faststart-optimised mp4 that plays
+        natively in every modern browser. Returns False on any failure so the
+        caller can fall back to mp4v.
+        """
+        import subprocess as _sp
+        if not frames:
+            return False
+        h, w = frames[0].shape[:2]
+        fps_c = max(5.0, min(30.0, float(fps)))
+        cmd = [
+            'ffmpeg', '-y',
+            '-f', 'rawvideo', '-vcodec', 'rawvideo',
+            '-pix_fmt', 'bgr24', '-s', f'{w}x{h}', '-r', str(fps_c),
+            '-i', 'pipe:0',
+            '-vcodec', 'libx264', '-preset', 'fast', '-crf', '23',
+            '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart',
+            str(out_path)
+        ]
+        try:
+            proc = _sp.Popen(cmd, stdin=_sp.PIPE,
+                             stdout=_sp.PIPE, stderr=_sp.PIPE)
+            last_good = frames[0]
+            for f in frames:
+                if self._is_frame_valid(f) and \
+                   not self._is_frame_too_different(f, last_good):
+                    proc.stdin.write(f.tobytes())
+                    last_good = f
+                else:
+                    proc.stdin.write(last_good.tobytes())
+            proc.stdin.close()
+            _, stderr = proc.communicate(timeout=120)
+            if proc.returncode != 0:
+                log.error('[%s] ffmpeg encode failed: %s',
+                          self.camera_id,
+                          stderr.decode(errors='replace')[-800:])
+                return False
+            return True
+        except FileNotFoundError:
+            log.warning('[%s] ffmpeg not found — falling back to mp4v',
+                        self.camera_id)
+            return False
+        except Exception as e:
+            log.error('[%s] ffmpeg pipe error: %s', self.camera_id, e)
+            return False
+
     def _finalize_motion_clip(self, frames: list, meta: dict, fps: float = 10.0):
-        """Save MP4 clip with ffmpeg faststart, verify integrity, write event JSON, send Telegram."""
-        import subprocess as _subp
+        """Save MP4 clip (H.264 via ffmpeg, mp4v fallback), verify, write event JSON, send Telegram."""
         start_time: datetime = meta["time"]
         event_id: str = meta["event_id"]
         storage_root = Path(self.global_cfg["storage"]["root"])
@@ -559,42 +608,22 @@ class CameraRuntime:
             day_dir = storage_root / "motion_detection" / self.camera_id / start_time.strftime("%Y-%m-%d")
             day_dir.mkdir(parents=True, exist_ok=True)
             vid_path = day_dir / f"{event_id}.mp4"
-            h, w = frames[0].shape[:2]
-            writer = cv2.VideoWriter(str(vid_path), cv2.VideoWriter_fourcc(*'mp4v'), fps_clamped, (w, h))
-            last_good = frames[0]
-            for f in frames:
-                if self._is_frame_valid(f) and not self._is_frame_too_different(f, last_good):
-                    writer.write(f)
-                    last_good = f
-                else:
-                    writer.write(last_good)
-            writer.release()
-
-            # Fix moov atom placement so browsers report correct duration
-            tmp_path = vid_path.with_name(vid_path.stem + '_fs.mp4')
-            try:
-                r = _subp.run(
-                    ['ffmpeg', '-y', '-i', str(vid_path), '-c', 'copy',
-                     '-movflags', '+faststart', str(tmp_path)],
-                    capture_output=True, timeout=60)
-                if r.returncode == 0 and tmp_path.exists() and tmp_path.stat().st_size > 1024:
-                    vid_path.unlink()
-                    tmp_path.rename(vid_path)
-                else:
-                    stderr_text = (r.stderr or b'').decode('utf-8', errors='replace')
-                    log.error("[%s] ffmpeg faststart failed (rc=%d): %s",
-                              self.camera_id, r.returncode, stderr_text[:800])
-                    encode_error = f"ffmpeg faststart rc={r.returncode}"
-                    if tmp_path.exists():
-                        tmp_path.unlink()
-            except Exception as fe:
-                log.error("[%s] ffmpeg faststart error: %s", self.camera_id, fe)
-                encode_error = f"ffmpeg exec error: {fe}"
-                try:
-                    if tmp_path.exists():
-                        tmp_path.unlink()
-                except Exception:
-                    pass
+            ok = self._write_clip_ffmpeg(frames, fps, vid_path)
+            if not ok:
+                # Fallback: legacy mp4v (may not play in browser)
+                log.warning("[%s] H.264 encode unavailable, writing mp4v fallback", self.camera_id)
+                encode_error = encode_error or "ffmpeg h264 encode failed — mp4v fallback"
+                h, w = frames[0].shape[:2]
+                writer = cv2.VideoWriter(str(vid_path),
+                    cv2.VideoWriter_fourcc(*'mp4v'), fps_clamped, (w, h))
+                last_good = frames[0]
+                for f in frames:
+                    if self._is_frame_valid(f) and \
+                       not self._is_frame_too_different(f, last_good):
+                        writer.write(f); last_good = f
+                    else:
+                        writer.write(last_good)
+                writer.release()
 
             # Verify output: must exist, have size, and be a readable video with real duration
             if not vid_path.exists() or vid_path.stat().st_size < 1024:

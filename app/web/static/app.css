@@ -149,6 +149,8 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:18px}@m
 .cat-filter-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;min-height:44px;border-radius:10px;border:none;cursor:pointer;font-size:13px;font-weight:500;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:background .15s,box-shadow .15s;background:color-mix(in srgb,var(--cb,#8888aa) 12%,transparent);color:rgba(255,255,255,.7)}
 .cat-filter-btn:hover{background:color-mix(in srgb,var(--cb,#8888aa) 22%,transparent);color:rgba(255,255,255,.9)}
 .cat-filter-btn:active{opacity:.85}
+.cat-filter-btn.tl-lane-btn-empty{opacity:0.35;cursor:default}
+.cat-filter-btn.tl-lane-btn-empty:hover{opacity:0.5}
 .cat-filter-btn .cfb-icon{display:inline-flex;align-items:center;flex-shrink:0}
 .cat-filter-btn.active{background:color-mix(in srgb,var(--cb,#8888aa) 42%,transparent);color:#fff;font-weight:600;box-shadow:inset 0 0 12px color-mix(in srgb,var(--cb,#8888aa) 20%,transparent)}
 .cat-filter-btn.active .cfb-icon{filter:brightness(0) invert(1)}

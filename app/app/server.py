@@ -767,6 +767,52 @@ def api_media_rescan():
         return jsonify({"ok": False, "error": traceback.format_exc()}), 500
 
 
+@app.post('/api/media/reencode')
+def api_media_reencode():
+    """Scan motion_detection/*.mp4 and re-encode non-H.264 files in place via ffmpeg."""
+    import subprocess as _sp
+    events_root = storage_root / "motion_detection"
+    reencoded = 0
+    failed = 0
+    skipped = 0
+    if not events_root.exists():
+        return jsonify({"ok": True, "reencoded": 0, "failed": 0, "skipped": 0})
+    log_r = logging.getLogger(__name__)
+    for mp4 in events_root.rglob("*.mp4"):
+        try:
+            probe = _sp.run(
+                ['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+                 '-show_entries', 'stream=codec_name',
+                 '-of', 'default=noprint_wrappers=1:nokey=1', str(mp4)],
+                capture_output=True, timeout=15)
+            codec = probe.stdout.decode(errors='replace').strip()
+            if codec == 'h264':
+                skipped += 1
+                continue
+            log_r.info("[Reencode] %s (codec=%s) -> h264", mp4.name, codec or '?')
+            tmp = mp4.with_name(mp4.stem + '_reenc.mp4')
+            r = _sp.run(
+                ['ffmpeg', '-y', '-i', str(mp4),
+                 '-vcodec', 'libx264', '-preset', 'fast', '-crf', '23',
+                 '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an',
+                 str(tmp)],
+                capture_output=True, timeout=120)
+            if r.returncode == 0 and tmp.exists() and tmp.stat().st_size > 1024:
+                mp4.unlink()
+                tmp.rename(mp4)
+                reencoded += 1
+            else:
+                log_r.error("[Reencode] failed for %s: %s", mp4.name,
+                            r.stderr.decode(errors='replace')[-400:])
+                if tmp.exists():
+                    tmp.unlink()
+                failed += 1
+        except Exception as e:
+            log_r.error("[Reencode] error on %s: %s", mp4.name, e)
+            failed += 1
+    return jsonify({"ok": True, "reencoded": reencoded, "failed": failed, "skipped": skipped})
+
+
 @app.post('/api/media/purge-orphans')
 def api_media_purge_orphans():
     try:
