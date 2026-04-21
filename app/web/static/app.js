@@ -2385,10 +2385,25 @@ function getMediaAccentColor(labels){
   }
   return colors.motion||'#93c5fd';
 }
+function fmtMediaDate(ts){
+  if(!ts) return '';
+  try{
+    const d=new Date(ts.replace(' ','T'));
+    return d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});
+  }catch{return '';}
+}
+function fmtMediaTimeOnly(ts){
+  if(!ts) return '';
+  try{
+    const d=new Date(ts.replace(' ','T'));
+    return d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
+  }catch{return '';}
+}
 function mediaCardHTML(item){
-  // Shared badge styles — used by both timelapse and motion/image branches
+  // Primary (bold white) badge — shared across all card types
   const badgeStyle='font-size:10px;font-weight:700;color:#e2e8f0;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);padding:2px 6px;border-radius:4px;line-height:1.45;white-space:nowrap';
-  const badgeSubStyle='font-size:10px;color:#a5bfce;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);padding:1px 6px;border-radius:4px;line-height:1.45;white-space:nowrap;margin-top:2px';
+  // Secondary (dimmer, accent-colored) badge — color added per-branch via accent
+  const subBadgeBase='font-size:10px;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);padding:1px 6px;border-radius:4px;line-height:1.45;white-space:nowrap;margin-top:2px;opacity:0.85';
   const isTL=item.type==='timelapse';
   if(isTL){
     const wk=item.window_key||item.day||'';
@@ -2403,20 +2418,20 @@ function mediaCardHTML(item){
     const tlAccent=getMediaAccentColor(['timelapse']);
     const tlPlayBg=hexToRgba(tlAccent,0.18);
     const tlPlayBorder=hexToRgba(tlAccent,0.5);
+    const tlSubBadge=`${subBadgeBase};color:${tlAccent}`;
     return `<article class="media-card mmc-tl" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
       <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
         ${thumbEl}
         <div style="position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center">
           <div class="mmc-play-btn" style="background:${tlPlayBg};border:1.5px solid ${tlPlayBorder}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:${tlAccent};margin-left:2px"><polygon points="5,3 19,12 5,21"/></svg></div>
         </div>
-        <div class="mmc-meta-bar"></div>
         <div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none">
           ${datePart?`<div style="${badgeStyle}">${esc(datePart)}</div>`:''}
-          ${timePart?`<div style="${badgeSubStyle}">${esc(timePart)}</div>`:''}
+          ${timePart?`<div style="${tlSubBadge}">${esc(timePart)}</div>`:''}
         </div>
         ${(durLabel||sizeText)?`<div style="position:absolute;bottom:7px;right:8px;z-index:2;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px">
           ${durLabel?`<div style="${badgeStyle}">${esc(durLabel)}</div>`:''}
-          ${sizeText?`<div style="${badgeSubStyle}">${esc(sizeText)}</div>`:''}
+          ${sizeText?`<div style="${tlSubBadge}">${esc(sizeText)}</div>`:''}
         </div>`:''}
         <div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge">${objIconSvg('timelapse',12)}Timelapse</span></div>
         <div class="mmc-actions" style="z-index:3">
@@ -2435,17 +2450,27 @@ function mediaCardHTML(item){
   const accent=getMediaAccentColor(item.labels);
   const playBg=hexToRgba(accent,0.18);
   const playBorder=hexToRgba(accent,0.5);
+  const subBadge=`${subBadgeBase};color:${accent}`;
   const motionBg=hexToRgba(colors.motion,0.18);
   const motionBorder=hexToRgba(colors.motion,0.35);
   const motionBadge=`<div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge" style="background:${motionBg};border:1px solid ${motionBorder};color:${colors.motion}">${objIconSvg('motion',12)}Bewegung</span></div>`;
   const errorBadge=item.encode_error?`<div style="position:absolute;top:6px;right:6px;z-index:4"><span title="${esc(item.encode_error)}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(250,204,21,.18);border:1px solid rgba(250,204,21,.5);color:#facc15;font-size:13px;font-weight:800;backdrop-filter:blur(4px)">⚠</span></div>`:'';
+  const vidDate=fmtMediaDate(item.time||'');
+  const vidTime=fmtMediaTimeOnly(item.time||'');
+  const vidDur=fmtDur(item.duration_s);
+  const vidSize=fmtByt(item.file_size_bytes);
   const mediaInner=showPlayer
     ?`<div style="position:absolute;inset:0;background:#0a0e1a;display:flex;align-items:center;justify-content:center">
         <div class="mmc-play-btn" style="background:${playBg};border:1.5px solid ${playBorder}"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="color:${accent};margin-left:3px"><polygon points="5,3 19,12 5,21"/></svg></div>
       </div>
-      <div class="mmc-meta-bar"><span>${fmtMediaTime(item.time||'')}</span></div>
-      ${item.duration_s?`<div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none"><div style="${badgeStyle}">${fmtDur(item.duration_s)}</div></div>`:''}
-      ${item.file_size_bytes?`<div style="position:absolute;bottom:7px;right:8px;z-index:2;pointer-events:none"><div style="${badgeStyle}">${fmtByt(item.file_size_bytes)}</div></div>`:''}
+      ${(vidDate||vidTime)?`<div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none">
+        ${vidDate?`<div style="${badgeStyle}">${esc(vidDate)}</div>`:''}
+        ${vidTime?`<div style="${subBadge}">${esc(vidTime)}</div>`:''}
+      </div>`:''}
+      ${(vidDur||vidSize)?`<div style="position:absolute;bottom:7px;right:8px;z-index:2;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+        ${vidDur?`<div style="${badgeStyle}">${vidDur}</div>`:''}
+        ${vidSize?`<div style="${subBadge}">${vidSize}</div>`:''}
+      </div>`:''}
       ${motionBadge}
       ${errorBadge}`
     :`<img src="${esc(imgSrc)}" alt="event" loading="lazy" onerror="this.style.display='none'" />
@@ -2453,7 +2478,7 @@ function mediaCardHTML(item){
   return `<article class="media-card ${confirmed}" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
     <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
       ${mediaInner}
-      <div class="media-label-bubbles">${labelBubbles}</div>
+      ${showPlayer?'':`<div class="media-label-bubbles">${labelBubbles}</div>`}
       ${item.confirmed
         ? `<span class="media-confirmed-badge">✓</span>`
         : `<div class="mmc-actions">
