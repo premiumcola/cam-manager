@@ -282,6 +282,28 @@ class EventStore:
                     event["video_url"] = f"{base}/media/{rel.as_posix()}" if base else f"/media/{rel.as_posix()}"
                     event["snapshot_relpath"] = None
                     event["snapshot_url"] = None
+                    # Try to grab a thumbnail so the freshly-registered card has a preview
+                    thumb = media_file.with_suffix(".jpg")
+                    if not thumb.exists():
+                        try:
+                            import cv2 as _cv2
+                            cap = _cv2.VideoCapture(str(media_file))
+                            total = int(cap.get(_cv2.CAP_PROP_FRAME_COUNT))
+                            if total > 2:
+                                cap.set(_cv2.CAP_PROP_POS_FRAMES, total // 2)
+                            ok_t, frame_t = cap.read()
+                            cap.release()
+                            if ok_t and frame_t is not None and _cv2.imwrite(
+                                    str(thumb), frame_t, [int(_cv2.IMWRITE_JPEG_QUALITY), 85]):
+                                thumb_rel = thumb.relative_to(self.root).as_posix()
+                                event["snapshot_relpath"] = thumb_rel
+                                event["snapshot_url"] = f"{base}/media/{thumb_rel}" if base else f"/media/{thumb_rel}"
+                        except Exception as _e:
+                            log.debug("[MediaScan] thumb extract failed for %s: %s", media_file.name, _e)
+                    elif thumb.exists():
+                        thumb_rel = thumb.relative_to(self.root).as_posix()
+                        event["snapshot_relpath"] = thumb_rel
+                        event["snapshot_url"] = f"{base}/media/{thumb_rel}" if base else f"/media/{thumb_rel}"
                 else:
                     event["snapshot_relpath"] = rel.as_posix()
                     event["snapshot_url"] = f"{base}/media/{rel.as_posix()}" if base else f"/media/{rel.as_posix()}"

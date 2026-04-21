@@ -272,9 +272,10 @@ function calcItemsPerPage(){
   if(!containerW){
     const isMobile=window.innerWidth<=768;
     const mediaEl=byId('media');
-    containerW=Math.max(161,mediaEl&&mediaEl.clientWidth>160?mediaEl.clientWidth-24:window.innerWidth-(isMobile?24:320));
+    containerW=Math.max(193,mediaEl&&mediaEl.clientWidth>192?mediaEl.clientWidth-24:window.innerWidth-(isMobile?24:320));
   }
-  const cols=_lastKnownCols||Math.max(1,Math.floor((containerW+10)/(160+10)));
+  const GAP=10,MIN_CARD=192;
+  const cols=_lastKnownCols||Math.max(1,Math.floor((containerW+GAP)/(MIN_CARD+GAP)));
   return _MEDIA_ROWS*cols;
 }
 function updateAvailableLabelPills(){
@@ -2146,13 +2147,13 @@ byId('rescanMediaBtn')?.addEventListener('click',async()=>{
   finally{btn.disabled=false; btn.classList.remove('scanning');}
 });
 let _fixThumbsPoll=null;
-function _showFixThumbsBar(done,total,finalMsg){
+function _showFixThumbsBar(done,total,errors,finalMsg){
   let bar=byId('fixThumbsBar');
   if(!bar){
     bar=document.createElement('div');
     bar.id='fixThumbsBar';
-    bar.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:500;background:var(--panel);padding:10px 20px;box-shadow:0 -4px 12px rgba(0,0,0,.35);font-size:13px;color:var(--muted)';
-    bar.innerHTML=`<div style="position:absolute;top:0;left:0;right:0;height:3px;background:rgba(255,255,255,.05)"><div id="fixThumbsProgress" style="height:100%;background:var(--accent);width:0%;transition:width .25s ease"></div></div><span id="fixThumbsLabel">⧗ Thumbnails werden erzeugt…</span>`;
+    bar.style.cssText='position:fixed;bottom:0;left:0;right:0;z-index:500;background:var(--panel);padding:10px 20px;border-top:1px solid rgba(255,255,255,.08);font-size:13px;color:var(--muted)';
+    bar.innerHTML=`<div style="position:absolute;top:0;left:0;right:0;height:3px;background:rgba(255,255,255,.05)"><div id="fixThumbsProgress" style="height:100%;background:var(--accent);width:0%;transition:width .25s ease"></div></div><span id="fixThumbsLabel">Thumbnails werden erzeugt: 0 / 0</span>`;
     document.body.appendChild(bar);
   }
   const lbl=byId('fixThumbsLabel');
@@ -2164,7 +2165,7 @@ function _showFixThumbsBar(done,total,finalMsg){
   }
   const pct=total>0?(done/total)*100:0;
   if(prog) prog.style.width=pct+'%';
-  if(lbl) lbl.textContent=`⧗ Thumbnails werden erzeugt… ${done} / ${total}`;
+  if(lbl) lbl.textContent=`Thumbnails werden erzeugt: ${done} / ${total}`;
 }
 function _hideFixThumbsBar(){
   const bar=byId('fixThumbsBar');
@@ -2175,15 +2176,16 @@ function _startFixThumbsPoll(){
   _fixThumbsPoll=setInterval(async()=>{
     try{
       const s=await j('/api/media/fix-thumbnails/status');
-      _showFixThumbsBar(s.done||0,s.total||0);
+      _showFixThumbsBar(s.done||0,s.total||0,s.errors||0);
       if(!s.running){
         clearInterval(_fixThumbsPoll); _fixThumbsPoll=null;
-        _showFixThumbsBar(s.total||0,s.total||0,`✓ ${s.done||0} Thumbnails erzeugt`);
-        setTimeout(_hideFixThumbsBar,3000);
-        try{await loadAll();}catch(_){}
+        const done=s.done||0, errs=s.errors||0;
+        _showFixThumbsBar(s.total||0,s.total||0,errs,`✓ ${done-errs} Thumbnails erzeugt, ${errs} Fehler`);
+        setTimeout(_hideFixThumbsBar,4000);
+        try{renderMediaGrid();}catch(_){}
       }
     }catch(_){ /* transient — keep polling */ }
-  },2000);
+  },1500);
 }
 byId('fixThumbsBtn')?.addEventListener('click',async()=>{
   const btn=byId('fixThumbsBtn');
@@ -2196,11 +2198,11 @@ byId('fixThumbsBtn')?.addEventListener('click',async()=>{
       showToast('Thumbnail-Erzeugung: '+(r.error||'Fehler'),'error');
       return;
     }
-    if((r.total||0)===0){
-      _showFixThumbsBar(0,0,'✓ Alle Thumbnails vorhanden');
-      setTimeout(_hideFixThumbsBar,3000);
+    if((r.total||0)===0&&!r.already_running){
+      _showFixThumbsBar(0,0,0,'✓ Alle Thumbnails vorhanden');
+      setTimeout(_hideFixThumbsBar,4000);
     }else{
-      _showFixThumbsBar(0,r.total||0);
+      _showFixThumbsBar(r.done||0,r.total||0,r.errors||0);
       _startFixThumbsPoll();
     }
   }catch(e){showToast('Fehler: '+e.message,'error');}
@@ -2796,6 +2798,22 @@ function renderMediaGrid(){
   window._openMediaItem=id=>{const item=items.find(x=>x.event_id===id); if(item) openLightbox(item);};
   // Refresh label-pill visibility against current data
   updateAvailableLabelPills();
+  // Cache-bust any card whose item has a snapshot_relpath but whose <img> is
+  // empty or broken — covers freshly-generated thumbnails that the browser
+  // may have cached as 404 from an earlier render pass.
+  grid.querySelectorAll('.media-card').forEach(card=>{
+    const eid=card.dataset.eventId;
+    if(!eid) return;
+    const item=items.find(x=>x.event_id===eid);
+    if(!item||!item.snapshot_relpath) return;
+    const img=card.querySelector('.mmc-img-wrap img');
+    if(!img) return;
+    const needsBust=!img.getAttribute('src')||img.naturalWidth===0||img.style.display==='none';
+    if(needsBust){
+      img.style.display='';
+      img.src=`/media/${item.snapshot_relpath}?t=${Date.now()}`;
+    }
+  });
   // Post-render column correction: measure actual card width, recompute page size if off
   requestAnimationFrame(()=>{
     const firstCard=grid.querySelector('.media-card');
@@ -2910,7 +2928,7 @@ function syncMediaPills(){
   let lastW=0;
   const ro=new ResizeObserver(entries=>{
     const w=entries[0]?.contentRect?.width||0;
-    if(!w||Math.abs(w-lastW)<160) return;
+    if(!w||Math.abs(w-lastW)<192) return;
     lastW=w;
     if(byId('mediaDrilldown')?.style.display==='none') return;
     const firstCard=grid.querySelector('.media-card');

@@ -791,15 +791,16 @@ def api_media_rescan():
 
 
 import threading as _threading_fix
-_fix_thumbs_state = {"done": 0, "total": 0, "running": False}
+_thumb_task = {"running": False, "done": 0, "total": 0, "errors": 0}
 _fix_thumbs_lock = _threading_fix.Lock()
 
 
 @app.post('/api/media/fix-thumbnails')
 def api_media_fix_thumbnails():
     """Scan all motion_detection event JSONs; for each event with video_relpath
-    but no snapshot_relpath, extract the first frame and save it as a thumbnail.
-    Runs in a background thread, progress via GET /api/media/fix-thumbnails/status."""
+    but no (valid) snapshot file on disk, extract the middle frame of the mp4
+    and save it next to the video. Runs in a background thread; progress via
+    GET /api/media/fix-thumbnails/status."""
     import json as _json
     log_t = logging.getLogger(__name__)
     events_root = storage_root / "motion_detection"
@@ -808,38 +809,50 @@ def api_media_fix_thumbnails():
         for jf in events_root.rglob("*.json"):
             try:
                 ev = _json.loads(jf.read_text(encoding="utf-8"))
-                if ev.get("video_relpath") and not ev.get("snapshot_relpath"):
+                vid_rel = ev.get("video_relpath")
+                if not vid_rel:
+                    continue
+                snap_rel = ev.get("snapshot_relpath")
+                snap_ok = bool(snap_rel) and (storage_root / snap_rel).exists()
+                if not snap_ok:
                     todo.append((jf, ev))
             except Exception:
                 continue
 
     with _fix_thumbs_lock:
-        if _fix_thumbs_state["running"]:
-            return jsonify({"ok": False, "error": "already running",
-                            **_fix_thumbs_state}), 409
-        _fix_thumbs_state["total"] = len(todo)
-        _fix_thumbs_state["done"] = 0
-        _fix_thumbs_state["running"] = True
+        if _thumb_task["running"]:
+            return jsonify({"ok": True, "already_running": True, **_thumb_task})
+        _thumb_task["total"] = len(todo)
+        _thumb_task["done"] = 0
+        _thumb_task["errors"] = 0
+        _thumb_task["running"] = True
 
     public_base = (get_effective_config().get("server", {}).get("public_base_url") or "").rstrip("/")
 
     def _worker():
         for jf, ev in todo:
+            err = False
             try:
                 vid_rel = ev.get("video_relpath") or ""
                 vid_path = storage_root / vid_rel
                 if not vid_path.exists():
+                    err = True
                     continue
                 cap = cv2.VideoCapture(str(vid_path))
+                total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                if total_frames > 2:
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, total_frames // 2)
                 ok, frame = cap.read()
                 cap.release()
                 if not ok or frame is None:
                     log_t.warning("[fix-thumbs] no readable frame in %s", vid_path.name)
+                    err = True
                     continue
                 snap_path = vid_path.with_suffix(".jpg")
                 if not cv2.imwrite(str(snap_path), frame,
                                    [int(cv2.IMWRITE_JPEG_QUALITY), 85]):
                     log_t.warning("[fix-thumbs] imwrite failed for %s", snap_path.name)
+                    err = True
                     continue
                 snap_rel = snap_path.relative_to(storage_root).as_posix()
                 snap_url = f"{public_base}/media/{snap_rel}" if public_base else f"/media/{snap_rel}"
@@ -851,20 +864,23 @@ def api_media_fix_thumbnails():
                 log_t.info("[fix-thumbs] %s -> %s", vid_path.name, snap_path.name)
             except Exception as e:
                 log_t.warning("[fix-thumbs] error on %s: %s", jf.name, e)
+                err = True
             finally:
                 with _fix_thumbs_lock:
-                    _fix_thumbs_state["done"] += 1
+                    _thumb_task["done"] += 1
+                    if err:
+                        _thumb_task["errors"] += 1
         with _fix_thumbs_lock:
-            _fix_thumbs_state["running"] = False
+            _thumb_task["running"] = False
 
     _threading_fix.Thread(target=_worker, daemon=True).start()
-    return jsonify({"ok": True, "total": len(todo), "task_id": "fix-thumbs"})
+    return jsonify({"ok": True, "total": len(todo), "already_running": False})
 
 
 @app.get('/api/media/fix-thumbnails/status')
 def api_media_fix_thumbnails_status():
     with _fix_thumbs_lock:
-        return jsonify(dict(_fix_thumbs_state))
+        return jsonify(dict(_thumb_task))
 
 
 @app.post('/api/media/purge-orphans')
