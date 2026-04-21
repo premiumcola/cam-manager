@@ -553,11 +553,12 @@ class CameraRuntime:
         video_relpath = None
         duration_s: float = 0.0
         file_size_bytes: int = 0
+        encode_error: str | None = None
+        fps_clamped = max(5.0, min(30.0, float(fps)))
         try:
             day_dir = storage_root / "motion_detection" / self.camera_id / start_time.strftime("%Y-%m-%d")
             day_dir.mkdir(parents=True, exist_ok=True)
             vid_path = day_dir / f"{event_id}.mp4"
-            fps_clamped = max(5.0, min(30.0, float(fps)))
             h, w = frames[0].shape[:2]
             writer = cv2.VideoWriter(str(vid_path), cv2.VideoWriter_fourcc(*'mp4v'), fps_clamped, (w, h))
             last_good = frames[0]
@@ -580,11 +581,15 @@ class CameraRuntime:
                     vid_path.unlink()
                     tmp_path.rename(vid_path)
                 else:
-                    log.warning("[%s] ffmpeg faststart failed (rc=%d)", self.camera_id, r.returncode)
+                    stderr_text = (r.stderr or b'').decode('utf-8', errors='replace')
+                    log.error("[%s] ffmpeg faststart failed (rc=%d): %s",
+                              self.camera_id, r.returncode, stderr_text[:800])
+                    encode_error = f"ffmpeg faststart rc={r.returncode}"
                     if tmp_path.exists():
                         tmp_path.unlink()
             except Exception as fe:
-                log.warning("[%s] ffmpeg faststart error: %s", self.camera_id, fe)
+                log.error("[%s] ffmpeg faststart error: %s", self.camera_id, fe)
+                encode_error = f"ffmpeg exec error: {fe}"
                 try:
                     if tmp_path.exists():
                         tmp_path.unlink()
@@ -613,7 +618,36 @@ class CameraRuntime:
                      file_size_bytes // 1024)
         except Exception as e:
             log.error("[%s] Motion clip save error: %s", self.camera_id, e)
-            if vid_path is not None and vid_path.exists():
+            if encode_error is None:
+                encode_error = str(e)
+
+        # Fallback: primary path failed but file exists — the mp4v writer output may
+        # still be playable even without faststart. Re-check via OpenCV.
+        if video_url is None and vid_path is not None and vid_path.exists():
+            try:
+                size_bytes = vid_path.stat().st_size
+                if size_bytes > 0:
+                    check = cv2.VideoCapture(str(vid_path))
+                    fc = int(check.get(cv2.CAP_PROP_FRAME_COUNT))
+                    cfps = check.get(cv2.CAP_PROP_FPS) or fps_clamped
+                    check.release()
+                    dur = fc / cfps if cfps > 0 else 0.0
+                    if fc >= 3 and dur >= 0.3:
+                        duration_s = round(dur, 2)
+                        file_size_bytes = size_bytes
+                        rel = vid_path.relative_to(storage_root)
+                        video_url = f"{public_base}/media/{rel.as_posix()}" if public_base else f"/media/{rel.as_posix()}"
+                        video_relpath = rel.as_posix()
+                        log.warning("[%s] Motion clip recovered via fallback: %s (%d frames %.2fs, encode_error=%s)",
+                                    self.camera_id, vid_path.name, fc, dur, encode_error)
+                    else:
+                        log.error("[%s] Fallback: clip unreadable (frames=%d dur=%.2fs) — removing",
+                                  self.camera_id, fc, dur)
+                        vid_path.unlink()
+                else:
+                    vid_path.unlink()
+            except Exception as fe:
+                log.error("[%s] Fallback read failed: %s", self.camera_id, fe)
                 try:
                     vid_path.unlink()
                 except Exception:
@@ -644,6 +678,8 @@ class CameraRuntime:
             "duration_s": duration_s,
             "file_size_bytes": file_size_bytes,
         }
+        if encode_error:
+            event["encode_error"] = encode_error
         self.store.add_event(self.camera_id, event)
 
         if self.mqtt and self.cfg.get("mqtt_enabled", True):

@@ -2138,10 +2138,27 @@ function _lbResetToPhoto(){
   const videoEl=byId('lightboxVideo');
   if(videoEl){videoEl.pause();videoEl.src='';videoEl.style.display='none';}
   byId('lightboxImg').style.display='';
+  const errEl=byId('lightboxErrorMsg');
+  if(errEl) errEl.style.display='none';
   const confirmBtn=byId('lightboxConfirm');
   if(confirmBtn) confirmBtn.style.display='';
   const labGrad=byId('lightboxLabelsGrad');
   if(labGrad) labGrad.style.display='';
+}
+function _lbShowError(text){
+  let errEl=byId('lightboxErrorMsg');
+  if(!errEl){
+    errEl=document.createElement('div');
+    errEl.id='lightboxErrorMsg';
+    errEl.style.cssText='align-items:center;justify-content:center;width:100%;min-height:240px;max-height:80vh;color:rgba(255,255,255,.55);font-size:15px;font-weight:500;background:#080510;border-radius:18px';
+    const wrap=byId('lightboxMediaWrap');
+    if(wrap) wrap.appendChild(errEl);
+  }
+  errEl.textContent=text;
+  errEl.style.display='flex';
+  byId('lightboxImg').style.display='none';
+  const videoEl=byId('lightboxVideo');
+  if(videoEl){videoEl.style.display='none';videoEl.pause();videoEl.src='';}
 }
 function openLightbox(item){
   if(item.type==='timelapse'){openTLPlayer(item);return;}
@@ -2156,11 +2173,15 @@ function openLightbox(item){
   // Show video player for motion clips, image for snapshots
   const vidSrc=_lbItem.video_relpath?`/media/${_lbItem.video_relpath}`:(_lbItem.video_url||'');
   const imgSrc=_lbItem.snapshot_relpath?`/media/${_lbItem.snapshot_relpath}`:(_lbItem.snapshot_url||'');
+  const hasVideoLabel=(_lbItem.labels||[]).some(l=>['motion','car','person','cat','bird'].includes(l));
   if(vidSrc){
     const imgEl=byId('lightboxImg'); imgEl.style.display='none';
     const videoEl=byId('lightboxVideo');
     videoEl.style.display='block'; videoEl.src=vidSrc; videoEl.muted=true; videoEl.loop=true;
     videoEl.load(); videoEl.play().catch(()=>{});
+    const confirmBtn=byId('lightboxConfirm'); if(confirmBtn) confirmBtn.style.display='none';
+  } else if(!imgSrc && (hasVideoLabel || _lbItem.encode_error)){
+    _lbShowError('Video nicht verfügbar');
     const confirmBtn=byId('lightboxConfirm'); if(confirmBtn) confirmBtn.style.display='none';
   } else {
     byId('lightboxImg').src=imgSrc;
@@ -2348,7 +2369,26 @@ function fmtMediaTime(ts){
   }catch{return ts;}
 }
 const _TL_FILMSTRIP=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><line x1="6" y1="3" x2="18" y2="3"/><line x1="6" y1="21" x2="18" y2="21"/><polygon points="7,4 17,4 12,12" fill="#c4b5fd" opacity=".8"/><polygon points="12,12 7,20 17,20" fill="#c4b5fd" opacity=".5"/></svg>`;
+function hexToRgba(hex,alpha){
+  const h=(hex||'').replace('#','');
+  if(h.length!==6) return `rgba(147,197,253,${alpha})`;
+  const r=parseInt(h.substring(0,2),16);
+  const g=parseInt(h.substring(2,4),16);
+  const b=parseInt(h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+function getMediaAccentColor(labels){
+  if(Array.isArray(labels)){
+    for(const l of labels){
+      if(colors[l]) return colors[l];
+    }
+  }
+  return colors.motion||'#93c5fd';
+}
 function mediaCardHTML(item){
+  // Shared badge styles — used by both timelapse and motion/image branches
+  const badgeStyle='font-size:10px;font-weight:700;color:#e2e8f0;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);padding:2px 6px;border-radius:4px;line-height:1.45;white-space:nowrap';
+  const badgeSubStyle='font-size:10px;color:#a5bfce;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);padding:1px 6px;border-radius:4px;line-height:1.45;white-space:nowrap;margin-top:2px';
   const isTL=item.type==='timelapse';
   if(isTL){
     const wk=item.window_key||item.day||'';
@@ -2360,13 +2400,14 @@ function mediaCardHTML(item){
     const thumbEl=thumbSrc
       ? `<img src="${esc(thumbSrc)}" alt="preview" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;opacity:.7" loading="lazy" onerror="this.remove()">`
       : '';
-    const badgeStyle='font-size:10px;font-weight:700;color:#e2e8f0;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);padding:2px 6px;border-radius:4px;line-height:1.45;white-space:nowrap';
-    const badgeSubStyle='font-size:10px;color:#a5bfce;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);padding:1px 6px;border-radius:4px;line-height:1.45;white-space:nowrap;margin-top:2px';
+    const tlAccent=getMediaAccentColor(['timelapse']);
+    const tlPlayBg=hexToRgba(tlAccent,0.18);
+    const tlPlayBorder=hexToRgba(tlAccent,0.5);
     return `<article class="media-card mmc-tl" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
       <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
         ${thumbEl}
         <div style="position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center">
-          <div class="mmc-play-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:#d8b4fe;margin-left:2px"><polygon points="5,3 19,12 5,21"/></svg></div>
+          <div class="mmc-play-btn" style="background:${tlPlayBg};border:1.5px solid ${tlPlayBorder}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:${tlAccent};margin-left:2px"><polygon points="5,3 19,12 5,21"/></svg></div>
         </div>
         <div class="mmc-meta-bar"></div>
         <div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none">
@@ -2384,20 +2425,29 @@ function mediaCardHTML(item){
       </div>
     </article>`;
   }
-  const isVideo=!!(item.video_relpath||item.video_url);
+  const hasVideo=!!(item.video_relpath||item.video_url);
+  const showPlayer=hasVideo||!!item.encode_error;
   const imgSrc=item.snapshot_relpath?`/media/${item.snapshot_relpath}`:(item.snapshot_url||'');
   const confirmed=item.confirmed?'mmc-confirmed':'';
   const labelBubbles=(item.labels||[]).slice(0,3).map(l=>objBubble(l,26)).join('');
-  const badgeSt='font-size:10px;font-weight:700;color:#e2e8f0;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);padding:2px 6px;border-radius:4px;line-height:1.45;white-space:nowrap';
   const fmtDur=s=>{if(!s||s<=0)return'';const m=Math.floor(s/60),sec=Math.round(s%60);return`${m}:${String(sec).padStart(2,'0')}`;};
   const fmtByt=b=>{if(!b||b<=0)return'';if(b>=1048576)return(b/1048576).toFixed(1)+' MB';return Math.round(b/1024)+' KB';};
-  const mediaInner=isVideo
+  const accent=getMediaAccentColor(item.labels);
+  const playBg=hexToRgba(accent,0.18);
+  const playBorder=hexToRgba(accent,0.5);
+  const motionBg=hexToRgba(colors.motion,0.18);
+  const motionBorder=hexToRgba(colors.motion,0.35);
+  const motionBadge=`<div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge" style="background:${motionBg};border:1px solid ${motionBorder};color:${colors.motion}">${objIconSvg('motion',12)}Bewegung</span></div>`;
+  const errorBadge=item.encode_error?`<div style="position:absolute;top:6px;right:6px;z-index:4"><span title="${esc(item.encode_error)}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(250,204,21,.18);border:1px solid rgba(250,204,21,.5);color:#facc15;font-size:13px;font-weight:800;backdrop-filter:blur(4px)">⚠</span></div>`:'';
+  const mediaInner=showPlayer
     ?`<div style="position:absolute;inset:0;background:#0a0e1a;display:flex;align-items:center;justify-content:center">
-        <div class="mmc-play-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="color:#fff;margin-left:3px"><polygon points="5,3 19,12 5,21"/></svg></div>
+        <div class="mmc-play-btn" style="background:${playBg};border:1.5px solid ${playBorder}"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="color:${accent};margin-left:3px"><polygon points="5,3 19,12 5,21"/></svg></div>
       </div>
       <div class="mmc-meta-bar"><span>${fmtMediaTime(item.time||'')}</span></div>
-      ${item.duration_s?`<div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none"><div style="${badgeSt}">${fmtDur(item.duration_s)}</div></div>`:''}
-      ${item.file_size_bytes?`<div style="position:absolute;bottom:7px;right:8px;z-index:2;pointer-events:none"><div style="${badgeSt}">${fmtByt(item.file_size_bytes)}</div></div>`:''}`
+      ${item.duration_s?`<div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none"><div style="${badgeStyle}">${fmtDur(item.duration_s)}</div></div>`:''}
+      ${item.file_size_bytes?`<div style="position:absolute;bottom:7px;right:8px;z-index:2;pointer-events:none"><div style="${badgeStyle}">${fmtByt(item.file_size_bytes)}</div></div>`:''}
+      ${motionBadge}
+      ${errorBadge}`
     :`<img src="${esc(imgSrc)}" alt="event" loading="lazy" onerror="this.style.display='none'" />
       <div class="mmc-meta-bar"><span>${fmtMediaTime(item.time||'')}</span></div>`;
   return `<article class="media-card ${confirmed}" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
