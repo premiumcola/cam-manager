@@ -2223,15 +2223,19 @@ function _lbHandleDeleteKey(){
   }
   byId('lightboxDelete').click();
 }
+const _LB_CHECK_SVG=`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,12 9,18 20,6"/></svg>`;
+const _LB_CHECK2_SVG=`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="1,13 6,18 13,9"/><polyline points="10,13 15,18 23,6"/></svg>`;
+const _LB_HINT='<span style="font-size:9px;line-height:1;opacity:.7;white-space:nowrap">↑ behalten</span>';
+const _LB_TRASH_HTML='<span style="font-size:14px;line-height:1;opacity:.8">↓</span><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,6 5,6 21,6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>';
 function _updateLbConfirmBtn(confirmed){
   const btn=byId('lightboxConfirm');
   if(!btn) return;
   if(confirmed){
-    btn.style.background='#166534';btn.style.color='#4ade80';
-    btn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.85">↑</span><span style="font-size:22px;line-height:1">✓✓</span>';
+    btn.style.background='#166534';
+    btn.innerHTML=_LB_CHECK2_SVG+_LB_HINT;
   } else {
-    btn.style.background='';btn.style.color='';
-    btn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↑</span><span style="font-size:22px;line-height:1">✓</span>';
+    btn.style.background='';
+    btn.innerHTML=_LB_CHECK_SVG+_LB_HINT;
   }
 }
 function _lbResetToPhoto(){
@@ -2269,7 +2273,7 @@ function openLightbox(item){
   _lbDeletePending=false;
   _lbResetToPhoto();
   const delBtn=byId('lightboxDelete');
-  if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↓</span><span style="font-size:22px;line-height:1">🗑</span>';delBtn.title=_lbItem.confirmed?'Bestätigt — trotzdem löschen?':'Löschen';}
+  if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML=_LB_TRASH_HTML;delBtn.title=_lbItem.confirmed?'Bestätigt — trotzdem löschen?':'Löschen';}
   _updateLbConfirmBtn(_lbItem.confirmed);
   // Show video player for motion clips, image for snapshots
   const vidSrc=_lbItem.video_relpath?`/media/${_lbItem.video_relpath}`:(_lbItem.video_url||'');
@@ -2335,7 +2339,7 @@ function openTLPlayer(item){
   const labGrad=byId('lightboxLabelsGrad'); if(labGrad) labGrad.style.display='none';
   byId('lightboxLabels').innerHTML='';
   const delBtn=byId('lightboxDelete');
-  if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↓</span><span style="font-size:22px;line-height:1">🗑</span>';delBtn.title='Timelapse löschen';}
+  if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML=_LB_TRASH_HTML;delBtn.title='Timelapse löschen';}
   const period=_tlPeriodLabel(item);
   const sizeBadge=item.size_mb!=null?`<span class="badge">${item.size_mb} MB</span>`:'';
   byId('lightboxMeta').innerHTML=`
@@ -2377,10 +2381,29 @@ document.addEventListener('keydown',(e)=>{
   else if(e.key==='ArrowDown'){e.preventDefault();_lbHandleDeleteKey();}
   else if(e.key==='Escape') closeLightbox();
 });
-byId('lightboxConfirm').innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↑</span><span style="font-size:22px;line-height:1">✓</span>';
-byId('lightboxDelete').innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↓</span><span style="font-size:22px;line-height:1">🗑</span>';
+_updateLbConfirmBtn(false);
+byId('lightboxDelete').innerHTML=_LB_TRASH_HTML;
 _initFsBtn('liveViewFsBtn',byId('liveViewWrap'),()=>byId('liveViewWrap'));
 _initFsBtn('lightboxFsBtn',byId('lightboxMediaWrap'),()=>{const v=byId('lightboxVideo');return(v&&v.style.display!=='none')?v:byId('lightboxMediaWrap');});
+// Swipe navigation on the lightbox media area (mobile)
+(function initLightboxSwipe(){
+  const wrap=byId('lightboxMediaWrap');
+  if(!wrap) return;
+  let _tx=0,_dragging=false;
+  wrap.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1) return;
+    _tx=e.touches[0].clientX;
+    _dragging=true;
+  },{passive:true});
+  wrap.addEventListener('touchend',e=>{
+    if(!_dragging) return;
+    _dragging=false;
+    const dx=e.changedTouches[0].clientX-_tx;
+    if(Math.abs(dx)<40) return;
+    if(dx<0) byId('lightboxNext')?.click();
+    else byId('lightboxPrev')?.click();
+  },{passive:true});
+})();
 byId('lightboxConfirm').onclick=async()=>{
   if(!_lbItem) return;
   const{camera_id,event_id}=_lbItem;
