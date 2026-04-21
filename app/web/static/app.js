@@ -370,6 +370,8 @@ function renderDashboard(){
       ? `/api/camera/${esc(c.id)}/stream_hd.mjpg`
       : `/api/camera/${esc(c.id)}/snapshot.jpg?t=${Date.now()}`;
     const isActive=c.status==='active';
+    const motionActive=isActive;
+    const coralActive=!!(c.coral_available && c.detection_mode && c.detection_mode!=='motion_only');
     const tlOn=!!(c.timelapse&&c.timelapse.enabled);
     const fps=c.frame_interval_ms?Math.round(1000/c.frame_interval_ms):null;
     const previewFps=(c.preview_fps||0)>0?c.preview_fps:null;
@@ -412,7 +414,7 @@ function renderDashboard(){
         <div class="cv-live-collapsed">
           <div class="cv-pdot"></div>
           <span>Live</span>
-          ${previewFps?`<span style="color:rgba(134,239,172,.55);font-size:10px;font-weight:400;margin-left:4px">${previewFps}</span>`:''}
+          ${previewFps?`<span style="color:rgba(134,239,172,.55);font-size:10px;font-weight:400;margin-left:3px">${previewFps}</span>`:''}
           <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="rgba(200,245,224,.55)" stroke-width="1.8" stroke-linecap="round" style="margin-left:auto;flex-shrink:0"><path d="M3 4.5l3 3 3-3"/></svg>
         </div>
         <div class="cv-live-expanded">
@@ -429,11 +431,12 @@ function renderDashboard(){
       <div class="cv-pill ${c.armed?'cv-pill-alarm-on':'cv-pill-alarm-off'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})" style="cursor:pointer">${c.armed?bellOn:bellOff}${c.armed?'Benachrichtigung':'Stumm'}</div>
     </div>
 
-    <!-- bottom-right: HD toggle + timelapse + motion·objects chips -->
+    <!-- bottom-right: HD toggle + timelapse + motion + objects pills -->
     <div class="cv-br">
-      ${c.rtsp_url?`<button class="cv-hd-badge${hdOn?' active':''}" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau umschalten">HD</button>`:''}
+      ${c.rtsp_url?`<button class="cv-hd-badge${hdOn?' active':''}" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau">HD</button>`:''}
       <div class="cv-pill ${tlOn?'cv-pill-tl':'cv-pill-tl-off'}">${objIconSvg('timelapse',13)}Timelapse${tlOn?' aktiv':' aus'}</div>
-      <div class="cv-pill" style="${(isActive||c.coral_available)?'background:rgba(129,140,248,.18);border:1.5px solid rgba(129,140,248,.5);color:#e0e7ff':'background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);color:rgba(255,255,255,.4)'}">${objIconSvg('motion_objects',13)}<span>Motion · Objekte</span></div>
+      <div class="cv-pill ${motionActive?'cv-pill-motion-on':'cv-pill-motion-off'}" style="font-size:10px;padding:3px 7px">${objIconSvg('motion',11)} Motion</div>
+      ${c.coral_available?`<div class="cv-pill ${coralActive?'cv-pill-coral-on':'cv-pill-coral-off'}" style="font-size:10px;padding:3px 7px">${objIconSvg('motion_objects',11)} Objekte</div>`:''}
     </div>
 
     <!-- bottom: hover action button -->
@@ -1079,9 +1082,10 @@ let _liveViewCamId=null;
 let _liveViewHd=false;
 function openLiveView(camId,camName){
   const modal=byId('liveViewModal'); if(!modal) return;
-  _liveViewCamId=camId; _liveViewHd=false;
+  _liveViewCamId=camId;
+  _liveViewHd=_hdCards.has(camId); // inherit shared HD state
   byId('liveViewTitle').textContent=camName||camId;
-  _setLiveViewStream(false);
+  _setLiveViewStream(_liveViewHd);
   const imgEl=byId('liveViewImg');
   // Image click no longer toggles fullscreen — the dedicated FS button owns that.
   if(imgEl) imgEl.onclick=null;
@@ -1095,18 +1099,31 @@ function _setLiveViewStream(hd){
   const url=hd?`/api/camera/${encodeURIComponent(_liveViewCamId)}/stream_hd.mjpg`
                :`/api/camera/${encodeURIComponent(_liveViewCamId)}/stream.mjpg`;
   img.src=url;
+  // Shared state: keep the card's HD badge + img in sync
+  if(hd) _hdCards.add(_liveViewCamId); else _hdCards.delete(_liveViewCamId);
+  const cardBadge=document.querySelector(`.cv-card[data-camid="${CSS.escape(_liveViewCamId)}"] .cv-hd-badge`);
+  if(cardBadge) cardBadge.classList.toggle('active',hd);
+  const cardImg=document.querySelector(`.cv-card[data-camid="${CSS.escape(_liveViewCamId)}"] .cv-img`);
+  if(cardImg){
+    if(hd && cardImg.dataset.hdMode!=='1'){
+      cardImg.dataset.hdMode='1';
+      cardImg.src=`/api/camera/${encodeURIComponent(_liveViewCamId)}/stream_hd.mjpg`;
+    } else if(!hd && cardImg.dataset.hdMode==='1'){
+      cardImg.dataset.hdMode='0';
+      cardImg.src=`/api/camera/${encodeURIComponent(_liveViewCamId)}/snapshot.jpg?t=${Date.now()}`;
+    }
+  }
   const hdBtn=byId('liveViewHdBtn');
   if(hdBtn){
     hdBtn.textContent='HD';
+    hdBtn.style.border='none';
     if(hd){
-      hdBtn.style.borderColor='#f59e0b';
-      hdBtn.style.color='#f59e0b';
-      hdBtn.style.background='rgba(245,158,11,0.15)';
+      hdBtn.style.background='rgba(255,255,255,0.85)';
+      hdBtn.style.color='#0a0e1a';
       hdBtn.style.fontWeight='800';
     } else {
-      hdBtn.style.borderColor='rgba(255,255,255,0.2)';
-      hdBtn.style.color='rgba(255,255,255,0.5)';
-      hdBtn.style.background='rgba(0,0,0,0.55)';
+      hdBtn.style.background='rgba(255,255,255,0.08)';
+      hdBtn.style.color='rgba(255,255,255,0.35)';
       hdBtn.style.fontWeight='700';
     }
   }

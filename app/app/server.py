@@ -1137,7 +1137,7 @@ def api_camera_stream_hd(cam_id):
                 'ffmpeg', '-rtsp_transport', 'tcp',
                 '-i', rtsp_url,
                 '-vf', 'fps=15',
-                '-q:v', '5',
+                '-q:v', '4',
                 '-f', 'mjpeg',
                 '-an',
                 'pipe:1',
@@ -1152,7 +1152,7 @@ def api_camera_stream_hd(cam_id):
                 )
                 buf = b''
                 while True:
-                    chunk = proc.stdout.read(4096)
+                    chunk = proc.stdout.read(8192)
                     if not chunk:
                         break
                     buf += chunk
