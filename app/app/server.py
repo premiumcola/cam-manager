@@ -1107,18 +1107,97 @@ def api_camera_stream(cam_id):
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
+import shutil as _shutil_check
+_FFMPEG_AVAILABLE = _shutil_check.which('ffmpeg') is not None
+
+
 @app.get('/api/camera/<cam_id>/stream_hd.mjpg')
 def api_camera_stream_hd(cam_id):
-    """Interactive HD stream — reads from main-stream annotated frames (full resolution).
-    Use only when a user is actively watching. Quality=90, ~10fps practical cap
-    (main stream capture interval limits effective FPS to ~3–5fps on Reolink)."""
+    """Interactive HD stream.
+
+    Preferred path: ffmpeg transcodes the camera's RTSP main stream (H.264 or
+    H.265) directly to MJPEG and we pipe that into the HTTP response. This
+    avoids OpenCV's flaky H.265 decoder and re-uses the camera's native
+    timebase, so playback is smooth and artifact-free.
+
+    Fallback (no ffmpeg binary): read annotated frames from the camera runtime
+    preview buffer and re-encode in Python. Slower and may show decode
+    artifacts, but keeps the UI functional."""
+    cam_cfg = settings.get_camera(cam_id)
     rt = runtimes.get(cam_id)
+    rtsp_url = (cam_cfg or {}).get("rtsp_url") if cam_cfg else None
+
+    if _FFMPEG_AVAILABLE and rtsp_url:
+        import subprocess
+        if rt:
+            rt.add_viewer()
+
+        def gen_ffmpeg():
+            cmd = [
+                'ffmpeg', '-rtsp_transport', 'tcp',
+                '-i', rtsp_url,
+                '-vf', 'fps=15',
+                '-q:v', '5',
+                '-f', 'mjpeg',
+                '-an',
+                'pipe:1',
+            ]
+            proc = None
+            try:
+                proc = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    bufsize=1024 * 1024,
+                )
+                buf = b''
+                while True:
+                    chunk = proc.stdout.read(4096)
+                    if not chunk:
+                        break
+                    buf += chunk
+                    while True:
+                        start = buf.find(b'\xff\xd8')
+                        if start < 0:
+                            buf = b''
+                            break
+                        end = buf.find(b'\xff\xd9', start + 2)
+                        if end < 0:
+                            # Keep the partial JPEG; wait for more bytes
+                            if start > 0:
+                                buf = buf[start:]
+                            break
+                        jpeg = buf[start:end + 2]
+                        buf = buf[end + 2:]
+                        yield (b'--frame\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n'
+                               + jpeg + b'\r\n')
+            except GeneratorExit:
+                pass
+            except Exception as e:
+                logging.getLogger(__name__).warning(
+                    "[%s] HD ffmpeg stream error: %s", cam_id, e)
+            finally:
+                if proc is not None:
+                    try:
+                        proc.kill()
+                        proc.wait(timeout=2)
+                    except Exception:
+                        pass
+                if rt:
+                    rt.remove_viewer()
+
+        return Response(gen_ffmpeg(),
+                        mimetype='multipart/x-mixed-replace; boundary=frame')
+
+    # ── Fallback: OpenCV-based re-encode from the runtime preview buffer ────
     if not rt:
         return ("not running", 404)
     rt.add_viewer()
-    def gen():
+
+    def gen_opencv():
         import time as _time
-        _interval = 1.0 / 15  # 15fps target — main stream usually limits to ~3-5fps
+        _interval = 1.0 / 15
         try:
             while True:
                 t0 = _time.monotonic()
@@ -1135,7 +1214,8 @@ def api_camera_stream_hd(cam_id):
                     _time.sleep(gap)
         finally:
             rt.remove_viewer()
-    return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+    return Response(gen_opencv(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
 @app.post('/api/camera/<cam_id>/arm')

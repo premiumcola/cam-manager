@@ -161,6 +161,7 @@ const _prevCamStatuses=new Map();
 // ── 5fps dashboard preview refresh ────────────────────────────────────────────
 // Refreshes all visible camera thumbnails at ~5fps while the tab is active.
 // Uses the existing snapshot.jpg endpoint (served from sub-stream frame buffer).
+const _hdCards=new Set();
 function startPreviewRefresh(){
   if(_previewRefreshInterval) clearInterval(_previewRefreshInterval);
   _previewRefreshInterval=setInterval(()=>{
@@ -168,11 +169,29 @@ function startPreviewRefresh(){
     const grid=byId('cameraCards');
     if(!grid) return;
     grid.querySelectorAll('.cv-img.loaded').forEach(img=>{
+      if(img.dataset.hdMode==='1') return; // HD MJPEG stream refreshes itself
       const base=img.src.split('?')[0];
       img.src=base+'?t='+Date.now();
     });
   },200); // 5fps
 }
+function toggleCardHd(camId,btn){
+  const card=btn.closest('.cv-card');
+  const img=card?.querySelector('.cv-img');
+  if(!img) return;
+  if(_hdCards.has(camId)){
+    _hdCards.delete(camId);
+    btn.classList.remove('active');
+    img.dataset.hdMode='0';
+    img.src=`/api/camera/${encodeURIComponent(camId)}/snapshot.jpg?t=${Date.now()}`;
+  } else {
+    _hdCards.add(camId);
+    btn.classList.add('active');
+    img.dataset.hdMode='1';
+    img.src=`/api/camera/${encodeURIComponent(camId)}/stream_hd.mjpg`;
+  }
+}
+window.toggleCardHd=toggleCardHd;
 
 function startLiveUpdate(){
   if(_liveUpdateInterval) clearInterval(_liveUpdateInterval);
@@ -346,7 +365,10 @@ function renderDashboard(){
   // shared SVGs
   const pencil=`<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>`;
   byId('cameraCards').innerHTML=cams.map(c=>{
-    const snapUrl=`/api/camera/${esc(c.id)}/snapshot.jpg?t=${Date.now()}`;
+    const hdOn=_hdCards.has(c.id);
+    const snapUrl=hdOn
+      ? `/api/camera/${esc(c.id)}/stream_hd.mjpg`
+      : `/api/camera/${esc(c.id)}/snapshot.jpg?t=${Date.now()}`;
     const isActive=c.status==='active';
     const tlOn=!!(c.timelapse&&c.timelapse.enabled);
     const fps=c.frame_interval_ms?Math.round(1000/c.frame_interval_ms):null;
@@ -370,7 +392,7 @@ function renderDashboard(){
   <div class="cv-frame">
     <div class="cv-img-wrap">
       <div class="cv-loading-placeholder">${!isActive?_makeSquirrelHTML():'<div class="cv-loading-icon">⟳</div><div class="cv-loading-text">Verbinde…</div>'}</div>
-      <img class="cv-img cam-snap" src="${snapUrl}" alt="${esc(c.name)}"
+      <img class="cv-img cam-snap" src="${snapUrl}" alt="${esc(c.name)}" data-hd-mode="${hdOn?'1':'0'}"
         onload="this.classList.add('loaded');this.previousElementSibling.style.display='none'"
         onerror="_camImgRetry(this)" />
     </div>
@@ -407,8 +429,9 @@ function renderDashboard(){
       <div class="cv-pill ${c.armed?'cv-pill-alarm-on':'cv-pill-alarm-off'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})" style="cursor:pointer">${c.armed?bellOn:bellOff}${c.armed?'Benachrichtigung':'Stumm'}</div>
     </div>
 
-    <!-- bottom-right: timelapse + motion·objects chips -->
+    <!-- bottom-right: HD toggle + timelapse + motion·objects chips -->
     <div class="cv-br">
+      ${c.rtsp_url?`<button class="cv-hd-badge${hdOn?' active':''}" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau umschalten">HD</button>`:''}
       <div class="cv-pill ${tlOn?'cv-pill-tl':'cv-pill-tl-off'}">${objIconSvg('timelapse',13)}Timelapse${tlOn?' aktiv':' aus'}</div>
       <div class="cv-pill" style="${(isActive||c.coral_available)?'background:rgba(129,140,248,.18);border:1.5px solid rgba(129,140,248,.5);color:#e0e7ff':'background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.2);color:rgba(255,255,255,.4)'}">${objIconSvg('motion_objects',13)}<span>Motion · Objekte</span></div>
     </div>
@@ -1060,7 +1083,8 @@ function openLiveView(camId,camName){
   byId('liveViewTitle').textContent=camName||camId;
   _setLiveViewStream(false);
   const imgEl=byId('liveViewImg');
-  if(imgEl) imgEl.onclick=e=>{e.stopPropagation();_fsToggle(byId('liveViewWrap'),byId('liveViewWrap'));};
+  // Image click no longer toggles fullscreen — the dedicated FS button owns that.
+  if(imgEl) imgEl.onclick=null;
   modal.classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
@@ -1073,9 +1097,18 @@ function _setLiveViewStream(hd){
   img.src=url;
   const hdBtn=byId('liveViewHdBtn');
   if(hdBtn){
-    hdBtn.textContent=hd?'HD':'SD';
-    hdBtn.style.borderColor=hd?'#4ade80':'rgba(255,255,255,0.25)';
-    hdBtn.style.color=hd?'#4ade80':'#fff';
+    hdBtn.textContent='HD';
+    if(hd){
+      hdBtn.style.borderColor='#f59e0b';
+      hdBtn.style.color='#f59e0b';
+      hdBtn.style.background='rgba(245,158,11,0.15)';
+      hdBtn.style.fontWeight='800';
+    } else {
+      hdBtn.style.borderColor='rgba(255,255,255,0.2)';
+      hdBtn.style.color='rgba(255,255,255,0.5)';
+      hdBtn.style.background='rgba(0,0,0,0.55)';
+      hdBtn.style.fontWeight='700';
+    }
   }
 }
 function closeLiveView(){
