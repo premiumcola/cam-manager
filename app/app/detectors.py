@@ -454,6 +454,224 @@ class BirdSpeciesClassifier:
         return display, latin, best_score
 
 
+# ──────────────────────────────────────────────────────────────────────────
+# Wildlife classifier: ImageNet MobileNetV2 → fox / squirrel / hedgehog
+# ──────────────────────────────────────────────────────────────────────────
+#
+# COCO SSD has 80 classes and does not contain fox, squirrel, or hedgehog —
+# so when motion hits a garden camera we need a second-stage classifier that
+# *can* name these animals. The classic ImageNet-1000 model includes:
+#   • "red fox, Vulpes vulpes"        (idx 277)
+#   • "fox squirrel, Sciurus niger"   (idx 335)
+#   • "hedgehog, Erinaceus europaeus" (idx 334 in most label files)
+#
+# We map any ImageNet top-1 whose human-readable label matches one of those
+# substrings down to our three target categories. Everything else is None.
+
+# Substring→category rules. Case-insensitive match against the ImageNet
+# human-readable label. Ordering matters — first hit wins, so put the more
+# specific rule first (e.g. "red fox" before bare "fox" to avoid flying-fox
+# or corsac-fox false positives).
+_WILDLIFE_LABEL_RULES: tuple[tuple[str, str], ...] = (
+    ("red fox",       "fox"),
+    ("grey fox",      "fox"),
+    ("gray fox",      "fox"),
+    ("kit fox",       "fox"),
+    ("arctic fox",    "fox"),
+    ("fox squirrel",  "squirrel"),
+    ("squirrel",      "squirrel"),
+    ("hedgehog",      "hedgehog"),
+)
+
+
+def _wildlife_category(raw_label: str | None) -> str | None:
+    """Map an ImageNet top-1 label to one of our wildlife categories, or None."""
+    if not raw_label:
+        return None
+    low = str(raw_label).lower()
+    for needle, cat in _WILDLIFE_LABEL_RULES:
+        if needle in low:
+            return cat
+    return None
+
+
+class WildlifeClassifier:
+    """ImageNet MobileNetV2 (1000 classes) second-stage classifier used for
+    mammals the COCO detector cannot name — fox, squirrel, hedgehog.
+
+    Same three-tier fallback as BirdSpeciesClassifier:
+      1. pycoral + EdgeTPU  → mode="coral"
+      2. tflite-runtime CPU → mode="cpu"
+      3. disabled           → mode="none"
+
+    classify_crop() returns (category, imagenet_label, score) where
+    `category` is one of "fox" / "squirrel" / "hedgehog" or None when the
+    top-1 doesn't map to any wildlife class we track.
+    """
+
+    def __init__(self, cfg: dict):
+        self.cfg = cfg or {}
+        self.enabled = bool(self.cfg.get("enabled"))
+        self.available = False
+        self.reason = "disabled"
+        self.mode = "none"  # "coral" | "cpu" | "none"
+        self.labels = load_label_map(self.cfg.get("labels_path"))
+        self.min_score = float(self.cfg.get("min_score", 0.35))
+        self.interpreter = None
+        self.common = None
+        self.classify = None
+        self._cpu_mode = False
+        # Some ImageNet label files include an extra "background" entry at
+        # index 0 (1001 labels total). The model output then has 1001 bins
+        # too, so no offset is required. When the labels file has exactly
+        # 1000 entries and the model emits 1001, we shift by 1 on read.
+        self._label_offset = 0
+        if not self.enabled:
+            return
+        model_path = self.cfg.get("model_path")
+        if not model_path:
+            self.reason = "missing model_path"
+            return
+        if not Path(model_path).exists():
+            cpu_alt = self.cfg.get("cpu_model_path")
+            if not (cpu_alt and Path(cpu_alt).exists()):
+                self.reason = f"model file not found: {model_path}"
+                log.warning("Wildlife classifier: %s", self.reason)
+                return
+
+        coral_error = ""
+        # ── Tier 1: pycoral ───────────────────────────────────────────────
+        try:
+            from pycoral.utils.edgetpu import make_interpreter  # type: ignore
+            from pycoral.adapters import common, classify  # type: ignore
+            self.common = common
+            self.classify = classify
+            self.interpreter = make_interpreter(model_path, device=self.cfg.get("device"))
+            self.interpreter.allocate_tensors()
+            self.available = True
+            self.mode = "coral"
+            self.reason = "ok"
+            log.info("Wildlife classifier (Coral) aktiv: %s — %d labels", model_path, len(self.labels))
+            return
+        except Exception as e:
+            log.warning("Wildlife classifier pycoral unavailable (%s) – CPU-Fallback…", e)
+            coral_error = str(e)
+
+        # ── Tier 2: tflite-runtime ────────────────────────────────────────
+        cpu_model = self.cfg.get("cpu_model_path")
+        if not cpu_model:
+            cpu_model = model_path.replace("_edgetpu.tflite", ".tflite")
+            if cpu_model == model_path:
+                cpu_model = None
+
+        for try_path in filter(None, [cpu_model, model_path]):
+            try:
+                import tflite_runtime.interpreter as tflite  # type: ignore
+                interp = tflite.Interpreter(model_path=try_path)
+                interp.allocate_tensors()
+                self.interpreter = interp
+                self._cpu_mode = True
+                self.available = True
+                self.mode = "cpu"
+                self.reason = f"cpu_fallback (coral: {coral_error})" if coral_error else "ok"
+                log.info("Wildlife classifier (CPU) aktiv: %s — %d labels", try_path, len(self.labels))
+                return
+            except Exception as e2:
+                log.warning("Wildlife classifier CPU fehlgeschlagen für %s: %s", try_path, e2)
+
+        self.reason = f"classifier unavailable: {coral_error}" if coral_error else "classifier unavailable"
+        log.warning("Wildlife classifier nicht verfügbar")
+
+    def classify_crop(self, crop: np.ndarray) -> tuple[str | None, str | None, float | None]:
+        """Return (category, imagenet_label, score).
+
+        category ∈ {"fox", "squirrel", "hedgehog", None}. None means the
+        top-1 didn't match any of the wildlife rules we track (or score too
+        low). `imagenet_label` is the raw ImageNet label for diagnostics.
+        """
+        if not self.available or crop is None or crop.size == 0:
+            return None, None, None
+        if self._cpu_mode:
+            return self._classify_cpu(crop)
+        return self._classify_coral(crop)
+
+    def _classify_coral(self, crop: np.ndarray) -> tuple[str | None, str | None, float | None]:
+        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        width, height = self.common.input_size(self.interpreter)
+        resized = cv2.resize(rgb, (width, height))
+        self.common.set_input(self.interpreter, resized)
+        self.interpreter.invoke()
+        classes = self.classify.get_classes(self.interpreter, top_k=3, score_threshold=self.min_score)
+        for c in classes:
+            raw = self.labels.get(int(c.id), str(c.id))
+            cat = _wildlife_category(raw)
+            if cat:
+                return cat, raw, float(c.score)
+        # No match in top-3 — return the top-1 raw label for diagnostics only
+        if classes:
+            c0 = classes[0]
+            raw0 = self.labels.get(int(c0.id), str(c0.id))
+            return None, raw0, float(c0.score)
+        return None, None, None
+
+    def _classify_cpu(self, crop: np.ndarray) -> tuple[str | None, str | None, float | None]:
+        input_details = self.interpreter.get_input_details()
+        output_details = self.interpreter.get_output_details()
+        in_h = input_details[0]['shape'][1]
+        in_w = input_details[0]['shape'][2]
+        in_dtype = input_details[0]['dtype']
+        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        resized = cv2.resize(rgb, (in_w, in_h))
+        inp = np.expand_dims(resized, axis=0)
+        if in_dtype == np.float32:
+            # ImageNet MobileNet V2 expects [-1, 1] normalisation
+            inp = (inp.astype(np.float32) - 127.5) / 127.5
+        else:
+            inp = inp.astype(in_dtype)
+        self.interpreter.set_tensor(input_details[0]['index'], inp)
+        self.interpreter.invoke()
+        scores = self.interpreter.get_tensor(output_details[0]['index'])[0]
+        # Top-3 so we can fall through to the second-best if the first is
+        # something like "hare" on a squirrel crop. NOTE: scores is uint8
+        # for quantized models — `np.argsort(-scores)` would wrap around on
+        # unsigned arithmetic and return index 0 first. Descending-sort the
+        # array itself and reverse to get a correct top-K.
+        top_ids = np.argsort(scores)[::-1][:3]
+        out_dtype = output_details[0]['dtype']
+        scale, zero_point = (0.0, 0)
+        if out_dtype in (np.uint8, np.int8):
+            q = output_details[0].get('quantization', (0.0, 0))
+            scale = float(q[0]) if q and q[0] else 0.0
+            zero_point = int(q[1]) if q else 0
+
+        def _to_prob(raw: float) -> float:
+            if out_dtype in (np.uint8, np.int8):
+                return (raw - zero_point) * scale if scale else raw / 255.0
+            return float(raw)
+
+        best_raw_score = _to_prob(float(scores[int(top_ids[0])]))
+        best_id = int(top_ids[0])
+        best_label = self.labels.get(best_id - self._label_offset, str(best_id))
+        # Detect 1000/1001 mismatch once, then keep using the offset
+        if self._label_offset == 0 and len(self.labels) == 1000 and scores.shape[0] == 1001:
+            self._label_offset = 1
+            best_label = self.labels.get(best_id - 1, str(best_id))
+
+        for i in top_ids:
+            i = int(i)
+            raw_score = _to_prob(float(scores[i]))
+            if raw_score < self.min_score:
+                break
+            label = self.labels.get(i - self._label_offset, str(i))
+            cat = _wildlife_category(label)
+            if cat:
+                return cat, label, raw_score
+        # No wildlife match — return the top-1 anyway for UI diagnostics
+        if best_raw_score >= self.min_score * 0.5:
+            return None, best_label, best_raw_score
+        return None, None, None
+
+
 def draw_detections(frame: np.ndarray, detections: list[Detection]) -> np.ndarray:
     if frame is None:
         return frame

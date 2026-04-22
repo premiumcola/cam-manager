@@ -1773,7 +1773,7 @@ async function _populateCoralTestCameras(){
   sel.innerHTML=html;
   if(current&&[...sel.options].some(o=>o.value===current)) sel.value=current;
 }
-const _CORAL_LABEL_COLORS={person:'#6e6eff',cat:'#a06eff',bird:'#54d662',dog:'#00b0ff'};
+const _CORAL_LABEL_COLORS={person:'#6e6eff',cat:'#a06eff',bird:'#54d662',dog:'#00b0ff',fox:'#ff7a1a',squirrel:'#c8651a',hedgehog:'#a67c52'};
 function _coralLabelColor(lbl){return _CORAL_LABEL_COLORS[String(lbl||'').toLowerCase()]||'#ffb400';}
 async function _runCoralTest(){
   const btn=byId('coralTestBtn'); const out=byId('coralTestResult');
@@ -1871,18 +1871,43 @@ function _renderCoralBatchResult(out,r,folder){
           return `<span class="ct-pill${d.species?' ct-pill--2line':''}" style="border-left-color:${c}"><span class="ct-pill-main">${esc(d.label)}<span class="ct-pct">${(d.score*100).toFixed(0)}%</span></span>${speciesLine}</span>`;
         }).join('')
       : '<span class="cb-empty">Keine Objekte erkannt</span>';
+    // Wildlife (ImageNet) pill — only set for fox / squirrel / hedgehog
+    // folders; shows the top ImageNet match and whether it maps to our
+    // animal categories.
+    let wildlifePill='';
+    if(item.wildlife){
+      const wl=item.wildlife;
+      const wlc=wl.label?_coralLabelColor(wl.label):'#64748b';
+      const wlPct=wl.score!=null?` ${(wl.score*100).toFixed(0)}%`:'';
+      const mainTxt=wl.label?`${esc(wl.label)} ✓`:'kein Treffer';
+      const subTxt=wl.imagenet?` <span class="ct-species-lat">ImageNet: ${esc(_truncMid(wl.imagenet,42))}</span>`:'';
+      wildlifePill=`<span class="ct-pill ct-pill--2line" style="border-left-color:${wlc}"><span class="ct-pill-main">🦊 ${mainTxt}<span class="ct-pct">${wlPct}</span></span><span class="ct-species" style="color:${wlc}">${subTxt}</span></span>`;
+    }
     const img=item.image_b64
       ? `<img src="${item.image_b64}" alt="${esc(item.filename)}" loading="lazy"/>`
       : '<div class="cb-noimg">Kein Bild</div>';
     return `<div class="cb-card">
       <div class="cb-imgwrap">${img}<span class="cb-ms">${item.inference_ms||0} ms</span></div>
       <div class="cb-fname" title="${esc(item.filename)}">${esc(_truncMid(item.filename,40))}</div>
-      <div class="cb-pills">${pills}</div>
+      <div class="cb-pills">${pills}${wildlifePill}</div>
     </div>`;
   }).join('');
+  // For wildlife folders, the headline stat is the wildlife hit-rate; for
+  // everything else keep the COCO detection count.
+  const isWildlifeFolder=['fox','hedgehog','squirrel'].includes(folder);
+  const wlHits=summary.with_wildlife||0;
+  const primaryLine=isWildlifeFolder
+    ? `${summaryIcon} <strong>${wlHits} von ${total} Bildern</strong>: als ${esc(folder)} klassifiziert · Ø ${avg} ms`
+    : `${summaryIcon} <strong>${hits} von ${total} Bildern</strong>: Objekte erkannt · Ø ${avg} ms`;
+  if(isWildlifeFolder){
+    const wlRate=total>0?(wlHits/total):0;
+    summaryClass=wlRate>=0.75?'cb-sum--ok':wlRate>=0.5?'cb-sum--warn':'cb-sum--bad';
+    summaryIcon=wlRate>=0.75?'✅':wlRate>=0.5?'⚠️':'❌';
+    interp=wlRate>=0.75?'Wildlife-Klassifikator erkennt diese Art zuverlässig.':wlRate>=0.5?'Mittlere Klassifikationsrate — ggf. min_score prüfen.':'Niedrige Rate — Wildlife-Modell liefert oft andere Klasse.';
+  }
   out.innerHTML=`
     <div class="cb-summary ${summaryClass}">
-      <div class="cb-sum-line">${summaryIcon} <strong>${hits} von ${total} Bildern</strong>: Objekte erkannt · Ø ${avg} ms</div>
+      <div class="cb-sum-line">${primaryLine}</div>
       <div class="cb-sum-interp">${esc(interp)}</div>
     </div>
     <div class="cb-grid">${cards}</div>`;

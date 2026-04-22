@@ -52,6 +52,16 @@ processing:
     latin_to_de_path: /app/config/inat_to_german.json
     min_score: 0.25
     device: usb
+  # Wildlife classifier (ImageNet MobileNet V2 → fox / squirrel / hedgehog).
+  # Used as a second-stage when COCO can't name the animal — the three
+  # target species are outside COCO's 80-class vocabulary.
+  wildlife:
+    enabled: false
+    model_path: /app/models/mobilenet_v2_1.0_224_quant_edgetpu.tflite
+    cpu_model_path: /app/models/mobilenet_v2_1.0_224_quant.tflite
+    labels_path: /app/models/imagenet_labels.txt
+    min_score: 0.35
+    device: usb
   cat_identity:
     match_threshold: 10
   person_identity:

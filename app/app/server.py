@@ -1780,6 +1780,8 @@ _TEST_FOLDER_LABELS = {
     "person":   {"label": "Person",       "icon": "🚶"},
     "car":      {"label": "Auto",         "icon": "🚗"},
     "squirrel": {"label": "Eichhörnchen", "icon": "🐿️"},
+    "fox":      {"label": "Fuchs",        "icon": "🦊"},
+    "hedgehog": {"label": "Igel",         "icon": "🦔"},
 }
 _TEST_VALID_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -1823,13 +1825,14 @@ def api_coral_test_batch():
     sanity-check object-detection quality without live camera feeds."""
     import base64 as _b64
     import time as _time
-    from .detectors import CoralObjectDetector, BirdSpeciesClassifier, draw_detections
+    from .detectors import CoralObjectDetector, BirdSpeciesClassifier, WildlifeClassifier, draw_detections
     payload = request.get_json(silent=True) or {}
     folder_filter = (payload.get("folder") or "").strip()
 
     eff = get_effective_config()
     det_cfg = (eff.get("processing", {}) or {}).get("detection", {}) or {}
     bird_cfg = (eff.get("processing", {}) or {}).get("bird_species", {}) or {}
+    wl_cfg = (eff.get("processing", {}) or {}).get("wildlife", {}) or {}
     storage_root = Path(eff.get("storage", {}).get("root", "storage"))
     base = storage_root / "test_images"
     if not base.exists():
@@ -1862,12 +1865,25 @@ def api_coral_test_batch():
     # detected in the frame. Built once per batch for speed.
     bird_clf = BirdSpeciesClassifier(bird_cfg) if bird_cfg.get("enabled") else None
 
+    # Wildlife classifier (fox/squirrel/hedgehog via ImageNet MobileNetV2).
+    # Always built for test-batch — even folders the COCO detector handles
+    # well (bird/cat/car) gain diagnostic value from seeing the wildlife
+    # model's top-1. Folders where COCO has no matching class (fox,
+    # hedgehog, squirrel) rely on it entirely.
+    wl_clf = WildlifeClassifier(wl_cfg) if wl_cfg.get("enabled") else None
+    # Only run wildlife inference for folders where it's meaningful — on
+    # every image for those, as a second-stage classifier. For bird/cat/
+    # person/car we skip it to keep inference fast.
+    _WILDLIFE_FOLDERS = {"fox", "hedgehog", "squirrel"}
+
     results: list = []
     by_label: dict = {}
     total_images = 0
     with_detections = 0
+    with_wildlife = 0
     inference_times: list = []
     species_counts: dict = {}
+    wildlife_counts: dict = {}
 
     for d in candidate_dirs:
         if not d.is_dir():
@@ -1916,6 +1932,23 @@ def api_coral_test_batch():
                         dd.species_latin = sp_latin
                         dd.species_score = float(sp_score) if sp_score is not None else None
                         species_counts[sp] = species_counts.get(sp, 0) + 1
+            # Wildlife (ImageNet) classification — only runs for folders
+            # where COCO doesn't have a matching class. Always runs on the
+            # FULL frame since the target animals don't produce COCO boxes.
+            wildlife_info = None
+            if wl_clf is not None and wl_clf.available and d.name in _WILDLIFE_FOLDERS:
+                try:
+                    cat, raw_lbl, wscore = wl_clf.classify_crop(frame)
+                except Exception:
+                    cat, raw_lbl, wscore = None, None, None
+                if raw_lbl is not None:
+                    wildlife_info = {
+                        "label": cat,
+                        "imagenet": raw_lbl,
+                        "score": round(float(wscore), 3) if wscore is not None else None,
+                    }
+                    if cat:
+                        wildlife_counts[cat] = wildlife_counts.get(cat, 0) + 1
             # Annotate frame with bounding boxes and encode to base64 (max 480px wide for transport)
             annotated = draw_detections(frame, dets)
             h, w = annotated.shape[:2]
@@ -1938,6 +1971,7 @@ def api_coral_test_batch():
                     "species_latin": dd.species_latin,
                     "species_score": round(float(dd.species_score), 3) if dd.species_score is not None else None,
                 } for dd in dets],
+                "wildlife": wildlife_info,
             })
             total_images += 1
             inference_times.append(ms)
@@ -1945,6 +1979,10 @@ def api_coral_test_batch():
                 with_detections += 1
                 for dd in dets:
                     by_label[dd.label] = by_label.get(dd.label, 0) + 1
+            # For wildlife folders, "hit" means either COCO found something
+            # or wildlife classifier found fox/squirrel/hedgehog
+            if wildlife_info and wildlife_info.get("label"):
+                with_wildlife += 1
 
     return jsonify({
         "ok": True,
@@ -1952,12 +1990,16 @@ def api_coral_test_batch():
         "detector_reason": detector.reason,
         "bird_species_mode": bird_clf.mode if bird_clf else "none",
         "bird_species_reason": bird_clf.reason if bird_clf else "disabled",
+        "wildlife_mode": wl_clf.mode if wl_clf else "none",
+        "wildlife_reason": wl_clf.reason if wl_clf else "disabled",
         "model_path": det_cfg.get("model_path"),
         "summary": {
             "total_images": total_images,
             "with_detections": with_detections,
+            "with_wildlife": with_wildlife,
             "by_label": by_label,
             "by_species": species_counts,
+            "by_wildlife": wildlife_counts,
             "avg_ms": round(sum(inference_times) / len(inference_times), 1) if inference_times else 0.0,
         },
         "results": results,

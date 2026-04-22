@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 import requests
 import numpy as np
-from .detectors import CoralObjectDetector, BirdSpeciesClassifier, draw_detections
+from .detectors import CoralObjectDetector, BirdSpeciesClassifier, WildlifeClassifier, Detection, draw_detections
 from .event_logic import is_in_schedule, choose_alarm_level
 
 # Does this container have an ffmpeg binary? If so, motion recording uses the
@@ -118,6 +118,10 @@ class CameraRuntime:
         proc = self.global_cfg.get("processing", {})
         self.detector = CoralObjectDetector(proc.get("detection", {}))
         self.bird_classifier = BirdSpeciesClassifier(proc.get("bird_species", {}))
+        # Second-stage wildlife classifier — maps ImageNet top-1 to our
+        # fox/squirrel/hedgehog labels so motion on a fox or hedgehog
+        # doesn't go unrecognised (COCO has neither class).
+        self.wildlife_classifier = WildlifeClassifier(proc.get("wildlife", {}))
         self._ach_lock = threading.Lock()
         self._ach_path = Path(self.global_cfg["storage"]["root"]) / "achievements.json"
         self._motion_confirm: deque = deque(maxlen=3)  # multi-frame confirmation
@@ -1517,6 +1521,29 @@ class CameraRuntime:
                                 d.species = species
                                 d.species_latin = species_latin
                                 d.species_score = float(species_score) if species_score is not None else None
+                # Wildlife second-stage: only runs when motion was confirmed
+                # AND COCO produced nothing usable for naming a mammal. This
+                # catches fox / squirrel / hedgehog, which don't exist as
+                # COCO classes. Runs on the full frame — cheap enough.
+                if (
+                    motion_confirmed
+                    and self.wildlife_classifier.available
+                    and not any(d.label in ("bird", "cat", "dog", "person") for d in detections)
+                ):
+                    try:
+                        cat, raw_lbl, wscore = self.wildlife_classifier.classify_crop(proc_frame)
+                    except Exception:
+                        cat, raw_lbl, wscore = None, None, None
+                    if cat and (not allowed or cat in allowed):
+                        h0, w0 = proc_frame.shape[:2]
+                        detections.append(Detection(
+                            label=cat,
+                            score=float(wscore) if wscore is not None else 0.5,
+                            bbox=(0, 0, w0, h0),
+                            species=raw_lbl,
+                            species_score=float(wscore) if wscore is not None else None,
+                        ))
+                        labels.append(cat)
                 if self.cat_registry:
                     for d in detections:
                         if d.label == "cat":

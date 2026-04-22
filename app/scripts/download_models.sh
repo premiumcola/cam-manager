@@ -76,6 +76,20 @@ else
   download "$LABELS_URL" "$CONFIG_DIR/$LABELS" 500
 fi
 
+# ── Wildlife classifier: ImageNet MobileNetV2 (1000 classes) ───────────────
+# Covers fox, squirrel, hedgehog — none of which are COCO classes, so this
+# model is our only way to name these animals from a camera frame.
+WL_EDGETPU="mobilenet_v2_1.0_224_quant_edgetpu.tflite"
+WL_CPU="mobilenet_v2_1.0_224_quant.tflite"
+WL_LABELS="imagenet_labels.txt"
+
+echo
+echo "-- Wildlife classifier (ImageNet MobileNetV2) --"
+download "$BASE/$WL_EDGETPU" "$MODELS_DIR/$WL_EDGETPU" 3000000 || true
+download "$BASE/$WL_CPU"     "$MODELS_DIR/$WL_CPU"     3000000
+download "https://raw.githubusercontent.com/google-coral/test_data/master/$WL_LABELS" \
+         "$MODELS_DIR/$WL_LABELS" 5000
+
 echo
 echo "Done. Restart the container for detectors.py to pick up the models:"
 echo "  docker restart tam-spy"
