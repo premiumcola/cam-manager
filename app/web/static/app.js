@@ -709,13 +709,10 @@ function renderCameraSettings(){
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
-          <span class="io-switch${c.enabled?' on':''}"
-            onclick="toggleCameraEnabled('${esc(c.id)}',${!c.enabled})"
-            title="${c.enabled?'Aktiv · klicken zum Deaktivieren':'Inaktiv · klicken zum Aktivieren'}">
-            <span class="io-lbl io-lbl-0">0</span>
-            <span class="io-track"><span class="io-thumb"></span></span>
-            <span class="io-lbl io-lbl-1">1</span>
-          </span>
+          <label class="switch" title="${c.enabled?'Aktiv · klicken zum Deaktivieren':'Inaktiv · klicken zum Aktivieren'}">
+            <input type="checkbox" ${c.enabled?'checked':''} onchange="toggleCameraEnabled('${esc(c.id)}',this.checked)">
+            <span class="slider"></span>
+          </label>
           <button class="btn-reconnect" title="Neu verbinden" onclick="event.stopPropagation();_reconnectCam('${esc(c.id)}',this)">
             <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M2.5 8A5.5 5.5 0 0 1 13 5M13.5 8A5.5 5.5 0 0 1 3 11"/>
@@ -1269,22 +1266,22 @@ function hydrateSettings(){
   // MQTT badge
   const mqttBadge=byId('mqttStatusBadge');
   if(mqttBadge){mqttBadge.textContent=mqtt.enabled?'aktiv':'aus';mqttBadge.className='set-status-badge '+(mqtt.enabled?'set-status-badge--on':'set-status-badge--off');}
-  // Coral section — io-switch toggles
+  // Coral section — unified .switch toggles (checkbox-driven)
   const coralActive=!!(proc.coral_enabled ?? coral.mode==='coral');
   const birdActive=!!(proc.bird_species_enabled ?? coral.bird_species_enabled);
-  const coralSwitch=byId('coralTpuSwitch'); if(coralSwitch) coralSwitch.classList.toggle('on',coralActive);
-  const birdSwitch=byId('birdSpeciesSwitch'); if(birdSwitch) birdSwitch.classList.toggle('on',birdActive);
+  const coralInp=byId('coralTpuEnabled'); if(coralInp) coralInp.checked=coralActive;
+  const birdInp=byId('birdSpeciesEnabled'); if(birdInp) birdInp.checked=birdActive;
   const cam0=state.cameras[0];
   const coralAvail=!!cam0?.coral_available;
   const chip=byId('coralStatusChip');
   if(chip){
-    let label='⏸ Aus', cls='coral-chip--off';
+    let label='aus', cls='set-status-badge--off';
     if(coralActive){
-      if(coralAvail){label='⚡ Coral TPU';cls='coral-chip--active';}
-      else{label='💻 CPU Fallback';cls='coral-chip--cpu';}
+      if(coralAvail){label='Coral TPU';cls='set-status-badge--on';}
+      else{label='CPU Fallback';cls='set-status-badge--cpu';}
     }
     chip.textContent=label;
-    chip.className='coral-status-chip '+cls;
+    chip.className='set-status-badge '+cls;
   }
   const hint=byId('coralStatusHint');
   if(hint){
@@ -1328,6 +1325,17 @@ async function updateSystemPanel(){
     const commit=b.commit||'dev';
     const date=b.date||'—';
     const count=b.count||'—';
+    // Letzter Neustart — the Flask process start time, NOT the build date.
+    // Build date only updates on rebuild; this always reflects the last
+    // container restart.
+    let restartShort='—';
+    if(s.process_start){
+      try{
+        const d=new Date(s.process_start);
+        const pad=n=>String(n).padStart(2,'0');
+        restartShort=`${pad(d.getDate())}.${pad(d.getMonth()+1)}. ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      }catch{}
+    }
     const heroEl=byId('heroBuildInfo');
     if(heroEl){
       const url='https://github.com/premiumcola/cam-manager/commits/main/';
@@ -1335,7 +1343,8 @@ async function updateSystemPanel(){
       const countPart=(b.count&&b.count!=='—')?`<a href="${url}" target="_blank" class="hero-build-count">Build #${esc(String(b.count))}</a>`:`<span class="hero-build-count hero-build-count--dev">Build · dev</span>`;
       const commitPart=`<code class="hero-build-commit" title="Git commit">${esc(shortCommit)}</code>`;
       const datePart=b.date&&b.date!=='—'?`<span class="hero-build-date">${esc(b.date)}</span>`:'';
-      heroEl.innerHTML=`${countPart}<span class="hero-build-sep">·</span>${commitPart}${datePart?`<span class="hero-build-sep">·</span>${datePart}`:''}`;
+      const restartPart=s.process_start?`<span class="hero-build-date" title="Letzter Neustart: ${esc(s.process_start)}">⟳ ${esc(restartShort)}</span>`:'';
+      heroEl.innerHTML=`${countPart}<span class="hero-build-sep">·</span>${commitPart}${datePart?`<span class="hero-build-sep">·</span>${datePart}`:''}${restartPart?`<span class="hero-build-sep">·</span>${restartPart}`:''}`;
     }
     const memUsed=s.mem_used_mb||0;
     const memTotal=s.mem_total_mb||0;
@@ -1346,6 +1355,7 @@ async function updateSystemPanel(){
       <div class="app-info-grid" style="margin-bottom:0">
         <div class="app-info-item"><span class="app-info-label">Build</span><span class="app-info-val"><code>${esc(commit)}</code> · ${esc(date)}</span></div>
         <div class="app-info-item"><span class="app-info-label">Commits</span><span class="app-info-val">${esc(String(count))}</span></div>
+        ${s.process_start?`<div class="app-info-item"><span class="app-info-label">Letzter Neustart</span><span class="app-info-val" title="${esc(s.process_start)}">${esc(restartShort)}</span></div>`:''}
         ${memTotal?`<div class="app-info-item"><span class="app-info-label">RAM (System)</span><span class="app-info-val">${memUsed} / ${memTotal} MB</span></div>`:''}
         ${procMem?`<div class="app-info-item"><span class="app-info-label">RAM (App)</span><span class="app-info-val">${procMem} MB</span></div>`:''}
         ${uptime?`<div class="app-info-item"><span class="app-info-label">Container-Uptime</span><span class="app-info-val">${uptimeStr}</span></div>`:''}
@@ -1764,18 +1774,17 @@ window.saveMqttSettings=async function(){
   showToast('MQTT gespeichert · Verbindungen werden neu gestartet.','success');
   await loadAll();
 };
-window._toggleCoralSetting=async function(key,swEl){
-  const nowOn=!swEl.classList.contains('on');
-  swEl.classList.toggle('on',nowOn);
-  const coralEnabled=key==='coral_enabled'?nowOn:!!(byId('coralTpuSwitch')?.classList.contains('on'));
-  const birdEnabled=key==='bird_species_enabled'?nowOn:!!(byId('birdSpeciesSwitch')?.classList.contains('on'));
+window._toggleCoralSetting=async function(key,inputEl){
+  const nowOn=!!inputEl.checked;
+  const coralEnabled=key==='coral_enabled'?nowOn:!!(byId('coralTpuEnabled')?.checked);
+  const birdEnabled=key==='bird_species_enabled'?nowOn:!!(byId('birdSpeciesEnabled')?.checked);
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({processing:{coral_enabled:coralEnabled,bird_species_enabled:birdEnabled}})});
   showToast('Coral gespeichert · Kameras werden neu gestartet.','success');
   await loadAll();
 };
 window.reloadCoralRuntime=async function(){
-  const coralEnabled=!!(byId('coralTpuSwitch')?.classList.contains('on'));
-  const birdEnabled=!!(byId('birdSpeciesSwitch')?.classList.contains('on'));
+  const coralEnabled=!!(byId('coralTpuEnabled')?.checked);
+  const birdEnabled=!!(byId('birdSpeciesEnabled')?.checked);
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({processing:{coral_enabled:coralEnabled,bird_species_enabled:birdEnabled}})});
   showToast('Coral-Runtime neu gestartet.','success');
   await loadAll();
@@ -2510,9 +2519,20 @@ function renderTlStatusBar(){
 // ── Settings collapsible sections ────────────────────────────────────────────
 window.toggleSetSection=function(id){
   const el=byId(id); if(!el){console.warn('[toggleSetSection] not found:',id);return;}
+  // Propagate the per-section accent (stored as "R,G,B" on data-accent) into
+  // a CSS custom property so the accent-tinted border + header rules can pick
+  // it up. Cheap to set unconditionally.
+  if(el.dataset.accent) el.style.setProperty('--sa',el.dataset.accent);
   const opening=!el.classList.contains('open');
   el.classList.toggle('open',opening);
 };
+// Seed --sa on page load so even closed sections render with the correct
+// accent once opened (without waiting for the first click to set it).
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('.set-section[data-accent]').forEach(el=>{
+    el.style.setProperty('--sa',el.dataset.accent);
+  });
+});
 
 // ── Password field visibility toggle ─────────────────────────────────────────
 window.togglePwField=function(btn,fieldName){

@@ -100,6 +100,13 @@ def _get_build_info() -> dict:
 
 _BUILD_INFO = _get_build_info()
 
+# Captured once at module load so "Letzter Neustart" on the dashboard reflects
+# when the Flask process actually started — distinct from BUILD_DATE, which
+# only advances on a code rebuild. For bind-mounted dev setups the container
+# often runs code from days ago; users need to see when the restart happened.
+from datetime import datetime as _dt, timezone as _tz
+_PROCESS_START_ISO = _dt.now(_tz.utc).astimezone().isoformat(timespec="seconds")
+
 
 def _fetch_github_commit_count():
     """One-shot background fetch of the live commit count from GitHub.
@@ -2198,6 +2205,7 @@ def api_system():
         pass
     return jsonify({
         "build": _BUILD_INFO,
+        "process_start": _PROCESS_START_ISO,
         "mem_total_mb": round(mem_total / 1048576, 1),
         "mem_used_mb": round(mem_used / 1048576, 1),
         "proc_mem_mb": proc_mem_mb,
