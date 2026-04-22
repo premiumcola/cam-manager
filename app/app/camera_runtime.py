@@ -122,6 +122,12 @@ class CameraRuntime:
         # fox/squirrel/hedgehog labels so motion on a fox or hedgehog
         # doesn't go unrecognised (COCO has neither class).
         self.wildlife_classifier = WildlifeClassifier(proc.get("wildlife", {}))
+        # Exclusion-mask image cache. Built lazily on first frame and
+        # rebuilt whenever the masks config signature changes (_mask_sig).
+        # See _ensure_mask_image().
+        self._mask_image = None
+        self._mask_sig: str | None = None
+        self._ensure_mask_image(log_summary=True)
         self._ach_lock = threading.Lock()
         self._ach_path = Path(self.global_cfg["storage"]["root"]) / "achievements.json"
         self._motion_confirm: deque = deque(maxlen=3)  # multi-frame confirmation
@@ -454,6 +460,69 @@ class CameraRuntime:
         hsv = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV)
         sat = hsv[:, :, 1].astype(np.float32)
         return float(sat.mean()) > 120 and float(sat.std()) > 60
+
+    def _ensure_mask_image(self, log_summary: bool = False):
+        """Build / refresh the binary exclusion-mask image from the camera's
+        polygon list. White (255) = active detection area, black (0) = masked
+        out. The image is sized 720×1280 — each frame gets resized to match
+        at filter time so any frame resolution works. Rebuilds only when the
+        mask config signature changes, so the per-frame filter path stays
+        cheap."""
+        cam_masks = self.cfg.get("masks", []) or []
+        # Signature: stable serialisation of all polygons. Compared against
+        # the cached signature to decide whether a rebuild is needed.
+        try:
+            sig = _json_mod.dumps(cam_masks, sort_keys=True, separators=(',', ':'))
+        except Exception:
+            sig = repr(cam_masks)
+        if sig == self._mask_sig:
+            return  # no change
+        self._mask_sig = sig
+        if not cam_masks:
+            self._mask_image = None
+            if log_summary:
+                log.info("[%s] exclusion masks: none", self.camera_id)
+            return
+        h, w = 720, 1280
+        mask = np.ones((h, w), dtype=np.uint8) * 255
+        for poly in cam_masks:
+            if not isinstance(poly, list) or len(poly) < 3:
+                continue
+            pts = np.array([[int(p.get('x', 0)), int(p.get('y', 0))] for p in poly], dtype=np.int32)
+            pts[:, 0] = np.clip(pts[:, 0], 0, w - 1)
+            pts[:, 1] = np.clip(pts[:, 1], 0, h - 1)
+            cv2.fillPoly(mask, [pts], 0)
+        self._mask_image = mask
+        if log_summary:
+            total_verts = sum(len(p) for p in cam_masks if isinstance(p, list))
+            log.info("[%s] Loaded %d exclusion masks (%d total vertices)",
+                     self.camera_id, len(cam_masks), total_verts)
+
+    def _filter_masked_detections(self, frame, detections: list) -> list:
+        """Drop detections whose bbox-centre lands inside a masked region.
+        No-op when the camera has no masks configured. The mask image is
+        resized to the frame's dimensions with NEAREST interpolation so a
+        point on the mask boundary keeps a crisp 0/255 answer."""
+        self._ensure_mask_image()
+        if self._mask_image is None or not detections:
+            return detections
+        h_m, w_m = self._mask_image.shape[:2]
+        h_f, w_f = frame.shape[:2]
+        if (h_m, w_m) != (h_f, w_f):
+            mask_resized = cv2.resize(self._mask_image, (w_f, h_f), interpolation=cv2.INTER_NEAREST)
+        else:
+            mask_resized = self._mask_image
+        kept: list = []
+        for d in detections:
+            x1, y1, x2, y2 = d.bbox
+            cx = max(0, min(w_f - 1, (x1 + x2) // 2))
+            cy = max(0, min(h_f - 1, (y1 + y2) // 2))
+            if mask_resized[cy, cx] > 0:
+                kept.append(d)
+            else:
+                log.debug("[%s] Detection '%s' (%.0f%%) suppressed by mask at (%d,%d)",
+                          self.camera_id, d.label, d.score * 100, cx, cy)
+        return kept
 
     def _motion_detect(self, frame):
         """Returns (labels: list[str], motion_bbox: tuple|None).
@@ -1534,6 +1603,12 @@ class CameraRuntime:
                 allowed = set(self.cfg.get("object_filter") or [])
                 if allowed:
                     detections = [d for d in detections if d.label in allowed]
+                # Suppress COCO hits whose bbox-centre lies in a masked
+                # polygon — otherwise wind-blown foliage keeps firing
+                # "bird" in the top corner we told the camera to ignore.
+                # Applied BEFORE the bird/cat/person classifiers so we
+                # don't waste cycles on a crop we're about to drop.
+                detections = self._filter_masked_detections(proc_frame, detections)
                 labels = effective_motion + [d.label for d in detections]
                 if self.bird_classifier.available:
                     for d in detections:
@@ -1559,14 +1634,26 @@ class CameraRuntime:
                         cat, raw_lbl, wscore = None, None, None
                     if cat and (not allowed or cat in allowed):
                         h0, w0 = proc_frame.shape[:2]
-                        detections.append(Detection(
+                        # Wildlife runs on the full frame; prefer the
+                        # motion_bbox centre if we have one so the mask
+                        # filter can reject motion that happened in the
+                        # masked region. Fallback to frame centre.
+                        if effective_bbox:
+                            mx, my, mw, mh = effective_bbox
+                            bb = (mx, my, mx + mw, my + mh)
+                        else:
+                            bb = (0, 0, w0, h0)
+                        wl_det = Detection(
                             label=cat,
                             score=float(wscore) if wscore is not None else 0.5,
-                            bbox=(0, 0, w0, h0),
+                            bbox=bb,
                             species=raw_lbl,
                             species_score=float(wscore) if wscore is not None else None,
-                        ))
-                        labels.append(cat)
+                        )
+                        survivors = self._filter_masked_detections(proc_frame, [wl_det])
+                        if survivors:
+                            detections.append(wl_det)
+                            labels.append(cat)
                 if self.cat_registry:
                     for d in detections:
                         if d.label == "cat":
