@@ -1927,6 +1927,7 @@ def api_coral_test_batch():
                     "label": dd.label,
                     "score": round(float(dd.score), 3),
                     "bbox": list(dd.bbox),
+                    "raw_cls_id": int(dd.raw_cls_id),
                     "species": dd.species,
                     "species_score": round(float(dd.species_score), 3) if dd.species_score is not None else None,
                 } for dd in dets],

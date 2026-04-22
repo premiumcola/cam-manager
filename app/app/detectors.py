@@ -8,6 +8,32 @@ import numpy as np
 log = logging.getLogger(__name__)
 
 
+# COCO classes that are physically implausible for a residential / garden /
+# workshop camera in central Europe. When the object detector emits one of
+# these (typically a low-quality hallucination on a dark blob: e.g. a crow
+# coming back as "elephant"), we drop it instead of polluting the event log.
+# Disable via config: processing.detection.region_filter_enabled = false
+IMPOSSIBLE_LABELS: frozenset[str] = frozenset({
+    "elephant", "bear", "zebra", "giraffe",
+    "cow", "sheep", "horse",
+    "airplane", "train", "bus", "truck", "boat",
+    "surfboard", "snowboard", "skis",
+    "baseball bat", "baseball_bat",
+    "baseball glove", "baseball_glove",
+    "frisbee", "skateboard", "kite",
+    "fire hydrant", "fire_hydrant",
+    "parking meter", "parking_meter",
+    "stop sign", "stop_sign",
+    "traffic light", "traffic_light",
+})
+
+
+def _apply_region_filter(dets: list["Detection"], enabled: bool) -> list["Detection"]:
+    if not enabled:
+        return dets
+    return [d for d in dets if d.label not in IMPOSSIBLE_LABELS]
+
+
 def load_label_map(path: str | None) -> dict[int, str]:
     """Load a TFLite label file.
 
@@ -55,6 +81,7 @@ class Detection:
     species: str | None = None
     species_score: float | None = None
     identity: str | None = None
+    raw_cls_id: int = -1  # unmapped class id as emitted by the model
 
     def to_dict(self):
         x1, y1, x2, y2 = self.bbox
@@ -65,6 +92,7 @@ class Detection:
             "species": self.species,
             "species_score": round(float(self.species_score), 4) if self.species_score is not None else None,
             "identity": self.identity,
+            "raw_cls_id": int(self.raw_cls_id),
         }
 
 
@@ -83,6 +111,9 @@ class CoralObjectDetector:
         self.mode = "motion_only"  # "coral" | "cpu" | "motion_only"
         self.labels = load_label_map(self.cfg.get("labels_path"))
         self.min_score = float(self.cfg.get("min_score", 0.55))
+        # Region filter: drop implausible COCO labels (elephant, zebra, …)
+        # after detection. On by default. See IMPOSSIBLE_LABELS for the set.
+        self._region_filter = bool(self.cfg.get("region_filter_enabled", True))
         self.interpreter = None
         self.common = None
         self.detect = None
@@ -90,6 +121,12 @@ class CoralObjectDetector:
         self.device = self.cfg.get("device")
         if not self.enabled:
             return
+        # Startup diagnostic: log the label file path + first 25 entries so
+        # label-mapping mistakes surface immediately instead of showing up as
+        # "crow detected as elephant" weeks later.
+        lp = self.cfg.get("labels_path")
+        sample = {k: self.labels[k] for k in sorted(self.labels)[:25]}
+        log.info("CoralObjectDetector labels: %s — %d entries, head=%s", lp, len(self.labels), sample)
         model_path = self.cfg.get("model_path")
         if not model_path:
             self.reason = "missing model_path"
@@ -165,9 +202,10 @@ class CoralObjectDetector:
             y1 = max(0, int(bbox.ymin * sy))
             x2 = min(w, int(bbox.xmax * sx))
             y2 = min(h, int(bbox.ymax * sy))
-            label = self.labels.get(int(obj.id), str(obj.id))
-            out.append(Detection(label=label, score=float(obj.score), bbox=(x1, y1, x2, y2)))
-        return out
+            cid = int(obj.id)
+            label = self.labels.get(cid, str(cid))
+            out.append(Detection(label=label, score=float(obj.score), bbox=(x1, y1, x2, y2), raw_cls_id=cid))
+        return _apply_region_filter(out, self._region_filter)
 
     def _detect_cpu(self, frame: np.ndarray, threshold: float | None = None) -> list[Detection]:
         """Inference via tflite-runtime on CPU (SSD MobileNet layout)."""
@@ -200,8 +238,8 @@ class CoralObjectDetector:
             y2 = min(h, int(ymax * h))
             cls_id = int(classes[i])
             label = self.labels.get(cls_id, str(cls_id))
-            out.append(Detection(label=label, score=score, bbox=(x1, y1, x2, y2)))
-        return out
+            out.append(Detection(label=label, score=score, bbox=(x1, y1, x2, y2), raw_cls_id=cls_id))
+        return _apply_region_filter(out, self._region_filter)
 
 
 # Latin binomial → German common name. Used to rewrite iNaturalist labels like
