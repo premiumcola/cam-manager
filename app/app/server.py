@@ -1712,6 +1712,109 @@ def api_coral_test():
     })
 
 
+@app.post('/api/coral/test-batch')
+def api_coral_test_batch():
+    """Run detect_frame on every image under storage/test_images/<folder>/.
+
+    Body: {"folder": "bird"} runs only that folder. Empty body runs all.
+    Returns a per-image breakdown plus a summary of label counts so the user
+    can sanity-check object-detection quality without live camera feeds."""
+    import time as _time
+    from .detectors import CoralObjectDetector
+    payload = request.get_json(silent=True) or {}
+    folder_filter = (payload.get("folder") or "").strip()
+
+    eff = get_effective_config()
+    det_cfg = (eff.get("processing", {}) or {}).get("detection", {}) or {}
+    storage_root = Path(eff.get("storage", {}).get("root", "storage"))
+    base = storage_root / "test_images"
+    if not base.exists():
+        return jsonify({
+            "ok": False,
+            "error": "test_images directory not found",
+            "expected_at": str(base),
+            "results": [],
+        }), 404
+
+    if folder_filter:
+        candidate_dirs = [base / folder_filter]
+    else:
+        candidate_dirs = sorted(
+            d for d in base.iterdir()
+            if d.is_dir() and not d.name.startswith("_")
+        )
+
+    detector = CoralObjectDetector(det_cfg)
+    if not detector.available:
+        return jsonify({
+            "ok": False,
+            "error": "detector unavailable",
+            "detector_mode": detector.mode,
+            "detector_reason": detector.reason,
+            "results": [],
+        })
+
+    valid_ext = {".jpg", ".jpeg", ".png", ".webp"}
+    results: list = []
+    by_label: dict = {}
+    total_images = 0
+    with_detections = 0
+
+    for d in candidate_dirs:
+        if not d.is_dir():
+            continue
+        for img_path in sorted(d.iterdir()):
+            if img_path.suffix.lower() not in valid_ext:
+                continue
+            frame = cv2.imread(str(img_path))
+            if frame is None:
+                results.append({
+                    "folder": d.name,
+                    "filename": img_path.name,
+                    "error": "could not read image",
+                })
+                continue
+            try:
+                t0 = _time.perf_counter()
+                dets = detector.detect_frame(frame)
+                ms = round((_time.perf_counter() - t0) * 1000, 1)
+            except Exception as e:
+                results.append({
+                    "folder": d.name,
+                    "filename": img_path.name,
+                    "error": str(e),
+                })
+                continue
+            results.append({
+                "folder": d.name,
+                "filename": img_path.name,
+                "inference_ms": ms,
+                "detections": [{
+                    "label": dd.label,
+                    "score": round(float(dd.score), 3),
+                    "bbox": list(dd.bbox),
+                } for dd in dets],
+            })
+            total_images += 1
+            if dets:
+                with_detections += 1
+                for dd in dets:
+                    by_label[dd.label] = by_label.get(dd.label, 0) + 1
+
+    return jsonify({
+        "ok": True,
+        "detector_mode": detector.mode,
+        "detector_reason": detector.reason,
+        "model_path": det_cfg.get("model_path"),
+        "summary": {
+            "total_images": total_images,
+            "with_detections": with_detections,
+            "by_label": by_label,
+        },
+        "results": results,
+    })
+
+
 _MODELS_DIR = Path("/app/models")
 
 
