@@ -1726,11 +1726,12 @@ def api_coral_test():
                 if crop is None or crop.size == 0:
                     continue
                 try:
-                    sp, sp_score = bird_clf.classify_crop(crop)
+                    sp, sp_latin, sp_score = bird_clf.classify_crop(crop)
                 except Exception:
-                    sp, sp_score = None, None
+                    sp, sp_latin, sp_score = None, None, None
                 if sp:
                     d.species = sp
+                    d.species_latin = sp_latin
                     d.species_score = float(sp_score) if sp_score is not None else None
 
     annotated = draw_detections(frame, detections)
@@ -1907,11 +1908,12 @@ def api_coral_test_batch():
                     if crop is None or crop.size == 0:
                         continue
                     try:
-                        sp, sp_score = bird_clf.classify_crop(crop)
+                        sp, sp_latin, sp_score = bird_clf.classify_crop(crop)
                     except Exception:
-                        sp, sp_score = None, None
+                        sp, sp_latin, sp_score = None, None, None
                     if sp:
                         dd.species = sp
+                        dd.species_latin = sp_latin
                         dd.species_score = float(sp_score) if sp_score is not None else None
                         species_counts[sp] = species_counts.get(sp, 0) + 1
             # Annotate frame with bounding boxes and encode to base64 (max 480px wide for transport)
@@ -1933,6 +1935,7 @@ def api_coral_test_batch():
                     "bbox": list(dd.bbox),
                     "raw_cls_id": int(dd.raw_cls_id),
                     "species": dd.species,
+                    "species_latin": dd.species_latin,
                     "species_score": round(float(dd.species_score), 3) if dd.species_score is not None else None,
                 } for dd in dets],
             })

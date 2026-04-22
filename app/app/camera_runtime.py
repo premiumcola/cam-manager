@@ -1504,9 +1504,11 @@ class CameraRuntime:
                     for d in detections:
                         if d.label == "bird":
                             crop = self._crop(proc_frame, d.bbox)
-                            species, _ = self.bird_classifier.classify_crop(crop)
+                            species, species_latin, species_score = self.bird_classifier.classify_crop(crop)
                             if species:
                                 d.species = species
+                                d.species_latin = species_latin
+                                d.species_score = float(species_score) if species_score is not None else None
                 if self.cat_registry:
                     for d in detections:
                         if d.label == "cat":

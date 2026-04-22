@@ -78,7 +78,8 @@ class Detection:
     label: str
     score: float
     bbox: tuple[int, int, int, int]
-    species: str | None = None
+    species: str | None = None          # display name (German when mapped, else raw iNat)
+    species_latin: str | None = None    # "Genus species" binomial from the iNat label
     species_score: float | None = None
     identity: str | None = None
     raw_cls_id: int = -1  # unmapped class id as emitted by the model
@@ -90,6 +91,7 @@ class Detection:
             "score": round(float(self.score), 4),
             "bbox": {"x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2)},
             "species": self.species,
+            "species_latin": self.species_latin,
             "species_score": round(float(self.species_score), 4) if self.species_score is not None else None,
             "identity": self.identity,
             "raw_cls_id": int(self.raw_cls_id),
@@ -242,91 +244,76 @@ class CoralObjectDetector:
         return _apply_region_filter(out, self._region_filter)
 
 
-# Latin binomial → German common name. Used to rewrite iNaturalist labels like
-# "Turdus merula (Common Blackbird)" to the German "Amsel" for Bavarian garden
-# birds. Falls back to the raw iNat label when a species is not in the table.
-_BIRD_LATIN_TO_DE: dict[str, str] = {
-    "Turdus merula":                  "Amsel",
-    "Cyanistes caeruleus":            "Blaumeise",
-    "Parus caeruleus":                "Blaumeise",
-    "Parus major":                    "Kohlmeise",
-    "Erithacus rubecula":             "Rotkehlchen",
-    "Fringilla coelebs":              "Buchfink",
-    "Chloris chloris":                "Grünfink",
-    "Carduelis chloris":              "Grünfink",
-    "Passer domesticus":              "Haussperling",
-    "Passer montanus":                "Feldsperling",
-    "Sturnus vulgaris":               "Star",
-    "Pica pica":                      "Elster",
-    "Corvus corone":                  "Rabenkrähe",
-    "Corvus cornix":                  "Nebelkrähe",
-    "Corvus monedula":                "Dohle",
-    "Corvus frugilegus":              "Saatkrähe",
-    "Columba palumbus":               "Ringeltaube",
-    "Columba livia":                  "Straßentaube",
-    "Streptopelia decaocto":          "Türkentaube",
-    "Sitta europaea":                 "Kleiber",
-    "Dendrocopos major":              "Buntspecht",
-    "Troglodytes troglodytes":        "Zaunkönig",
-    "Phoenicurus ochruros":           "Hausrotschwanz",
-    "Phoenicurus phoenicurus":        "Gartenrotschwanz",
-    "Motacilla alba":                 "Bachstelze",
-    "Carduelis carduelis":            "Stieglitz",
-    "Spinus spinus":                  "Erlenzeisig",
-    "Coccothraustes coccothraustes":  "Kernbeißer",
-    "Pyrrhula pyrrhula":              "Gimpel",
-    "Prunella modularis":             "Heckenbraunelle",
-    "Sylvia atricapilla":             "Mönchsgrasmücke",
-    "Phylloscopus collybita":         "Zilpzalp",
-    "Phylloscopus trochilus":         "Fitis",
-    "Emberiza citrinella":            "Goldammer",
-    "Garrulus glandarius":            "Eichelhäher",
-    "Serinus serinus":                "Girlitz",
-    "Aegithalos caudatus":            "Schwanzmeise",
-    "Periparus ater":                 "Tannenmeise",
-    "Lophophanes cristatus":          "Haubenmeise",
-    "Poecile palustris":              "Sumpfmeise",
-    "Turdus philomelos":              "Singdrossel",
-    "Turdus pilaris":                 "Wacholderdrossel",
-    "Turdus viscivorus":              "Misteldrossel",
-    "Regulus regulus":                "Wintergoldhähnchen",
-    "Regulus ignicapilla":            "Sommergoldhähnchen",
-    "Certhia brachydactyla":          "Gartenbaumläufer",
-    "Certhia familiaris":             "Waldbaumläufer",
-    "Hirundo rustica":                "Rauchschwalbe",
-    "Delichon urbicum":               "Mehlschwalbe",
-    "Apus apus":                      "Mauersegler",
-}
+import json
+
+# Latin binomial → German common name. Lazily loaded from a JSON file so
+# editing the list doesn't require a Python redeploy. The file is optional —
+# when missing, classifier output simply stays in Latin/English.
+_BIRD_LATIN_TO_DE_PATH_DEFAULT = "/app/config/inat_to_german.json"
+_bird_latin_to_de_cache: dict[str, str] | None = None
+_bird_latin_to_de_cache_path: str | None = None
 
 
-def _pretty_bird_label(raw: str | None) -> str | None:
-    """Transform an iNaturalist label into its German common name when known.
+def _load_bird_latin_to_de(path: str | None) -> dict[str, str]:
+    """Cached load of the Latin→German map. `path` may be overridden per
+    classifier instance; reloads only when the path changes or the file has
+    not been read yet."""
+    global _bird_latin_to_de_cache, _bird_latin_to_de_cache_path
+    use_path = path or _BIRD_LATIN_TO_DE_PATH_DEFAULT
+    if _bird_latin_to_de_cache is not None and _bird_latin_to_de_cache_path == use_path:
+        return _bird_latin_to_de_cache
+    data: dict[str, str] = {}
+    try:
+        with open(use_path, "r", encoding="utf-8") as f:
+            raw = json.load(f)
+        data = {k: v for k, v in raw.items() if isinstance(k, str) and isinstance(v, str) and not k.startswith("_")}
+    except FileNotFoundError:
+        log.info("Bird latin→de map: %s not found — species will show Latin names only.", use_path)
+    except Exception as e:
+        log.warning("Bird latin→de map: failed to parse %s: %s", use_path, e)
+    _bird_latin_to_de_cache = data
+    _bird_latin_to_de_cache_path = use_path
+    if data:
+        log.info("Bird latin→de map loaded from %s (%d entries)", use_path, len(data))
+    return data
 
-    Input shapes:
-      - "Turdus merula (Common Blackbird)"  → "Amsel"
-      - "Turdus merula"                      → "Amsel"
-      - "PARUS MAJOR"                        → "Kohlmeise"
-      - "Passer_domesticus"                  → "Haussperling"
-    Unknown species return the raw label unchanged so the UI still shows
-    something useful (Latin + English).
+
+def _extract_latin(raw: str | None) -> str | None:
+    """Pull a clean "Genus species" string out of any iNat label shape.
+
+    Examples:
+      "Turdus merula (Common Blackbird)"  → "Turdus merula"
+      "PARUS MAJOR"                        → "Parus major"
+      "Passer_domesticus"                  → "Passer domesticus"
     """
     if not raw:
-        return raw
+        return None
     base = str(raw).strip()
     if not base:
         return None
-    # "Turdus merula (Common Blackbird)" → strip trailing parenthetical
     latin = base.split("(", 1)[0].strip().replace("_", " ")
-    if not latin:
-        return base
-    # Normalize to "Genus species" casing for lookup
     parts = latin.split()
-    if len(parts) >= 2:
-        key = parts[0].capitalize() + " " + parts[1].lower()
-        de = _BIRD_LATIN_TO_DE.get(key)
-        if de:
-            return de
-    return base
+    if len(parts) < 2:
+        return latin or None
+    return parts[0].capitalize() + " " + parts[1].lower()
+
+
+def _pretty_bird_label(raw: str | None, mapping: dict[str, str] | None = None) -> tuple[str | None, str | None]:
+    """Return (display_name, latin_binomial) for an iNaturalist label.
+
+    The display name is the German common name when the species is in the
+    mapping, otherwise the raw iNat label (which typically already includes
+    Latin + English). latin_binomial is always the clean "Genus species"
+    form when it can be extracted — useful as a stable key for the UI.
+    """
+    if not raw:
+        return raw, None
+    latin = _extract_latin(raw)
+    m = mapping if mapping is not None else _load_bird_latin_to_de(None)
+    de = m.get(latin) if latin else None
+    if de:
+        return de, latin
+    return str(raw).strip(), latin
 
 
 class BirdSpeciesClassifier:
@@ -343,7 +330,8 @@ class BirdSpeciesClassifier:
         self.reason = "disabled"
         self.mode = "none"  # "coral" | "cpu" | "none"
         self.labels = load_label_map(self.cfg.get("labels_path"))
-        self.min_score = float(self.cfg.get("min_score", 0.45))
+        self.min_score = float(self.cfg.get("min_score", 0.25))
+        self.latin_to_de = _load_bird_latin_to_de(self.cfg.get("latin_to_de_path"))
         self.interpreter = None
         self.common = None
         self.classify = None
@@ -403,14 +391,20 @@ class BirdSpeciesClassifier:
         self.reason = f"classifier unavailable: {coral_error}"
         log.warning("Bird species classifier nicht verfügbar")
 
-    def classify_crop(self, crop: np.ndarray) -> tuple[str | None, float | None]:
+    def classify_crop(self, crop: np.ndarray) -> tuple[str | None, str | None, float | None]:
+        """Return (display_name, latin_binomial, score).
+
+        display_name is the German common name when the species is in the
+        latin_to_de map, otherwise the raw iNat label. latin_binomial is
+        always the clean "Genus species" form.
+        """
         if not self.available or crop is None or crop.size == 0:
-            return None, None
+            return None, None, None
         if self._cpu_mode:
             return self._classify_cpu(crop)
         return self._classify_coral(crop)
 
-    def _classify_coral(self, crop: np.ndarray) -> tuple[str | None, float | None]:
+    def _classify_coral(self, crop: np.ndarray) -> tuple[str | None, str | None, float | None]:
         rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
         width, height = self.common.input_size(self.interpreter)
         resized = cv2.resize(rgb, (width, height))
@@ -421,9 +415,10 @@ class BirdSpeciesClassifier:
             return None, None
         c = classes[0]
         raw = self.labels.get(int(c.id), str(c.id))
-        return _pretty_bird_label(raw), float(c.score)
+        display, latin = _pretty_bird_label(raw, self.latin_to_de)
+        return display, latin, float(c.score)
 
-    def _classify_cpu(self, crop: np.ndarray) -> tuple[str | None, float | None]:
+    def _classify_cpu(self, crop: np.ndarray) -> tuple[str | None, str | None, float | None]:
         input_details = self.interpreter.get_input_details()
         output_details = self.interpreter.get_output_details()
         in_h = input_details[0]['shape'][1]
@@ -453,9 +448,10 @@ class BirdSpeciesClassifier:
         else:
             best_score = raw_score
         if best_score < self.min_score:
-            return None, None
+            return None, None, None
         raw = self.labels.get(best_id, str(best_id))
-        return _pretty_bird_label(raw), best_score
+        display, latin = _pretty_bird_label(raw, self.latin_to_de)
+        return display, latin, best_score
 
 
 def draw_detections(frame: np.ndarray, detections: list[Detection]) -> np.ndarray:

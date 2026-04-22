@@ -1816,8 +1816,9 @@ async function _runCoralTest(){
       ? dets.map(d=>{
           const c=_coralLabelColor(d.label);
           const spPct=d.species_score!=null?` ${(d.species_score*100).toFixed(0)}%`:'';
-          const speciesTag=d.species?`<span class="ct-species" style="color:${c}">→ ${esc(d.species)}${spPct}</span>`:'';
-          return `<span class="ct-pill" style="border-left-color:${c}">${esc(d.label)}<span class="ct-pct">${(d.score*100).toFixed(0)}%</span>${speciesTag}</span>`;
+          const spLat=d.species_latin && d.species && d.species!==d.species_latin?` <span class="ct-species-lat">(${esc(d.species_latin)})</span>`:'';
+          const speciesLine=d.species?`<span class="ct-species" style="color:${c}">→ ${esc(d.species)}${spLat}${spPct}</span>`:'';
+          return `<span class="ct-pill${d.species?' ct-pill--2line':''}" style="border-left-color:${c}"><span class="ct-pill-main">${esc(d.label)}<span class="ct-pct">${(d.score*100).toFixed(0)}%</span></span>${speciesLine}</span>`;
         }).join('')
       : '';
     const overlayBottom=dets.length
@@ -1874,8 +1875,9 @@ function _renderCoralBatchResult(out,r,folder){
       ? dets.map(d=>{
           const c=_coralLabelColor(d.label);
           const spPct=d.species_score!=null?` ${(d.species_score*100).toFixed(0)}%`:'';
-          const speciesTag=d.species?`<span class="ct-species" style="color:${c}">→ ${esc(d.species)}${spPct}</span>`:'';
-          return `<span class="ct-pill" style="border-left-color:${c}">${esc(d.label)}<span class="ct-pct">${(d.score*100).toFixed(0)}%</span>${speciesTag}</span>`;
+          const spLat=d.species_latin && d.species && d.species!==d.species_latin?` <span class="ct-species-lat">(${esc(d.species_latin)})</span>`:'';
+          const speciesLine=d.species?`<span class="ct-species" style="color:${c}">→ ${esc(d.species)}${spLat}${spPct}</span>`:'';
+          return `<span class="ct-pill${d.species?' ct-pill--2line':''}" style="border-left-color:${c}"><span class="ct-pill-main">${esc(d.label)}<span class="ct-pct">${(d.score*100).toFixed(0)}%</span></span>${speciesLine}</span>`;
         }).join('')
       : '<span class="cb-empty">Keine Objekte erkannt</span>';
     const img=item.image_b64

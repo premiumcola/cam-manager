@@ -49,7 +49,8 @@ processing:
     model_path: /app/models/inat_bird_quant_edgetpu.tflite
     cpu_model_path: /app/models/inat_bird_quant.tflite
     labels_path: /app/models/inat_bird_labels.txt
-    min_score: 0.35
+    latin_to_de_path: /app/config/inat_to_german.json
+    min_score: 0.25
     device: usb
   cat_identity:
     match_threshold: 10
