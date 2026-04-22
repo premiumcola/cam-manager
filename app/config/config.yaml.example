@@ -105,7 +105,7 @@ cameras:
     schedule: { enabled: false, start: "22:00", end: "06:00" }
     timelapse:
       enabled: true
-      fps: 12
+      fps: 25
 
   - id: cam-beispiel-2
     name: Beispielkamera 2
@@ -125,4 +125,4 @@ cameras:
     schedule: { enabled: true, start: "22:00", end: "06:00" }
     timelapse:
       enabled: false
-      fps: 12
+      fps: 25

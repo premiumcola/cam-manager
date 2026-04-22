@@ -1400,7 +1400,7 @@ def api_timelapse_status():
         cam_id = cam["id"]
         tl = cam.get("timelapse") or {}
         profiles = tl.get("profiles") or {}
-        fps = int(tl.get("fps", 30))
+        cam_fps = int(tl.get("fps", 25))
         prof_status = {}
         any_active = False
         for pname in _PROFILES:
@@ -1411,11 +1411,15 @@ def api_timelapse_status():
             fc = timelapse_builder.frame_count(cam_id, pname, today)
             target_s = int(prof.get("target_seconds", 60))
             period_s = int(prof.get("period_seconds", _PROFILE_PERIOD_DEFAULTS.get(pname, 86400)))
-            interval_s = max(2, round(period_s / max(1, target_s * fps)))
+            prof_fps = int(prof.get("fps") or cam_fps)
+            # Sub-1s interval is legitimate for short periods (15min → 1min).
+            interval_s = round(period_s / max(1, target_s * prof_fps), 2)
+            interval_s = max(0.5, interval_s)
             prof_status[pname] = {
                 "enabled": enabled,
                 "frame_count": fc,
                 "interval_s": interval_s,
+                "fps": prof_fps,
             }
         cameras_out.append({
             "camera_id": cam_id,
@@ -1454,7 +1458,7 @@ def api_camera_timelapse(cam_id):
     day = request.args.get("day") or datetime.now().strftime("%Y-%m-%d")
     force = request.args.get("force") == "1"
     target_s = int(tl_cfg.get("daily_target_seconds", 60))
-    target_fps = int(tl_cfg.get("fps", 30))
+    target_fps = int(tl_cfg.get("fps", 25))
     period = tl_cfg.get("period", "day")
     path = timelapse_builder.build_period(
         cam_id, day,
@@ -1573,7 +1577,7 @@ def api_camera_timelapse_rolling(cam_id):
     ])
     if len(images) < 2:
         return jsonify({"ok": False, "error": "not_enough_frames", "minutes": minutes}), 404
-    target_fps = int(tl_cfg.get("fps", 30))
+    target_fps = int(tl_cfg.get("fps", 25))
     target_s = max(5, int(tl_cfg.get("daily_target_seconds", 60)) // 10)
     path = timelapse_builder.build_period(
         cam_id, day,

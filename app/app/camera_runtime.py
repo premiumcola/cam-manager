@@ -1297,10 +1297,11 @@ class CameraRuntime:
                 time.sleep(10)
                 continue
             target_s = int(tl.get("daily_target_seconds", 60))
-            target_fps = int(tl.get("fps", 30))
+            target_fps = int(tl.get("fps", 25))
             period_s = _period_map.get(tl.get("period", "day"), 86400)
             total_frames = max(1, target_s * target_fps)
-            interval_s = max(2.0, period_s / total_frames)
+            interval_s = max(0.5, period_s / total_frames)
+            jpeg_q = 50 if interval_s < 1.0 else 72
             # Read latest frame from shared buffer — no independent camera connection
             with self.lock:
                 frame = self.frame.copy() if self.frame is not None else None
@@ -1312,8 +1313,8 @@ class CameraRuntime:
                     tl_dir.mkdir(parents=True, exist_ok=True)
                     ts = datetime.now().strftime("%H%M%S")
                     out = tl_dir / f"{ts}.jpg"
-                    cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
-                    log_tl.debug("[%s] timelapse frame saved: %s (interval=%.0fs)", self.camera_id, out.name, interval_s)
+                    cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_q])
+                    log_tl.debug("[%s] timelapse frame saved: %s (interval=%.2fs, q=%d)", self.camera_id, out.name, interval_s, jpeg_q)
                 except Exception as e:
                     log_tl.debug("[%s] timelapse frame write error: %s", self.camera_id, e)
             deadline = time.time() + interval_s
@@ -1342,10 +1343,12 @@ class CameraRuntime:
                 continue
 
             target_s = int(prof.get("target_seconds", 60))
-            target_fps = int(tl.get("fps", 30))
+            # Per-profile fps falls back to the camera-level fps, then 25.
+            target_fps = int(prof.get("fps") or tl.get("fps") or 25)
             period_s = int(prof.get("period_seconds", _PROFILE_PERIOD_DEFAULTS.get(profile_name, 86400)))
             total_frames = max(1, target_s * target_fps)
-            interval_s = max(2.0, period_s / total_frames)
+            interval_s = max(0.5, period_s / total_frames)
+            jpeg_q = 50 if interval_s < 1.0 else 72
 
             now = datetime.now()
             now_t = time.time()
@@ -1423,9 +1426,9 @@ class CameraRuntime:
                             tl_dir.mkdir(parents=True, exist_ok=True)
                             ts = now.strftime("%H%M%S_%f")[:10]
                             out = tl_dir / f"{ts}.jpg"
-                            cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 72])
-                            log_tl.debug("[%s][%s] frame saved: %s window=%s (%.0fs/frame)",
-                                      self.camera_id, profile_name, out.name, window_key, interval_s)
+                            cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_q])
+                            log_tl.debug("[%s][%s] frame saved: %s window=%s (%.2fs/frame, q=%d)",
+                                      self.camera_id, profile_name, out.name, window_key, interval_s, jpeg_q)
                 except Exception as e:
                     log_tl.debug("[%s][%s] frame write error: %s", self.camera_id, profile_name, e)
 

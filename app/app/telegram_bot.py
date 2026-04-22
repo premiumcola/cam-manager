@@ -154,7 +154,7 @@ class TelegramService:
             return
         if action == "timelapse":
             day = datetime.now().strftime("%Y-%m-%d")
-            path = self.timelapse_builder.build_for_day(cam_id, day, fps=int(((self._cfg().get('cameras') or [{}])[0].get('timelapse') or {}).get('fps', 12)), force=False) if self.timelapse_builder else None
+            path = self.timelapse_builder.build_for_day(cam_id, day, fps=int(((self._cfg().get('cameras') or [{}])[0].get('timelapse') or {}).get('fps', 25)), force=False) if self.timelapse_builder else None
             if not path:
                 await q.edit_message_text(f"Kein Zeitraffer für {cam_id} verfügbar.", reply_markup=self._main_menu())
                 return

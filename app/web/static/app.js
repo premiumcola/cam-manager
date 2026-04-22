@@ -1491,7 +1491,7 @@ async function finishWizard(){
     server:{default_discovery_subnet:byId('wiz_subnet').value||'192.168.1.0/24'},
     telegram:{enabled:byId('wiz_tg_enabled').checked,token:byId('wiz_tg_token').value||'',chat_id:byId('wiz_tg_chat_id').value||''},
     mqtt:{enabled:byId('wiz_mqtt_enabled').checked,host:byId('wiz_mqtt_host').value||'',port:Number(byId('wiz_mqtt_port').value||1883),username:byId('wiz_mqtt_username').value||'',password:byId('wiz_mqtt_password').value||'',base_topic:byId('wiz_mqtt_topic').value||'tam-spy'},
-    cameras: camId ? [{id:camId,name:byId('wiz_cam_name').value||camId,location:byId('wiz_cam_location').value||'',rtsp_url:byId('wiz_cam_rtsp').value||'',snapshot_url:byId('wiz_cam_snapshot').value||'',group_id:byId('wiz_cam_group').value||'bereichsuebersicht',role:byId('wiz_cam_group').selectedOptions[0].textContent,enabled:true,armed:true,object_filter:['person','cat','bird'],timelapse:{enabled:false,fps:12},zones:[],masks:[],schedule:{enabled:false,start:'22:00',end:'06:00'},telegram_enabled:true,mqtt_enabled:true,whitelist_names:[]}] : []
+    cameras: camId ? [{id:camId,name:byId('wiz_cam_name').value||camId,location:byId('wiz_cam_location').value||'',rtsp_url:byId('wiz_cam_rtsp').value||'',snapshot_url:byId('wiz_cam_snapshot').value||'',group_id:byId('wiz_cam_group').value||'bereichsuebersicht',role:byId('wiz_cam_group').selectedOptions[0].textContent,enabled:true,armed:true,object_filter:['person','cat','bird'],timelapse:{enabled:false,fps:25},zones:[],masks:[],schedule:{enabled:false,start:'22:00',end:'06:00'},telegram_enabled:true,mqtt_enabled:true,whitelist_names:[]}] : []
   };
   await fetch('/api/wizard/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   closeWizard();
@@ -1648,7 +1648,7 @@ window.saveDiscoveryCamera=async(ip)=>{
   const payload={id:camId,name,location:'',rtsp_url:rtsp,snapshot_url:snap,
     group_id:groupId,enabled:true,armed:true,
     object_filter:['person','cat','bird'],
-    timelapse:{enabled:false,fps:12},zones:[],masks:[],
+    timelapse:{enabled:false,fps:25},zones:[],masks:[],
     schedule:{enabled:false,start:'22:00',end:'06:00'},
     telegram_enabled:true,mqtt_enabled:true,whitelist_names:[]};
   try{
@@ -1683,7 +1683,7 @@ byId('cameraForm').onsubmit=async(e)=>{
     telegram_enabled:existingCam?.telegram_enabled??true,
     mqtt_enabled:existingCam?.mqtt_enabled??true,
     whitelist_names:_whitelistState.filter(Boolean),
-    timelapse:existingCam?.timelapse||{enabled:false,fps:30,period:'day',daily_target_seconds:60,weekly_target_seconds:180,telegram_send:false},
+    timelapse:existingCam?.timelapse||{enabled:false,fps:25,period:'day',daily_target_seconds:60,weekly_target_seconds:180,telegram_send:false},
     schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},
     bottom_crop_px:parseInt(f['bottom_crop_px']?.value||0),
     motion_sensitivity:parseFloat(f['motion_sensitivity']?.value||0.5),
@@ -2023,9 +2023,50 @@ const _TL_PERIOD_OPTIONS=[
   {v:7776000,  l:'1 Quartal'},
   {v:31536000, l:'1 Jahr'},
 ];
+// Period+target presets for the "Benutzerdefiniert" profile — the user picks
+// one tuple rather than two independent controls. Value is "<periodS>,<targetS>".
+const _TL_CUSTOM_PRESETS=[
+  {period:900,   target:60,  label:'15 Min → 1 Min Video'},
+  {period:1800,  target:60,  label:'30 Min → 1 Min Video'},
+  {period:3600,  target:30,  label:'1 Std → 30 Sek Video'},
+  {period:3600,  target:60,  label:'1 Std → 1 Min Video'},
+  {period:10800, target:60,  label:'3 Std → 1 Min Video'},
+  {period:21600, target:60,  label:'6 Std → 1 Min Video'},
+  {period:21600, target:120, label:'6 Std → 2 Min Video'},
+  {period:43200, target:60,  label:'12 Std → 1 Min Video'},
+  {period:43200, target:120, label:'12 Std → 2 Min Video'},
+  {period:86400, target:30,  label:'24 Std → 30 Sek Video'},
+  {period:86400, target:60,  label:'24 Std → 1 Min Video'},
+  {period:86400, target:120, label:'24 Std → 2 Min Video'},
+];
+function _tlClosestCustomPreset(periodS,targetS){
+  const pN=parseInt(periodS)||3600, tN=parseInt(targetS)||60;
+  let best=_TL_CUSTOM_PRESETS[0], bd=Infinity;
+  for(const p of _TL_CUSTOM_PRESETS){
+    // rank exact period match above exact target match
+    const d=Math.abs(Math.log(p.period/pN))*2 + Math.abs(Math.log(p.target/tN));
+    if(d<bd){bd=d;best=p;}
+  }
+  return `${best.period},${best.target}`;
+}
 function _tlClosestPeriod(v){
   const n=parseInt(v)||3600;
   return _TL_PERIOD_OPTIONS.reduce((a,b)=>Math.abs(b.v-n)<Math.abs(a.v-n)?b:a).v;
+}
+const _TL_FPS_OPTIONS=[20,25];
+function _tlFmtInterval(secs){
+  const s=Number(secs);
+  if(!isFinite(s)||s<=0) return '—';
+  if(s<10){
+    // 0.6 → "0,6s"  ·  5 → "5s"  ·  5.5 → "5,5s"
+    const r=Math.round(s*10)/10;
+    const str=(r===Math.floor(r))?String(Math.floor(r)):r.toFixed(1).replace('.',',');
+    return `${str}s`;
+  }
+  if(s<60) return `${Math.round(s)}s`;
+  if(s<3600) return `${Math.round(s/60)}min`;
+  if(s<86400) return `${Math.round(s/3600)}h`;
+  return `${Math.round(s/86400)}d`;
 }
 function _tlSpeedupLabel(v){
   if(v>=10000) return (Math.round(v/100)/10).toFixed(1)+'k×';
@@ -2080,47 +2121,77 @@ function _renderTlCameraList(cameras){
 function _renderTlModesGrid(cam){
   const tl=cam.timelapse||{};
   const profs=tl.profiles||{};
-  const fps=parseInt(tl.fps)||30;
+  const camFps=parseInt(tl.fps)||25;
   const cols=_TL_PROFILES_DEF.map(p=>{
     const prof=profs[p.key]||{};
     const enabled=!!prof.enabled;
     const targetS=prof.target_seconds??p.defaultTarget;
     const periodS=prof.period_seconds??p.defaultPeriod;
+    const profFps=parseInt(prof.fps)||camFps;
     const isCustom=p.key==='custom';
     const minT=p.minTarget||10, maxT=p.maxTarget||900;
     const clampedTarget=Math.max(minT,Math.min(maxT,targetS));
-    return `<div class="tl-mode-col${enabled?' tl-mode-col--on':''}" id="tlProfCard_${esc(cam.id)}_${p.key}">
+    const cid=esc(cam.id);
+    const pk=p.key;
+    const fpsSelectHtml=`<div class="field-wrap">
+        <select id="tlProfFps_${cid}_${pk}" style="width:100%"
+          onchange="_tlRefreshDesc('${cid}','${pk}')">
+          ${_TL_FPS_OPTIONS.map(v=>`<option value="${v}"${v===profFps?' selected':''}>${v} fps</option>`).join('')}
+        </select>
+        <span class="field-label">Video-Framerate</span>
+      </div>`;
+    let controlHtml;
+    if(isCustom){
+      const currentKey=`${periodS},${clampedTarget}`;
+      const closestKey=_tlClosestCustomPreset(periodS,clampedTarget);
+      const selectedKey=_TL_CUSTOM_PRESETS.some(pp=>`${pp.period},${pp.target}`===currentKey)?currentKey:closestKey;
+      controlHtml=`<div class="field-wrap">
+        <select id="tlProfPreset_${cid}_${pk}" style="width:100%"
+          onchange="_tlApplyCustomPreset('${cid}','${pk}',this.value)">
+          ${_TL_CUSTOM_PRESETS.map(pp=>{const k=`${pp.period},${pp.target}`;return `<option value="${k}"${k===selectedKey?' selected':''}>${esc(pp.label)}</option>`;}).join('')}
+        </select>
+        <span class="field-label">Timelapse-Profil</span>
+      </div>
+      <input type="hidden" id="tlProfTarget_${cid}_${pk}" value="${clampedTarget}" />
+      <input type="hidden" id="tlProfPeriod_${cid}_${pk}" value="${periodS}" />`;
+    } else {
+      controlHtml=`<div class="field-wrap">
+        <div style="display:flex;align-items:center;gap:8px">
+          <input type="range" id="tlProfTarget_${cid}_${pk}" min="${minT}" max="${maxT}" step="${p.step||10}" value="${clampedTarget}" style="flex:1;accent-color:#a855f7"
+            oninput="_tlRefreshDesc('${cid}','${pk}')" />
+          <span id="tlProfTargetLbl_${cid}_${pk}" style="font-size:11px;color:#a855f7;font-weight:700;min-width:36px;text-align:right">${_tlTargetLabel(clampedTarget)}</span>
+        </div>
+        <span class="field-label">Zieldauer Video</span>
+      </div>
+      <input type="hidden" id="tlProfPeriod_${cid}_${pk}" value="${periodS}" />`;
+    }
+    return `<div class="tl-mode-col${enabled?' tl-mode-col--on':''}" id="tlProfCard_${cid}_${pk}">
       <div class="tl-mode-col-head">
         <div>
           <div class="tl-mode-col-name">${esc(p.label)}</div>
         </div>
         <label class="switch switch-sm" onclick="event.stopPropagation()">
-          <input type="checkbox" id="tlProf_${esc(cam.id)}_${p.key}" ${enabled?'checked':''}
-            onchange="byId('tlProfCard_${esc(cam.id)}_${p.key}').classList.toggle('tl-mode-col--on',this.checked);_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" />
+          <input type="checkbox" id="tlProf_${cid}_${pk}" ${enabled?'checked':''}
+            onchange="byId('tlProfCard_${cid}_${pk}').classList.toggle('tl-mode-col--on',this.checked);_tlRefreshDesc('${cid}','${pk}')" />
           <span class="slider"></span>
         </label>
       </div>
-      <div class="tl-mode-col-desc" id="tlProfDesc_${esc(cam.id)}_${p.key}">${_tlResultDesc(periodS,clampedTarget,fps)}</div>
-      <div class="field-wrap">
-        <div style="display:flex;align-items:center;gap:8px">
-          <input type="range" id="tlProfTarget_${esc(cam.id)}_${p.key}" min="${minT}" max="${maxT}" step="${p.step||10}" value="${clampedTarget}" style="flex:1;accent-color:#a855f7"
-            oninput="_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})" />
-          <span id="tlProfTargetLbl_${esc(cam.id)}_${p.key}" style="font-size:11px;color:#a855f7;font-weight:700;min-width:36px;text-align:right">${_tlTargetLabel(clampedTarget)}</span>
-        </div>
-        <span class="field-label">Zieldauer Video</span>
-      </div>
-      ${isCustom?`<div class="field-wrap">
-        <select id="tlProfPeriod_${esc(cam.id)}_${p.key}" style="width:100%"
-          onchange="_tlRefreshDesc('${esc(cam.id)}','${p.key}',${fps})">
-          ${_TL_PERIOD_OPTIONS.map(o=>`<option value="${o.v}"${_tlClosestPeriod(periodS)===o.v?' selected':''}>${o.l}</option>`).join('')}
-        </select>
-        <span class="field-label">Zeitraum</span>
-      </div>`:`<input type="hidden" id="tlProfPeriod_${esc(cam.id)}_${p.key}" value="${periodS}" />`}
+      <div class="tl-mode-col-desc" id="tlProfDesc_${cid}_${pk}">${_tlResultDesc(periodS,clampedTarget,profFps)}</div>
+      ${controlHtml}
+      ${fpsSelectHtml}
     </div>`;
   }).join('');
   return `<div class="tl-modes-grid">${cols}</div>
     <button class="settings-save-btn" style="margin-top:4px" onclick="saveTlCameraProfiles('${esc(cam.id)}')">💾 Speichern</button>`;
 }
+window._tlApplyCustomPreset=function(camId,profKey,val){
+  const [periodS,targetS]=(val||'').split(',').map(x=>parseInt(x)||0);
+  const pEl=byId(`tlProfPeriod_${camId}_${profKey}`);
+  const tEl=byId(`tlProfTarget_${camId}_${profKey}`);
+  if(pEl) pEl.value=periodS;
+  if(tEl) tEl.value=targetS;
+  _tlRefreshDesc(camId,profKey);
+};
 window.selectTlCam=function(camId){
   document.querySelectorAll('#tlCamTabs .sec-tab-btn').forEach(b=>b.classList.toggle('active',b.id===`tlTab_${camId}`));
   const cam=(state.cameras||[]).find(c=>c.id===camId);
@@ -2137,22 +2208,26 @@ function _tlPeriodLabel(s){
   return Math.round(n/60)+' Min';
 }
 function _tlResultDesc(periodS,targetS,fps){
-  const pN=parseInt(periodS)||86400, tN=parseInt(targetS)||60, fN=parseInt(fps)||30;
-  const interval=_tlCalcInterval(pN,tN,fN);
-  const totalFrames=Math.round(tN*fN);
+  const pN=parseInt(periodS)||86400, tN=parseInt(targetS)||60, fN=parseInt(fps)||25;
+  const totalFrames=Math.max(1, Math.round(tN*fN));
+  const intervalS=pN/totalFrames;
   const periodLabel=_tlPeriodLabel(pN);
-  const intervalLabel=_tlIntervalLabel(interval);
-  const speedup=_tlSpeedupLabel(Math.round(pN/Math.max(1,tN)));
-  const comprPct=(Math.floor((1-tN/Math.max(1,pN))*10000)/100).toFixed(2).replace('.',',');
-  return `<div class="tl-drow"><span class="tl-drow-ico">${_TL_ICO_SPAN}</span><span class="tl-drow-text">${periodLabel} mit ${intervalLabel} → ${tN}s Video (${fN} fps)</span></div><div class="tl-drow"><span class="tl-drow-ico">${_TL_ICO_FRAMES}</span><span class="tl-drow-text">${totalFrames} frames → Jede ${intervalLabel} ein Foto</span></div><div class="tl-drow tl-drow-accent"><span class="tl-drow-ico">${_TL_ICO_SPEED}</span><span class="tl-drow-text">${speedup} · Kompression ${comprPct}%</span></div>`;
+  const intervalLabel=_tlFmtInterval(intervalS);
+  const compression=Math.round(pN/Math.max(1,tN));
+  // ~40 KB per JPEG at q≈72; sub-1s interval drops to q=50 ≈ 26 KB.
+  const perFrameKb=intervalS<1?26:40;
+  const diskMb=Math.max(1, Math.round(totalFrames*perFrameKb/1024));
+  return `<div class="tl-drow"><span class="tl-drow-ico">⏱</span><span class="tl-drow-text">${periodLabel} → ${tN}s Video · ${fN} fps</span></div><div class="tl-drow"><span class="tl-drow-ico">📸</span><span class="tl-drow-text">${totalFrames} Frames · Alle ${intervalLabel} ein Foto</span></div><div class="tl-drow tl-drow-accent"><span class="tl-drow-ico">⚡</span><span class="tl-drow-text">${compression}× Zeitraffer · ~${diskMb} MB Speicher</span></div>`;
 }
 // _renderTlProfileCards replaced by _renderTlModesGrid (4-column grid)
-window._tlRefreshDesc=function(camId,profKey,fps){
+window._tlRefreshDesc=function(camId,profKey){
   const targetEl=byId(`tlProfTarget_${camId}_${profKey}`);
   const periodEl=byId(`tlProfPeriod_${camId}_${profKey}`);
+  const fpsEl=byId(`tlProfFps_${camId}_${profKey}`);
   const descEl=byId(`tlProfDesc_${camId}_${profKey}`);
   const lblEl=byId(`tlProfTargetLbl_${camId}_${profKey}`);
   if(!targetEl||!periodEl) return;
+  const fps=parseInt(fpsEl?.value)||25;
   if(lblEl) lblEl.textContent=_tlTargetLabel(parseInt(targetEl.value)||10);
   if(descEl) descEl.innerHTML=_tlResultDesc(periodEl.value,targetEl.value,fps);
 };
@@ -2168,19 +2243,25 @@ window.saveTlCameraProfiles=async function(camId){
   if(!cam) return;
   const profiles={};
   const tl=cam.timelapse||{};
-  const fps=parseInt(tl.fps)||30;
+  const camFps=parseInt(tl.fps)||25;
+  let latestFps=camFps;
   for(const p of _TL_PROFILES_DEF){
     const enabledEl=byId(`tlProf_${camId}_${p.key}`);
     const targetEl=byId(`tlProfTarget_${camId}_${p.key}`);
     const periodEl=byId(`tlProfPeriod_${camId}_${p.key}`);
+    const fpsEl=byId(`tlProfFps_${camId}_${p.key}`);
+    const profFps=parseInt(fpsEl?.value)||camFps;
+    latestFps=profFps;
     profiles[p.key]={
       enabled:!!(enabledEl?.checked),
       target_seconds:parseInt(targetEl?.value)||p.defaultTarget,
       period_seconds:parseInt(periodEl?.value)||p.defaultPeriod,
+      fps:profFps,
     };
   }
   const anyEnabled=Object.values(profiles).some(p=>p.enabled);
-  const payload={...cam,timelapse:{...(cam.timelapse||{}),enabled:anyEnabled,profiles}};
+  // Keep a camera-level fps too (most recently edited) for legacy readers.
+  const payload={...cam,timelapse:{...(cam.timelapse||{}),enabled:anyEnabled,fps:latestFps,profiles}};
   await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   showToast(`Timelapse für ${esc(cam.name)} gespeichert.`,'success');
   await loadAll();

@@ -282,6 +282,13 @@ class TimelapseBuilder:
         fps = n / max(1.0, float(target_duration_s))
         fps = min(float(target_fps), max(1.0, fps))
         actual_duration = n / fps
+        if fps < 15.0:
+            log.warning(
+                "timelapse: %s will play at %.1f fps (< 15) — video will look "
+                "choppy; only %d frames for a %ds target. Lower target_seconds "
+                "or capture more frequently (shorter interval).",
+                out_path.name, fps, n, target_duration_s,
+            )
 
         # ── Completeness report ───────────────────────────────────────────────
         coverage_pct = min(100.0, 100.0 * frames_on_disk / expected_frames)
@@ -379,7 +386,7 @@ class TimelapseBuilder:
             return str(out_path)
         return self._write_video(images, out_path, target_duration_s, target_fps)
 
-    def build_for_day(self, camera_id: str, day: str, fps: int = 12, force: bool = False) -> str | None:
+    def build_for_day(self, camera_id: str, day: str, fps: int = 25, force: bool = False) -> str | None:
         """Backward-compatible wrapper. Tries timelapse_frames first, falls back to event snapshots."""
         path = self.build_period(camera_id, day,
                                  target_duration_s=60,
@@ -400,6 +407,6 @@ class TimelapseBuilder:
             return str(out_path)
         return self._write_video(images, out_path, 60, fps)
 
-    def build_yesterday_if_missing(self, camera_id: str, fps: int = 12):
+    def build_yesterday_if_missing(self, camera_id: str, fps: int = 25):
         day = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
         return self.build_for_day(camera_id, day, fps=fps, force=False)
