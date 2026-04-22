@@ -471,6 +471,11 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 @keyframes toast-out{from{opacity:1;transform:none}to{opacity:0;transform:translateX(40px)}}
 
 /* ── Achievements / Trophäen ───────────────────────────────────────────────── */
+/* ── Achievements (golden-themed section) ──────────────────────────────── */
+#achievements{
+  background:linear-gradient(135deg,rgba(180,140,40,0.06) 0%,rgba(120,90,20,0.03) 100%);
+  border-top:2px solid rgba(200,160,50,0.15);
+}
 .ach-progress-bar{margin-bottom:16px;padding:14px 18px;border-radius:16px;background:var(--surface);display:flex;align-items:center;gap:14px}
 .ach-progress-text{font-weight:700;font-size:16px;white-space:nowrap}
 .ach-progress-track{flex:1;height:10px;border-radius:999px;background:#1a2b3c;overflow:hidden}
@@ -479,23 +484,38 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .ach-grid{margin-top:4px}
 .ach-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;margin-bottom:4px;margin-left:8px;font-size:13px;color:var(--muted);align-items:center}
 .ach-leg-dot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:5px;vertical-align:middle;flex-shrink:0}
-.ach-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:16px}
-.ach-card{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;cursor:default;padding:8px 4px;border-radius:14px;transition:background .15s}
+/* Medal grid — bumped minmax +20% to match larger medals */
+.ach-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:18px}
+.ach-card{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;cursor:default;padding:10px 4px 8px;border-radius:14px;transition:background .15s;position:relative}
 .ach-card:not(.locked):hover{background:rgba(255,255,255,.04)}
 .ach-card:not(.locked):hover .medal-wrap svg{transform:scale(1.05);filter:drop-shadow(0 6px 14px rgba(0,0,0,.55))}
-.medal-wrap{position:relative;width:92px;height:92px;display:flex;align-items:center;justify-content:center}
+/* Medals: 92 → 110 (+20%) */
+.medal-wrap{position:relative;width:110px;height:110px;display:flex;align-items:center;justify-content:center;margin-top:14px}
 .medal-wrap svg{display:block;transition:transform .2s,filter .2s;filter:drop-shadow(0 3px 8px rgba(0,0,0,.4))}
-.medal-emoji{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:32px;line-height:1;pointer-events:none}
+.medal-emoji{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:38px;line-height:1;pointer-events:none}
 .medal-emoji-locked{filter:grayscale(1) brightness(0.4)}
 .medal-count-badge{position:absolute;top:-4px;right:-6px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;white-space:nowrap;pointer-events:none}
 .medal-count-badge.bronze{background:#7a3e10;color:#f0a050;border:1px solid #e08040}
 .medal-count-badge.silver{background:#304050;color:#b0d0e8;border:1px solid #90b8d0}
 .medal-count-badge.gold{background:#4a3a08;color:#f0d040;border:1px solid #e0b820}
+/* Lock now sits ABOVE the medal (overlapping top edge by ~30%) */
 .medal-lock-badge{position:absolute;top:-10px;right:-10px;width:26px;height:26px;border-radius:50%;background:#1a2230;border:1.5px solid #2e4258;display:flex;align-items:center;justify-content:center;font-size:12px;color:#3a5268;pointer-events:none}
-.medal-lock-overlay{position:absolute;bottom:-4px;right:-4px;width:32px;height:32px;background:rgba(10,14,26,0.85);border-radius:50%;border:1.5px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;z-index:4;pointer-events:none}
+.medal-lock-overlay{position:absolute;top:-12px;left:50%;transform:translateX(-50%);width:36px;height:36px;background:rgba(10,14,26,0.85);border-radius:50%;border:1.5px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;z-index:4;pointer-events:none;opacity:.7}
 .medal-name{font-size:12px;font-weight:600;color:var(--text);line-height:1.2}
 .medal-count{font-size:11px;font-weight:700}
 .medal-count.locked-text{color:#3a5268}
+/* Rarity pill shown below the name */
+.medal-rarity{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.02em;line-height:1.4;white-space:nowrap;margin-top:2px}
+.medal-rarity.r-sehrhaeufig{background:rgba(34,197,94,.18);color:#4ade80;border:1px solid rgba(34,197,94,.45)}
+.medal-rarity.r-haeufig{background:rgba(132,204,22,.16);color:#bef264;border:1px solid rgba(132,204,22,.4)}
+.medal-rarity.r-regelmaessig{background:rgba(234,179,8,.16);color:#fde68a;border:1px solid rgba(234,179,8,.4)}
+.medal-rarity.r-gelegentlich{background:rgba(249,115,22,.16);color:#fdba74;border:1px solid rgba(249,115,22,.45)}
+.medal-rarity.r-selten{background:rgba(236,72,153,.16);color:#fbcfe8;border:1px solid rgba(236,72,153,.45)}
+/* Unlocked bottom row — count + rarity side by side */
+.medal-footline{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;min-height:18px}
+/* Squirrel variants row */
+.ach-subheading{grid-column:1/-1;font-size:12px;font-weight:700;color:rgba(200,160,50,.85);letter-spacing:.08em;text-transform:uppercase;margin-top:10px;padding:4px 0 2px;border-top:1px dashed rgba(200,160,50,.2)}
+.ach-squirrel-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;max-width:440px}
 
 /* Discovery add-camera form */
 .disc-add-form{background:#131e2e;border-radius:12px;padding:12px;margin-top:8px}
@@ -621,14 +641,14 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .ct-pill--2line .ct-pill-main{display:inline-flex;align-items:center;gap:6px}
 .coral-test-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,.55);font-size:12px;font-weight:600;pointer-events:none}
 
-/* Coral batch test (storage/test_images/<folder>) — 2-column grid + summary */
+/* Coral batch test (storage/test_images/<folder>) — 3-column grid + summary */
 .cb-summary{padding:10px 12px;border-radius:10px;margin-bottom:10px;line-height:1.4}
 .cb-sum-line{font-size:13px;font-weight:600}
 .cb-sum-interp{font-size:11px;color:var(--muted);margin-top:2px}
 .cb-sum--ok{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.35);color:#86efac}
 .cb-sum--warn{background:rgba(250,204,21,.12);border:1px solid rgba(250,204,21,.35);color:#fde68a}
 .cb-sum--bad{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.35);color:#fca5a5}
-.cb-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;max-height:500px;overflow-y:auto;padding-right:4px}
+.cb-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-height:640px;overflow-y:auto;padding-right:4px}
 @media(max-width:768px){.cb-grid{grid-template-columns:1fr}}
 .cb-card{background:var(--surface);border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:8px;display:grid;gap:6px}
 .cb-card-err{color:#fca5a5;font-size:11px;padding:6px}

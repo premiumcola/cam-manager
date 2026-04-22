@@ -1,13 +1,13 @@
 """
 Download a small set of freely-licensed sample images from Wikimedia Commons
-into storage/test_images/<category>/ for /api/coral/test-batch.
+into storage/test_images/<folder>/ for /api/coral/test-batch.
 
 Usage (inside container):
     docker exec tam-spy python3 /app/storage/test_images/_download.py
 
-The script uses the MediaWiki API (commons.wikimedia.org/w/api.php) and asks
-for the 640px-wide thumbnail of each file via iiurlwidth=640 — no local resize
-required. Existing files are skipped, so re-running is safe.
+Fills each folder with exactly 3 clear, identifiable photos per species,
+named `<GermanSpecies>_1.jpg` / `_2.jpg` / `_3.jpg`. Existing files with the
+same names are skipped, so re-running is safe.
 
 All images are sourced from Wikimedia Commons under their respective free
 licenses (CC-BY, CC-BY-SA, public domain). Original attribution lives at
@@ -25,105 +25,73 @@ from pathlib import Path
 BASE = Path(__file__).resolve().parent
 HEADERS = {"User-Agent": "tam-spy-test-images/1.0 (+https://github.com/premiumcola/cam-manager)"}
 
-# (folder, [(commons_category, count_to_keep)])
-CATEGORIES: dict[str, list[tuple[str, int]]] = {
-    "person": [
-        ("People_walking_outdoors", 5),
-    ],
-    "car": [
-        # Specific modern car-model categories yield real user-uploaded photos
-        # of cars parked on streets / driveways — matching what a garden or
-        # workshop camera would actually see. Parent categories like
-        # "Sedans" / "Hatchbacks" are full of line drawings, brochures, and
-        # 1910s newspaper ads which trip the detector.
-        ("Volkswagen_Golf",    1),
-        ("Volkswagen_Passat",  1),
-        ("Toyota_Corolla",     1),
-        ("BMW_3_Series",       1),
-        ("Audi_A4",            1),
-        ("Opel_Astra",         1),
-        ("Ford_Focus",         1),
-        ("Skoda_Octavia",      1),
-    ],
-    "cat": [
-        ("Felis_silvestris_catus", 5),  # all domestic cats
+# folder → [(german_name, commons_category), ...]  — exactly 3 images per species
+# "bird" folder covers LBV Top 20 Bavarian garden birds.
+SPECIES: dict[str, list[tuple[str, str]]] = {
+    "bird": [
+        ("Haussperling",     "Passer_domesticus"),
+        ("Amsel",            "Turdus_merula"),
+        ("Kohlmeise",        "Parus_major"),
+        ("Star",             "Sturnus_vulgaris"),
+        ("Feldsperling",     "Passer_montanus"),
+        ("Blaumeise",        "Cyanistes_caeruleus"),
+        ("Ringeltaube",      "Columba_palumbus"),
+        ("Mauersegler",      "Apus_apus"),
+        ("Elster",           "Pica_pica"),
+        ("Mehlschwalbe",     "Delichon_urbicum"),
+        ("Buchfink",         "Fringilla_coelebs"),
+        ("Rotkehlchen",      "Erithacus_rubecula"),
+        ("Gruenfink",        "Chloris_chloris"),
+        ("Rabenkraehe",      "Corvus_corone"),
+        ("Hausrotschwanz",   "Phoenicurus_ochruros"),
+        ("Moenchsgrasmucke", "Sylvia_atricapilla"),
+        ("Stieglitz",        "Carduelis_carduelis"),
+        ("Buntspecht",       "Dendrocopos_major"),
+        ("Kleiber",          "Sitta_europaea"),
+        ("Eichelhaher",      "Garrulus_glandarius"),
     ],
     "squirrel": [
-        ("Sciurus_vulgaris", 4),
+        ("Eichhoernchen", "Sciurus_vulgaris"),
     ],
-    "bird": [
-        ("Turdus_merula",                  1),  # Amsel
-        ("Cyanistes_caeruleus",            1),  # Blaumeise
-        ("Parus_major",                    1),  # Kohlmeise
-        ("Erithacus_rubecula",             1),  # Rotkehlchen
-        ("Fringilla_coelebs",              1),  # Buchfink
-        ("Chloris_chloris",                1),  # Grünfink
-        ("Passer_domesticus",              1),  # Haussperling
-        ("Passer_montanus",                1),  # Feldsperling
-        ("Sturnus_vulgaris",               1),  # Star
-        ("Pica_pica",                      1),  # Elster
-        ("Corvus_corone",                  1),  # Rabenkrähe
-        ("Columba_palumbus",               1),  # Ringeltaube
-        ("Streptopelia_decaocto",          1),  # Türkentaube
-        ("Sitta_europaea",                 1),  # Kleiber
-        ("Dendrocopos_major",              1),  # Buntspecht
-        ("Troglodytes_troglodytes",        1),  # Zaunkönig
-        ("Phoenicurus_ochruros",           1),  # Hausrotschwanz
-        ("Motacilla_alba",                 1),  # Bachstelze
-        ("Carduelis_carduelis",            1),  # Stieglitz
-        ("Spinus_spinus",                  1),  # Erlenzeisig
-        ("Coccothraustes_coccothraustes",  1),  # Kernbeißer
-        ("Pyrrhula_pyrrhula",              1),  # Gimpel
-        ("Prunella_modularis",             1),  # Heckenbraunelle
-        ("Sylvia_atricapilla",             1),  # Mönchsgrasmücke
-        ("Phylloscopus_collybita",         1),  # Zilpzalp
-        ("Emberiza_citrinella",            1),  # Goldammer
-        ("Garrulus_glandarius",            1),  # Eichelhäher
-        ("Serinus_serinus",                1),  # Girlitz
-        ("Aegithalos_caudatus",            1),  # Schwanzmeise
-        ("Periparus_ater",                 1),  # Tannenmeise
+    "fox": [
+        ("Fuchs", "Vulpes_vulpes"),
+    ],
+    "hedgehog": [
+        ("Igel", "Erinaceus_europaeus"),
     ],
 }
 
-VALID_EXT = {".jpg", ".jpeg", ".png", ".webp"}
-# Skip obvious non-photo assets that end up in Commons species / vehicle
-# categories. Covers: bird atlases (maps/IUCN/rangemaps), species drawings
-# (skeleton/skull/egg), bird audio files, and for cars the usual clutter
-# (brochures, adverts, interiors, dashboards, logos/emblems, patent
-# drawings, schematic line drawings, historical newspaper clippings).
+IMAGES_PER_SPECIES = 3
+THUMB_WIDTH = 640
+
+# Skip obvious non-photo assets that end up in Commons species categories.
 SKIP_SUBSTR = (
-    # birds / species categories
     "distribution map", "range map", "rangemap", "iucn", "_map", " map",
     "map.jpg", "map.jpeg", "map.png", "diagram", "phylogeny", "taxonomy",
-    "locator", "skeleton", "skull", "egg ", "_egg", "nest only", "habitat map",
-    "vocalizations", "call.ogg", "song.ogg", "audio", "spectrogram",
-    # cars / vehicle categories
-    "interior", "dashboard", "cockpit", "engine", "motor_block", "gearbox",
-    "logo", "emblem", "badge", "sticker", "decal",
-    "advertisement", "advertising", "brochure", "ad_", "ad.jpg",
-    "patent", "blueprint", "schematic", "line drawing", "sketch",
-    "newspaper", "_press_", " press ", "free_press",
-    "rear light", "tail light", "headlight", "wheel_", "tire_", "tyre_",
-    "spare wheel", "spare_wheel", "hubcap", "rim_", "mudguard",
+    "locator", "skeleton", "skull", " egg ", "_egg", "-egg",
+    "nest only", "habitat map", "vocalizations", "call.ogg", "song.ogg",
+    "audio", "spectrogram", "illustration", "drawing", "sketch", "engraving",
+    "painting", "plate ", "specimen", "taxidermy", "mount ",
+    "feather", "plumage detail", "chick only", "juvenile only",
 )
 
 
-def list_images(category: str, want: int) -> list[tuple[str, str]]:
-    """Return up to ~want*3 (file_title, thumb_url) pairs from a Commons category."""
+def list_images(category: str, limit: int) -> list[tuple[str, str]]:
+    """Return (file_title, thumb_url) pairs from a Commons category."""
     params = {
         "action":      "query",
         "format":      "json",
         "generator":   "categorymembers",
         "gcmtitle":    f"Category:{category}",
         "gcmtype":     "file",
-        "gcmlimit":    str(max(want * 3, 10)),
+        "gcmlimit":    str(limit),
         "prop":        "imageinfo",
-        "iiprop":      "url|mime",
-        "iiurlwidth":  "640",
+        "iiprop":      "url|mime|size",
+        "iiurlwidth":  str(THUMB_WIDTH),
     }
     url = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode(params)
     req = urllib.request.Request(url, headers=HEADERS)
-    with urllib.request.urlopen(req, timeout=20) as r:
+    with urllib.request.urlopen(req, timeout=25) as r:
         data = json.loads(r.read())
     pages = (data.get("query") or {}).get("pages") or {}
     out: list[tuple[str, str]] = []
@@ -137,21 +105,21 @@ def list_images(category: str, want: int) -> list[tuple[str, str]]:
         thumb = info.get("thumburl") or info.get("url")
         if not thumb:
             continue
+        # Skip SVGs and tiny crops (less than 400px original width)
+        w = info.get("width") or 0
+        if w and w < 400:
+            continue
         title = (p.get("title") or "").replace("File:", "").strip()
-        if title:
-            out.append((title, thumb))
+        if not title:
+            continue
+        low = title.lower().replace("_", " ")
+        if any(s in low for s in SKIP_SUBSTR):
+            continue
+        out.append((title, thumb))
     return out
 
 
-def safe_filename(s: str) -> str:
-    keep = "-_."
-    cleaned = "".join(c if c.isalnum() or c in keep else "_" for c in s)
-    return cleaned[:80]
-
-
 def download(url: str, dest: Path) -> int:
-    # Retry with exponential backoff on 429 rate-limits (Wikimedia returns them
-    # when our request cadence spikes). Up to 4 tries, then give up.
     delay = 2.0
     last_err: Exception | None = None
     for attempt in range(4):
@@ -173,26 +141,23 @@ def download(url: str, dest: Path) -> int:
 def main() -> int:
     new_total = 0
     skipped_total = 0
-    for folder, cats in CATEGORIES.items():
+    for folder, species_list in SPECIES.items():
         out_dir = BASE / folder
         out_dir.mkdir(parents=True, exist_ok=True)
-        for cat, want in cats:
-            print(f"\n== {folder} / Category:{cat}  (want {want}) ==", flush=True)
+        for de_name, cat in species_list:
+            print(f"\n== {folder}/{de_name}  (Category:{cat}) ==", flush=True)
+            # Request 10× the target so skip-filter + picky selection has room
             try:
-                imgs = list_images(cat, want)
+                imgs = list_images(cat, IMAGES_PER_SPECIES * 10)
             except Exception as e:
                 print(f"  ! list_images failed: {e}", flush=True)
                 continue
             taken = 0
-            for fname, url in imgs:
-                if taken >= want:
+            for _title, url in imgs:
+                if taken >= IMAGES_PER_SPECIES:
                     break
-                # Normalize underscores and spaces so SKIP_SUBSTR matches whichever Commons returns
-                low = fname.lower().replace("_", " ")
-                if any(s in low for s in SKIP_SUBSTR):
-                    continue
-                # iiurlwidth=640 always serves a JPG-encoded thumbnail
-                outname = safe_filename(Path(fname).stem) + ".jpg"
+                idx = taken + 1
+                outname = f"{de_name}_{idx}.jpg"
                 dest = out_dir / outname
                 if dest.exists():
                     print(f"  · already have {outname}", flush=True)
@@ -204,11 +169,11 @@ def main() -> int:
                     print(f"  ✓ {outname} ({sz // 1024} KB)", flush=True)
                     taken += 1
                     new_total += 1
-                    time.sleep(1.0)  # be nice to Wikimedia
+                    time.sleep(0.8)
                 except Exception as e:
-                    print(f"  ! {fname} failed: {e}", flush=True)
-            if taken < want:
-                print(f"  (only {taken}/{want} for {cat})", flush=True)
+                    print(f"  ! {outname} failed: {e}", flush=True)
+            if taken < IMAGES_PER_SPECIES:
+                print(f"  (only {taken}/{IMAGES_PER_SPECIES} for {de_name})", flush=True)
 
     print(f"\n=== done. new: {new_total}, already-present: {skipped_total} ===", flush=True)
     return 0

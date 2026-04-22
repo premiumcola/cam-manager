@@ -3593,23 +3593,51 @@ function _decrementMediaOverviewCount(camId){
   renderMediaOverview();
 }
 
-// ── Bird SVG icons ───────────────────────────────────────────────────────────
+// ── Bird SVG icons — one distinctive silhouette per Bavarian Top-20 species ──
+// viewBox 0 0 80 80 (reused by the medal rendering at size 80×80). Each SVG
+// emphasises the bird's identifying features: plumage pattern, beak shape,
+// posture. Flat design, 2–4 colours, branch perch for consistency.
 const BIRD_SVGS={
-'blaumeise':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M18 56 L10 58 L12 64 L20 61Z" fill="#4a90d9"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#f0d060"/><ellipse cx="30" cy="44" rx="17" ry="9" fill="#5a9a40"/><ellipse cx="28" cy="42" rx="15" ry="7" fill="#4a90d9"/><circle cx="52" cy="36" r="11" fill="#f0f0f0"/><ellipse cx="52" cy="27" rx="11" ry="7" fill="#4a90d9"/><rect x="42" y="34" width="18" height="2.5" rx="1.2" fill="#111"/><circle cx="57" cy="32" r="1.8" fill="#111"/><path d="M63 35 L72 34 L63 38Z" fill="#666"/></svg>`,
-'kohlmeise':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M18 56 L10 58 L12 64 L20 61Z" fill="#333"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#f0d060"/><rect x="32" y="40" width="7" height="22" rx="3.5" fill="#111"/><ellipse cx="30" cy="44" rx="17" ry="9" fill="#6a9a30"/><circle cx="52" cy="36" r="11" fill="#111"/><ellipse cx="51" cy="41" rx="7" ry="4.5" fill="#f0f0f0"/><circle cx="57" cy="32" r="1.8" fill="#fff"/><path d="M63 35 L72 34 L63 38Z" fill="#555"/></svg>`,
-'rotkehlchen':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M18 57 L10 59 L12 65 L20 62Z" fill="#8b6040"/><ellipse cx="36" cy="51" rx="18" ry="12" fill="#f5f0ea"/><ellipse cx="30" cy="44" rx="16" ry="10" fill="#8b6040"/><circle cx="48" cy="47" r="13" fill="#e05a20"/><circle cx="52" cy="35" r="11" fill="#e05a20"/><circle cx="57" cy="32" r="1.8" fill="#111"/><path d="M63 34 L72 33 L63 37Z" fill="#555"/></svg>`,
-'buchfink':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M18 56 L10 58 L12 64 L20 61Z" fill="#a05030"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#c07060"/><ellipse cx="28" cy="44" rx="17" ry="9" fill="#a05030"/><rect x="18" y="43" width="26" height="3" rx="1.5" fill="#f0f0f0"/><circle cx="52" cy="36" r="11" fill="#7090b0"/><circle cx="57" cy="33" r="1.8" fill="#111"/><path d="M63 35 L72 34 L63 38Z" fill="#606060"/></svg>`,
+// 1 Haussperling — stocky brown, grey crown, black bib, pale cheeks
+'haussperling':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M18 57 L10 59 L12 65 L20 62Z" fill="#9b6840"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#c4a478"/><ellipse cx="28" cy="44" rx="18" ry="9" fill="#7a5330"/><rect x="16" y="43" width="14" height="2.5" rx="1.2" fill="#3a2a18"/><circle cx="52" cy="36" r="11" fill="#c4a478"/><path d="M41 30 Q 52 22 63 30 Q 63 34 52 34 Q 41 34 41 30Z" fill="#7a6150"/><ellipse cx="46" cy="43" rx="7" ry="4" fill="#1a1a1a"/><circle cx="57" cy="33" r="1.8" fill="#111"/><path d="M63 35 L72 34 L63 38Z" fill="#3a2a18"/></svg>`,
+// 2 Amsel — solid black bird, orange beak + eye-ring
 'amsel':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M14 55 L6 57 L8 64 L16 60Z" fill="#111"/><ellipse cx="36" cy="50" rx="20" ry="13" fill="#111"/><ellipse cx="30" cy="44" rx="18" ry="10" fill="#111"/><circle cx="52" cy="36" r="11" fill="#111"/><circle cx="57" cy="32" r="4" fill="none" stroke="#f08030" stroke-width="2"/><circle cx="57" cy="32" r="1.8" fill="#111"/><path d="M63 35 L74 33 L63 39Z" fill="#f08030"/></svg>`,
-'hausspatz':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M18 57 L10 59 L12 65 L20 62Z" fill="#9b6840"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#d4c4a8"/><ellipse cx="28" cy="44" rx="18" ry="9" fill="#9b6840"/><rect x="16" y="43" width="14" height="2.5" rx="1.2" fill="#c4b090"/><circle cx="52" cy="36" r="11" fill="#d4c4a8"/><ellipse cx="52" cy="27" rx="11" ry="7" fill="#909090"/><ellipse cx="50" cy="41" rx="5.5" ry="3.5" fill="#222"/><circle cx="57" cy="33" r="1.8" fill="#111"/><path d="M63 35 L72 34 L63 38Z" fill="#806040"/></svg>`,
+// 3 Kohlmeise — yellow belly, black head, white cheek, black belly stripe
+'kohlmeise':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M18 56 L10 58 L12 64 L20 61Z" fill="#333"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#f0d060"/><rect x="32" y="40" width="7" height="22" rx="3.5" fill="#111"/><ellipse cx="30" cy="44" rx="17" ry="9" fill="#6a9a30"/><circle cx="52" cy="36" r="11" fill="#111"/><ellipse cx="51" cy="41" rx="7" ry="4.5" fill="#f0f0f0"/><circle cx="57" cy="32" r="1.8" fill="#fff"/><path d="M63 35 L72 34 L63 38Z" fill="#555"/></svg>`,
+// 4 Star — iridescent dark with white speckles, pointed yellow beak
+'star':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M14 55 L6 57 L8 64 L16 60Z" fill="#1a1a2a"/><ellipse cx="36" cy="50" rx="20" ry="12" fill="#1a1a2a"/><ellipse cx="30" cy="44" rx="18" ry="10" fill="#2a2a44"/><circle cx="24" cy="46" r="1" fill="#d0d0e0"/><circle cx="30" cy="48" r="1" fill="#d0d0e0"/><circle cx="36" cy="46" r="1" fill="#d0d0e0"/><circle cx="42" cy="49" r="1" fill="#d0d0e0"/><circle cx="28" cy="52" r="1" fill="#d0d0e0"/><circle cx="36" cy="53" r="1" fill="#d0d0e0"/><circle cx="44" cy="53" r="1" fill="#d0d0e0"/><circle cx="22" cy="50" r="1" fill="#d0d0e0"/><circle cx="52" cy="35" r="11" fill="#1a1a2a"/><circle cx="57" cy="31" r="1.8" fill="#f5f5ff"/><path d="M62 33 L76 32 L62 37Z" fill="#f0c020"/></svg>`,
+// 5 Feldsperling — warm brown cap, white cheeks with black cheek-spot
+'feldsperling':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M18 57 L10 59 L12 65 L20 62Z" fill="#a0704a"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#d4b890"/><ellipse cx="28" cy="44" rx="17" ry="9" fill="#a0704a"/><circle cx="52" cy="36" r="11" fill="#f5ecd8"/><path d="M41 26 Q 52 20 63 26 L 63 32 Q 52 34 41 32Z" fill="#7a4820"/><circle cx="50" cy="39" r="2.5" fill="#2a1a08"/><circle cx="57" cy="33" r="1.8" fill="#111"/><path d="M63 35 L72 34 L63 38Z" fill="#3a2a18"/></svg>`,
+// 6 Blaumeise — blue cap + wings, yellow belly, white face
+'blaumeise':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M18 56 L10 58 L12 64 L20 61Z" fill="#4a90d9"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#f0d060"/><ellipse cx="30" cy="44" rx="17" ry="9" fill="#5a9a40"/><ellipse cx="28" cy="42" rx="15" ry="7" fill="#4a90d9"/><circle cx="52" cy="36" r="11" fill="#f0f0f0"/><ellipse cx="52" cy="27" rx="11" ry="7" fill="#4a90d9"/><rect x="42" y="34" width="18" height="2.5" rx="1.2" fill="#111"/><circle cx="57" cy="32" r="1.8" fill="#111"/><path d="M63 35 L72 34 L63 38Z" fill="#666"/></svg>`,
+// 7 Ringeltaube — plump grey dove with white neck patch
+'ringeltaube':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M14 54 L4 56 L6 64 L16 60Z" fill="#6d7686"/><ellipse cx="36" cy="50" rx="22" ry="14" fill="#8c96a6"/><ellipse cx="28" cy="44" rx="20" ry="11" fill="#6d7686"/><circle cx="52" cy="34" r="12" fill="#7e8898"/><ellipse cx="44" cy="38" rx="5" ry="3.5" fill="#f5f5f5"/><ellipse cx="40" cy="42" rx="4" ry="2" fill="#f5f5f5" opacity="0.8"/><circle cx="57" cy="31" r="1.8" fill="#e04040"/><path d="M63 33 L72 32 L71 37 L63 37Z" fill="#e0a040"/></svg>`,
+// 8 Mauersegler — dark sickle-winged bird in flight
+'mauersegler':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><ellipse cx="40" cy="42" rx="10" ry="4" fill="#2a2a32"/><path d="M 30 42 Q 10 20 4 30 Q 12 32 28 42Z" fill="#1a1a22"/><path d="M 50 42 Q 70 20 76 30 Q 68 32 52 42Z" fill="#1a1a22"/><path d="M 30 42 Q 14 28 6 32 Q 14 36 28 44Z" fill="#2a2a32"/><path d="M 50 42 Q 66 28 74 32 Q 66 36 52 44Z" fill="#2a2a32"/><path d="M 38 48 L 36 58 L 40 56 L 44 58 L 42 48Z" fill="#1a1a22"/><circle cx="46" cy="41" r="1.5" fill="#111"/><path d="M50 42 L54 42 L50 44Z" fill="#111"/></svg>`,
+// 9 Elster — black-and-white, long tail
+'elster':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M6 48 L2 55 L14 60 L20 54Z" fill="#111"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#f5f5f5"/><ellipse cx="27" cy="44" rx="15" ry="9" fill="#111"/><ellipse cx="33" cy="52" rx="9" ry="5" fill="#f5f5f5"/><circle cx="52" cy="36" r="11" fill="#111"/><ellipse cx="48" cy="38" rx="5" ry="4" fill="#1a2e55" opacity="0.65"/><circle cx="57" cy="32" r="1.8" fill="#fff"/><path d="M63 35 L72 34 L63 38Z" fill="#222"/></svg>`,
+// 10 Mehlschwalbe — forked-tail swallow, white underside
+'mehlschwalbe':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><path d="M 30 40 Q 10 30 4 36 Q 10 44 28 44Z" fill="#1a2a44"/><path d="M 50 40 Q 70 30 76 36 Q 70 44 52 44Z" fill="#1a2a44"/><ellipse cx="40" cy="42" rx="12" ry="6" fill="#1a2a44"/><ellipse cx="40" cy="46" rx="10" ry="4" fill="#f5f5f5"/><path d="M 34 48 L 26 60 L 34 54 L 40 58 L 46 54 L 54 60 L 46 48Z" fill="#1a2a44"/><ellipse cx="42" cy="43" rx="3" ry="2" fill="#f5f5f5" opacity="0.7"/><circle cx="46" cy="41" r="1.5" fill="#111"/><path d="M50 42 L54 42 L50 43Z" fill="#111"/></svg>`,
+// 11 Buchfink — pink breast, white wing bars, blue-grey cap
+'buchfink':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M18 56 L10 58 L12 64 L20 61Z" fill="#a05030"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#c07060"/><ellipse cx="28" cy="44" rx="17" ry="9" fill="#6a4a38"/><rect x="16" y="43" width="26" height="2.5" rx="1.2" fill="#f0f0f0"/><rect x="18" y="48" width="22" height="2.5" rx="1.2" fill="#f0f0f0"/><circle cx="52" cy="36" r="11" fill="#7090b0"/><circle cx="57" cy="33" r="1.8" fill="#111"/><path d="M63 35 L72 34 L63 38Z" fill="#606060"/></svg>`,
+// 12 Rotkehlchen — orange-red face/breast, round body
+'rotkehlchen':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M18 57 L10 59 L12 65 L20 62Z" fill="#8b6040"/><ellipse cx="36" cy="51" rx="18" ry="12" fill="#f5f0ea"/><ellipse cx="30" cy="44" rx="16" ry="10" fill="#8b6040"/><circle cx="48" cy="47" r="13" fill="#e05a20"/><circle cx="52" cy="35" r="11" fill="#e05a20"/><circle cx="57" cy="32" r="1.8" fill="#111"/><path d="M63 34 L72 33 L63 37Z" fill="#555"/></svg>`,
+// 13 Grünfink — olive body, bright yellow wing patch
 'gruenfink':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M16 55 L8 57 L10 63 L18 60Z" fill="#6a9a20"/><ellipse cx="36" cy="50" rx="19" ry="12" fill="#90bb30"/><ellipse cx="28" cy="44" rx="17" ry="9" fill="#6a9a20"/><rect x="16" y="46" width="24" height="4" rx="2" fill="#e8d020"/><circle cx="52" cy="36" r="11" fill="#90bb30"/><circle cx="57" cy="33" r="1.8" fill="#111"/><path d="M62 34 L74 33 L62 38Z" fill="#d4a010"/></svg>`,
-'stieglitz':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M14 55 L6 57 L8 63 L16 60Z" fill="#111"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#f5f0ea"/><ellipse cx="26" cy="44" rx="17" ry="9" fill="#111"/><rect x="14" y="46" width="28" height="5" rx="2.5" fill="#f0c010"/><circle cx="52" cy="36" r="11" fill="#f5f5f5"/><ellipse cx="46" cy="33" rx="9" ry="9" fill="#111"/><ellipse cx="51" cy="36" rx="8" ry="7" fill="#cc2200"/><circle cx="57" cy="33" r="1.8" fill="#111"/><path d="M62 35 L72 34 L62 38Z" fill="#c0b090"/></svg>`,
-'kleiber':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M16 55 L8 57 L10 63 L18 60Z" fill="#6080a0"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#d07030"/><ellipse cx="28" cy="43" rx="18" ry="9" fill="#6080a0"/><ellipse cx="36" cy="57" rx="12" ry="5" fill="#f5e8d0"/><circle cx="52" cy="36" r="11" fill="#6080a0"/><rect x="40" y="33" width="22" height="3" rx="1.5" fill="#111"/><circle cx="56" cy="30" r="1.8" fill="#fff"/><path d="M62 35 L73 36 L62 40Z" fill="#444"/></svg>`,
-'buntspecht':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M12 52 L6 56 L8 62 L14 58Z" fill="#111"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#111"/><ellipse cx="27" cy="50" rx="9" ry="8" fill="#f5f5f5"/><ellipse cx="36" cy="59" rx="6" ry="4" fill="#cc0000"/><circle cx="52" cy="36" r="11" fill="#111"/><ellipse cx="48" cy="39" rx="6" ry="4.5" fill="#f5f5f5"/><ellipse cx="52" cy="27" rx="9" ry="6" fill="#cc0000"/><circle cx="57" cy="34" r="1.8" fill="#fff"/><path d="M63 35 L74 34 L63 39Z" fill="#555"/></svg>`,
-'eichelhaher':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M12 54 L4 57 L6 63 L14 60Z" fill="#c8906c"/><ellipse cx="36" cy="50" rx="20" ry="13" fill="#c8906c"/><ellipse cx="26" cy="46" rx="13" ry="8" fill="#4060e0"/><line x1="18" y1="43" x2="32" y2="43" stroke="#111" stroke-width="1.5"/><line x1="18" y1="47" x2="32" y2="47" stroke="#111" stroke-width="1.5"/><line x1="18" y1="51" x2="32" y2="51" stroke="#111" stroke-width="1.5"/><circle cx="52" cy="36" r="11" fill="#c8906c"/><ellipse cx="52" cy="28" rx="9" ry="6" fill="#f0f0f0"/><rect x="42" y="39" width="14" height="2.5" rx="1.2" fill="#111"/><circle cx="57" cy="33" r="1.8" fill="#111"/><path d="M63 35 L72 34 L63 38Z" fill="#555"/></svg>`,
-'elster':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M14 52 L6 48 L4 58 L12 60Z" fill="#111"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#f5f5f5"/><ellipse cx="27" cy="44" rx="15" ry="9" fill="#111"/><ellipse cx="33" cy="52" rx="9" ry="5" fill="#f5f5f5"/><circle cx="52" cy="36" r="11" fill="#111"/><ellipse cx="48" cy="38" rx="5" ry="4" fill="#1a1a4a" opacity="0.6"/><circle cx="57" cy="32" r="1.8" fill="#fff"/><path d="M63 35 L72 34 L63 38Z" fill="#222"/></svg>`,
+// 14 Rabenkrähe — all-black, stout beak
 'rabenkraehe':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M10 52 L2 55 L4 63 L12 59Z" fill="#111"/><ellipse cx="36" cy="50" rx="22" ry="14" fill="#111"/><ellipse cx="28" cy="43" rx="20" ry="11" fill="#111"/><circle cx="52" cy="35" r="13" fill="#111"/><circle cx="57" cy="31" r="2" fill="#334455"/><path d="M62 33 L76 31 L62 40Z" fill="#111"/><path d="M62 34 L75 32 L62 39Z" fill="#223"/></svg>`,
-'maeusebussard':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M14 54 L6 57 L8 63 L16 60Z" fill="#8b5a30"/><ellipse cx="36" cy="50" rx="20" ry="13" fill="#e0c090"/><rect x="20" y="47" width="28" height="3" rx="1.5" fill="#8b5a30" opacity="0.5"/><rect x="22" y="52" width="24" height="2.5" rx="1.2" fill="#8b5a30" opacity="0.4"/><ellipse cx="27" cy="43" rx="18" ry="9" fill="#8b5a30"/><circle cx="52" cy="36" r="11" fill="#c09060"/><circle cx="57" cy="32" r="2" fill="#111"/><path d="M63 34 L73 32 L71 38 L63 38Z" fill="#807060"/></svg>`,
-'turmfalke':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M14 54 L6 57 L8 63 L16 60Z" fill="#cc6030"/><ellipse cx="36" cy="50" rx="20" ry="12" fill="#f0d8a8"/><circle cx="28" cy="50" r="2" fill="#8b5030" opacity="0.6"/><circle cx="36" cy="53" r="2" fill="#8b5030" opacity="0.6"/><circle cx="44" cy="50" r="2" fill="#8b5030" opacity="0.6"/><ellipse cx="26" cy="43" rx="18" ry="9" fill="#cc6030"/><circle cx="52" cy="36" r="11" fill="#7090c0"/><path d="M46 40 L58 38" stroke="#111" stroke-width="2" stroke-linecap="round"/><circle cx="57" cy="32" r="1.8" fill="#111"/><path d="M62 34 L72 32 L70 38 L62 37Z" fill="#807060"/></svg>`
+// 15 Hausrotschwanz — dark sooty body, rusty-red tail
+'hausrotschwanz':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M20 53 L6 56 L4 64 L14 63Z" fill="#c8451a"/><path d="M20 53 L10 58 L14 64 L22 61Z" fill="#e05a20"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#3a3a40"/><ellipse cx="30" cy="44" rx="16" ry="9" fill="#202028"/><circle cx="52" cy="36" r="11" fill="#202028"/><circle cx="57" cy="32" r="1.8" fill="#fff"/><path d="M63 35 L72 34 L63 38Z" fill="#111"/></svg>`,
+// 16 Mönchsgrasmücke — olive-brown body, black cap (male)
+'moenchsgrasmucke':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M18 56 L10 58 L12 64 L20 61Z" fill="#7a7060"/><ellipse cx="36" cy="51" rx="18" ry="12" fill="#b0a890"/><ellipse cx="28" cy="44" rx="17" ry="9" fill="#7a7060"/><circle cx="52" cy="36" r="11" fill="#a09684"/><path d="M41 30 Q 52 20 63 28 Q 63 36 52 34 Q 41 34 41 30Z" fill="#111"/><circle cx="57" cy="33" r="1.8" fill="#f5f5f5"/><path d="M63 35 L72 34 L63 38Z" fill="#555"/></svg>`,
+// 17 Stieglitz — red face, gold wing bar, black wings
+'stieglitz':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M14 55 L6 57 L8 63 L16 60Z" fill="#111"/><ellipse cx="36" cy="50" rx="18" ry="12" fill="#f5f0ea"/><ellipse cx="26" cy="44" rx="17" ry="9" fill="#111"/><rect x="14" y="46" width="28" height="5" rx="2.5" fill="#f0c010"/><circle cx="52" cy="36" r="11" fill="#f5f5f5"/><ellipse cx="46" cy="33" rx="9" ry="9" fill="#111"/><ellipse cx="51" cy="36" rx="8" ry="7" fill="#cc2200"/><circle cx="57" cy="33" r="1.8" fill="#111"/><path d="M62 35 L72 34 L62 38Z" fill="#c0b090"/></svg>`,
+// 18 Buntspecht — black/white striped back, red belly patch, woodpecker pose
+'buntspecht':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="44" y="10" width="5" height="60" rx="2" fill="#5a3a1a"/><ellipse cx="36" cy="48" rx="12" ry="14" fill="#111"/><ellipse cx="29" cy="46" rx="7" ry="10" fill="#f5f5f5"/><line x1="18" y1="34" x2="38" y2="34" stroke="#111" stroke-width="2"/><line x1="18" y1="40" x2="38" y2="40" stroke="#111" stroke-width="2"/><ellipse cx="32" cy="60" rx="8" ry="5" fill="#cc1a1a"/><circle cx="34" cy="32" r="8" fill="#111"/><ellipse cx="34" cy="26" rx="6" ry="4" fill="#cc1a1a"/><ellipse cx="32" cy="34" rx="4" ry="3" fill="#f5f5f5"/><circle cx="36" cy="30" r="1.5" fill="#fff"/><path d="M40 31 L52 30 L40 34Z" fill="#333"/></svg>`,
+// 19 Kleiber — blue-grey back, orange underside, head-down pose on trunk
+'kleiber':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="54" y="6" width="6" height="68" rx="3" fill="#5a3a1a"/><path d="M 44 20 Q 56 26 58 44 Q 56 58 44 64 Q 30 60 28 44 Q 30 26 44 20Z" fill="#6080a0"/><path d="M 44 30 Q 54 36 54 48 Q 54 58 44 62 Q 36 58 34 48 Q 36 38 44 30Z" fill="#d07030"/><rect x="32" y="30" width="20" height="3" rx="1.5" fill="#111"/><circle cx="38" cy="28" r="1.8" fill="#fff"/><path d="M30 30 L20 32 L30 34Z" fill="#444"/></svg>`,
+// 20 Eichelhäher — pinkish-brown body, bright blue wing patch
+'eichelhaher':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="10" y="62" width="60" height="3" rx="1.5" fill="#5a3a1a"/><path d="M12 54 L4 57 L6 63 L14 60Z" fill="#c8906c"/><ellipse cx="36" cy="50" rx="20" ry="13" fill="#c8906c"/><ellipse cx="26" cy="46" rx="13" ry="8" fill="#4060e0"/><line x1="18" y1="43" x2="32" y2="43" stroke="#111" stroke-width="1.5"/><line x1="18" y1="47" x2="32" y2="47" stroke="#111" stroke-width="1.5"/><line x1="18" y1="51" x2="32" y2="51" stroke="#111" stroke-width="1.5"/><circle cx="52" cy="36" r="11" fill="#c8906c"/><ellipse cx="52" cy="28" rx="9" ry="6" fill="#f0f0f0"/><rect x="42" y="39" width="14" height="2.5" rx="1.2" fill="#111"/><circle cx="57" cy="33" r="1.8" fill="#111"/><path d="M63 35 L72 34 L63 38Z" fill="#555"/></svg>`
 };
 
 // ── Mammal SVG icons ─────────────────────────────────────────────────────────
@@ -3632,31 +3660,37 @@ function openAchievementDrilldown(id, name){
 }
 
 // ── Achievements / Trophäen ───────────────────────────────────────────────────
+// Top 20 Bavarian garden birds (LBV Stunde der Gartenvögel 2025 Bayern),
+// sorted by frequency (most common first). freq values drive rarity pills.
 const ACH_DEFS=[
-  // Vögel
-  {id:'blaumeise',    name:'Blaumeise',     icon:'🐦', cat:'birds'},
-  {id:'kohlmeise',    name:'Kohlmeise',     icon:'🐦', cat:'birds'},
-  {id:'rotkehlchen',  name:'Rotkehlchen',   icon:'🐦', cat:'birds'},
-  {id:'buchfink',     name:'Buchfink',      icon:'🐦', cat:'birds'},
-  {id:'amsel',        name:'Amsel',         icon:'🐦', cat:'birds'},
-  {id:'hausspatz',    name:'Hausspatz',     icon:'🐦', cat:'birds'},
-  {id:'gruenfink',    name:'Grünfink',      icon:'🐦', cat:'birds'},
-  {id:'stieglitz',    name:'Stieglitz',     icon:'🐦', cat:'birds'},
-  {id:'kleiber',      name:'Kleiber',       icon:'🐦', cat:'birds'},
-  {id:'buntspecht',   name:'Buntspecht',    icon:'🐦', cat:'birds'},
-  {id:'eichelhaher',  name:'Eichelhäher',   icon:'🦅', cat:'birds'},
-  {id:'elster',       name:'Elster',        icon:'🐦', cat:'birds'},
-  {id:'rabenkraehe',  name:'Rabenkrähe',    icon:'🐦', cat:'birds'},
-  {id:'maeusebussard',name:'Mäusebussard',  icon:'🦅', cat:'birds'},
-  {id:'turmfalke',    name:'Turmfalke',     icon:'🦅', cat:'birds'},
+  {id:'haussperling',     name:'Haussperling',     icon:'🐦', cat:'birds', freq:'sehr haeufig',  rank:1},
+  {id:'amsel',            name:'Amsel',            icon:'🐦', cat:'birds', freq:'sehr haeufig',  rank:2},
+  {id:'kohlmeise',        name:'Kohlmeise',        icon:'🐦', cat:'birds', freq:'sehr haeufig',  rank:3},
+  {id:'star',             name:'Star',             icon:'🐦', cat:'birds', freq:'haeufig',       rank:4},
+  {id:'feldsperling',     name:'Feldsperling',     icon:'🐦', cat:'birds', freq:'haeufig',       rank:5},
+  {id:'blaumeise',        name:'Blaumeise',        icon:'🐦', cat:'birds', freq:'haeufig',       rank:6},
+  {id:'ringeltaube',      name:'Ringeltaube',      icon:'🐦', cat:'birds', freq:'haeufig',       rank:7},
+  {id:'mauersegler',      name:'Mauersegler',      icon:'🐦', cat:'birds', freq:'haeufig',       rank:8},
+  {id:'elster',           name:'Elster',           icon:'🐦', cat:'birds', freq:'regelmaessig',  rank:9},
+  {id:'mehlschwalbe',     name:'Mehlschwalbe',     icon:'🐦', cat:'birds', freq:'regelmaessig',  rank:10},
+  {id:'buchfink',         name:'Buchfink',         icon:'🐦', cat:'birds', freq:'regelmaessig',  rank:11},
+  {id:'rotkehlchen',      name:'Rotkehlchen',      icon:'🐦', cat:'birds', freq:'regelmaessig',  rank:12},
+  {id:'gruenfink',        name:'Grünfink',         icon:'🐦', cat:'birds', freq:'regelmaessig',  rank:13},
+  {id:'rabenkraehe',      name:'Rabenkrähe',       icon:'🐦', cat:'birds', freq:'regelmaessig',  rank:14},
+  {id:'hausrotschwanz',   name:'Hausrotschwanz',   icon:'🐦', cat:'birds', freq:'gelegentlich',  rank:15},
+  {id:'moenchsgrasmucke', name:'Mönchsgrasmücke',  icon:'🐦', cat:'birds', freq:'gelegentlich',  rank:16},
+  {id:'stieglitz',        name:'Stieglitz',        icon:'🐦', cat:'birds', freq:'gelegentlich',  rank:17},
+  {id:'buntspecht',       name:'Buntspecht',       icon:'🐦', cat:'birds', freq:'gelegentlich',  rank:18},
+  {id:'kleiber',          name:'Kleiber',          icon:'🐦', cat:'birds', freq:'selten',        rank:19},
+  {id:'eichelhaher',      name:'Eichelhäher',      icon:'🐦', cat:'birds', freq:'selten',        rank:20},
   // Säugetiere
-  {id:'eichhoernchen_orange',  name:'Eichhörnchen (rot)',     icon:'🐿️', cat:'mammals'},
-  {id:'eichhoernchen_schwarz', name:'Eichhörnchen (schwarz)', icon:'🐿️', cat:'mammals'},
-  {id:'eichhoernchen_hell',    name:'Eichhörnchen (hell)',    icon:'🐿️', cat:'mammals'},
-  {id:'igel',         name:'Igel',          icon:'🦔', cat:'mammals'},
-  {id:'feldhase',     name:'Feldhase',      icon:'🐇', cat:'mammals'},
-  {id:'reh',          name:'Reh',           icon:'🦌', cat:'mammals'},
-  {id:'fuchs',        name:'Fuchs',         icon:'🦊', cat:'mammals'},
+  {id:'eichhoernchen_orange',  name:'Eichhörnchen (rot)',     icon:'🐿️', cat:'mammals', freq:'haeufig',      rank:1},
+  {id:'eichhoernchen_schwarz', name:'Eichhörnchen (schwarz)', icon:'🐿️', cat:'mammals', freq:'selten',       rank:2},
+  {id:'eichhoernchen_hell',    name:'Eichhörnchen (hell)',    icon:'🐿️', cat:'mammals', freq:'selten',       rank:3},
+  {id:'igel',         name:'Igel',          icon:'🦔', cat:'mammals', freq:'gelegentlich', rank:4},
+  {id:'feldhase',     name:'Feldhase',      icon:'🐇', cat:'mammals', freq:'selten',       rank:5},
+  {id:'reh',          name:'Reh',           icon:'🦌', cat:'mammals', freq:'selten',       rank:6},
+  {id:'fuchs',        name:'Fuchs',         icon:'🦊', cat:'mammals', freq:'selten',       rank:7},
 ];
 
 let _achData={};
@@ -3700,7 +3734,7 @@ function _medalSVG(achId, tier, birdSvg, isUnlocked){
     // Slight overflow so the animal visually pops out of the medal rim
     bird=birdSvg.replace('<svg ',`<svg x="10" y="10" width="80" height="80" ${filter} `);
   }
-  return `<svg viewBox="0 0 100 100" width="92" height="92" xmlns="http://www.w3.org/2000/svg">
+  return `<svg viewBox="0 0 100 100" width="110" height="110" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <radialGradient id="rg${uid}" cx="50%" cy="40%" r="55%">
         <stop offset="0%" stop-color="${rc}"/>
@@ -3719,6 +3753,19 @@ function _medalSVG(achId, tier, birdSvg, isUnlocked){
   </svg>`;
 }
 
+// Frequency → pill class + German label
+const _FREQ_META={
+  'sehr haeufig':  {cls:'r-sehrhaeufig',  label:'Sehr häufig'},
+  'haeufig':       {cls:'r-haeufig',      label:'Häufig'},
+  'regelmaessig':  {cls:'r-regelmaessig', label:'Regelmäßig'},
+  'gelegentlich':  {cls:'r-gelegentlich', label:'Gelegentlich'},
+  'selten':        {cls:'r-selten',       label:'Selten'},
+};
+function _rarityPill(freq){
+  const m=_FREQ_META[freq]; if(!m) return '';
+  return `<span class="medal-rarity ${m.cls}">${m.label}</span>`;
+}
+
 function renderAchievements(){
   const unlocked=ACH_DEFS.filter(a=>_achData[a.id]);
   const total=ACH_DEFS.length;
@@ -3734,25 +3781,27 @@ function renderAchievements(){
     <span><span class="ach-leg-dot" style="background:#e0c050;width:14px;height:14px"></span><span style="font-size:13px;font-weight:600">Gold 20×+</span></span>
   </div>`;
 
-  const cards=ACH_DEFS.map(a=>{
+  const _renderCard=(a)=>{
     const info=_achData[a.id];
     const isUnlocked=!!info;
     const count=isUnlocked?(info.count||1):0;
     const tier=_achTier(count);
     const iconSvg=a.cat==='birds'?(BIRD_SVGS[a.id]||null):(MAMMAL_SVGS[a.id]||null);
     const medalHtml=_medalSVG(a.id,tier,iconSvg,isUnlocked);
-    // emoji overlay only when no hand-crafted SVG available
     const emojiOverlay=!iconSvg
       ?`<span class="medal-emoji${isUnlocked?'':' medal-emoji-locked'}">${isUnlocked?a.icon:'🔒'}</span>`
       :'';
+    // When unlocked: count-badge on medal. When locked: lock badge ABOVE medal (overlapping top).
     const badge=isUnlocked
       ?`<span class="medal-count-badge ${tier}">${count}×</span>`
-      :(iconSvg?`<div class="medal-lock-overlay"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="3"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>`:'');
-    // count label
+      :`<div class="medal-lock-overlay"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="3"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>`;
+    // Bottom row: count + rarity pill (unlocked) or just rarity pill (locked)
     const countColors={bronze:'#d4894a',silver:'#90a8be',gold:'#d4a820'};
-    const countLabel=isUnlocked
-      ?`<div class="medal-count" style="color:${countColors[tier]||'#d4a820'}">${count}×</div>`
-      :`<div class="medal-count locked-text">nicht entdeckt</div>`;
+    const rarityPill=_rarityPill(a.freq);
+    const countSpan=isUnlocked
+      ?`<span class="medal-count" style="color:${countColors[tier]||'#d4a820'}">${count}× gesehen</span>`
+      :'';
+    const footline=`<div class="medal-footline">${countSpan}${rarityPill}</div>`;
     // Split "Eichhörnchen (rot)" → base name + muted variant suffix
     const nameParts=a.name.match(/^(.+?)\s*(\(.+\))?$/);
     const baseName=nameParts?.[1]||a.name;
@@ -3766,11 +3815,19 @@ function renderAchievements(){
         ${badge}
       </div>
       <div class="medal-name">${nameHtml}</div>
-      ${countLabel}
+      ${footline}
     </div>`;
-  }).join('');
+  };
 
-  byId('achievementsGrid').innerHTML=`<div class="ach-cards-grid">${cards}</div>`+legend;
+  // Order: all birds → squirrel sub-row → remaining mammals
+  const birdCards=ACH_DEFS.filter(a=>a.cat==='birds').map(_renderCard).join('');
+  const squirrelIds=['eichhoernchen_orange','eichhoernchen_schwarz','eichhoernchen_hell'];
+  const squirrelCards=ACH_DEFS.filter(a=>squirrelIds.includes(a.id)).map(_renderCard).join('');
+  const otherMammalCards=ACH_DEFS.filter(a=>a.cat==='mammals'&&!squirrelIds.includes(a.id)).map(_renderCard).join('');
+  const squirrelBlock=squirrelCards?`<div class="ach-subheading">Eichhörnchen-Varianten</div><div class="ach-squirrel-row">${squirrelCards}</div>`:'';
+  const othersBlock=otherMammalCards?`<div class="ach-subheading">Weitere Säugetiere</div><div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:18px">${otherMammalCards}</div>`:'';
+
+  byId('achievementsGrid').innerHTML=`<div class="ach-cards-grid">${birdCards}${squirrelBlock}${othersBlock}</div>`+legend;
 }
 
 // Wire confirm modal
