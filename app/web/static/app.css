@@ -660,52 +660,47 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 @keyframes toast-in{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
 @keyframes toast-out{from{opacity:1;transform:none}to{opacity:0;transform:translateX(40px)}}
 
-/* ── Achievements / Trophäen ───────────────────────────────────────────────── */
-/* ── Achievements (golden-themed section) ──────────────────────────────── */
+/* ── Achievements / Trophäen ───────────────────────────────────────────── */
+/* Warm golden tint across the whole section. No border-top — the tint
+   alone is enough to set this apart from the surrounding dark UI. */
 #achievements{
-  background:linear-gradient(135deg,rgba(180,140,40,0.06) 0%,rgba(120,90,20,0.03) 100%);
-  border-top:2px solid rgba(200,160,50,0.15);
+  background:linear-gradient(160deg, rgba(250,200,50,0.07) 0%, rgba(200,150,30,0.04) 100%);
+  padding:12px 16px;
 }
-.ach-progress-bar{margin-bottom:16px;padding:14px 18px;border-radius:16px;background:var(--surface);display:flex;align-items:center;gap:14px}
-.ach-progress-text{font-weight:700;font-size:16px;white-space:nowrap}
-.ach-progress-track{flex:1;height:10px;border-radius:999px;background:#1a2b3c;overflow:hidden}
+#achievements .section-head h3,
+#achievements .section-head .section-subtitle{color:rgba(250,200,50,0.8)}
+.ach-progress-bar{margin-bottom:10px;padding:10px 14px;border-radius:12px;background:rgba(0,0,0,0.15);display:flex;align-items:center;gap:12px}
+.ach-progress-text{font-weight:700;font-size:14px;white-space:nowrap;color:rgba(250,200,50,0.85)}
+.ach-progress-track{flex:1;height:8px;border-radius:999px;background:rgba(255,255,255,0.06);overflow:hidden}
 .ach-progress-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#d4a017,#f0c040);transition:width .5s cubic-bezier(.4,0,.2,1)}
-.ach-progress-pct{font-size:13px;font-weight:700;color:#f0c040;white-space:nowrap}
-.ach-grid{margin-top:4px}
-.ach-legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px;margin-bottom:4px;margin-left:8px;font-size:13px;color:var(--muted);align-items:center}
-.ach-leg-dot{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:5px;vertical-align:middle;flex-shrink:0}
-/* Medal grid — bumped minmax +20% to match larger medals */
-.ach-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:18px}
-.ach-card{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;cursor:default;padding:10px 4px 8px;border-radius:14px;transition:background .15s;position:relative}
+.ach-progress-pct{font-size:12px;font-weight:700;color:rgba(250,200,50,0.85);white-space:nowrap}
+.ach-grid{margin-top:2px}
+.ach-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;margin-bottom:2px;margin-left:4px;font-size:12px;color:var(--muted);align-items:center}
+.ach-leg-dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:4px;vertical-align:middle;flex-shrink:0}
+/* Compact grid: smaller tile, tighter gaps, 5-6 cols on desktop at
+   typical viewport widths. */
+.ach-cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:10px}
+.ach-card{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;cursor:default;padding:8px 4px 6px;border-radius:10px;transition:background .15s;position:relative}
 .ach-card:not(.locked):hover{background:rgba(255,255,255,.04)}
-.ach-card:not(.locked):hover .medal-wrap svg{transform:scale(1.05);filter:drop-shadow(0 6px 14px rgba(0,0,0,.55))}
-/* Medals: 92 → 110 (+20%) */
-.medal-wrap{position:relative;width:110px;height:110px;display:flex;align-items:center;justify-content:center;margin-top:14px}
-.medal-wrap svg{display:block;transition:transform .2s,filter .2s;filter:drop-shadow(0 3px 8px rgba(0,0,0,.4))}
-.medal-emoji{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:38px;line-height:1;pointer-events:none}
+.ach-card:not(.locked):hover .medal-wrap svg{transform:scale(1.04);filter:drop-shadow(0 5px 12px rgba(0,0,0,.5))}
+.medal-wrap{position:relative;width:88px;height:88px;display:flex;align-items:center;justify-content:center;margin-top:10px}
+.medal-wrap svg{display:block;transition:transform .2s,filter .2s;filter:drop-shadow(0 3px 7px rgba(0,0,0,.4))}
+.medal-emoji{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:30px;line-height:1;pointer-events:none}
 .medal-emoji-locked{filter:grayscale(1) brightness(0.4)}
-.medal-count-badge{position:absolute;top:-4px;right:-6px;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;white-space:nowrap;pointer-events:none}
+.medal-count-badge{position:absolute;top:-4px;right:-4px;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:800;white-space:nowrap;pointer-events:none}
 .medal-count-badge.bronze{background:#7a3e10;color:#f0a050;border:1px solid #e08040}
 .medal-count-badge.silver{background:#304050;color:#b0d0e8;border:1px solid #90b8d0}
 .medal-count-badge.gold{background:#4a3a08;color:#f0d040;border:1px solid #e0b820}
-/* Lock now sits ABOVE the medal (overlapping top edge by ~30%) */
-.medal-lock-badge{position:absolute;top:-10px;right:-10px;width:26px;height:26px;border-radius:50%;background:#1a2230;border:1.5px solid #2e4258;display:flex;align-items:center;justify-content:center;font-size:12px;color:#3a5268;pointer-events:none}
-.medal-lock-overlay{position:absolute;top:-12px;left:50%;transform:translateX(-50%);width:36px;height:36px;background:rgba(10,14,26,0.85);border-radius:50%;border:1.5px solid rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;z-index:4;pointer-events:none;opacity:.7}
-.medal-name{font-size:12px;font-weight:600;color:var(--text);line-height:1.2}
-.medal-count{font-size:11px;font-weight:700}
-.medal-count.locked-text{color:#3a5268}
-/* Rarity pill shown below the name */
-.medal-rarity{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.02em;line-height:1.4;white-space:nowrap;margin-top:2px}
-.medal-rarity.r-sehrhaeufig{background:rgba(34,197,94,.18);color:#4ade80;border:1px solid rgba(34,197,94,.45)}
-.medal-rarity.r-haeufig{background:rgba(132,204,22,.16);color:#bef264;border:1px solid rgba(132,204,22,.4)}
-.medal-rarity.r-regelmaessig{background:rgba(234,179,8,.16);color:#fde68a;border:1px solid rgba(234,179,8,.4)}
-.medal-rarity.r-gelegentlich{background:rgba(249,115,22,.16);color:#fdba74;border:1px solid rgba(249,115,22,.45)}
-.medal-rarity.r-selten{background:rgba(236,72,153,.16);color:#fbcfe8;border:1px solid rgba(236,72,153,.45)}
-/* Unlocked bottom row — count + rarity side by side */
-.medal-footline{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;min-height:18px}
-/* Squirrel variants row */
-.ach-subheading{grid-column:1/-1;font-size:12px;font-weight:700;color:rgba(200,160,50,.85);letter-spacing:.08em;text-transform:uppercase;margin-top:10px;padding:4px 0 2px;border-top:1px dashed rgba(200,160,50,.2)}
-.ach-squirrel-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;max-width:440px}
+/* Lock badge: above the medal, overlapping ~25% of the top edge.
+   Small and unobtrusive, matching the overall "muted" locked aesthetic. */
+.medal-lock-overlay{position:absolute;top:-10px;left:50%;transform:translateX(-50%);width:28px;height:28px;background:rgba(0,0,0,0.4);border-radius:50%;border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;z-index:4;pointer-events:none}
+.medal-lock-overlay svg{stroke:rgba(255,255,255,0.2)!important;width:16px!important;height:16px!important}
+.medal-name{font-size:11px;font-weight:600;color:var(--text);line-height:1.2}
+.ach-card.locked .medal-name{color:rgba(255,255,255,0.4)}
+.medal-count{font-size:10px;font-weight:700}
+/* Rarity is now plain text, coloured inline by the renderer. */
+.medal-rarity{font-size:10px;font-weight:500;letter-spacing:.02em;line-height:1.3;white-space:nowrap;margin-top:1px}
+.medal-footline{display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;min-height:14px}
 
 /* Discovery add-camera form */
 .disc-add-form{background:#131e2e;border-radius:12px;padding:12px;margin-top:8px}

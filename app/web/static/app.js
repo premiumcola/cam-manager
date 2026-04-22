@@ -4112,30 +4112,32 @@ function _achTier(count){
 }
 
 function _medalSVG(achId, tier, birdSvg, isUnlocked){
-  const rimC={
-    locked:['#0e1820','#283848'],
-    bronze:['#4a2408','#c87840'],
-    silver:['#303840','#a0b4c4'],
-    gold:  ['#402e08','#e0c050'],
-  };
-  const faceC={
-    locked:['#101820','#101820'],
-    bronze:['#3a2010','#1e0e04'],
-    silver:['#202e38','#101820'],
-    gold:  ['#2a2010','#140e04'],
-  };
-  const hlC={locked:'#4a6888',bronze:'#e09860',silver:'#c0d0e0',gold:'#f0e060'};
+  const uid=achId.replace(/[^a-z0-9]/g,'');
+  // Locked medals are deliberately drab: two flat neutral greys, no
+  // highlight arc. The silhouette is rendered faintly so the shape is
+  // still recognisable without announcing itself.
+  if(!isUnlocked){
+    let silhouette='';
+    if(birdSvg){
+      // Desaturate + dim via filter so the silhouette is barely visible.
+      silhouette=birdSvg.replace('<svg ',
+        '<svg x="10" y="10" width="80" height="80" style="filter:grayscale(1) brightness(0.18) opacity(0.45)" ');
+    }
+    return `<svg viewBox="0 0 100 100" width="88" height="88" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="50" cy="50" r="47" fill="rgba(255,255,255,0.06)"/>
+      <circle cx="50" cy="50" r="36" fill="rgba(255,255,255,0.03)"/>
+      <circle cx="50" cy="50" r="36" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
+      ${silhouette}
+    </svg>`;
+  }
+  const rimC={bronze:['#4a2408','#c87840'], silver:['#303840','#a0b4c4'], gold:['#402e08','#e0c050']};
+  const faceC={bronze:['#3a2010','#1e0e04'], silver:['#202e38','#101820'], gold:['#2a2010','#140e04']};
+  const hlC={bronze:'#e09860', silver:'#c0d0e0', gold:'#f0e060'};
   const [rc,re]=rimC[tier];
   const [fc,fe]=faceC[tier];
   const hl=hlC[tier];
-  const uid=achId.replace(/[^a-z0-9]/g,'');
-  let bird='';
-  if(birdSvg){
-    const filter=isUnlocked?'':'style="filter:grayscale(1) brightness(0.28)"';
-    // Slight overflow so the animal visually pops out of the medal rim
-    bird=birdSvg.replace('<svg ',`<svg x="10" y="10" width="80" height="80" ${filter} `);
-  }
-  return `<svg viewBox="0 0 100 100" width="110" height="110" xmlns="http://www.w3.org/2000/svg">
+  const bird = birdSvg ? birdSvg.replace('<svg ',`<svg x="10" y="10" width="80" height="80" `) : '';
+  return `<svg viewBox="0 0 100 100" width="88" height="88" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <radialGradient id="rg${uid}" cx="50%" cy="40%" r="55%">
         <stop offset="0%" stop-color="${rc}"/>
@@ -4154,17 +4156,20 @@ function _medalSVG(achId, tier, birdSvg, isUnlocked){
   </svg>`;
 }
 
-// Frequency → pill class + German label
+// Rarity → German label + subtle text colour when unlocked. Locked
+// medals always render rarity in a neutral gray regardless of rank so
+// the eye focuses on what's already been discovered, not what's missing.
 const _FREQ_META={
-  'sehr haeufig':  {cls:'r-sehrhaeufig',  label:'Sehr häufig'},
-  'haeufig':       {cls:'r-haeufig',      label:'Häufig'},
-  'regelmaessig':  {cls:'r-regelmaessig', label:'Regelmäßig'},
-  'gelegentlich':  {cls:'r-gelegentlich', label:'Gelegentlich'},
-  'selten':        {cls:'r-selten',       label:'Selten'},
+  'sehr haeufig':  {label:'Sehr häufig',  color:'rgba(150,200,150,0.7)'},
+  'haeufig':       {label:'Häufig',       color:'rgba(150,200,150,0.6)'},
+  'regelmaessig':  {label:'Regelmäßig',   color:'rgba(200,200,150,0.7)'},
+  'gelegentlich':  {label:'Gelegentlich', color:'rgba(210,170,100,0.7)'},
+  'selten':        {label:'Selten',       color:'rgba(210,120,100,0.7)'},
 };
-function _rarityPill(freq){
+function _rarityText(freq, isUnlocked){
   const m=_FREQ_META[freq]; if(!m) return '';
-  return `<span class="medal-rarity ${m.cls}">${m.label}</span>`;
+  const color = isUnlocked ? m.color : 'rgba(255,255,255,0.25)';
+  return `<span class="medal-rarity" style="color:${color}">${m.label}</span>`;
 }
 
 function renderAchievements(){
@@ -4196,13 +4201,13 @@ function renderAchievements(){
     const badge=isUnlocked
       ?`<span class="medal-count-badge ${tier}">${count}×</span>`
       :`<div class="medal-lock-overlay"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="3"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>`;
-    // Bottom row: count + rarity pill (unlocked) or just rarity pill (locked)
+    // Bottom row: count + plain muted-colour rarity text.
     const countColors={bronze:'#d4894a',silver:'#90a8be',gold:'#d4a820'};
-    const rarityPill=_rarityPill(a.freq);
+    const rarityTxt=_rarityText(a.freq, isUnlocked);
     const countSpan=isUnlocked
       ?`<span class="medal-count" style="color:${countColors[tier]||'#d4a820'}">${count}× gesehen</span>`
       :'';
-    const footline=`<div class="medal-footline">${countSpan}${rarityPill}</div>`;
+    const footline=`<div class="medal-footline">${countSpan}${rarityTxt}</div>`;
     // Split "Eichhörnchen (rot)" → base name + muted variant suffix
     const nameParts=a.name.match(/^(.+?)\s*(\(.+\))?$/);
     const baseName=nameParts?.[1]||a.name;
@@ -4220,15 +4225,15 @@ function renderAchievements(){
     </div>`;
   };
 
-  // Order: all birds → squirrel sub-row → remaining mammals
-  const birdCards=ACH_DEFS.filter(a=>a.cat==='birds').map(_renderCard).join('');
-  const squirrelIds=['eichhoernchen_orange','eichhoernchen_schwarz','eichhoernchen_hell'];
-  const squirrelCards=ACH_DEFS.filter(a=>squirrelIds.includes(a.id)).map(_renderCard).join('');
-  const otherMammalCards=ACH_DEFS.filter(a=>a.cat==='mammals'&&!squirrelIds.includes(a.id)).map(_renderCard).join('');
-  const squirrelBlock=squirrelCards?`<div class="ach-subheading">Eichhörnchen-Varianten</div><div class="ach-squirrel-row">${squirrelCards}</div>`:'';
-  const othersBlock=otherMammalCards?`<div class="ach-subheading">Weitere Säugetiere</div><div style="grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:18px">${otherMammalCards}</div>`:'';
-
-  byId('achievementsGrid').innerHTML=`<div class="ach-cards-grid">${birdCards}${squirrelBlock}${othersBlock}</div>`+legend;
+  // Single flat grid: birds first (by rank, 1 = most common), then
+  // mammals (by rank). No sub-headings, no category dividers.
+  const sorted = [...ACH_DEFS].sort((a,b)=>{
+    const catOrder = (a.cat==='birds'?0:1) - (b.cat==='birds'?0:1);
+    if(catOrder) return catOrder;
+    return (a.rank||99) - (b.rank||99);
+  });
+  const cards = sorted.map(_renderCard).join('');
+  byId('achievementsGrid').innerHTML=`<div class="ach-cards-grid">${cards}</div>`+legend;
 }
 
 // Wire confirm modal
