@@ -460,6 +460,10 @@ class CameraRuntime:
         motion_bbox is (x, y, w, h) bounding rect of all motion combined.
         Applies per-camera exclusion masks and motion_sensitivity threshold.
         Brightness-normalises both frames before diff to suppress cloud/sun transitions."""
+        # Per-camera kill-switch — skips all motion work (saves CPU when
+        # the camera is in objects-only mode).
+        if not self.cfg.get("motion_enabled", True):
+            return [], None
         proc = self.global_cfg.get("processing", {}).get("motion", {})
         if not proc.get("enabled", True):
             return [], None
@@ -544,6 +548,10 @@ class CameraRuntime:
             p = self.person_registry.get_profile(person_match) or {}
             whitelisted = whitelisted or bool(p.get("whitelisted"))
         level, notify = choose_alarm_level(group, list(sorted(set(labels))), after_hours, whitelisted)
+        # "Stumm" kill-switch: armed=false suppresses all Telegram alerts
+        # but keeps the event recording and archive path intact.
+        if not self.cfg.get("armed", True):
+            notify = False
         # Encode thumbnail for Telegram (in memory, never written as JPEG to disk)
         thumb_bytes = None
         if drawn_frame is not None:
@@ -862,6 +870,10 @@ class CameraRuntime:
             except Exception:
                 pass
         notify = meta.get("notify", False)
+        # Defensive: "Stumm" cameras never send Telegram, even if upstream
+        # logic slipped through.
+        if not self.cfg.get("armed", True):
+            notify = False
         if video_url and notify and self.notifier and self.cfg.get("telegram_enabled", True):
             try:
                 caption = (f"📷 {self.cfg.get('name', self.camera_id)}\n"
@@ -1046,6 +1058,9 @@ class CameraRuntime:
 
         # Telegram
         notify = meta.get("notify", False)
+        # Defensive: "Stumm" cameras never send Telegram.
+        if not self.cfg.get("armed", True):
+            notify = False
         _send_tg = notify and self.cfg.get("telegram_enabled", True)
         if _send_tg:
             tg_cfg = self.global_cfg.get("telegram", {})
@@ -1569,7 +1584,22 @@ class CameraRuntime:
                 self._prev_good_frame = proc_frame  # no copy — proc_frame is already a new array
 
                 now_dt = datetime.now()
-                has_motion = bool(labels)
+                # Per-camera trigger mode:
+                #   motion_and_objects (default) — motion OR object fires event
+                #   objects_only                 — motion alone ignored; objects
+                #                                  still carry motion in metadata
+                #   motion_only                  — only motion fires; objects
+                #                                  are still labelled for metadata
+                trigger_mode = self.cfg.get("detection_trigger", "motion_and_objects")
+                object_labels = [d.label for d in detections]
+                if trigger_mode == "objects_only":
+                    has_motion = bool(object_labels)
+                    labels = sorted(set(effective_motion + object_labels)) if has_motion else []
+                elif trigger_mode == "motion_only":
+                    has_motion = bool(effective_motion)
+                    labels = sorted(set(effective_motion + object_labels)) if has_motion else []
+                else:
+                    has_motion = bool(labels)
 
                 if self.cfg.get("rtsp_url"):
                     # ── RTSP: pre-buffer + per-session video recording ────────
@@ -1583,7 +1613,10 @@ class CameraRuntime:
 
                     # Clip boundary knobs (configurable); ffmpeg stream-copy ignores pre-buffer
                     _clip_max = int(self.global_cfg.get("processing", {}).get("clip_max_duration_s", 120))
-                    _post_tail = float(self.global_cfg.get("processing", {}).get("post_motion_tail_s", 3.0))
+                    _post_tail = float(
+                        self.cfg.get("post_motion_tail_s")
+                        or self.global_cfg.get("processing", {}).get("post_motion_tail_s", 3.0)
+                    )
                     ffmpeg_mode = bool(self._ffmpeg_proc) or (_FFMPEG_AVAILABLE and not self._recording)
                     # Pre-buffer only matters for the OpenCV fallback path
                     if not _FFMPEG_AVAILABLE:
@@ -1710,6 +1743,9 @@ class CameraRuntime:
                         if self.mqtt and self.cfg.get("mqtt_enabled", True):
                             self.mqtt.publish(f"events/{self.camera_id}", event)
                         _send_tg = ev_meta["notify"] and self.cfg.get("telegram_enabled", True)
+                        # Defensive: "Stumm" cameras never send Telegram.
+                        if not self.cfg.get("armed", True):
+                            _send_tg = False
                         if _send_tg:
                             tg_cfg = self.global_cfg.get("telegram", {})
                             tg_groups = tg_cfg.get("groups", {})

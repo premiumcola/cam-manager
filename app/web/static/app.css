@@ -137,6 +137,14 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@me
 .cv-pill-motion-off{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);color:rgba(255,255,255,.3)}
 .cv-pill-coral-on{background:rgba(129,140,248,.18);border:1.5px solid rgba(129,140,248,.5);color:#c7d2fe}
 .cv-pill-coral-off{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);color:rgba(255,255,255,.3)}
+/* Dimmed pill state — the detection mode *senses* this modality but it's
+   not wired up as a trigger (objects_only or motion_only per camera). */
+.cv-pill-dim{opacity:.42;text-decoration:line-through;text-decoration-thickness:1px}
+/* "Stumm" card — muted across the board: card dim, small bell-off icon next
+   to the name. Recording continues, only Telegram is suppressed. */
+.cv-card--muted{opacity:.85}
+.cv-card--muted:hover{opacity:1}
+.cv-muted-ico{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;opacity:.85}
 /* Timelapse pill */
 .cv-pill-tl{background:rgba(168,85,247,.32);border:1.5px solid rgba(168,85,247,.78);color:#ede0ff}
 .cv-pill-tl-off{background:rgba(255,255,255,.12);border:1.5px solid rgba(255,255,255,.28);color:rgba(255,255,255,.6)}
@@ -281,6 +289,19 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .cam-sched{background:var(--surface);border-radius:14px;padding:10px 12px}.cam-sched summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:600}
 @media (max-width:1200px){.cam-2col{grid-template-columns:1fr}}
 .toggle-row{margin-bottom:0}
+/* ── Erkennung & Aufnahme grouped block (motion / trigger / tail) ───────── */
+.cam-det-block{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)}
+.cam-det-heading{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;margin-bottom:8px}
+.cam-det-row{display:grid;grid-template-columns:auto 1fr 1fr;gap:12px;align-items:end}
+.cam-det-toggle{display:inline-flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;white-space:nowrap;padding-bottom:4px;user-select:none}
+.cam-det-toggle input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+.cam-det-field{display:flex;flex-direction:column;gap:3px;min-width:0}
+.cam-det-field select{width:100%;min-width:0;font-size:12px;padding:6px 8px}
+.cam-det-label{font-size:11px;color:var(--muted);font-weight:500;line-height:1.2}
+.cam-det-help{font-size:11px;color:var(--muted);margin-top:6px;font-style:italic}
+.cam-det-motionoff{font-size:11px;color:#f59e0b;margin-top:4px;font-weight:600}
+.cam-det-block.motion-off select[name="detection_trigger"]{opacity:.5;pointer-events:none}
+@media (max-width:720px){.cam-det-row{grid-template-columns:1fr;gap:8px}}
 /* Camera connection diagnostics */
 .cam-diag-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .cam-diag-item{background:var(--surface);border-radius:8px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}

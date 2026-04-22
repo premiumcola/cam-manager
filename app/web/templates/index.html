@@ -337,6 +337,38 @@
                 </div>
                 <span class="field-label">KI-Empfindlichkeit · Höher = weniger Fehlalarme</span>
               </div>
+
+              <!-- Erkennung & Aufnahme — grouped trio (motion toggle / trigger mode / tail) -->
+              <div class="cam-det-block">
+                <div class="cam-det-heading">Erkennung &amp; Aufnahme</div>
+                <div class="cam-det-row">
+                  <label class="cam-det-toggle">
+                    <input type="checkbox" name="motion_enabled" checked />
+                    <span>Bewegungserkennung</span>
+                  </label>
+                  <div class="cam-det-field">
+                    <select name="detection_trigger">
+                      <option value="motion_and_objects">Motion + Objekte</option>
+                      <option value="objects_only">Nur Objekte (kein Motion-Trigger)</option>
+                      <option value="motion_only">Nur Motion</option>
+                    </select>
+                    <span class="cam-det-label">Event-Auslöser</span>
+                  </div>
+                  <div class="cam-det-field">
+                    <select name="post_motion_tail_s">
+                      <option value="0">Standard (3s)</option>
+                      <option value="3">3s</option>
+                      <option value="5">5s</option>
+                      <option value="8">8s</option>
+                      <option value="10">10s</option>
+                      <option value="15">15s</option>
+                    </select>
+                    <span class="cam-det-label">Nachlauf nach Bewegung</span>
+                  </div>
+                </div>
+                <div class="cam-det-help">Nur Objekte = weniger Fehlalarme. Längerer Nachlauf = vollständigere Clips.</div>
+                <div class="cam-det-motionoff" hidden>Motion deaktiviert — nur Objekt-Erkennung aktiv</div>
+              </div>
             </div>
 
             <!-- Panel: Zonen -->

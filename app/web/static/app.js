@@ -409,7 +409,19 @@ function renderDashboard(){
     const bellOn=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2.2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`;
     const bellOff=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 
-    return `<article class="cv-card" data-camid="${esc(c.id)}" data-cam-name="${esc(c.name||c.id)}" onclick="_cvCardClick(event,'${esc(c.id)}')">
+    // Per-camera detection mode drives pill visibility / dim state
+    const motionEnabled=(c.motion_enabled!==false);
+    const trigMode=c.detection_trigger||'motion_and_objects';
+    // Motion pill hidden entirely when the kill-switch is off
+    const motionPillHidden=!motionEnabled;
+    // When in objects_only mode, motion pill is dimmed (still visible so
+    // users understand motion is IGNORED as a trigger even if sensed)
+    const motionPillDim=motionEnabled && trigMode==='objects_only';
+    // When in motion_only mode, object pill is dimmed
+    const objectPillDim=trigMode==='motion_only';
+    // Stumm-style bell-off next to the title when armed=false
+    const mutedIndicator=c.armed?'':`<span class="cv-muted-ico" title="Benachrichtigungen stumm">${bellOff}</span>`;
+    return `<article class="cv-card${c.armed?'':' cv-card--muted'}" data-camid="${esc(c.id)}" data-cam-name="${esc(c.name||c.id)}" onclick="_cvCardClick(event,'${esc(c.id)}')">
   <div class="cv-frame">
     <div class="cv-img-wrap">
       <div class="cv-loading-placeholder">${isActive?_makeConnectingPlaceholder():_makeOfflinePlaceholder()}</div>
@@ -423,6 +435,7 @@ function renderDashboard(){
     <!-- top-left: name + group — ALWAYS rendered so the offline card is still identifiable -->
     <div class="cv-title-wrap">
       <div class="cv-name-row">
+        ${mutedIndicator}
         <div class="cv-name">${esc(c.name)}</div>
         ${tlOn?`<span class="cv-tl-dot" title="Timelapse aktiv">${objIconSvg('timelapse',15)}</span>`:''}
       </div>
@@ -456,10 +469,11 @@ ${isActive?`
       <div class="cv-pill ${c.armed?'cv-pill-alarm-on':'cv-pill-alarm-off'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})" style="cursor:pointer">${c.armed?bellOn:bellOff}${c.armed?'Benachrichtigung':'Stumm'}</div>
     </div>
 
-    <!-- bottom-right: Motion + Objekte pills (horizontal) -->
+    <!-- bottom-right: Motion + Objekte pills (horizontal). Visibility +
+         dimming mirror the per-camera detection_trigger mode. -->
     <div class="cv-br">
-      <div class="cv-pill ${motionActive?'cv-pill-motion-on':'cv-pill-motion-off'}" style="font-size:10px;padding:3px 7px">${objIconSvg('motion',11)} Motion</div>
-      ${c.coral_available?`<div class="cv-pill ${coralActive?'cv-pill-coral-on':'cv-pill-coral-off'}" style="font-size:10px;padding:3px 7px">${objIconSvg('motion_objects',11)} Objekte</div>`:''}
+      ${motionPillHidden?'':`<div class="cv-pill ${motionActive?'cv-pill-motion-on':'cv-pill-motion-off'}${motionPillDim?' cv-pill-dim':''}" style="font-size:10px;padding:3px 7px" title="${motionPillDim?'Motion wird erkannt, löst aber KEIN Event aus (Nur Objekte)':'Motion-Erkennung'}">${objIconSvg('motion',11)} Motion</div>`}
+      ${c.coral_available?`<div class="cv-pill ${coralActive?'cv-pill-coral-on':'cv-pill-coral-off'}${objectPillDim?' cv-pill-dim':''}" style="font-size:10px;padding:3px 7px" title="${objectPillDim?'Objekte werden erkannt, lösen aber KEIN Event aus (Nur Motion)':'Objekt-Erkennung'}">${objIconSvg('motion_objects',11)} Objekte</div>`:''}
     </div>
 `:''}
     <!-- bottom: hover action button -->
@@ -772,6 +786,16 @@ function _initCameraFormListeners(){
   f['frame_interval_ms']?.addEventListener('input',()=>{ byId('frameIntervalLabel').textContent=f['frame_interval_ms'].value+'ms'; });
   // Snapshot interval slider
   f['snapshot_interval_s']?.addEventListener('input',()=>{ byId('snapshotIntervalLabel').textContent=f['snapshot_interval_s'].value+'s'; });
+  // Motion toggle → grey out the trigger dropdown + show hint
+  f['motion_enabled']?.addEventListener('change',_updateMotionOffState);
+}
+
+function _updateMotionOffState(){
+  const f=byId('cameraForm')?.elements; if(!f) return;
+  const off=!(f['motion_enabled']?.checked);
+  const block=document.querySelector('.cam-det-block'); if(!block) return;
+  block.classList.toggle('motion-off',off);
+  const hint=block.querySelector('.cam-det-motionoff'); if(hint) hint.hidden=!off;
 }
 
 function editCamera(camId){
@@ -807,6 +831,18 @@ function editCamera(camId){
     const cms=(c.detection_min_score && c.detection_min_score>0) ? c.detection_min_score : globalMs;
     f['detection_min_score'].value=cms;
     byId('detectionMinScoreLabel').textContent=Number(cms).toFixed(2);
+  }
+  // Erkennung & Aufnahme trio
+  if(f['motion_enabled']){
+    f['motion_enabled'].checked=(c.motion_enabled!==false);
+    _updateMotionOffState();
+  }
+  if(f['detection_trigger']) f['detection_trigger'].value=c.detection_trigger||'motion_and_objects';
+  if(f['post_motion_tail_s']){
+    // Normalise: 0 or null → "0" (global default), otherwise match closest preset
+    const tail=c.post_motion_tail_s||0;
+    const presets=['0','3','5','8','10','15'];
+    f['post_motion_tail_s'].value=presets.includes(String(tail))?String(tail):'0';
   }
   if(f['resolution']) f['resolution'].value=c.resolution||'auto';
   if(f['frame_interval_ms']){const fi=c.frame_interval_ms||350; f['frame_interval_ms'].value=fi; byId('frameIntervalLabel').textContent=fi+'ms';}
@@ -1678,6 +1714,9 @@ byId('cameraForm').onsubmit=async(e)=>{
     schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},
     bottom_crop_px:parseInt(f['bottom_crop_px']?.value||0),
     motion_sensitivity:parseFloat(f['motion_sensitivity']?.value||0.5),
+    motion_enabled:f['motion_enabled']?f['motion_enabled'].checked:true,
+    detection_trigger:f['detection_trigger']?.value||'motion_and_objects',
+    post_motion_tail_s:parseFloat(f['post_motion_tail_s']?.value||0),
     detection_min_score:parseFloat(f['detection_min_score']?.value||0),
     resolution:f['resolution']?.value||'auto',
     frame_interval_ms:parseInt(f['frame_interval_ms']?.value||350),
