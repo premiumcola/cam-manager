@@ -47,12 +47,16 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@me
 /* Every 6 s one diagonal pair jitters a single pixel (signal-interference feel) */
 .cv-ph-brackets .cv-ph-br--tl,.cv-ph-brackets .cv-ph-br--br{animation:bracketJitter 6s ease-in-out infinite}
 .cv-ph-brackets .cv-ph-br--tr,.cv-ph-brackets .cv-ph-br--bl{animation:bracketJitter 6s ease-in-out infinite;animation-delay:3s}
-.cv-ph-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:1}
-.cv-ph-icon{animation:iconPulse 3s ease-in-out infinite;line-height:0}
-.cv-ph-icon--red{filter:drop-shadow(0 0 12px rgba(239,68,68,0.15))}
+.cv-ph-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:1}
+/* Fixed square stage centers rings, crosshair and icon on one point so the
+   geometry is independent of card aspect ratio and flex-label height. */
+.cv-ph-stage{position:relative;width:180px;height:180px;display:flex;align-items:center;justify-content:center}
+.cv-ph-icon{position:relative;z-index:3;line-height:0;margin:0 auto;animation:iconPulse 3s ease-in-out infinite}
+.cv-ph-icon--red{filter:drop-shadow(0 0 15px rgba(239,68,68,0.2))}
 .cv-ph-icon--glitch{animation:iconPulse 3s ease-in-out infinite, glitch 10s linear infinite}
-.cv-ph-label{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,0.4);font-weight:700}
+.cv-ph-label{font-size:14px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,0.4);font-weight:800}
 .cv-ph-label--flicker{animation:textFlicker 6s linear infinite}
+.cv-ph-label--red{text-shadow:0 0 20px rgba(239,68,68,0.15)}
 .cv-ph-label--blue{color:rgba(59,130,246,0.55)}
 
 /* Offline (red): expanding rings + crosshair */

@@ -205,11 +205,18 @@ function startLiveUpdate(){
   _liveUpdateInterval=setInterval(async()=>{
     try{
       const r=await j('/api/cameras');
+      // Transitions into/out of 'active' change whether the live overlays
+      // (cv-tr / cv-br) are present in the DOM — those only render when
+      // the camera is active. Simply toggling classes isn't enough; we
+      // need a full renderDashboard() so the missing overlay nodes appear.
+      let needsRedraw=false;
       (r.cameras||[]).forEach(c=>{
         const prev=_prevCamStatuses.get(c.id);
         _prevCamStatuses.set(c.id,c.status);
         if(prev!==c.status){
-          // Show squirrel whenever camera starts reconnecting
+          const wasActive=prev==='active';
+          const nowActive=c.status==='active';
+          if(wasActive!==nowActive) needsRedraw=true;
           if(c.status==='starting') showCameraReloadAnimation(c.id);
           // Camera settings list badge
           const item=byId('cameraSettingsList')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
@@ -242,6 +249,10 @@ function startLiveUpdate(){
           }
         }
       });
+      if(needsRedraw){
+        state.cameras=r.cameras||state.cameras;
+        renderDashboard();
+      }
     }catch{/* silent */}
   },3000);
   ['liveIndicator'].forEach(id=>{const el=byId(id);if(el)el.classList.remove('hidden');});
@@ -401,15 +412,15 @@ function renderDashboard(){
     return `<article class="cv-card" data-camid="${esc(c.id)}" data-cam-name="${esc(c.name||c.id)}" onclick="_cvCardClick(event,'${esc(c.id)}')">
   <div class="cv-frame">
     <div class="cv-img-wrap">
-      <div class="cv-loading-placeholder">${isActive?_makeConnectingPlaceholder(c.name||c.id):_makeOfflinePlaceholder(c.name||c.id)}</div>
+      <div class="cv-loading-placeholder">${isActive?_makeConnectingPlaceholder():_makeOfflinePlaceholder()}</div>
       <img class="cv-img cam-snap" src="${snapUrl}" alt="${esc(c.name)}" data-hd-mode="${hdOn?'1':'0'}"
         onload="this.classList.add('loaded');this.previousElementSibling.style.display='none'"
         onerror="_camImgRetry(this)" />
     </div>
     <div class="cv-grad-top"></div>
     <div class="cv-grad-bot"></div>
-${isActive?`
-    <!-- top-left: name + group -->
+
+    <!-- top-left: name + group — ALWAYS rendered so the offline card is still identifiable -->
     <div class="cv-title-wrap">
       <div class="cv-name-row">
         <div class="cv-name">${esc(c.name)}</div>
@@ -418,7 +429,7 @@ ${isActive?`
       ${c.location?`<div class="cv-loc">${esc(c.location)}</div>`:''}
       <span class="cv-group-pill">${esc(c.group_id||'—')}</span>
     </div>
-
+${isActive?`
     <!-- top-right: [Live + HD] row, then alarm pill below -->
     <div class="cv-tr">
       <div class="cv-tr-row">
@@ -1955,60 +1966,67 @@ function _placeholderShell(accent, centerHtml, bracketKeyframe){
   </div>`;
 }
 
-// Bigger icons with thicker strokes — the old 42/28px versions disappeared
-// against the grid backdrop. Opacity is applied to individual sub-elements
-// so the red strike-through reads as a strong "no signal" mark even when
-// the camera body is muted.
-const _CAM_OFF_SVG=`<svg viewBox="0 0 48 48" width="64" height="64" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <path d="M32 18v-2a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2v-2l8 6V12l-8 6z" stroke="rgba(255,255,255,0.3)" stroke-width="2.5"/>
-  <circle cx="20" cy="24" r="4.5" stroke="rgba(255,255,255,0.2)" stroke-width="2.5"/>
-  <line x1="4" y1="4" x2="44" y2="44" stroke="rgba(239,68,68,0.5)" stroke-width="3"/>
+// Structured SVG so the camera body, viewfinder cone, lens circle and strike
+// line each carry their own opacity/stroke — the old single-path Feather
+// icon had everything at one alpha and fell apart visually at small sizes.
+const _CAM_OFF_SVG=`<svg viewBox="0 0 48 48" width="72" height="72" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block">
+  <rect x="8" y="14" width="24" height="20" rx="2.5" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+  <path d="M32 20 L40 14 V34 L32 28 Z" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
+  <circle cx="20" cy="24" r="4.5" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
+  <line x1="4" y1="4" x2="44" y2="44" stroke="rgba(239,68,68,0.55)" stroke-width="2.5"/>
 </svg>`;
-const _CAM_SM_SVG=`<svg viewBox="0 0 48 48" width="40" height="40" fill="none" stroke="rgba(59,130,246,0.45)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <path d="M32 18v-2a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2v-2l8 6V12l-8 6z"/>
+const _CAM_SM_SVG=`<svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="rgba(59,130,246,0.5)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block">
+  <rect x="8" y="14" width="24" height="20" rx="2.5"/>
+  <path d="M32 20 L40 14 V34 L32 28 Z"/>
   <circle cx="20" cy="24" r="5"/>
 </svg>`;
 
-function _makeOfflinePlaceholder(_nameUnused){
+function _makeOfflinePlaceholder(){
   // Red: four expanding rings + crosshair + struck-through camera icon.
+  // All three visual layers (rings, crosshair, icon) live in .cv-ph-stage
+  // so they truly share one center regardless of container aspect ratio.
   const rings=[0, 1, 2, 3].map(i=>
     `<span class="cv-ph-ring" style="animation-delay:${i}s"></span>`
   ).join('');
   const center=`
-    <div class="cv-ph-crosshair"></div>
-    ${rings}
-    <div class="cv-ph-icon cv-ph-icon--glitch cv-ph-icon--red">${_CAM_OFF_SVG}</div>
-    <div class="cv-ph-label cv-ph-label--flicker">KEIN SIGNAL</div>
+    <div class="cv-ph-stage">
+      <div class="cv-ph-crosshair"></div>
+      ${rings}
+      <div class="cv-ph-icon cv-ph-icon--glitch cv-ph-icon--red">${_CAM_OFF_SVG}</div>
+    </div>
+    <div class="cv-ph-label cv-ph-label--flicker cv-ph-label--red">KEIN SIGNAL</div>
   `;
   return _placeholderShell('red', center, 'bracketPulseRed');
 }
 
-function _makeConnectingPlaceholder(_nameUnused){
-  // Blue: rotating radar cone + orbiting dots + small camera icon.
+function _makeConnectingPlaceholder(){
+  // Blue: rotating radar cone + orbiting dots + small camera icon, all
+  // inside the same stage so they share one center.
   const center=`
-    <svg class="cv-ph-guides" viewBox="-100 -100 200 200" aria-hidden="true">
-      <circle cx="0" cy="0" r="30" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
-      <circle cx="0" cy="0" r="55" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
-      <circle cx="0" cy="0" r="80" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
-    </svg>
-    <svg class="cv-ph-radar" viewBox="-100 -100 200 200" aria-hidden="true">
-      <path d="M0,0 L85,-49 A98,98 0 0 1 85,49 Z" fill="rgba(59,130,246,0.12)"/>
-      <line x1="0" y1="0" x2="85" y2="49" stroke="rgba(59,130,246,0.5)" stroke-width="1.5"/>
-      <circle cx="85" cy="49" r="3" fill="rgba(59,130,246,0.9)"/>
-    </svg>
-    <span class="cv-ph-orbit cv-ph-orbit--1"></span>
-    <span class="cv-ph-orbit cv-ph-orbit--2"></span>
-    <span class="cv-ph-orbit cv-ph-orbit--3"></span>
-    <div class="cv-ph-icon">${_CAM_SM_SVG}</div>
+    <div class="cv-ph-stage">
+      <svg class="cv-ph-guides" viewBox="-100 -100 200 200" aria-hidden="true">
+        <circle cx="0" cy="0" r="30" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
+        <circle cx="0" cy="0" r="55" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
+        <circle cx="0" cy="0" r="80" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
+      </svg>
+      <svg class="cv-ph-radar" viewBox="-100 -100 200 200" aria-hidden="true">
+        <path d="M0,0 L85,-49 A98,98 0 0 1 85,49 Z" fill="rgba(59,130,246,0.12)"/>
+        <line x1="0" y1="0" x2="85" y2="49" stroke="rgba(59,130,246,0.5)" stroke-width="1.5"/>
+        <circle cx="85" cy="49" r="3" fill="rgba(59,130,246,0.9)"/>
+      </svg>
+      <span class="cv-ph-orbit cv-ph-orbit--1"></span>
+      <span class="cv-ph-orbit cv-ph-orbit--2"></span>
+      <span class="cv-ph-orbit cv-ph-orbit--3"></span>
+      <div class="cv-ph-icon">${_CAM_SM_SVG}</div>
+    </div>
     <div class="cv-ph-label cv-ph-label--blue">VERBINDE…</div>
   `;
   return _placeholderShell('blue', center, 'bracketPulseBlue');
 }
 
 function _restorePlaceholder(card){
-  const camName=card.dataset.camName||'';
   const placeholder=card.querySelector('.cv-loading-placeholder');
-  if(placeholder) placeholder.innerHTML=_makeOfflinePlaceholder(camName);
+  if(placeholder) placeholder.innerHTML=_makeOfflinePlaceholder();
   const img=card.querySelector('.cv-img');
   if(img){const base=img.src.split('?')[0];img.src=base+'?t='+Date.now();}
 }
@@ -2020,9 +2038,8 @@ function showCameraReloadAnimation(camId){
   cards.filter(Boolean).forEach(card=>{
     const placeholder=card.querySelector('.cv-loading-placeholder');
     const img=card.querySelector('.cv-img');
-    const camName=card.dataset.camName||'';
     if(placeholder && !placeholder.querySelector('.cv-ph--blue'))
-      placeholder.innerHTML=_makeConnectingPlaceholder(camName);
+      placeholder.innerHTML=_makeConnectingPlaceholder();
     if(img){img.classList.remove('loaded');img.style.opacity='0';}
     const targetCamId=card.dataset.camid;
     let attempts=0;
@@ -2032,7 +2049,14 @@ function showCameraReloadAnimation(camId){
       try{
         const r=await j('/api/cameras');
         const cam=(r.cameras||[]).find(c=>c.id===targetCamId);
-        if(cam?.status==='active'){clearInterval(poll);_restorePlaceholder(card);}
+        if(cam?.status==='active'){
+          clearInterval(poll);
+          // Full re-render so the cv-tr / cv-br overlay nodes appear in the
+          // DOM — they weren't rendered while the camera was offline and
+          // simply toggling their parent's class wouldn't add them back.
+          state.cameras=r.cameras||state.cameras;
+          renderDashboard();
+        }
       }catch{}
     },2000);
   });
