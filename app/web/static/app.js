@@ -664,6 +664,51 @@ const RTSP_PATH_OPTS=[
 // ! is allowed unencoded in userinfo per RFC 3986
 function _rtspEnc(s){ return (s||'').replace(/%/g,'%25').replace(/\?/g,'%3F').replace(/@/g,'%40').replace(/#/g,'%23'); }
 
+// ── URL password masking ────────────────────────────────────────────────
+// Replace only the password portion of a URL with dots. The real URL is
+// stored in input.dataset.real; .value holds the masked text so the input
+// visibly hides the secret. Before form submit we unmask (_unmaskUrlsForSubmit)
+// so the saved value is the real URL. In masked state the input is also
+// readonly — clicking the eye reveals AND makes the field editable.
+function _maskUrlPassword(url){
+  return (url||'').replace(/:([^@:/]+)@/,':••••••••@');
+}
+function _applyUrlMask(input){
+  if(!input) return;
+  const real=input.dataset.real!=null?input.dataset.real:input.value;
+  input.dataset.real=real;
+  input.value=_maskUrlPassword(real);
+  // While masked: readonly so keystrokes can't corrupt the masked dots.
+  // (rtsp_url is also readonly for other reasons — that's fine, stays so.)
+  input.setAttribute('readonly','readonly');
+  input.dataset.masked='1';
+}
+function _revealUrl(input){
+  if(!input) return;
+  if(input.dataset.real!=null) input.value=input.dataset.real;
+  input.dataset.masked='0';
+  // rtsp_url keeps its inherent readonly, only snapshot_url becomes editable
+  if(input.name!=='rtsp_url') input.removeAttribute('readonly');
+}
+window._toggleUrlMask=function(btn){
+  const wrap=btn.closest('.url-wrap'); const input=wrap?.querySelector('input[data-mask-url="1"]');
+  if(!input) return;
+  const nowRevealed=input.dataset.masked==='1';
+  if(nowRevealed){_revealUrl(input); btn.classList.add('revealed'); btn.textContent='🙈';}
+  else {
+    // User just edited the revealed value — stash new real before re-masking
+    input.dataset.real=input.value;
+    _applyUrlMask(input); btn.classList.remove('revealed'); btn.textContent='👁';
+  }
+};
+function _unmaskUrlsForSubmit(form){
+  form.querySelectorAll('input[data-mask-url="1"]').forEach(inp=>{
+    if(inp.dataset.masked==='1' && inp.dataset.real!=null){
+      inp.value=inp.dataset.real;
+    }
+  });
+}
+
 function initRtspBuilder(){
   const sel=byId('rtspPathSelect');
   if(!sel.options.length) RTSP_PATH_OPTS.forEach(p=>{const o=document.createElement('option');o.value=p.value;o.textContent=p.label;sel.appendChild(o);});
@@ -674,13 +719,21 @@ function initRtspBuilder(){
     const pass=(f['rtsp_pass']?.value||'').trim();
     const port=(f['rtsp_port']?.value||'554').trim();
     const path=f['rtsp_path']?.value||'';
-    if(!ip){f['rtsp_url'].value='';return;}
+    const setMaskable=(input,realVal)=>{
+      if(!input) return;
+      input.dataset.real=realVal;
+      // Re-mask iff the eye is currently in masked mode; otherwise show real
+      if(input.dataset.masked==='1') input.value=_maskUrlPassword(realVal);
+      else input.value=realVal;
+    };
+    if(!ip){setMaskable(f['rtsp_url'],'');return;}
     const auth=user?(user+(pass?':'+_rtspEnc(pass):'')+'@'):'';
     const portPart=port&&port!=='554'?':'+port:'';
-    f['rtsp_url'].value=`rtsp://${auth}${ip}${portPart}${path}`;
+    setMaskable(f['rtsp_url'],`rtsp://${auth}${ip}${portPart}${path}`);
     // auto-fill snapshot if empty
-    if(!f['snapshot_url']?.value && user)
-      f['snapshot_url'].value=`http://${user}:${_rtspEnc(pass)}@${ip}/cgi-bin/snapshot.cgi`;
+    const snapReal=f['snapshot_url']?.dataset.real||f['snapshot_url']?.value||'';
+    if(!snapReal && user)
+      setMaskable(f['snapshot_url'],`http://${user}:${_rtspEnc(pass)}@${ip}/cgi-bin/snapshot.cgi`);
   };
   ['rtsp_ip','rtsp_user','rtsp_pass','rtsp_port'].forEach(n=>f[n]?.addEventListener('input',rebuild));
   sel.addEventListener('change',rebuild);
@@ -699,16 +752,28 @@ window.toggleCameraEnabled=async function(camId,enabled){
   await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...cam,enabled})});
   await loadAll();
 };
+// Group category → accent RGB triplet. Unknown groups fall through to a
+// neutral white so --ca defaults don't crash the CSS.
+const _GROUP_ACCENTS={
+  sicherheit:        '239,68,68',     // red
+  tierbeobachtung:   '180,120,40',    // amber/brown
+  bereichsuebersicht:'59,130,246',    // blue
+  eingangskamera:    '34,197,94',     // green
+};
+function _groupAccent(group_id){
+  return _GROUP_ACCENTS[String(group_id||'').toLowerCase()]||'255,255,255';
+}
+
 function renderCameraSettings(){
-  byId('cameraSettingsList').innerHTML=state.cameras.map(c=>`
-    <div class="cam-item" data-camid="${esc(c.id)}">
+  byId('cameraSettingsList').innerHTML=state.cameras.map(c=>{
+    const accent=_groupAccent(c.group_id);
+    return `
+    <div class="cam-item" data-camid="${esc(c.id)}" style="--ca:${accent}">
       <div class="cam-item-head" style="cursor:pointer" onclick="editCamera('${esc(c.id)}')">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:22px;line-height:1;flex-shrink:0">${getCameraIcon(c.name)}</span>
-          <div>
-            <div style="font-weight:700;font-size:15px">${esc(c.name)}</div>
-            <div class="small muted">${esc(c.group_id||'—')}</div>
-          </div>
+        <div class="cam-item-head-left">
+          <span class="cam-item-head-icon">${getCameraIcon(c.name)}</span>
+          <span class="cam-item-head-name">${esc(c.name)}</span>
+          <span class="cam-item-head-group">${esc(c.group_id||'—')}</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
           <label class="switch" title="${c.enabled?'Aktiv · klicken zum Deaktivieren':'Inaktiv · klicken zum Aktivieren'}">
@@ -731,7 +796,7 @@ function renderCameraSettings(){
           </button>
         </div>
       </div>
-    </div>`).join('');
+    </div>`;}).join('');
 }
 window._reconnectCam=function(camId,btn){
   btn.classList.add('spinning');
@@ -860,7 +925,13 @@ function editCamera(camId){
   const matchedPath=RTSP_PATH_OPTS.find(o=>o.value===p.path);
   if(f['rtsp_path']) f['rtsp_path'].value=matchedPath?matchedPath.value:RTSP_PATH_OPTS[0].value;
   f['rtsp_url'].value=c.rtsp_url||'';
-  f['snapshot_url'].value=c.snapshot_url||''; f['group_id'].value=c.group_id||'';
+  f['snapshot_url'].value=c.snapshot_url||'';
+  // Apply password masking to the URL display fields. Eye toggle reveals.
+  delete f['rtsp_url'].dataset.real; delete f['snapshot_url'].dataset.real;
+  _applyUrlMask(f['rtsp_url']);
+  _applyUrlMask(f['snapshot_url']);
+  // Reset eye buttons to masked-state icon
+  byId('cameraForm').querySelectorAll('.url-eye').forEach(b=>{b.classList.remove('revealed'); b.textContent='👁';}); f['group_id'].value=c.group_id||'';
   // Object filter is now rendered as a pill bar; keep the hidden input in
   // sync so the existing save flow (reads from f['object_filter'].value)
   // still works unchanged.
@@ -903,9 +974,12 @@ function editCamera(camId){
   f['zones_json'].value=JSON.stringify(shapeState.zones); f['masks_json'].value=JSON.stringify(shapeState.masks);
   byId('deleteCameraBtn').dataset.camId=camId;
   loadMaskSnapshot(camId); drawShapes();
-  // Slide down inside the clicked camera card
+  // Slide down inside the clicked camera card. Propagate the group accent
+  // so the expanded block tints to match the camera's category.
+  const accent=_groupAccent(c.group_id);
   const camRow=byId('cameraSettingsList')?.querySelector(`[data-camid="${camId}"]`);
   const wrapper=byId('cameraEditWrapper');
+  if(wrapper) wrapper.style.setProperty('--ca',accent);
   if(camRow){ camRow.appendChild(wrapper); camRow.classList.add('editing'); }
   requestAnimationFrame(()=>wrapper.classList.add('slide-open'));
   _currentEditCamId=camId;
@@ -979,9 +1053,30 @@ async function _loadCamDiagnostics(camId){
       if(s.last_error){errEl.textContent=s.last_error; errEl.style.display='';}
       else errEl.style.display='none';
     }
+    // Compute collapsible summary + auto-open on problems.
+    const reconnects=s.reconnect_count||0;
+    const errStreak=s.error_streak||0;
+    const hasErr=!!s.last_error;
+    const problem=errStreak>0 || reconnects>5 || hasErr;
+    const sumEl=byId('camDiagSummary'); const dotEl=byId('camDiagDot');
+    if(sumEl){
+      sumEl.textContent = problem
+        ? `${reconnects} Reconnects · ${errStreak} Fehler${hasErr?' · Stream-Fehler':''}`
+        : 'Verbindung stabil';
+    }
+    if(dotEl){
+      dotEl.style.setProperty('--cd', problem?'#f87171':'#4ade80');
+      panel.style.setProperty('--cd', problem?'#f87171':'#4ade80');
+    }
+    // Auto-open on problems; collapsed otherwise.
+    panel.classList.toggle('open', problem);
     panel.style.display='';
   }catch(e){/* no diagnostics available — stay hidden */}
 }
+window._toggleCamDiag=function(){
+  const panel=byId('camDiagnostics'); if(!panel) return;
+  panel.classList.toggle('open');
+};
 window.editCamera=editCamera;
 
 byId('deleteCameraBtn').onclick=async()=>{
@@ -1653,6 +1748,9 @@ window.applyDiscoveryRtsp=(ip)=>{
 };
 byId('cameraForm').onsubmit=async(e)=>{
   e.preventDefault(); const f=e.target.elements;
+  // Resolve masked URL inputs back to their real values before we read
+  // .value into the payload, otherwise we'd persist dot-masked URLs.
+  _unmaskUrlsForSubmit(e.target);
   const existingCam=(state.cameras||[]).find(x=>x.id===f['id'].value);
   const payload={id:f['id'].value,name:f['name'].value,
     icon:f['icon']?.value||getCameraIcon(f['name'].value),

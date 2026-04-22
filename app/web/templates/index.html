@@ -257,24 +257,40 @@
                 <div class="field-wrap"><select name="rtsp_path" id="rtspPathSelect"></select><span class="field-label">RTSP-Pfad</span></div>
                 <div class="field-wrap"><input name="rtsp_port" placeholder="554" value="554" /><span class="field-label">Port</span></div>
               </div>
-              <div class="field-wrap"><input name="rtsp_url" readonly style="color:var(--muted);font-size:11px" /><span class="field-label">RTSP-URL (automatisch)</span></div>
-              <div class="field-wrap"><input name="snapshot_url" placeholder="http://…" /><span class="field-label">Snapshot-URL – optional</span></div>
+              <div class="field-wrap url-wrap">
+                <input name="rtsp_url" readonly style="color:var(--muted);font-size:11px;padding-right:36px" data-mask-url="1" />
+                <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen">👁</button>
+                <span class="field-label">RTSP-URL (automatisch)</span>
+              </div>
+              <div class="field-wrap url-wrap">
+                <input name="snapshot_url" placeholder="http://…" style="padding-right:36px" data-mask-url="1" />
+                <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen">👁</button>
+                <span class="field-label">Snapshot-URL – optional</span>
+              </div>
               <div class="field-wrap"><select name="group_id" id="groupSelect"></select><span class="field-label">Gruppe (Organisation)</span></div>
               <input type="hidden" name="object_filter" />
-              <!-- Connection health diagnostics (populated by JS on open) -->
-              <div id="camDiagnostics" style="display:none;margin-top:10px">
-                <div class="settings-divider" style="margin-bottom:6px">Verbindungsdiagnose</div>
-                <div class="cam-diag-grid">
-                  <div class="cam-diag-item"><span class="cam-diag-label">Stream-Alter</span><span id="diagFrameAge" class="cam-diag-val">—</span></div>
-                  <div class="cam-diag-item"><span class="cam-diag-label">Preview-FPS</span><span id="diagPreviewFps" class="cam-diag-val">—</span></div>
-                  <div class="cam-diag-item"><span class="cam-diag-label">Stream-Modus</span><span id="diagStreamMode" class="cam-diag-val">—</span></div>
-                  <div class="cam-diag-item"><span class="cam-diag-label">Aktive Viewer</span><span id="diagLiveViewers" class="cam-diag-val">—</span></div>
-                  <div class="cam-diag-item"><span class="cam-diag-label">Reconnects</span><span id="diagReconnects" class="cam-diag-val">—</span></div>
-                  <div class="cam-diag-item"><span class="cam-diag-label">Fehler-Streak</span><span id="diagErrorStreak" class="cam-diag-val">—</span></div>
-                  <div class="cam-diag-item"><span class="cam-diag-label">Stale Incidents</span><span id="diagStale" class="cam-diag-val">—</span></div>
-                  <div class="cam-diag-item"><span class="cam-diag-label">Stale Streak</span><span id="diagStaleStreak" class="cam-diag-val">—</span></div>
+              <!-- Connection health diagnostics — collapsible; shows a one-line
+                   summary when collapsed, auto-opens on error. Populated by JS. -->
+              <div id="camDiagnostics" class="cam-diag" style="display:none;margin-top:10px">
+                <button type="button" class="cam-diag-head" onclick="_toggleCamDiag()">
+                  <span class="cam-diag-dot" id="camDiagDot"></span>
+                  <span class="cam-diag-title">Verbindungsdiagnose</span>
+                  <span class="cam-diag-summary" id="camDiagSummary">Verbindung stabil</span>
+                  <span class="cam-diag-chevron">▶</span>
+                </button>
+                <div class="cam-diag-body">
+                  <div class="cam-diag-grid">
+                    <div class="cam-diag-item"><span class="cam-diag-label">Stream-Alter</span><span id="diagFrameAge" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Preview-FPS</span><span id="diagPreviewFps" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Stream-Modus</span><span id="diagStreamMode" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Aktive Viewer</span><span id="diagLiveViewers" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Reconnects</span><span id="diagReconnects" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Fehler-Streak</span><span id="diagErrorStreak" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Stale Incidents</span><span id="diagStale" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Stale Streak</span><span id="diagStaleStreak" class="cam-diag-val">—</span></div>
+                  </div>
+                  <div id="diagLastError" style="display:none;margin-top:5px;font-size:11px;color:var(--danger);background:rgba(239,68,68,.08);border-radius:6px;padding:5px 8px;word-break:break-all"></div>
                 </div>
-                <div id="diagLastError" style="display:none;margin-top:5px;font-size:11px;color:var(--danger);background:rgba(239,68,68,.08);border-radius:6px;padding:5px 8px;word-break:break-all"></div>
               </div>
             </div>
 

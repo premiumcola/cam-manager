@@ -276,13 +276,26 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .cam-badge-toggle{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:10px;background:#0c141d;border:1px solid var(--line);cursor:pointer;font-size:13px}
 .switch-sm{width:36px!important;height:20px!important}.switch-sm .slider:before{width:16px!important;height:16px!important;top:2px!important;left:2px!important}.switch-sm input:checked + .slider:before{transform:translateX(16px)!important}
 /* Camera settings list items */
-.cam-item{border-radius:16px;background:var(--surface);transition:background .2s,box-shadow .2s}.cam-item+.cam-item{margin-top:8px}
-.cam-item-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;gap:12px}
-.cam-item.editing{background:var(--panel);box-shadow:0 8px 32px rgba(0,0,0,.35)}
+/* Camera list item — collapsed state gets a subtle 2px accent border on
+   the left matching its group category. Edit state grows a full-border
+   tint so the expanded block visually separates from the page. --ca is
+   the group accent "R,G,B" set by JS from the camera's group_id. */
+.cam-item{--ca:255,255,255;border-radius:16px;background:var(--surface);transition:background .2s,box-shadow .2s,border-color .2s;border:1px solid transparent;border-left:3px solid rgba(var(--ca),0.45);position:relative}
+.cam-item+.cam-item{margin-top:8px}
+.cam-item-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;gap:10px}
+.cam-item-head-left{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+.cam-item-head-icon{font-size:20px;line-height:1;flex-shrink:0;width:22px;text-align:center}
+.cam-item-head-name{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cam-item-head-group{font-size:11px;color:var(--muted);margin-left:4px;padding:1px 8px;border-radius:999px;background:rgba(var(--ca),0.14);color:rgba(var(--ca),0.95);flex-shrink:0}
+.cam-item.editing{background:rgba(var(--ca),0.04);border-color:rgba(var(--ca),0.2);border-left-color:rgba(var(--ca),0.6);box-shadow:0 8px 32px rgba(0,0,0,.35)}
+.cam-item.editing .cam-edit-header{background:rgba(var(--ca),0.08);border-radius:12px;padding:10px 14px;margin-left:-2px;margin-right:-2px}
 /* Camera edit slide-down panel */
-.cam-edit-wrapper{display:grid;grid-template-rows:0fr;transition:grid-template-rows .38s cubic-bezier(.4,0,.2,1)}.cam-edit-wrapper.slide-open{grid-template-rows:1fr}
-.cam-edit-inner{overflow:hidden;min-height:0;padding:0 16px}.cam-edit-wrapper.slide-open .cam-edit-inner{padding:16px}
-.cam-edit-header{display:flex;align-items:center;margin-bottom:14px;gap:10px}
+.cam-edit-wrapper{--ca:255,255,255;display:grid;grid-template-rows:0fr;transition:grid-template-rows .38s cubic-bezier(.4,0,.2,1)}
+.cam-edit-wrapper.slide-open{grid-template-rows:1fr}
+.cam-edit-inner{overflow:hidden;min-height:0;padding:0 16px}
+.cam-edit-wrapper.slide-open .cam-edit-inner{padding:16px;background:rgba(var(--ca),0.035);border-radius:0 0 14px 14px}
+.cam-edit-header{display:flex;align-items:center;margin-bottom:14px;gap:10px;padding:10px 12px;border-radius:10px;background:rgba(var(--ca),0.08);border-left:3px solid rgba(var(--ca),0.55)}
+.cam-edit-header h3{margin:0;font-size:15px;color:var(--text)}
 /* Compact user+pass side by side */
 .cam-userpass{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 /* Whitelist chips */
@@ -320,7 +333,23 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .cam-det-motionoff{font-size:11px;color:#f59e0b;margin-top:4px;font-weight:600}
 .cam-det-block.motion-off select[name="detection_trigger"]{opacity:.5;pointer-events:none}
 @media (max-width:720px){.cam-det-row{grid-template-columns:1fr;gap:8px}}
-/* Camera connection diagnostics */
+/* Camera connection diagnostics — collapsible with one-line summary.
+   .cam-diag.open reveals the grid. Summary dot is green (ok) or red
+   (problem), set by JS as --cd. */
+.cam-diag{--cd:#4ade80;border:1px solid rgba(255,255,255,.06);border-radius:10px;background:rgba(255,255,255,.02);overflow:hidden}
+.cam-diag.open{border-color:rgba(255,255,255,.09)}
+.cam-diag-head{width:100%;display:flex;align-items:center;gap:8px;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;text-align:left}
+.cam-diag-head:hover{background:rgba(255,255,255,.03)}
+.cam-diag-dot{width:8px;height:8px;border-radius:50%;background:var(--cd);flex-shrink:0;box-shadow:0 0 6px color-mix(in srgb,var(--cd) 60%,transparent)}
+.cam-diag-title{flex-shrink:0;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.cam-diag-summary{flex:1;color:var(--muted);font-weight:500;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cam-diag.open .cam-diag-summary{color:var(--text)}
+.cam-diag-chevron{margin-left:auto;font-size:10px;color:var(--muted);transition:transform .2s}
+.cam-diag.open .cam-diag-chevron{transform:rotate(90deg)}
+.cam-diag-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s cubic-bezier(.4,0,.2,1)}
+.cam-diag.open .cam-diag-body{grid-template-rows:1fr}
+.cam-diag-body>*{overflow:hidden;min-height:0}
+.cam-diag.open .cam-diag-body{padding:0 12px 10px}
 .cam-diag-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .cam-diag-item{background:var(--surface);border-radius:8px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
 .cam-diag-label{font-size:11px;color:var(--muted);font-weight:500}
@@ -404,6 +433,13 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .pw-wrap input{padding-right:40px!important}
 .pw-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:15px;color:var(--muted);padding:4px;line-height:1;z-index:2;margin-top:-8px}
 .pw-eye:hover{color:var(--text)}
+/* URL-field eye toggle — masks the password portion of an rtsp://… or
+   http://user:pass@… URL while keeping the real value stored in
+   data-real. Clicking reveals; clicking again re-masks. */
+.url-wrap{position:relative}
+.url-eye{position:absolute;top:50%;right:8px;transform:translateY(-50%);width:26px;height:26px;border:none;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:14px;line-height:1;transition:background .15s,color .15s;-webkit-tap-highlight-color:transparent}
+.url-eye:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.url-eye.revealed{color:#60a5fa}
 
 /* ── Settings accordion ────────────────────────────────────────────────── */
 /* Closed = neutral gray, no border. Open = tinted border + background +
@@ -484,8 +520,23 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .tg-obj-chip input{display:none}
 .tg-obj-chip.active{background:rgba(59,130,246,.18);border-color:var(--accent);color:#93c5fd}
 
-/* Telegram tabs */
-.cam-tab-bar{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 12px}.cam-tab-btn{padding:7px 14px;border:1.5px solid rgba(255,255,255,.1);border-radius:999px;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}.cam-tab-btn:hover{border-color:var(--accent);color:var(--text)}.cam-tab-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}.cam-tab-panel{display:none}.cam-tab-panel.active{display:block}.tg-tab-bar{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 12px}
+/* Camera edit tabs — underline style keyed to the group accent (--ca on
+   the cam-edit-wrapper). Inactive = muted text, transparent. Active =
+   normal text weight 700 with a 2px bottom border in the accent colour
+   sitting on top of the shared divider line. Icons inside tabs inherit
+   colour from the button so they tint automatically. */
+.cam-tab-bar{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;border-bottom:1px solid rgba(255,255,255,.06);padding:0;margin-bottom:14px;-webkit-overflow-scrolling:touch}
+.cam-tab-bar::-webkit-scrollbar{height:3px}
+.cam-tab-bar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
+.cam-tab-btn{padding:10px 14px;min-width:80px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:color .15s,background .15s,border-color .15s;margin-bottom:-1px;flex-shrink:0}
+.cam-tab-btn:hover{background:rgba(255,255,255,.03);color:var(--text)}
+.cam-tab-btn.active{color:var(--text);font-weight:700;border-bottom-color:rgba(var(--ca,59,130,246),0.9)}
+.cam-tab-panel{display:none;animation:cam-tab-fade .15s ease-in}
+.cam-tab-panel.active{display:block}
+@keyframes cam-tab-fade{from{opacity:0}to{opacity:1}}
+
+/* Legacy Telegram tab bar — kept separate (used on a different page). */
+.tg-tab-bar{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 12px}
 .tg-tab-btn{padding:7px 14px;border:1.5px solid rgba(255,255,255,.1);border-radius:999px;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
 .tg-tab-btn:hover{border-color:var(--accent);color:var(--text)}
 .tg-tab-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
