@@ -31,8 +31,19 @@ CATEGORIES: dict[str, list[tuple[str, int]]] = {
         ("People_walking_outdoors", 5),
     ],
     "car": [
-        ("Sedans", 3),
-        ("Hatchbacks", 2),
+        # Specific modern car-model categories yield real user-uploaded photos
+        # of cars parked on streets / driveways — matching what a garden or
+        # workshop camera would actually see. Parent categories like
+        # "Sedans" / "Hatchbacks" are full of line drawings, brochures, and
+        # 1910s newspaper ads which trip the detector.
+        ("Volkswagen_Golf",    1),
+        ("Volkswagen_Passat",  1),
+        ("Toyota_Corolla",     1),
+        ("BMW_3_Series",       1),
+        ("Audi_A4",            1),
+        ("Opel_Astra",         1),
+        ("Ford_Focus",         1),
+        ("Skoda_Octavia",      1),
     ],
     "cat": [
         ("Felis_silvestris_catus", 5),  # all domestic cats
@@ -75,12 +86,25 @@ CATEGORIES: dict[str, list[tuple[str, int]]] = {
 }
 
 VALID_EXT = {".jpg", ".jpeg", ".png", ".webp"}
-# Skip obvious non-photo assets that end up in Commons species categories
+# Skip obvious non-photo assets that end up in Commons species / vehicle
+# categories. Covers: bird atlases (maps/IUCN/rangemaps), species drawings
+# (skeleton/skull/egg), bird audio files, and for cars the usual clutter
+# (brochures, adverts, interiors, dashboards, logos/emblems, patent
+# drawings, schematic line drawings, historical newspaper clippings).
 SKIP_SUBSTR = (
+    # birds / species categories
     "distribution map", "range map", "rangemap", "iucn", "_map", " map",
     "map.jpg", "map.jpeg", "map.png", "diagram", "phylogeny", "taxonomy",
     "locator", "skeleton", "skull", "egg ", "_egg", "nest only", "habitat map",
     "vocalizations", "call.ogg", "song.ogg", "audio", "spectrogram",
+    # cars / vehicle categories
+    "interior", "dashboard", "cockpit", "engine", "motor_block", "gearbox",
+    "logo", "emblem", "badge", "sticker", "decal",
+    "advertisement", "advertising", "brochure", "ad_", "ad.jpg",
+    "patent", "blueprint", "schematic", "line drawing", "sketch",
+    "newspaper", "_press_", " press ", "free_press",
+    "rear light", "tail light", "headlight", "wheel_", "tire_", "tyre_",
+    "spare wheel", "spare_wheel", "hubcap", "rim_", "mudguard",
 )
 
 
