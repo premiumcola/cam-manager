@@ -708,11 +708,17 @@ def api_settings_app():
     proc = settings.data.get("processing", {})
     eff = get_effective_config().get("processing", {}) or {}
     bird_cfg = eff.get("bird_species", {}) or {}
-    model_path = bird_cfg.get("model_path")
-    cpu_model_path = bird_cfg.get("cpu_model_path")
-    labels_path = bird_cfg.get("labels_path")
-    bird_model_available = any(p and Path(p).exists() for p in (model_path, cpu_model_path))
-    bird_labels_available = bool(labels_path and Path(labels_path).exists())
+    wl_cfg = eff.get("wildlife", {}) or {}
+    bird_model_path = bird_cfg.get("model_path")
+    bird_cpu_path   = bird_cfg.get("cpu_model_path")
+    bird_labels_path = bird_cfg.get("labels_path")
+    wl_model_path = wl_cfg.get("model_path")
+    wl_cpu_path   = wl_cfg.get("cpu_model_path")
+    wl_labels_path = wl_cfg.get("labels_path")
+    bird_model_available = any(p and Path(p).exists() for p in (bird_model_path, bird_cpu_path))
+    bird_labels_available = bool(bird_labels_path and Path(bird_labels_path).exists())
+    wl_model_available = any(p and Path(p).exists() for p in (wl_model_path, wl_cpu_path))
+    wl_labels_available = bool(wl_labels_path and Path(wl_labels_path).exists())
     return jsonify({
         "app": settings.data.get("app", {}),
         "server": settings.data.get("server", {}),
@@ -724,7 +730,11 @@ def api_settings_app():
             "bird_species_enabled": bool(proc.get("bird_species", {}).get("enabled", False)),
             "bird_model_available": bird_model_available,
             "bird_labels_available": bird_labels_available,
-            "bird_model_path": model_path,
+            "bird_model_path": bird_model_path,
+            "wildlife_enabled": bool(proc.get("wildlife", {}).get("enabled", False)),
+            "wildlife_model_available": wl_model_available,
+            "wildlife_labels_available": wl_labels_available,
+            "wildlife_model_path": wl_model_path,
         },
     })
 
@@ -742,10 +752,16 @@ def api_settings_app_save():
             needs_rebuild = True
         if "processing" in payload:
             proc = payload["processing"]
-            settings.update_section("processing", {
+            sec = {
                 "detection": {"mode": "coral" if proc.get("coral_enabled") else "none"},
                 "bird_species": {"enabled": bool(proc.get("bird_species_enabled"))},
-            })
+            }
+            # Only touch wildlife if the client actually sent it — otherwise
+            # saving the Coral toggles would clobber an existing wildlife
+            # config that the user set up separately.
+            if "wildlife_enabled" in proc:
+                sec["wildlife"] = {"enabled": bool(proc.get("wildlife_enabled"))}
+            settings.update_section("processing", sec)
             needs_rebuild = True
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 422

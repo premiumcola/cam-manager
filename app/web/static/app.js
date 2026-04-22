@@ -1368,10 +1368,19 @@ function hydrateSettings(){
   const mqttBadge=byId('mqttStatusBadge');
   if(mqttBadge){mqttBadge.textContent=mqtt.enabled?'aktiv':'aus';mqttBadge.className='set-status-badge '+(mqtt.enabled?'set-status-badge--on':'set-status-badge--off');}
   // Coral section — unified .switch toggles (checkbox-driven)
-  const coralActive=!!(proc.coral_enabled ?? coral.mode==='coral');
-  const birdActive=!!(proc.bird_species_enabled ?? coral.bird_species_enabled);
-  const coralInp=byId('coralTpuEnabled'); if(coralInp) coralInp.checked=coralActive;
-  const birdInp=byId('birdSpeciesEnabled'); if(birdInp) birdInp.checked=birdActive;
+  const coralActive   = !!(proc.coral_enabled ?? coral.mode==='coral');
+  const birdActive    = !!(proc.bird_species_enabled ?? coral.bird_species_enabled);
+  const wildlifeActive= !!proc.wildlife_enabled;
+  const coralInp   = byId('coralTpuEnabled');   if(coralInp)    coralInp.checked=coralActive;
+  const birdInp    = byId('birdSpeciesEnabled'); if(birdInp)     birdInp.checked=birdActive;
+  const wildInp    = byId('wildlifeEnabled');   if(wildInp)     wildInp.checked=wildlifeActive;
+  // Grey out the wildlife row when the model file is missing — still
+  // toggleable (explicit user opt-in), but signalled visually.
+  const wildRow = byId('wildlifeEnabledRow');
+  if(wildRow){
+    const missing = proc.wildlife_model_available===false;
+    wildRow.classList.toggle('toggle-row--disabled', missing);
+  }
   const cam0=state.cameras[0];
   const coralAvail=!!cam0?.coral_available;
   const chip=byId('coralStatusChip');
@@ -1387,19 +1396,25 @@ function hydrateSettings(){
   const hint=byId('coralStatusHint');
   if(hint){
     const reason=cam0?.coral_reason||'—';
-    const lines=[coralAvail?'✅ Coral TPU erkannt und aktiv.':`⚠️ Coral nicht verfügbar: ${reason}`];
+    const lines=[coralAvail?'✅ Coral TPU erkannt und aktiv.':(coralActive?`💻 CPU Fallback aktiv (${esc(reason)})`:'⏸ Erkennung deaktiviert')];
     if(birdActive && proc.bird_model_available===false){
       const p=proc.bird_model_path||'inat_bird_quant.tflite';
       lines.push(`⚠️ Vogelarten-Modell nicht gefunden. Bitte <code>${esc(p.split('/').pop())}</code> in <code>models/</code> ablegen.`);
     } else if(birdActive && cam0?.bird_species_available===false && cam0?.bird_species_reason){
       lines.push(`⚠️ Vogelarten-Klassifikation: ${esc(cam0.bird_species_reason)}`);
     }
+    if(wildlifeActive && proc.wildlife_model_available===false){
+      const p=proc.wildlife_model_path||'mobilenet_v2_1.0_224_quant.tflite';
+      lines.push(`⚠️ Wildtier-Modell nicht gefunden. Bitte <code>${esc(p.split('/').pop())}</code> in <code>models/</code> ablegen.`);
+    }
     hint.innerHTML=lines.join('<br>');
   }
   // Coral device info from /api/system (async, non-blocking)
   _updateCoralDeviceInfo();
   _populateCoralTestCameras();
-  _loadCoralModels();
+  // Models list is now behind the Modelle sub-tab; load it lazily on
+  // first open via toggleCoralTab, so hydrate doesn't spin up a request
+  // users aren't looking at.
   // Hydrate media settings form
   const storageSec=state.config.storage||{};
   const rdVal=storageSec.retention_days||14;
@@ -1990,18 +2005,30 @@ window.saveMqttSettings=async function(){
 };
 window._toggleCoralSetting=async function(key,inputEl){
   const nowOn=!!inputEl.checked;
-  const coralEnabled=key==='coral_enabled'?nowOn:!!(byId('coralTpuEnabled')?.checked);
-  const birdEnabled=key==='bird_species_enabled'?nowOn:!!(byId('birdSpeciesEnabled')?.checked);
-  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({processing:{coral_enabled:coralEnabled,bird_species_enabled:birdEnabled}})});
+  const coralEnabled=key==='coral_enabled'   ?nowOn:!!(byId('coralTpuEnabled')?.checked);
+  const birdEnabled =key==='bird_species_enabled'?nowOn:!!(byId('birdSpeciesEnabled')?.checked);
+  const wildlifeOn  =key==='wildlife_enabled'?nowOn:!!(byId('wildlifeEnabled')?.checked);
+  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({processing:{coral_enabled:coralEnabled,bird_species_enabled:birdEnabled,wildlife_enabled:wildlifeOn}})});
   showToast('Coral gespeichert · Kameras werden neu gestartet.','success');
   await loadAll();
 };
 window.reloadCoralRuntime=async function(){
   const coralEnabled=!!(byId('coralTpuEnabled')?.checked);
-  const birdEnabled=!!(byId('birdSpeciesEnabled')?.checked);
-  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({processing:{coral_enabled:coralEnabled,bird_species_enabled:birdEnabled}})});
+  const birdEnabled =!!(byId('birdSpeciesEnabled')?.checked);
+  const wildlifeOn  =!!(byId('wildlifeEnabled')?.checked);
+  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({processing:{coral_enabled:coralEnabled,bird_species_enabled:birdEnabled,wildlife_enabled:wildlifeOn}})});
   showToast('Coral-Runtime neu gestartet.','success');
   await loadAll();
+};
+// Coral section sub-tab switcher (Einstellungen / Test / Modelle)
+window.toggleCoralTab=function(tabId){
+  document.querySelectorAll('.coral-tab').forEach(t=>t.classList.toggle('active', t.dataset.tab===tabId));
+  document.querySelectorAll('.coral-tab-content').forEach(p=>p.hidden = p.id!==`coral-pane-${tabId}`);
+  // Lazy-load the models list the first time the Modelle tab is shown
+  if(tabId==='models' && !window._coralModelsLoadedOnce){
+    window._coralModelsLoadedOnce=true;
+    _loadCoralModels?.();
+  }
 };
 async function _updateCoralDeviceInfo(){
   const panel=byId('coralDeviceInfo'); if(!panel) return;
@@ -2243,7 +2270,7 @@ async function _loadCoralModels(){
           return `<div class="mvar${active?' mvar--active':''}" data-path="${esc(v.path)}">
             <span class="mvar-kind mvar-kind--${label.toLowerCase()}">${esc(label)}</span>
             <span class="mvar-size">${v.size_mb!=null?v.size_mb+' MB':''}</span>
-            <span class="mvar-badge">${active?'aktiv':'verfügbar'}</span>
+            ${active?'<span class="mvar-badge">aktiv</span>':''}
           </div>`;
         };
         // Title row: model stem + description

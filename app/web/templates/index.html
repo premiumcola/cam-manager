@@ -639,57 +639,59 @@
           <button type="button" class="set-hd" onclick="toggleSetSection('set-coral')">
             <span class="set-icon" style="font-size:16px">🧠</span><span>Objekterkennung · Google Coral TPU / CPU</span><span id="coralStatusChip" class="set-status-badge set-status-badge--off">aus</span><span class="set-chevron">▶</span>
           </button>
-          <div class="set-bd"><div class="set-inner coral-inner-wrap">
-            <!-- Einstellungen -->
-            <div class="coral-card">
-              <div class="coral-card-head">
-                <span class="coral-card-title">Einstellungen</span>
-                <button type="button" class="coral-card-btn" onclick="reloadCoralRuntime()" title="Coral neu initialisieren">
+          <div class="set-bd"><div class="set-inner">
+            <!-- Tab bar — underline style, matches camera settings -->
+            <div class="coral-tabs">
+              <button type="button" class="coral-tab active" data-tab="settings" onclick="toggleCoralTab('settings')"><span>⚙</span><span>Einstellungen</span></button>
+              <button type="button" class="coral-tab" data-tab="test" onclick="toggleCoralTab('test')"><span>▶</span><span>Test</span></button>
+              <button type="button" class="coral-tab" data-tab="models" onclick="toggleCoralTab('models')"><span>📦</span><span>Modelle</span></button>
+            </div>
+
+            <!-- Pane: Einstellungen -->
+            <div class="coral-tab-content" id="coral-pane-settings">
+              <label class="toggle-row">
+                <span class="toggle-row-label">Coral TPU<span class="toggle-row-sublabel">Hardware-Beschleunigung via USB-Stick</span></span>
+                <span class="switch"><input type="checkbox" id="coralTpuEnabled" onchange="window._toggleCoralSetting('coral_enabled',this)"><span class="slider"></span></span>
+              </label>
+              <label class="toggle-row" style="margin-top:6px">
+                <span class="toggle-row-label">Vogelarten-Klassifikation<span class="toggle-row-sublabel">iNaturalist · ~960 Arten</span></span>
+                <span class="switch"><input type="checkbox" id="birdSpeciesEnabled" onchange="window._toggleCoralSetting('bird_species_enabled',this)"><span class="slider"></span></span>
+              </label>
+              <label class="toggle-row" id="wildlifeEnabledRow" style="margin-top:6px">
+                <span class="toggle-row-label">Wildtier-Erkennung<span class="toggle-row-sublabel">ImageNet · Fuchs, Igel, Eichhörnchen</span></span>
+                <span class="switch"><input type="checkbox" id="wildlifeEnabled" onchange="window._toggleCoralSetting('wildlife_enabled',this)"><span class="slider"></span></span>
+              </label>
+              <div id="coralStatusHint" class="field-help" style="margin-top:10px"></div>
+              <div id="coralDeviceInfo"></div>
+              <div style="display:flex;justify-content:flex-end;margin-top:12px">
+                <button type="button" class="btn-action ghost small-btn" onclick="reloadCoralRuntime()" title="Coral neu initialisieren">
                   <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg>
                   Reload Runtime
                 </button>
               </div>
-              <div class="coral-card-body">
-                <label class="toggle-row">
-                  <span class="toggle-row-label">Coral TPU</span>
-                  <span class="switch"><input type="checkbox" id="coralTpuEnabled" onchange="window._toggleCoralSetting('coral_enabled',this)"><span class="slider"></span></span>
-                </label>
-                <label class="toggle-row">
-                  <span class="toggle-row-label">Vogelarten-Klassifikation</span>
-                  <span class="switch"><input type="checkbox" id="birdSpeciesEnabled" onchange="window._toggleCoralSetting('bird_species_enabled',this)"><span class="slider"></span></span>
-                </label>
-                <div id="coralStatusHint" class="field-help" style="margin-top:2px"></div>
-                <div id="coralDeviceInfo"></div>
-              </div>
             </div>
 
-            <!-- Inferenz-Test -->
-            <div class="coral-card">
-              <div class="coral-card-head">
-                <span class="coral-card-title">Inferenz-Test</span>
+            <!-- Pane: Test -->
+            <div class="coral-tab-content" id="coral-pane-test" hidden>
+              <div class="cam-field-label">Erkennung testen</div>
+              <div class="coral-test-row">
+                <select id="coralTestCamSel" class="dark-select"></select>
+                <button type="button" id="coralTestBtn" class="btn-action accent">▶ Testen</button>
               </div>
-              <div class="coral-card-body">
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-                  <select id="coralTestCamSel" style="flex:1;min-width:180px;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,0.04);color:var(--text);border:1px solid rgba(255,255,255,0.07);font-size:13px"></select>
-                  <button type="button" id="coralTestBtn" class="coral-card-btn" style="flex-shrink:0">▶ Coral testen</button>
-                </div>
-                <div id="coralTestResult" style="margin-top:10px"></div>
-              </div>
+              <div id="coralTestResult" style="margin-top:10px"></div>
             </div>
 
-            <!-- Modelle -->
-            <div class="coral-card">
-              <div class="coral-card-head">
-                <span class="coral-card-title">Modelle</span>
-                <button type="button" id="coralModelsReload" class="coral-card-btn" title="Liste neu laden">
+            <!-- Pane: Modelle -->
+            <div class="coral-tab-content" id="coral-pane-models" hidden>
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px">
+                <div class="cam-field-label" style="margin:0">Verfügbare Modelle</div>
+                <button type="button" id="coralModelsReload" class="btn-action ghost small-btn" title="Liste neu laden">
                   <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg>
                   Aktualisieren
                 </button>
               </div>
-              <div class="coral-card-body">
-                <div id="coralModelsList"></div>
-                <div class="field-help" style="margin-top:8px">Eigene <code>.tflite</code>-Modelle einfach in den <code>models/</code>-Ordner ablegen — sie erscheinen hier beim nächsten Aktualisieren.</div>
-              </div>
+              <div id="coralModelsList"></div>
+              <div class="field-help" style="margin-top:10px">Eigene <code>.tflite</code>-Modelle einfach in <code>models/</code> ablegen — sie erscheinen beim nächsten Aktualisieren.</div>
             </div>
           </div></div>
         </div>
