@@ -128,6 +128,13 @@ class CameraRuntime:
         self._mask_image = None
         self._mask_sig: str | None = None
         self._ensure_mask_image(log_summary=True)
+        # Inclusion-zone image cache. Mirrors the mask helpers but inverts
+        # the geometry: 255 = inside a zone (detect here), 0 = outside.
+        # When no zones are configured, _zone_image is None and the whole
+        # frame counts as active.
+        self._zone_image = None
+        self._zone_sig: str | None = None
+        self._ensure_zone_image(log_summary=True)
         self._ach_lock = threading.Lock()
         self._ach_path = Path(self.global_cfg["storage"]["root"]) / "achievements.json"
         self._motion_confirm: deque = deque(maxlen=3)  # multi-frame confirmation
@@ -485,16 +492,23 @@ class CameraRuntime:
             return
         h, w = 720, 1280
         mask = np.ones((h, w), dtype=np.uint8) * 255
+        # Accept either [ [{x,y}, ...], ... ] (legacy) or
+        # [ {points:[{x,y},...], label:"..."}, ... ] (new shape).
         for poly in cam_masks:
-            if not isinstance(poly, list) or len(poly) < 3:
+            pts_list = poly.get("points", poly) if isinstance(poly, dict) else poly
+            if not isinstance(pts_list, list) or len(pts_list) < 3:
                 continue
-            pts = np.array([[int(p.get('x', 0)), int(p.get('y', 0))] for p in poly], dtype=np.int32)
+            pts = np.array([[int(p.get('x', 0)), int(p.get('y', 0))] for p in pts_list], dtype=np.int32)
             pts[:, 0] = np.clip(pts[:, 0], 0, w - 1)
             pts[:, 1] = np.clip(pts[:, 1], 0, h - 1)
             cv2.fillPoly(mask, [pts], 0)
         self._mask_image = mask
         if log_summary:
-            total_verts = sum(len(p) for p in cam_masks if isinstance(p, list))
+            total_verts = 0
+            for p in cam_masks:
+                pts_list = p.get("points", p) if isinstance(p, dict) else p
+                if isinstance(pts_list, list):
+                    total_verts += len(pts_list)
             log.info("[%s] Loaded %d exclusion masks (%d total vertices)",
                      self.camera_id, len(cam_masks), total_verts)
 
@@ -521,6 +535,72 @@ class CameraRuntime:
                 kept.append(d)
             else:
                 log.debug("[%s] Detection '%s' (%.0f%%) suppressed by mask at (%d,%d)",
+                          self.camera_id, d.label, d.score * 100, cx, cy)
+        return kept
+
+    def _ensure_zone_image(self, log_summary: bool = False):
+        """Build / refresh the inclusion-zone image. Inverse logic vs. mask:
+        the canvas starts BLACK and each zone polygon is filled with WHITE,
+        so a pixel inside any zone is active (detect here). When no zones
+        are configured, _zone_image stays None and the whole frame is
+        active — behaviour equivalent to "no filter". Rebuilds only when
+        the zones config signature changes, so the per-frame path stays
+        cheap."""
+        cam_zones = self.cfg.get("zones", []) or []
+        try:
+            sig = _json_mod.dumps(cam_zones, sort_keys=True, separators=(',', ':'))
+        except Exception:
+            sig = repr(cam_zones)
+        if sig == self._zone_sig:
+            return
+        self._zone_sig = sig
+        if not cam_zones:
+            self._zone_image = None
+            if log_summary:
+                log.info("[%s] inclusion zones: none (entire frame active)", self.camera_id)
+            return
+        h, w = 720, 1280
+        zone = np.zeros((h, w), dtype=np.uint8)  # start all black (inactive)
+        for poly in cam_zones:
+            pts_list = poly.get("points", poly) if isinstance(poly, dict) else poly
+            if not isinstance(pts_list, list) or len(pts_list) < 3:
+                continue
+            pts = np.array([[int(p.get('x', 0)), int(p.get('y', 0))] for p in pts_list], dtype=np.int32)
+            pts[:, 0] = np.clip(pts[:, 0], 0, w - 1)
+            pts[:, 1] = np.clip(pts[:, 1], 0, h - 1)
+            cv2.fillPoly(zone, [pts], 255)  # white = active zone
+        self._zone_image = zone
+        if log_summary:
+            total_verts = 0
+            for p in cam_zones:
+                pts_list = p.get("points", p) if isinstance(p, dict) else p
+                if isinstance(pts_list, list):
+                    total_verts += len(pts_list)
+            log.info("[%s] Loaded %d inclusion zones (%d total vertices) — outside zones = ignored",
+                     self.camera_id, len(cam_zones), total_verts)
+
+    def _filter_zoned_detections(self, frame, detections: list) -> list:
+        """Keep only detections whose bbox-centre lands *inside* at least
+        one configured zone. No-op when no zones are configured (entire
+        frame is implicitly active)."""
+        self._ensure_zone_image()
+        if self._zone_image is None or not detections:
+            return detections
+        h_z, w_z = self._zone_image.shape[:2]
+        h_f, w_f = frame.shape[:2]
+        if (h_z, w_z) != (h_f, w_f):
+            zone_resized = cv2.resize(self._zone_image, (w_f, h_f), interpolation=cv2.INTER_NEAREST)
+        else:
+            zone_resized = self._zone_image
+        kept: list = []
+        for d in detections:
+            x1, y1, x2, y2 = d.bbox
+            cx = max(0, min(w_f - 1, (x1 + x2) // 2))
+            cy = max(0, min(h_f - 1, (y1 + y2) // 2))
+            if zone_resized[cy, cx] > 0:
+                kept.append(d)
+            else:
+                log.debug("[%s] Detection '%s' (%.0f%%) outside all zones at (%d,%d)",
                           self.camera_id, d.label, d.score * 100, cx, cy)
         return kept
 
@@ -559,18 +639,28 @@ class CameraRuntime:
         self.prev_gray = gray
         _, thresh = cv2.threshold(diff, 28, 255, cv2.THRESH_BINARY)
         thresh = cv2.dilate(thresh, None, iterations=2)
-        # Apply camera exclusion masks: zero out masked regions
-        cam_masks = self.cfg.get("masks", [])
-        if cam_masks:
-            h_f, w_f = thresh.shape[:2]
-            excl = np.ones(thresh.shape, dtype=np.uint8) * 255
-            for poly in cam_masks:
-                if len(poly) >= 3:
-                    pts = np.array([[int(p['x']), int(p['y'])] for p in poly], dtype=np.int32)
-                    pts[:, 0] = np.clip(pts[:, 0], 0, w_f - 1)
-                    pts[:, 1] = np.clip(pts[:, 1], 0, h_f - 1)
-                    cv2.fillPoly(excl, [pts], 0)
-            thresh = cv2.bitwise_and(thresh, excl)
+        # Apply camera exclusion masks: zero out masked regions. Reuses
+        # the cached mask image (_ensure_mask_image() rebuilds only on
+        # signature changes) so this stays cheap per frame.
+        self._ensure_mask_image()
+        if self._mask_image is not None:
+            h_t, w_t = thresh.shape[:2]
+            if self._mask_image.shape[:2] != (h_t, w_t):
+                mask_resized = cv2.resize(self._mask_image, (w_t, h_t), interpolation=cv2.INTER_NEAREST)
+            else:
+                mask_resized = self._mask_image
+            thresh = cv2.bitwise_and(thresh, mask_resized)
+        # Apply inclusion zones — keep only motion that happens inside at
+        # least one zone. The cached _zone_image is None when no zones are
+        # configured, in which case this is a no-op.
+        self._ensure_zone_image()
+        if self._zone_image is not None:
+            h_t, w_t = thresh.shape[:2]
+            if self._zone_image.shape[:2] != (h_t, w_t):
+                zone_resized = cv2.resize(self._zone_image, (w_t, h_t), interpolation=cv2.INTER_NEAREST)
+            else:
+                zone_resized = self._zone_image
+            thresh = cv2.bitwise_and(thresh, zone_resized)
         # Per-camera sensitivity → scales minimum contour area
         sensitivity = self.cfg.get("motion_sensitivity")
         if sensitivity is not None:
@@ -1603,12 +1693,17 @@ class CameraRuntime:
                 allowed = set(self.cfg.get("object_filter") or [])
                 if allowed:
                     detections = [d for d in detections if d.label in allowed]
-                # Suppress COCO hits whose bbox-centre lies in a masked
-                # polygon — otherwise wind-blown foliage keeps firing
-                # "bird" in the top corner we told the camera to ignore.
-                # Applied BEFORE the bird/cat/person classifiers so we
-                # don't waste cycles on a crop we're about to drop.
+                # Exclusion mask first: drop detections inside masked
+                # regions before zone filtering or any second-stage
+                # classification runs. Applied BEFORE the bird / cat /
+                # person classifiers so we don't waste cycles on a crop
+                # we're about to drop.
                 detections = self._filter_masked_detections(proc_frame, detections)
+                # Inclusion zones next: if any zones are defined, keep
+                # only detections whose centre lies inside a zone.
+                # Masks + zones compose: detect inside zones BUT exclude
+                # masked areas within zones.
+                detections = self._filter_zoned_detections(proc_frame, detections)
                 labels = effective_motion + [d.label for d in detections]
                 if self.bird_classifier.available:
                     for d in detections:
@@ -1651,6 +1746,7 @@ class CameraRuntime:
                             species_score=float(wscore) if wscore is not None else None,
                         )
                         survivors = self._filter_masked_detections(proc_frame, [wl_det])
+                        survivors = self._filter_zoned_detections(proc_frame, survivors)
                         if survivors:
                             detections.append(wl_det)
                             labels.append(cat)

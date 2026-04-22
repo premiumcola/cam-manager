@@ -395,20 +395,42 @@
             <!-- Panel: Zonen -->
             <div class="cam-tab-panel" id="cam-tab-zonen">
               <div class="mask-editor panel inset">
-                <div class="section-head"><h3>Masken &amp; Zonen</h3><div class="muted" id="shapeStatus">Punktweise zeichnen auf dem Snapshot</div></div>
-                <div class="shape-toolbar">
-                  <button class="ghost small-btn" id="refreshMaskSnapshotBtn" type="button">Snapshot aktualisieren</button>
-                  <button class="ghost small-btn" id="editZoneBtn" type="button">Zone zeichnen</button>
-                  <button class="ghost small-btn" id="editMaskBtn" type="button">Maske zeichnen</button>
-                  <button class="ghost small-btn" id="undoShapeBtn" type="button">Letzten Punkt löschen</button>
-                  <button class="ghost small-btn" id="saveShapeBtn" type="button">Polygon übernehmen</button>
-                  <button class="ghost small-btn danger-btn" id="clearShapesBtn" type="button">Alle löschen</button>
+                <!-- Legend — single source of truth for what blue/red mean -->
+                <div class="shape-legend">
+                  <span class="shape-legend-item"><span class="shape-legend-swatch shape-legend-swatch--zone"></span>Zone — nur hier erkennen</span>
+                  <span class="shape-legend-item"><span class="shape-legend-swatch shape-legend-swatch--mask"></span>Maske — hier NICHT erkennen</span>
                 </div>
+
+                <!-- Mode selector: colour-coded active state (blue/red) -->
+                <div class="shape-mode-row">
+                  <button class="shape-mode-btn" data-mode="zone" id="editZoneBtn" type="button">
+                    <span class="shape-mode-dot shape-mode-dot--zone"></span>Zone zeichnen
+                  </button>
+                  <button class="shape-mode-btn" data-mode="mask" id="editMaskBtn" type="button">
+                    <span class="shape-mode-dot shape-mode-dot--mask"></span>Maske zeichnen
+                  </button>
+                  <div class="shape-mode-spacer"></div>
+                  <button class="ghost small-btn" id="refreshMaskSnapshotBtn" type="button">Snapshot aktualisieren</button>
+                </div>
+
                 <div class="canvas-wrap">
                   <img id="maskSnapshot" src="" alt="Snapshot" />
                   <canvas id="maskCanvas" width="1280" height="720"></canvas>
                 </div>
-                <div class="small muted">Zonen = aktiv relevanter Bereich. Masken = Bereich ignorieren.</div>
+
+                <!-- Live counter + drawing actions (only visible while drawing) -->
+                <div class="shape-drawing-bar" id="shapeDrawingBar" hidden>
+                  <span class="shape-drawing-count" id="shapeDrawingCount">0 Punkte gesetzt</span>
+                  <button class="ghost small-btn" id="undoShapeBtn" type="button">Letzten Punkt entfernen</button>
+                  <button class="small-btn shape-save-btn" id="saveShapeBtn" type="button">Polygon übernehmen</button>
+                </div>
+
+                <!-- Polygon list — one row per saved polygon, click to pulse, trash to delete -->
+                <div class="shape-list" id="shapeList"></div>
+
+                <div class="shape-clear-row" id="shapeClearRow" hidden>
+                  <button class="ghost small-btn danger-btn" id="clearShapesBtn" type="button">Alle Polygone löschen</button>
+                </div>
               </div>
             </div>
 

@@ -1033,8 +1033,11 @@ function editCamera(camId){
     const el=byId('snapshotIntervalLabel'); if(el) el.textContent=si+'s';
   }
   _whitelistState=[...(c.whitelist_names||[])]; _updateWhitelistHidden();
-  shapeState.camera=camId; shapeState.zones=JSON.parse(JSON.stringify(c.zones||[])); shapeState.masks=JSON.parse(JSON.stringify(c.masks||[])); shapeState.points=[];
+  shapeState.camera=camId; shapeState.zones=JSON.parse(JSON.stringify(c.zones||[])); shapeState.masks=JSON.parse(JSON.stringify(c.masks||[])); shapeState.points=[]; shapeState.pulse=null;
   f['zones_json'].value=JSON.stringify(shapeState.zones); f['masks_json'].value=JSON.stringify(shapeState.masks);
+  // Keep the editor's auxiliary UI (polygon list, drawing-bar, mode
+  // buttons) in sync with shapeState whenever a camera is opened.
+  _renderShapeList(); _updateShapeDrawingBar(); _updateShapeModeButtons();
   byId('deleteCameraBtn').dataset.camId=camId;
   loadMaskSnapshot(camId); drawShapes();
   // Slide down inside the clicked camera card.
@@ -1621,18 +1624,126 @@ byId('saveTgGroupRulesBtn')?.addEventListener('click',async()=>{
 });
 
 function getCanvasCtx(){ return byId('maskCanvas').getContext('2d'); }
-function loadMaskSnapshot(camId){ if(!camId) return; byId('maskSnapshot').src=`/api/camera/${camId}/snapshot.jpg?t=${Date.now()}`; byId('shapeStatus').textContent=`Bearbeite ${camId} · ${shapeState.mode==='zone'?'Zone':'Maske'}`; }
+function loadMaskSnapshot(camId){ if(!camId) return; byId('maskSnapshot').src=`/api/camera/${camId}/snapshot.jpg?t=${Date.now()}`; }
 function scaleForCanvas(el,img){ const rect=el.getBoundingClientRect(); const naturalW=img.naturalWidth||1280, naturalH=img.naturalHeight||720; el.width=naturalW; el.height=naturalH; el.style.width=rect.width+'px'; el.style.height='auto'; }
-function drawPoly(ctx,poly,color,fillAlpha){ if(!poly?.length) return; ctx.beginPath(); ctx.moveTo(poly[0].x,poly[0].y); poly.slice(1).forEach(p=>ctx.lineTo(p.x,p.y)); ctx.closePath(); ctx.fillStyle=color.replace('1)', `${fillAlpha})`); ctx.strokeStyle=color; ctx.lineWidth=3; ctx.fill(); ctx.stroke(); }
-function drawShapes(){
-  const img=byId('maskSnapshot'), canvas=byId('maskCanvas'); if(!img.src) return;
-  scaleForCanvas(canvas,img); const ctx=getCanvasCtx(); ctx.clearRect(0,0,canvas.width,canvas.height);
-  (shapeState.zones||[]).forEach(poly=>drawPoly(ctx,poly,'rgba(75,163,255,1)',0.17));
-  (shapeState.masks||[]).forEach(poly=>drawPoly(ctx,poly,'rgba(255,107,107,1)',0.18));
-  if(shapeState.points.length){ ctx.beginPath(); ctx.moveTo(shapeState.points[0].x,shapeState.points[0].y); shapeState.points.slice(1).forEach(p=>ctx.lineTo(p.x,p.y)); ctx.strokeStyle='#ffffff'; ctx.lineWidth=2; ctx.setLineDash([7,6]); ctx.stroke(); ctx.setLineDash([]); shapeState.points.forEach(p=>{ ctx.beginPath(); ctx.arc(p.x,p.y,6,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); }); }
+// Polygon shape: {points:[{x,y},...], label:"Zone 1"}. Raw arrays of
+// points (legacy pre-label format) are still accepted — _polyPoints
+// unwraps both shapes transparently.
+function _polyPoints(p){ return Array.isArray(p)?p:(p?.points||[]); }
+function _polyLabel(p,fallback){ return (p&&p.label)||fallback; }
+function _nextPolyName(kind){
+  const list = kind==='zone' ? (shapeState.zones||[]) : (shapeState.masks||[]);
+  const base = kind==='zone' ? 'Zone' : 'Maske';
+  const used = new Set();
+  for(const p of list){
+    const lbl = (p && p.label) || '';
+    const m = lbl.match(new RegExp('^'+base+'\\s+(\\d+)$','i'));
+    if(m) used.add(parseInt(m[1],10));
+  }
+  let n=1; while(used.has(n)) n++;
+  return `${base} ${n}`;
 }
-function canvasPoint(evt){ const canvas=byId('maskCanvas'); const rect=canvas.getBoundingClientRect(); const x=(evt.clientX-rect.left)*(canvas.width/rect.width); const y=(evt.clientY-rect.top)*(canvas.height/rect.height); return {x:Math.round(x),y:Math.round(y)}; }
-function saveShapesIntoForm(){ const f=byId('cameraForm').elements; f['zones_json'].value=JSON.stringify(shapeState.zones||[]); f['masks_json'].value=JSON.stringify(shapeState.masks||[]); }
+function drawPoly(ctx,poly,color,fillAlpha,emphasised){
+  const pts=_polyPoints(poly); if(!pts.length) return;
+  ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
+  pts.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));
+  ctx.closePath();
+  ctx.fillStyle=color.replace('1)', `${fillAlpha})`);
+  ctx.strokeStyle=color;
+  ctx.lineWidth=emphasised?5:3;
+  ctx.fill(); ctx.stroke();
+  if(poly && poly.label){
+    const minX=Math.min(...pts.map(p=>p.x)), minY=Math.min(...pts.map(p=>p.y));
+    const labelY=Math.max(20, minY);
+    ctx.fillStyle='rgba(0,0,0,.6)';
+    ctx.fillRect(minX, labelY-22, Math.max(70, poly.label.length*9), 20);
+    ctx.fillStyle='#fff';
+    ctx.font='600 13px system-ui,sans-serif';
+    ctx.fillText(poly.label, minX+6, labelY-7);
+  }
+}
+function drawShapes(){
+  const img=byId('maskSnapshot'), canvas=byId('maskCanvas');
+  if(!img||!canvas||!img.src) return;
+  scaleForCanvas(canvas,img);
+  const ctx=getCanvasCtx(); ctx.clearRect(0,0,canvas.width,canvas.height);
+  const pulseId=shapeState.pulse;
+  (shapeState.zones||[]).forEach((p,i)=>drawPoly(ctx,p,'rgba(75,163,255,1)',0.17,pulseId===`zone:${i}`));
+  (shapeState.masks||[]).forEach((p,i)=>drawPoly(ctx,p,'rgba(255,107,107,1)',0.18,pulseId===`mask:${i}`));
+  if(shapeState.points.length){
+    ctx.beginPath();
+    ctx.moveTo(shapeState.points[0].x,shapeState.points[0].y);
+    shapeState.points.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));
+    ctx.strokeStyle='#ffffff'; ctx.lineWidth=2;
+    ctx.setLineDash([7,6]); ctx.stroke(); ctx.setLineDash([]);
+    shapeState.points.forEach(p=>{ ctx.beginPath(); ctx.arc(p.x,p.y,6,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); });
+  }
+}
+function canvasPoint(evt){
+  const canvas=byId('maskCanvas'); const rect=canvas.getBoundingClientRect();
+  // Support both mouse and touch events. Touch coords live on .touches
+  // (move/start) or .changedTouches (end).
+  const src = (evt.touches && evt.touches[0]) || (evt.changedTouches && evt.changedTouches[0]) || evt;
+  const x=(src.clientX-rect.left)*(canvas.width/rect.width);
+  const y=(src.clientY-rect.top)*(canvas.height/rect.height);
+  return {x:Math.round(x),y:Math.round(y)};
+}
+function saveShapesIntoForm(){
+  const f=byId('cameraForm').elements;
+  f['zones_json'].value=JSON.stringify(shapeState.zones||[]);
+  f['masks_json'].value=JSON.stringify(shapeState.masks||[]);
+}
+
+// ── Shape-editor UI updaters (drawing bar, polygon list, mode buttons) ──
+function _updateShapeDrawingBar(){
+  const bar=byId('shapeDrawingBar'); if(!bar) return;
+  const n=shapeState.points.length;
+  bar.hidden = n===0;
+  const count=byId('shapeDrawingCount');
+  if(count){
+    if(n<3) count.textContent=`${n} Punkt${n===1?'':'e'} gesetzt · Mindestens 3 für ein Polygon`;
+    else count.textContent=`${n} Punkte gesetzt · Übernehmen möglich`;
+  }
+  const save=byId('saveShapeBtn'); if(save) save.disabled = n<3;
+}
+function _updateShapeModeButtons(){
+  document.querySelectorAll('.shape-mode-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.mode===shapeState.mode);
+  });
+}
+function _renderShapeList(){
+  const host=byId('shapeList'); if(!host) return;
+  const zones=shapeState.zones||[]; const masks=shapeState.masks||[];
+  const clearRow=byId('shapeClearRow'); if(clearRow) clearRow.hidden = (zones.length+masks.length)===0;
+  if(zones.length+masks.length===0){
+    host.innerHTML='<div class="field-help" style="padding:8px 2px">Noch keine Polygone. Wähle oben einen Modus und klicke Punkte auf den Snapshot.</div>';
+    return;
+  }
+  const row=(p,i,kind)=>{
+    const pts=_polyPoints(p);
+    const label=_polyLabel(p, kind==='zone'?`Zone ${i+1}`:`Maske ${i+1}`);
+    const pulseKey=`${kind}:${i}`;
+    return `<div class="shape-row${shapeState.pulse===pulseKey?' pulse':''}" data-kind="${kind}" data-idx="${i}" onclick="_pulseShape('${kind}',${i})">
+      <span class="shape-row-dot shape-row-dot--${kind}"></span>
+      <span class="shape-row-label">${esc(label)}</span>
+      <span class="shape-row-count">${pts.length} Punkte</span>
+      <button type="button" class="shape-row-del" title="Löschen" onclick="event.stopPropagation();_deleteShape('${kind}',${i})"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,4 14,4"/><path d="M5 4V2h6v2"/><path d="M3 4l1 10h8l1-10"/></svg></button>
+    </div>`;
+  };
+  host.innerHTML =
+      zones.map((p,i)=>row(p,i,'zone')).join('')
+    + masks.map((p,i)=>row(p,i,'mask')).join('');
+}
+window._pulseShape=function(kind,idx){
+  shapeState.pulse = shapeState.pulse===`${kind}:${idx}` ? null : `${kind}:${idx}`;
+  drawShapes(); _renderShapeList();
+};
+window._deleteShape=function(kind,idx){
+  const arr = kind==='zone' ? shapeState.zones : shapeState.masks;
+  arr.splice(idx,1);
+  if(shapeState.pulse===`${kind}:${idx}`) shapeState.pulse=null;
+  saveShapesIntoForm(); drawShapes(); _renderShapeList();
+};
 
 function openWizard(){ byId('wizard').classList.remove('hidden'); showWizardStep(1); }
 function closeWizard(){ byId('wizard').classList.add('hidden'); }
@@ -2689,14 +2800,56 @@ byId('mediaSettingsForm').onsubmit=async(e)=>{
   await loadAll();
 };
 
-byId('maskCanvas').addEventListener('click',(evt)=>{ if(!shapeState.camera) return; shapeState.points.push(canvasPoint(evt)); drawShapes(); });
-byId('refreshMaskSnapshotBtn').onclick=()=>loadMaskSnapshot(shapeState.camera||byId('cameraForm').elements['id'].value);
-byId('editZoneBtn').onclick=()=>{shapeState.mode='zone'; byId('shapeStatus').textContent='Zone zeichnen';};
-byId('editMaskBtn').onclick=()=>{shapeState.mode='mask'; byId('shapeStatus').textContent='Maske zeichnen';};
-byId('undoShapeBtn').onclick=()=>{shapeState.points.pop(); drawShapes();};
-byId('saveShapeBtn').onclick=()=>{ if(shapeState.points.length<3){showToast('Mindestens 3 Punkte.','warn');return;} if(shapeState.mode==='zone') shapeState.zones.push([...shapeState.points]); else shapeState.masks.push([...shapeState.points]); shapeState.points=[]; saveShapesIntoForm(); drawShapes(); };
-byId('clearShapesBtn').onclick=async()=>{ if(!await showConfirm('Alle Zonen und Masken löschen?')) return; shapeState.zones=[]; shapeState.masks=[]; shapeState.points=[]; saveShapesIntoForm(); drawShapes(); };
-byId('maskSnapshot').addEventListener('load',drawShapes);
+// ── Shape editor wiring (canvas click/touch + toolbar) ────────────────────
+(function _initShapeEditor(){
+  const canvas = byId('maskCanvas');
+  const addPoint = (evt) => {
+    if(!shapeState.camera) return;
+    // Don't scroll / select while drawing on touch
+    if(evt.cancelable) evt.preventDefault();
+    shapeState.points.push(canvasPoint(evt));
+    drawShapes(); _updateShapeDrawingBar();
+  };
+  canvas?.addEventListener('click', addPoint);
+  canvas?.addEventListener('touchstart', addPoint, {passive:false});
+
+  byId('refreshMaskSnapshotBtn').onclick = () =>
+    loadMaskSnapshot(shapeState.camera || byId('cameraForm').elements['id'].value);
+
+  byId('editZoneBtn').onclick = () => { shapeState.mode='zone'; _updateShapeModeButtons(); };
+  byId('editMaskBtn').onclick = () => { shapeState.mode='mask'; _updateShapeModeButtons(); };
+
+  byId('undoShapeBtn').onclick = () => {
+    shapeState.points.pop();
+    drawShapes(); _updateShapeDrawingBar();
+  };
+
+  byId('saveShapeBtn').onclick = () => {
+    if(shapeState.points.length < 3){ showToast('Mindestens 3 Punkte.','warn'); return; }
+    const poly = {
+      points: [...shapeState.points],
+      label: _nextPolyName(shapeState.mode),
+    };
+    if(shapeState.mode==='zone') shapeState.zones.push(poly);
+    else                         shapeState.masks.push(poly);
+    shapeState.points = [];
+    saveShapesIntoForm(); drawShapes();
+    _updateShapeDrawingBar(); _renderShapeList();
+    showToast(`${poly.label} gespeichert`, 'success');
+  };
+
+  byId('clearShapesBtn').onclick = async () => {
+    if(!await showConfirm('Alle Zonen und Masken löschen?')) return;
+    shapeState.zones = []; shapeState.masks = []; shapeState.points = [];
+    shapeState.pulse = null;
+    saveShapesIntoForm(); drawShapes();
+    _updateShapeDrawingBar(); _renderShapeList();
+  };
+
+  byId('maskSnapshot').addEventListener('load', () => {
+    drawShapes(); _renderShapeList(); _updateShapeModeButtons(); _updateShapeDrawingBar();
+  });
+})();
 
 byId('wiz_cam_rtsp').value='rtsp://user:pass@192.168.X.X:554/Streaming/Channels/101';
 byId('wiz_cam_snapshot').value='http://user:pass@192.168.X.X/cgi-bin/snapshot.cgi';
