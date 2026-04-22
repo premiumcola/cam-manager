@@ -403,38 +403,42 @@ function renderDashboard(){
 
     <!-- top-left: name + group -->
     <div class="cv-title-wrap">
-      <div class="cv-name">${esc(c.name)}</div>
+      <div class="cv-name-row">
+        <div class="cv-name">${esc(c.name)}</div>
+        ${tlOn?`<span class="cv-tl-dot" title="Timelapse aktiv">${objIconSvg('timelapse',12)}</span>`:''}
+      </div>
       ${c.location?`<div class="cv-loc">${esc(c.location)}</div>`:''}
       <span class="cv-group-pill">${esc(c.group_id||'—')}</span>
     </div>
 
-    <!-- top-right: live pill + alarm pill -->
+    <!-- top-right: [Live + HD] row, then alarm pill below -->
     <div class="cv-tr">
-      <div class="cv-pill-live-wrap ${isActive?'cv-live-active':'cv-live-off'}">
-        <div class="cv-live-collapsed">
-          <div class="cv-pdot"></div>
-          <span>Live</span>
-          ${previewFps?`<span style="color:rgba(134,239,172,.55);font-size:10px;font-weight:400;margin-left:3px">${previewFps}</span>`:''}
-          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="rgba(200,245,224,.55)" stroke-width="1.8" stroke-linecap="round" style="margin-left:auto;flex-shrink:0"><path d="M3 4.5l3 3 3-3"/></svg>
-        </div>
-        <div class="cv-live-expanded">
-          <div class="cv-live-exp-header">
+      <div class="cv-tr-row">
+        <div class="cv-pill-live-wrap ${isActive?'cv-live-active':'cv-live-off'}">
+          <div class="cv-live-collapsed">
             <div class="cv-pdot"></div>
-            <span>Livestream ${isActive?'aktiv':'inaktiv'}</span>
+            <span>Live</span>
+            ${previewFps?`<span style="color:rgba(134,239,172,.55);font-size:10px;font-weight:400;margin-left:3px">${previewFps} FPS</span>`:''}
+            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="rgba(200,245,224,.55)" stroke-width="1.8" stroke-linecap="round" style="margin-left:auto;flex-shrink:0"><path d="M3 4.5l3 3 3-3"/></svg>
           </div>
-          <div class="cv-lp-row"><span>Stream-Modus</span><strong class="cv-stream-mode ${streamMode==='live'?'cv-mode-live':'cv-mode-base'}">${streamMode==='live'?'● Live':'○ Vorschau'}</strong></div>
-          <div class="cv-lp-row"><span>Preview-FPS<br><small>Gemessen (Sub-Stream)</small></span><strong class="cv-lp-fps-val">${previewFps!=null?previewFps+' fps':'—'}</strong></div>
-          <div class="cv-lp-row"><span>Auflösung</span><strong>${esc(c.preview_resolution||c.resolution||'—')}</strong></div>
-          <div class="cv-lp-row"><span>Analyse-Framerate<br><small>Wie oft TAM-spy analysiert</small></span><strong>${fps!=null?fps+' fps':'—'}</strong></div>
+          <div class="cv-live-expanded">
+            <div class="cv-live-exp-header">
+              <div class="cv-pdot"></div>
+              <span>Livestream ${isActive?'aktiv':'inaktiv'}</span>
+            </div>
+            <div class="cv-lp-row"><span>Stream-Modus</span><strong class="cv-stream-mode ${streamMode==='live'?'cv-mode-live':'cv-mode-base'}">${streamMode==='live'?'● Live':'○ Vorschau'}</strong></div>
+            <div class="cv-lp-row"><span>Preview-FPS<br><small>Gemessen (Sub-Stream)</small></span><strong class="cv-lp-fps-val">${previewFps!=null?previewFps+' fps':'—'}</strong></div>
+            <div class="cv-lp-row"><span>Auflösung</span><strong>${esc(c.preview_resolution||c.resolution||'—')}</strong></div>
+            <div class="cv-lp-row"><span>Analyse-Framerate<br><small>Wie oft TAM-spy analysiert</small></span><strong>${fps!=null?fps+' fps':'—'}</strong></div>
+          </div>
         </div>
+        ${c.rtsp_url?`<button class="cv-hd-badge${hdOn?' active':''}" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau">HD</button>`:''}
       </div>
       <div class="cv-pill ${c.armed?'cv-pill-alarm-on':'cv-pill-alarm-off'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})" style="cursor:pointer">${c.armed?bellOn:bellOff}${c.armed?'Benachrichtigung':'Stumm'}</div>
     </div>
 
-    <!-- bottom-right: HD toggle + timelapse + motion + objects pills -->
+    <!-- bottom-right: Motion + Objekte pills (horizontal) -->
     <div class="cv-br">
-      ${c.rtsp_url?`<button class="cv-hd-badge${hdOn?' active':''}" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau">HD</button>`:''}
-      <div class="cv-pill ${tlOn?'cv-pill-tl':'cv-pill-tl-off'}">${objIconSvg('timelapse',13)}Timelapse${tlOn?' aktiv':' aus'}</div>
       <div class="cv-pill ${motionActive?'cv-pill-motion-on':'cv-pill-motion-off'}" style="font-size:10px;padding:3px 7px">${objIconSvg('motion',11)} Motion</div>
       ${c.coral_available?`<div class="cv-pill ${coralActive?'cv-pill-coral-on':'cv-pill-coral-off'}" style="font-size:10px;padding:3px 7px">${objIconSvg('motion_objects',11)} Objekte</div>`:''}
     </div>
