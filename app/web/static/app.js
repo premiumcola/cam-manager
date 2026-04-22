@@ -2443,10 +2443,12 @@ function _updateLbConfirmBtn(confirmed){
   if(!btn) return;
   if(confirmed){
     btn.style.background='#166534';
-    btn.innerHTML=_LB_CHECK2_SVG+_LB_HINT;
+    btn.innerHTML=_LB_CHECK2_SVG;
+    btn.title='Bestätigt';
   } else {
     btn.style.background='';
-    btn.innerHTML=_LB_CHECK_SVG+_LB_HINT;
+    btn.innerHTML=_LB_CHECK_SVG;
+    btn.title='Behalten (↑)';
   }
 }
 function _lbResetToPhoto(){
@@ -2493,16 +2495,13 @@ function openLightbox(item){
   const pendingMsg=_lbItem.status==='recording'?'Video wird aufgenommen…':_lbItem.status==='processing'?'Video wird verarbeitet…':null;
   if(pendingMsg){
     _lbShowError(pendingMsg);
-    const confirmBtn=byId('lightboxConfirm'); if(confirmBtn) confirmBtn.style.display='none';
   } else if(vidSrc){
     const imgEl=byId('lightboxImg'); imgEl.style.display='none';
     const videoEl=byId('lightboxVideo');
     videoEl.style.display='block'; videoEl.src=vidSrc; videoEl.muted=true; videoEl.loop=true;
     videoEl.load(); videoEl.play().catch(()=>{});
-    const confirmBtn=byId('lightboxConfirm'); if(confirmBtn) confirmBtn.style.display='none';
   } else if(!imgSrc && (hasVideoLabel || _lbItem.encode_error)){
     _lbShowError('Video nicht verfügbar');
-    const confirmBtn=byId('lightboxConfirm'); if(confirmBtn) confirmBtn.style.display='none';
   } else {
     byId('lightboxImg').src=imgSrc;
   }
