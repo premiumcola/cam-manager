@@ -408,7 +408,7 @@ function renderDashboard(){
     </div>
     <div class="cv-grad-top"></div>
     <div class="cv-grad-bot"></div>
-
+${isActive?`
     <!-- top-left: name + group -->
     <div class="cv-title-wrap">
       <div class="cv-name-row">
@@ -422,7 +422,7 @@ function renderDashboard(){
     <!-- top-right: [Live + HD] row, then alarm pill below -->
     <div class="cv-tr">
       <div class="cv-tr-row">
-        <div class="cv-pill-live-wrap ${isActive?'cv-live-active':'cv-live-off'}">
+        <div class="cv-pill-live-wrap cv-live-active">
           <div class="cv-live-collapsed">
             <div class="cv-pdot"></div>
             <span>Live</span>
@@ -432,7 +432,7 @@ function renderDashboard(){
           <div class="cv-live-expanded">
             <div class="cv-live-exp-header">
               <div class="cv-pdot"></div>
-              <span>Livestream ${isActive?'aktiv':'inaktiv'}</span>
+              <span>Livestream aktiv</span>
             </div>
             <div class="cv-lp-row"><span>Stream-Modus</span><strong class="cv-stream-mode ${streamMode==='live'?'cv-mode-live':'cv-mode-base'}">${streamMode==='live'?'● Live':'○ Vorschau'}</strong></div>
             <div class="cv-lp-row"><span>Preview-FPS<br><small>Gemessen (Sub-Stream)</small></span><strong class="cv-lp-fps-val">${previewFps!=null?previewFps+' fps':'—'}</strong></div>
@@ -450,7 +450,7 @@ function renderDashboard(){
       <div class="cv-pill ${motionActive?'cv-pill-motion-on':'cv-pill-motion-off'}" style="font-size:10px;padding:3px 7px">${objIconSvg('motion',11)} Motion</div>
       ${c.coral_available?`<div class="cv-pill ${coralActive?'cv-pill-coral-on':'cv-pill-coral-off'}" style="font-size:10px;padding:3px 7px">${objIconSvg('motion_objects',11)} Objekte</div>`:''}
     </div>
-
+`:''}
     <!-- bottom: hover action button -->
     <div class="cv-actions">
       <button class="cv-abt cv-abt-edit" onclick="event.stopPropagation();editCamera('${esc(c.id)}')">${pencil}<span>Einstellungen</span></button>
@@ -1934,39 +1934,42 @@ async function _loadCoralModels(){
 byId('coralModelsReload')?.addEventListener('click',_loadCoralModels);
 // ── Camera card placeholders ─────────────────────────────────────────────────
 // Two states share a full-bleed monitoring-UI look: grid pattern, four corner
-// brackets, a top-left name + status pill, and a top-right status dot.
-// State-specific animation goes in the centre.
-function _placeholderShell(name, accent, stateLabel, centerHtml, bracketKeyframe, dotStyle){
-  const n=esc(name||'');
+// brackets, state-specific animation in the centre. The surrounding card
+// overlays (name, pills, etc.) are hidden by the renderer when offline, so
+// the placeholder owns the full frame without duplicate chrome.
+function _placeholderShell(accent, centerHtml, bracketKeyframe){
+  // Opposite corners get slightly different stroke widths (2.5 / 2) so the
+  // bracket set reads as a deliberate asymmetric viewfinder instead of a
+  // perfectly uniform rectangle. 30-unit arms on a 100-unit viewBox.
   return `<div class="cv-ph cv-ph--${accent}">
     <div class="cv-ph-grid"></div>
     <svg class="cv-ph-brackets" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      <g stroke-width="1.5" fill="none" style="animation:${bracketKeyframe} 2s ease-in-out infinite">
-        <polyline points="0,10 0,0 10,0"/>
-        <polyline points="90,0 100,0 100,10" style="animation-delay:.5s"/>
-        <polyline points="100,90 100,100 90,100" style="animation-delay:1s"/>
-        <polyline points="10,100 0,100 0,90" style="animation-delay:1.5s"/>
+      <g fill="none" style="animation:${bracketKeyframe} 2s ease-in-out infinite">
+        <polyline points="0,30 0,0 30,0"  stroke-width="2.5" class="cv-ph-br cv-ph-br--tl"/>
+        <polyline points="70,0 100,0 100,30" stroke-width="2"   class="cv-ph-br cv-ph-br--tr" style="animation-delay:.5s"/>
+        <polyline points="100,70 100,100 70,100" stroke-width="2.5" class="cv-ph-br cv-ph-br--br" style="animation-delay:1s"/>
+        <polyline points="30,100 0,100 0,70"    stroke-width="2"   class="cv-ph-br cv-ph-br--bl" style="animation-delay:1.5s"/>
       </g>
     </svg>
-    <div class="cv-ph-header">
-      <span class="cv-ph-name">${n}</span>
-      <span class="cv-ph-pill">${esc(stateLabel)}</span>
-    </div>
-    <span class="cv-ph-dot" style="${dotStyle}"></span>
     <div class="cv-ph-center">${centerHtml}</div>
   </div>`;
 }
 
-const _CAM_OFF_SVG=`<svg viewBox="0 0 48 48" width="42" height="42" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-  <path d="M32 18v-2a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2v-2l8 6V12l-8 6z"/>
-  <line x1="4" y1="4" x2="44" y2="44" stroke-width="2.5"/>
+// Bigger icons with thicker strokes — the old 42/28px versions disappeared
+// against the grid backdrop. Opacity is applied to individual sub-elements
+// so the red strike-through reads as a strong "no signal" mark even when
+// the camera body is muted.
+const _CAM_OFF_SVG=`<svg viewBox="0 0 48 48" width="64" height="64" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M32 18v-2a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2v-2l8 6V12l-8 6z" stroke="rgba(255,255,255,0.3)" stroke-width="2.5"/>
+  <circle cx="20" cy="24" r="4.5" stroke="rgba(255,255,255,0.2)" stroke-width="2.5"/>
+  <line x1="4" y1="4" x2="44" y2="44" stroke="rgba(239,68,68,0.5)" stroke-width="3"/>
 </svg>`;
-const _CAM_SM_SVG=`<svg viewBox="0 0 48 48" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+const _CAM_SM_SVG=`<svg viewBox="0 0 48 48" width="40" height="40" fill="none" stroke="rgba(59,130,246,0.45)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
   <path d="M32 18v-2a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2v-2l8 6V12l-8 6z"/>
   <circle cx="20" cy="24" r="5"/>
 </svg>`;
 
-function _makeOfflinePlaceholder(name){
+function _makeOfflinePlaceholder(_nameUnused){
   // Red: four expanding rings + crosshair + struck-through camera icon.
   const rings=[0, 1, 2, 3].map(i=>
     `<span class="cv-ph-ring" style="animation-delay:${i}s"></span>`
@@ -1974,14 +1977,13 @@ function _makeOfflinePlaceholder(name){
   const center=`
     <div class="cv-ph-crosshair"></div>
     ${rings}
-    <div class="cv-ph-icon cv-ph-icon--glitch" style="color:rgba(239,68,68,0.55)">${_CAM_OFF_SVG}</div>
+    <div class="cv-ph-icon cv-ph-icon--glitch cv-ph-icon--red">${_CAM_OFF_SVG}</div>
     <div class="cv-ph-label cv-ph-label--flicker">KEIN SIGNAL</div>
   `;
-  return _placeholderShell(name, 'red', 'OFFLINE', center, 'bracketPulseRed',
-    'background:#ef4444;box-shadow:0 0 10px rgba(239,68,68,.7)');
+  return _placeholderShell('red', center, 'bracketPulseRed');
 }
 
-function _makeConnectingPlaceholder(name){
+function _makeConnectingPlaceholder(_nameUnused){
   // Blue: rotating radar cone + orbiting dots + small camera icon.
   const center=`
     <svg class="cv-ph-guides" viewBox="-100 -100 200 200" aria-hidden="true">
@@ -1990,12 +1992,6 @@ function _makeConnectingPlaceholder(name){
       <circle cx="0" cy="0" r="80" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
     </svg>
     <svg class="cv-ph-radar" viewBox="-100 -100 200 200" aria-hidden="true">
-      <defs>
-        <linearGradient id="cvRadarGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stop-color="rgba(59,130,246,0)"/>
-          <stop offset="100%" stop-color="rgba(59,130,246,0.35)"/>
-        </linearGradient>
-      </defs>
       <path d="M0,0 L85,-49 A98,98 0 0 1 85,49 Z" fill="rgba(59,130,246,0.12)"/>
       <line x1="0" y1="0" x2="85" y2="49" stroke="rgba(59,130,246,0.5)" stroke-width="1.5"/>
       <circle cx="85" cy="49" r="3" fill="rgba(59,130,246,0.9)"/>
@@ -2003,11 +1999,10 @@ function _makeConnectingPlaceholder(name){
     <span class="cv-ph-orbit cv-ph-orbit--1"></span>
     <span class="cv-ph-orbit cv-ph-orbit--2"></span>
     <span class="cv-ph-orbit cv-ph-orbit--3"></span>
-    <div class="cv-ph-icon" style="color:rgba(59,130,246,0.35)">${_CAM_SM_SVG}</div>
-    <div class="cv-ph-label" style="color:rgba(59,130,246,0.55)">VERBINDE…</div>
+    <div class="cv-ph-icon">${_CAM_SM_SVG}</div>
+    <div class="cv-ph-label cv-ph-label--blue">VERBINDE…</div>
   `;
-  return _placeholderShell(name, 'blue', 'SUCHE…', center, 'bracketPulseBlue',
-    'background:#3b82f6;box-shadow:0 0 10px rgba(59,130,246,.7)');
+  return _placeholderShell('blue', center, 'bracketPulseBlue');
 }
 
 function _restorePlaceholder(card){

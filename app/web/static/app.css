@@ -43,18 +43,17 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@me
 .cv-ph{position:absolute;inset:0;overflow:hidden;background:#060810;color:rgba(255,255,255,.8);font-family:ui-monospace,Menlo,Consolas,monospace}
 .cv-ph-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);background-size:40px 40px;opacity:.05;animation:fadeGrid 8s ease-in-out infinite;pointer-events:none}
 .cv-ph-brackets{position:absolute;inset:22px;width:calc(100% - 44px);height:calc(100% - 44px);overflow:visible;pointer-events:none}
-.cv-ph-brackets polyline{stroke:rgba(255,255,255,0.1);stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
-.cv-ph-header{position:absolute;top:22px;left:22px;display:flex;align-items:center;gap:8px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;z-index:2;font-weight:700;color:rgba(255,255,255,0.55)}
-.cv-ph-name{color:rgba(255,255,255,0.7);font-weight:700;letter-spacing:.06em;text-transform:none;font-size:12px}
-.cv-ph-pill{padding:3px 8px;border-radius:999px;font-size:9.5px;letter-spacing:.14em;font-weight:800;backdrop-filter:blur(4px)}
-.cv-ph--red .cv-ph-pill{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.45);color:#fca5a5}
-.cv-ph--blue .cv-ph-pill{background:rgba(59,130,246,0.12);border:1px solid rgba(59,130,246,0.45);color:#93c5fd}
-.cv-ph-dot{position:absolute;top:26px;right:26px;width:7px;height:7px;border-radius:50%;animation:dotPulse 1.6s ease-in-out infinite;z-index:2}
-.cv-ph-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;z-index:1}
-.cv-ph-icon{opacity:.35;animation:iconPulse 3s ease-in-out infinite;line-height:0}
+.cv-ph-brackets polyline{stroke:rgba(255,255,255,0.15);stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+/* Every 6 s one diagonal pair jitters a single pixel (signal-interference feel) */
+.cv-ph-brackets .cv-ph-br--tl,.cv-ph-brackets .cv-ph-br--br{animation:bracketJitter 6s ease-in-out infinite}
+.cv-ph-brackets .cv-ph-br--tr,.cv-ph-brackets .cv-ph-br--bl{animation:bracketJitter 6s ease-in-out infinite;animation-delay:3s}
+.cv-ph-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;z-index:1}
+.cv-ph-icon{animation:iconPulse 3s ease-in-out infinite;line-height:0}
+.cv-ph-icon--red{filter:drop-shadow(0 0 12px rgba(239,68,68,0.15))}
 .cv-ph-icon--glitch{animation:iconPulse 3s ease-in-out infinite, glitch 10s linear infinite}
-.cv-ph-label{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,0.3);font-weight:700}
+.cv-ph-label{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,0.4);font-weight:700}
 .cv-ph-label--flicker{animation:textFlicker 6s linear infinite}
+.cv-ph-label--blue{color:rgba(59,130,246,0.55)}
 
 /* Offline (red): expanding rings + crosshair */
 .cv-ph-ring{position:absolute;top:50%;left:50%;width:60px;height:60px;margin:-30px 0 0 -30px;border:1.5px solid rgba(239,68,68,0.45);border-radius:50%;animation:ring1 4s ease-out infinite;pointer-events:none}
@@ -71,9 +70,10 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@me
 .cv-ph-orbit--3{width:3px;height:3px;margin:-1.5px 0 0 -1.5px;background:rgba(59,130,246,0.6);box-shadow:0 0 5px rgba(59,130,246,0.6);animation:orbitDot3 3s linear infinite}
 
 @keyframes fadeGrid{0%,100%{opacity:.04}50%{opacity:.07}}
-@keyframes bracketPulseRed{0%,100%{stroke:rgba(255,255,255,0.1)}50%{stroke:rgba(239,68,68,0.4)}}
-@keyframes bracketPulseBlue{0%,100%{stroke:rgba(255,255,255,0.1)}50%{stroke:rgba(59,130,246,0.4)}}
-@keyframes dotPulse{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes bracketPulseRed{0%,100%{stroke:rgba(255,255,255,0.15)}50%{stroke:rgba(239,68,68,0.6)}}
+@keyframes bracketPulseBlue{0%,100%{stroke:rgba(255,255,255,0.15)}50%{stroke:rgba(59,130,246,0.6)}}
+/* 200 ms wobble at the 6-second mark — one pair of corners shifts 1 px */
+@keyframes bracketJitter{0%,95%,100%{transform:translate(0,0)}96%{transform:translate(1px,0)}97%{transform:translate(0,1px)}98%{transform:translate(-1px,0)}99%{transform:translate(0,0)}}
 @keyframes ring1{0%{transform:scale(0.3);opacity:.6}100%{transform:scale(2.8);opacity:0}}
 @keyframes radarSpin{to{transform:translate(-50%,-50%) rotate(360deg)}}
 @keyframes orbitDot{from{transform:rotate(0deg) translateX(40px)}to{transform:rotate(360deg) translateX(40px)}}
