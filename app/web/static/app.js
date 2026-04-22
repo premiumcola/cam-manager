@@ -766,9 +766,8 @@ function _groupAccent(group_id){
 
 function renderCameraSettings(){
   byId('cameraSettingsList').innerHTML=state.cameras.map(c=>{
-    const accent=_groupAccent(c.group_id);
     return `
-    <div class="cam-item" data-camid="${esc(c.id)}" style="--ca:${accent}">
+    <div class="cam-item" data-camid="${esc(c.id)}">
       <div class="cam-item-head" style="cursor:pointer" onclick="editCamera('${esc(c.id)}')">
         <div class="cam-item-head-left">
           <span class="cam-item-head-icon">${getCameraIcon(c.name)}</span>
@@ -844,7 +843,10 @@ function _initCameraFormListeners(){
       f['id'].value='cam-'+f['name'].value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
   });
   // Motion sensitivity slider
-  f['motion_sensitivity']?.addEventListener('input',()=>{ byId('motionSensLabel').textContent=f['motion_sensitivity'].value; });
+  f['motion_sensitivity']?.addEventListener('input',()=>{
+    const v=parseFloat(f['motion_sensitivity'].value||0);
+    const lbl=byId('motionSensLabel'); if(lbl) lbl.textContent=Math.round(v*100)+'%';
+  });
   f['detection_min_score']?.addEventListener('input',()=>{ const v=parseFloat(f['detection_min_score'].value); byId('detectionMinScoreLabel').textContent=v.toFixed(2); });
   // Frame interval slider
   f['frame_interval_ms']?.addEventListener('input',()=>{ byId('frameIntervalLabel').textContent=f['frame_interval_ms'].value+'ms'; });
@@ -897,6 +899,46 @@ window._updateAlarmProfileHint=function(){
   hint.textContent=_ALARM_PROFILE_HINTS[sel.value]||'';
 };
 
+// Read-only status rows shown at the top of the Erkennung tab. Values are
+// global (Coral + motion detector state) so the rows link back to Coral
+// settings rather than offering an inline toggle here.
+function _renderGlobalStatusRows(){
+  const host=byId('camGlobalStatus'); if(!host) return;
+  const proc=state.config?.processing||{};
+  // Motion is on by default; only "off" if explicitly disabled in config.
+  const motionOn=proc.motion?.enabled!==false;
+  // Coral / CPU / motion_only → derived from the first camera's runtime state.
+  const cam0=state.cameras?.[0];
+  const coralOn=!!(proc.coral_enabled ?? (cam0?.detection_mode!=='motion_only'));
+  const coralAvail=!!cam0?.coral_available;
+  let kiText, kiOn;
+  if(!coralOn){kiText='KI-Objekterkennung deaktiviert'; kiOn=false;}
+  else if(coralAvail){kiText='KI-Objekterkennung aktiv (Coral TPU)'; kiOn=true;}
+  else if(cam0?.detection_mode==='cpu'){kiText='KI-Objekterkennung aktiv (CPU)'; kiOn=true;}
+  else{kiText='KI-Objekterkennung nicht verfügbar'; kiOn=false;}
+
+  const row=(on, text)=>`
+    <div class="cam-gs-row${on?'':' cam-gs-row--off'}">
+      <span class="cam-gs-dot"></span>
+      <span class="cam-gs-text">${esc(text)}</span>
+      <span class="cam-gs-tag">Global-Einstellung</span>
+    </div>`;
+  host.innerHTML = row(motionOn, motionOn?'Bewegungserkennung aktiv':'Bewegungserkennung deaktiviert')
+                 + row(kiOn, kiText)
+                 + `<a href="#coral-settings" class="cam-gs-link" onclick="_scrollToCoralSettings(event)">In Coral-Settings ändern →</a>`;
+}
+window._scrollToCoralSettings=function(ev){
+  ev?.preventDefault();
+  // Navigate to the settings page then expand the Coral section.
+  document.querySelector('a[href="#settings"]')?.click();
+  setTimeout(()=>{
+    const section=byId('set-coral');
+    if(!section) return;
+    if(!section.classList.contains('open')) window.toggleSetSection('set-coral');
+    section.scrollIntoView({behavior:'smooth',block:'start'});
+  },120);
+};
+
 function _updateMotionOffState(){
   const f=byId('cameraForm')?.elements; if(!f) return;
   const off=!(f['motion_enabled']?.checked);
@@ -931,7 +973,12 @@ function editCamera(camId){
   _applyUrlMask(f['rtsp_url']);
   _applyUrlMask(f['snapshot_url']);
   // Reset eye buttons to masked-state icon
-  byId('cameraForm').querySelectorAll('.url-eye').forEach(b=>{b.classList.remove('revealed'); b.textContent='👁';}); f['group_id'].value=c.group_id||'';
+  byId('cameraForm').querySelectorAll('.url-eye').forEach(b=>{b.classList.remove('revealed'); b.textContent='👁';});
+  // Load telegram / mqtt toggles (now on the Alerting tab)
+  if(f['telegram_enabled']) f['telegram_enabled'].checked=(c.telegram_enabled!==false);
+  if(f['mqtt_enabled']) f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
+  // Populate global status rows on the Erkennung tab
+  _renderGlobalStatusRows(); f['group_id'].value=c.group_id||'';
   // Object filter is now rendered as a pill bar; keep the hidden input in
   // sync so the existing save flow (reads from f['object_filter'].value)
   // still works unchanged.
@@ -947,7 +994,7 @@ function editCamera(camId){
   if(f['telegram_enabled']) f['telegram_enabled'].checked=(c.telegram_enabled!==false);
   if(f['mqtt_enabled']) f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
   if(f['bottom_crop_px']) f['bottom_crop_px'].value=c.bottom_crop_px||0;
-  if(f['motion_sensitivity']){const ms=c.motion_sensitivity!=null?c.motion_sensitivity:0.5; f['motion_sensitivity'].value=ms; byId('motionSensLabel').textContent=ms;}
+  if(f['motion_sensitivity']){const ms=c.motion_sensitivity!=null?c.motion_sensitivity:0.5; f['motion_sensitivity'].value=ms; const lbl=byId('motionSensLabel'); if(lbl) lbl.textContent=Math.round(parseFloat(ms)*100)+'%';}
   if(f['detection_min_score']){
     const globalMs=state.config?.processing?.detection?.min_score ?? 0.55;
     const cms=(c.detection_min_score && c.detection_min_score>0) ? c.detection_min_score : globalMs;
@@ -974,12 +1021,9 @@ function editCamera(camId){
   f['zones_json'].value=JSON.stringify(shapeState.zones); f['masks_json'].value=JSON.stringify(shapeState.masks);
   byId('deleteCameraBtn').dataset.camId=camId;
   loadMaskSnapshot(camId); drawShapes();
-  // Slide down inside the clicked camera card. Propagate the group accent
-  // so the expanded block tints to match the camera's category.
-  const accent=_groupAccent(c.group_id);
+  // Slide down inside the clicked camera card.
   const camRow=byId('cameraSettingsList')?.querySelector(`[data-camid="${camId}"]`);
   const wrapper=byId('cameraEditWrapper');
-  if(wrapper) wrapper.style.setProperty('--ca',accent);
   if(camRow){ camRow.appendChild(wrapper); camRow.classList.add('editing'); }
   requestAnimationFrame(()=>wrapper.classList.add('slide-open'));
   _currentEditCamId=camId;
@@ -1058,16 +1102,14 @@ async function _loadCamDiagnostics(camId){
     const errStreak=s.error_streak||0;
     const hasErr=!!s.last_error;
     const problem=errStreak>0 || reconnects>5 || hasErr;
-    const sumEl=byId('camDiagSummary'); const dotEl=byId('camDiagDot');
+    const sumEl=byId('camDiagSummary');
     if(sumEl){
       sumEl.textContent = problem
         ? `${reconnects} Reconnects · ${errStreak} Fehler${hasErr?' · Stream-Fehler':''}`
         : 'Verbindung stabil';
     }
-    if(dotEl){
-      dotEl.style.setProperty('--cd', problem?'#f87171':'#4ade80');
-      panel.style.setProperty('--cd', problem?'#f87171':'#4ade80');
-    }
+    // data-problem toggles the red/green CSS tinting on the entire block.
+    panel.dataset.problem = problem ? '1' : '0';
     // Auto-open on problems; collapsed otherwise.
     panel.classList.toggle('open', problem);
     panel.style.display='';
@@ -1760,8 +1802,9 @@ byId('cameraForm').onsubmit=async(e)=>{
     object_filter:f['object_filter'].value.split(',').map(x=>x.trim()).filter(Boolean),
     enabled:f['enabled']?f['enabled'].checked:(existingCam?.enabled??true),
     armed:f['armed'].checked,
-    telegram_enabled:existingCam?.telegram_enabled??true,
-    mqtt_enabled:existingCam?.mqtt_enabled??true,
+    // Prefer the live Alerting tab toggle state; fall back to persisted value.
+    telegram_enabled:f['telegram_enabled']?f['telegram_enabled'].checked:(existingCam?.telegram_enabled??true),
+    mqtt_enabled:f['mqtt_enabled']?f['mqtt_enabled'].checked:(existingCam?.mqtt_enabled??true),
     whitelist_names:_whitelistState.filter(Boolean),
     timelapse:existingCam?.timelapse||{enabled:false,fps:25,period:'day',daily_target_seconds:60,weekly_target_seconds:180,telegram_send:false},
     schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},

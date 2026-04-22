@@ -276,26 +276,30 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .cam-badge-toggle{display:flex;align-items:center;gap:6px;padding:5px 10px;border-radius:10px;background:#0c141d;border:1px solid var(--line);cursor:pointer;font-size:13px}
 .switch-sm{width:36px!important;height:20px!important}.switch-sm .slider:before{width:16px!important;height:16px!important;top:2px!important;left:2px!important}.switch-sm input:checked + .slider:before{transform:translateX(16px)!important}
 /* Camera settings list items */
-/* Camera list item — collapsed state gets a subtle 2px accent border on
-   the left matching its group category. Edit state grows a full-border
-   tint so the expanded block visually separates from the page. --ca is
-   the group accent "R,G,B" set by JS from the camera's group_id. */
-.cam-item{--ca:255,255,255;border-radius:16px;background:var(--surface);transition:background .2s,box-shadow .2s,border-color .2s;border:1px solid transparent;border-left:3px solid rgba(var(--ca),0.45);position:relative}
+/* Camera list item — clean neutral design, no colour accents. The
+   collapsed header is var(--surface) #29304a; the expanded edit body
+   below is slightly lighter (#212940 via rgba overlay) so the panel
+   steps forward without needing a coloured border. */
+.cam-item{border-radius:16px;background:var(--surface);transition:background .2s,box-shadow .2s;overflow:hidden}
 .cam-item+.cam-item{margin-top:8px}
 .cam-item-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;gap:10px}
 .cam-item-head-left{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
 .cam-item-head-icon{font-size:20px;line-height:1;flex-shrink:0;width:22px;text-align:center}
 .cam-item-head-name{font-weight:700;font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cam-item-head-group{font-size:11px;color:var(--muted);margin-left:4px;padding:1px 8px;border-radius:999px;background:rgba(var(--ca),0.14);color:rgba(var(--ca),0.95);flex-shrink:0}
-.cam-item.editing{background:rgba(var(--ca),0.04);border-color:rgba(var(--ca),0.2);border-left-color:rgba(var(--ca),0.6);box-shadow:0 8px 32px rgba(0,0,0,.35)}
-.cam-item.editing .cam-edit-header{background:rgba(var(--ca),0.08);border-radius:12px;padding:10px 14px;margin-left:-2px;margin-right:-2px}
+.cam-item-head-group{font-size:11px;color:var(--muted);padding:1px 8px;border-radius:999px;background:rgba(255,255,255,0.05);flex-shrink:0}
+.cam-item.editing{box-shadow:0 8px 32px rgba(0,0,0,.35)}
+/* Expanded: top bar (the cam-item-head) keeps var(--surface), the body
+   underneath gets a subtly lighter fill so the two areas read as
+   layered. */
+.cam-item.editing .cam-item-head{background:#2e3650}
 /* Camera edit slide-down panel */
-.cam-edit-wrapper{--ca:255,255,255;display:grid;grid-template-rows:0fr;transition:grid-template-rows .38s cubic-bezier(.4,0,.2,1)}
+/* Expanded edit body — neutral darker fill than the top header bar. No
+   colour accents; clean separation by background contrast only. */
+.cam-edit-wrapper{display:grid;grid-template-rows:0fr;transition:grid-template-rows .38s cubic-bezier(.4,0,.2,1)}
 .cam-edit-wrapper.slide-open{grid-template-rows:1fr}
-.cam-edit-inner{overflow:hidden;min-height:0;padding:0 16px}
-.cam-edit-wrapper.slide-open .cam-edit-inner{padding:16px;background:rgba(var(--ca),0.035);border-radius:0 0 14px 14px}
-.cam-edit-header{display:flex;align-items:center;margin-bottom:14px;gap:10px;padding:10px 12px;border-radius:10px;background:rgba(var(--ca),0.08);border-left:3px solid rgba(var(--ca),0.55)}
-.cam-edit-header h3{margin:0;font-size:15px;color:var(--text)}
+.cam-edit-inner{overflow:hidden;min-height:0;padding:0 16px;background:#212940}
+.cam-edit-wrapper.slide-open .cam-edit-inner{padding:16px}
+.cam-edit-header{display:none}  /* Redundant with the camera row header above; hide. */
 /* Compact user+pass side by side */
 .cam-userpass{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 /* Whitelist chips */
@@ -310,6 +314,21 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .cam-sched{background:var(--surface);border-radius:14px;padding:10px 12px}.cam-sched summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:600}
 @media (max-width:1200px){.cam-2col{grid-template-columns:1fr}}
 .toggle-row{margin-bottom:0}
+/* ── Erkennung tab — read-only global status rows (link to Coral). */
+.cam-global-status{display:grid;gap:6px;margin-bottom:4px}
+.cam-gs-row{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.12);font-size:12px;color:var(--text)}
+.cam-gs-row--off{background:rgba(255,255,255,0.03);border-color:rgba(255,255,255,0.07);color:var(--muted)}
+.cam-gs-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;flex-shrink:0;box-shadow:0 0 6px rgba(34,197,94,.5)}
+.cam-gs-row--off .cam-gs-dot{background:#6b7280;box-shadow:none}
+.cam-gs-text{flex:1;font-weight:600}
+.cam-gs-tag{font-size:10px;color:var(--muted);font-weight:500;padding:1px 8px;border-radius:999px;background:rgba(255,255,255,0.04)}
+.cam-gs-link{display:inline-block;margin-top:2px;padding:2px 4px;font-size:11px;color:#60a5fa;text-decoration:none;font-weight:500}
+.cam-gs-link:hover{text-decoration:underline}
+/* Separator between logical groups inside a camera tab panel — 1px rule,
+   no boxes-in-boxes, everything flat on the same level. */
+.cam-sep{height:1px;background:rgba(255,255,255,0.06);margin:14px 0}
+.cam-field-label{font-size:11px;font-weight:700;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+
 /* ── Per-camera object-filter pill bar (mirrors media-pill visuals but
      sits in the camera edit form and toggles state.cameraObjectFilter). */
 .cam-objfilter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
@@ -333,17 +352,20 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .cam-det-motionoff{font-size:11px;color:#f59e0b;margin-top:4px;font-weight:600}
 .cam-det-block.motion-off select[name="detection_trigger"]{opacity:.5;pointer-events:none}
 @media (max-width:720px){.cam-det-row{grid-template-columns:1fr;gap:8px}}
-/* Camera connection diagnostics — collapsible with one-line summary.
-   .cam-diag.open reveals the grid. Summary dot is green (ok) or red
-   (problem), set by JS as --cd. */
-.cam-diag{--cd:#4ade80;border:1px solid rgba(255,255,255,.06);border-radius:10px;background:rgba(255,255,255,.02);overflow:hidden}
-.cam-diag.open{border-color:rgba(255,255,255,.09)}
+/* Camera connection diagnostics — collapsible, tinted by status.
+   --problem=1 swaps to a red tint, otherwise green. Background + border
+   colour the entire card so the status reads at a glance even while
+   collapsed. */
+.cam-diag{border-radius:10px;overflow:hidden;transition:background .2s,border-color .2s;
+  background:rgba(34,197,94,0.04); border:1px solid rgba(34,197,94,0.1)}
+.cam-diag[data-problem="1"]{background:rgba(239,68,68,0.06); border-color:rgba(239,68,68,0.12)}
 .cam-diag-head{width:100%;display:flex;align-items:center;gap:8px;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;text-align:left}
 .cam-diag-head:hover{background:rgba(255,255,255,.03)}
-.cam-diag-dot{width:8px;height:8px;border-radius:50%;background:var(--cd);flex-shrink:0;box-shadow:0 0 6px color-mix(in srgb,var(--cd) 60%,transparent)}
+.cam-diag-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;flex-shrink:0;box-shadow:0 0 6px rgba(34,197,94,.5)}
+.cam-diag[data-problem="1"] .cam-diag-dot{background:#f87171;box-shadow:0 0 6px rgba(239,68,68,.5)}
 .cam-diag-title{flex-shrink:0;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
-.cam-diag-summary{flex:1;color:var(--muted);font-weight:500;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cam-diag.open .cam-diag-summary{color:var(--text)}
+.cam-diag-summary{flex:1;color:#4ade80;font-weight:500;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cam-diag[data-problem="1"] .cam-diag-summary{color:#f87171}
 .cam-diag-chevron{margin-left:auto;font-size:10px;color:var(--muted);transition:transform .2s}
 .cam-diag.open .cam-diag-chevron{transform:rotate(90deg)}
 .cam-diag-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s cubic-bezier(.4,0,.2,1)}
@@ -528,9 +550,13 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .cam-tab-bar{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;border-bottom:1px solid rgba(255,255,255,.06);padding:0;margin-bottom:14px;-webkit-overflow-scrolling:touch}
 .cam-tab-bar::-webkit-scrollbar{height:3px}
 .cam-tab-bar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
-.cam-tab-btn{padding:10px 14px;min-width:80px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:color .15s,background .15s,border-color .15s;margin-bottom:-1px;flex-shrink:0}
+.cam-tab-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 14px;min-width:80px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:color .15s,background .15s,border-color .15s;margin-bottom:-1px;flex-shrink:0}
 .cam-tab-btn:hover{background:rgba(255,255,255,.03);color:var(--text)}
-.cam-tab-btn.active{color:var(--text);font-weight:700;border-bottom-color:rgba(var(--ca,59,130,246),0.9)}
+/* Active tab: pure white underline + white text. Neutral, no group
+   accent — the tab-bar reads consistent regardless of group colour. */
+.cam-tab-btn.active{color:#fff;font-weight:700;border-bottom-color:#fff}
+.cam-tab-ico{flex-shrink:0;color:inherit}
+@media(max-width:480px){.cam-tab-btn{min-width:60px;padding:10px 8px;font-size:12px}}
 .cam-tab-panel{display:none;animation:cam-tab-fade .15s ease-in}
 .cam-tab-panel.active{display:block}
 @keyframes cam-tab-fade{from{opacity:0}to{opacity:1}}

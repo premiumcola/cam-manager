@@ -230,12 +230,12 @@
             <input type="hidden" name="masks_json" />
             <input type="hidden" name="whitelist_names" />
 
-            <!-- Tab bar -->
+            <!-- Tab bar — 4 tabs: Verbindung / Erkennung / Alerting / Zonen -->
             <div class="cam-tab-bar">
-              <button type="button" class="cam-tab-btn active" data-tab="cam-tab-verbindung">📡 Verbindung</button>
-              <button type="button" class="cam-tab-btn" data-tab="cam-tab-alarm">🔔 Alarm</button>
-              <button type="button" class="cam-tab-btn" data-tab="cam-tab-qualitaet">⚙️ Qualität</button>
-              <button type="button" class="cam-tab-btn" data-tab="cam-tab-zonen">🗺 Zonen</button>
+              <button type="button" class="cam-tab-btn active" data-tab="cam-tab-verbindung"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6"/><path d="M15 2v6"/><rect x="7" y="8" width="10" height="6" rx="1.2"/><path d="M12 14v4a3 3 0 0 0 3 3h1"/></svg><span>Verbindung</span></button>
+              <button type="button" class="cam-tab-btn" data-tab="cam-tab-erkennung"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span>Erkennung</span></button>
+              <button type="button" class="cam-tab-btn" data-tab="cam-tab-alerting"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Alerting</span></button>
+              <button type="button" class="cam-tab-btn" data-tab="cam-tab-zonen"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg><span>Zonen</span></button>
             </div>
 
             <!-- Panel: Verbindung -->
@@ -294,116 +294,102 @@
               </div>
             </div>
 
-            <!-- Panel: Alarm -->
-            <div class="cam-tab-panel" id="cam-tab-alarm">
+            <!-- Panel: Erkennung — detection settings only -->
+            <div class="cam-tab-panel" id="cam-tab-erkennung">
+              <!-- Global (read-only) status indicators — link to Coral section -->
+              <div id="camGlobalStatus" class="cam-global-status"></div>
 
-              <!-- Objekte erkennen — pill bar wired via camObjectFilter renderer -->
-              <div class="settings-divider">Objekte erkennen</div>
+              <div class="cam-sep"></div>
+
+              <div class="field-wrap">
+                <select name="detection_trigger">
+                  <option value="motion_and_objects">Motion + Objekte (Standard)</option>
+                  <option value="objects_only">Nur Objekte — weniger Fehlalarme</option>
+                  <option value="motion_only">Nur Motion</option>
+                </select>
+                <span class="field-label">Event-Auslöser</span>
+              </div>
+              <div class="field-help">Bestimmt was eine Aufnahme auslöst.</div>
+
+              <div class="cam-sep"></div>
+
+              <div class="cam-field-label">Objekte erkennen</div>
               <div id="camObjectFilter" class="cam-objfilter-bar"></div>
               <div class="field-help" style="margin-top:4px">Nur ausgewählte Objekte lösen Events aus.</div>
 
-              <div class="settings-divider" style="margin-top:12px">Alarmprofil</div>
+              <div class="cam-sep"></div>
+
+              <div class="field-wrap">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="range" name="detection_min_score" min="0.3" max="0.95" step="0.05" value="0.55" style="flex:1" />
+                  <span id="detectionMinScoreLabel" style="font-size:12px;color:var(--muted);min-width:48px;text-align:right">0.55</span>
+                </div>
+                <span class="field-label">KI-Empfindlichkeit</span>
+              </div>
+              <div class="field-help">Höher = weniger Fehlalarme.</div>
+
+              <div class="field-wrap" style="margin-top:10px">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="range" name="motion_sensitivity" min="0.1" max="1.0" step="0.1" value="0.5" style="flex:1" />
+                  <span id="motionSensLabel" style="font-size:12px;color:var(--muted);min-width:36px;text-align:right">50%</span>
+                </div>
+                <span class="field-label">Motion-Empfindlichkeit</span>
+              </div>
+              <div class="field-help">Niedriger = nur große Bewegungen.</div>
+
+              <div class="cam-sep"></div>
+
+              <div class="field-wrap">
+                <select name="post_motion_tail_s">
+                  <option value="0">3s (Standard)</option>
+                  <option value="3">3s</option>
+                  <option value="5">5s</option>
+                  <option value="8">8s</option>
+                  <option value="10">10s</option>
+                  <option value="15">15s</option>
+                </select>
+                <span class="field-label">Nachlauf nach Bewegung</span>
+              </div>
+              <div class="field-help">Wie lange nach letzter Bewegung weiter aufnehmen.</div>
+
+              <!-- Hidden: field still saved, controlled by global setting. -->
+              <input type="hidden" name="motion_enabled" value="true" />
+              <!-- Legacy fields kept hidden so save payload shape stays stable. -->
+              <input type="hidden" name="resolution" value="auto" />
+              <input type="hidden" name="frame_interval_ms" value="350" />
+              <input type="hidden" name="snapshot_interval_s" value="3" />
+              <input type="hidden" name="bottom_crop_px" value="0" />
+            </div>
+
+            <!-- Panel: Alerting — notifications, alarm, schedule -->
+            <div class="cam-tab-panel" id="cam-tab-alerting">
               <div class="field-wrap">
                 <select name="alarm_profile" id="camAlarmProfileSelect" onchange="_updateAlarmProfileHint()">
-                  <option value="hard">Hart · Person/Auto lösen Alarm + Telegram aus</option>
-                  <option value="medium">Mittel · Alle Objekte: Info + Telegram</option>
-                  <option value="soft" selected>Weich · Alles melden</option>
-                  <option value="info">Info · Nur Tiere, kein Motion-Alarm</option>
+                  <option value="hard">Hart — Person/Auto löst Alarm + Telegram aus</option>
+                  <option value="medium">Mittel — Alle Objekte melden via Telegram</option>
+                  <option value="soft" selected>Weich — Alles melden inkl. reine Bewegung</option>
+                  <option value="info">Info — Nur Tiere, kein Motion-Alarm</option>
                 </select>
                 <span class="field-label">Alarmprofil</span>
               </div>
               <div id="camAlarmProfileHint" class="field-help" style="margin-top:4px">Weich: Jedes Event wird als Info geloggt und gesendet.</div>
 
-              <div class="settings-divider" style="margin-top:12px">Benachrichtigung</div>
-              <label class="toggle-row"><span class="toggle-row-label">Stumm (armed=false blockt Telegram)<span class="toggle-row-sublabel">Aufnahmen laufen weiter, nur Telegram wird unterdrückt</span></span><label class="switch"><input type="checkbox" name="armed" checked /><span class="slider"></span></label></label>
+              <label class="toggle-row" style="margin-top:10px"><span class="toggle-row-label">Benachrichtigungen aktiv<span class="toggle-row-sublabel">Aus = Stumm, aber Aufnahme läuft weiter</span></span><label class="switch"><input type="checkbox" name="armed" checked /><span class="slider"></span></label></label>
 
-              <div id="camScheduleSection">
-                <div class="settings-divider" style="margin-top:12px">Nachtmodus / Zeitplan — wann ist die Kamera scharf?</div>
-                <label class="toggle-row"><span class="toggle-row-label">Zeitplan aktiv</span><label class="switch"><input type="checkbox" name="schedule_enabled" /><span class="slider"></span></label></label>
-                <div class="row" style="grid-template-columns:1fr 1fr;margin-top:4px">
-                  <div class="field-wrap"><input name="schedule_start" placeholder="22:00" /><span class="field-label">Von</span></div>
-                  <div class="field-wrap"><input name="schedule_end" placeholder="06:00" /><span class="field-label">Bis</span></div>
-                </div>
-                <div class="field-help" style="margin-top:6px">Innerhalb des Zeitplans gilt erhöhte Alarmstufe (Nachtmodus).</div>
-              </div>
-            </div>
+              <div class="cam-sep"></div>
 
-            <!-- Panel: Qualität -->
-            <div class="cam-tab-panel" id="cam-tab-qualitaet">
-              <div class="row" style="grid-template-columns:1fr 1fr 1fr">
-                <div class="field-wrap">
-                  <select name="resolution">
-                    <option value="auto">Auto</option>
-                    <option value="720p">720p (HD)</option>
-                    <option value="1080p">1080p (Full HD)</option>
-                    <option value="4k">4K (UHD)</option>
-                  </select>
-                  <span class="field-label">Auflösung</span>
-                </div>
-                <div class="field-wrap">
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <input type="range" name="frame_interval_ms" min="100" max="2000" step="50" value="350" style="flex:1" />
-                    <span id="frameIntervalLabel" style="font-size:12px;color:var(--muted);min-width:40px">350ms</span>
-                  </div>
-                  <span class="field-label">Frame-Intervall</span>
-                </div>
-                <div class="field-wrap">
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <input type="range" name="snapshot_interval_s" min="1" max="30" step="1" value="3" style="flex:1" />
-                    <span id="snapshotIntervalLabel" style="font-size:12px;color:var(--muted);min-width:28px">3s</span>
-                  </div>
-                  <span class="field-label">Snapshot-Intervall (HTTP-Kameras)</span>
-                </div>
-              </div>
+              <label class="toggle-row"><span class="toggle-row-label">Telegram<span class="toggle-row-sublabel">Events an Telegram-Bot senden</span></span><label class="switch"><input type="checkbox" name="telegram_enabled" checked /><span class="slider"></span></label></label>
+              <label class="toggle-row" style="margin-top:6px"><span class="toggle-row-label">MQTT<span class="toggle-row-sublabel">Events an Home Assistant publizieren</span></span><label class="switch"><input type="checkbox" name="mqtt_enabled" checked /><span class="slider"></span></label></label>
+
+              <div class="cam-sep"></div>
+
+              <div class="cam-field-label">Zeitplan (Nachtmodus)</div>
+              <label class="toggle-row" style="margin-top:4px"><span class="toggle-row-label">Zeitplan aktiv</span><label class="switch"><input type="checkbox" name="schedule_enabled" /><span class="slider"></span></label></label>
               <div class="row" style="grid-template-columns:1fr 1fr;margin-top:4px">
-                <div class="field-wrap"><input type="number" name="bottom_crop_px" min="0" max="200" value="0" /><span class="field-label">Unterer Bildrand ausblenden (px)</span></div>
-                <div class="field-wrap">
-                  <div style="display:flex;align-items:center;gap:8px">
-                    <input type="range" name="motion_sensitivity" min="0.1" max="1.0" step="0.1" value="0.5" style="flex:1" />
-                    <span id="motionSensLabel" style="font-size:12px;color:var(--muted);min-width:28px">0.5</span>
-                  </div>
-                  <span class="field-label">Bewegungsempfindlichkeit</span>
-                </div>
+                <div class="field-wrap"><input name="schedule_start" placeholder="22:00" /><span class="field-label">Von</span></div>
+                <div class="field-wrap"><input name="schedule_end" placeholder="06:00" /><span class="field-label">Bis</span></div>
               </div>
-              <div class="field-wrap" style="margin-top:4px">
-                <div style="display:flex;align-items:center;gap:8px">
-                  <input type="range" name="detection_min_score" min="0.3" max="0.95" step="0.05" value="0.55" style="flex:1" />
-                  <span id="detectionMinScoreLabel" style="font-size:12px;color:var(--muted);min-width:48px;text-align:right">0.55</span>
-                </div>
-                <span class="field-label">KI-Empfindlichkeit · Höher = weniger Fehlalarme</span>
-              </div>
-
-              <!-- Erkennung & Aufnahme — grouped trio (motion toggle / trigger mode / tail) -->
-              <div class="cam-det-block">
-                <div class="cam-det-heading">Erkennung &amp; Aufnahme</div>
-                <div class="cam-det-row">
-                  <label class="cam-det-toggle">
-                    <input type="checkbox" name="motion_enabled" checked />
-                    <span>Bewegungserkennung</span>
-                  </label>
-                  <div class="cam-det-field">
-                    <select name="detection_trigger">
-                      <option value="motion_and_objects">Motion + Objekte</option>
-                      <option value="objects_only">Nur Objekte (kein Motion-Trigger)</option>
-                      <option value="motion_only">Nur Motion</option>
-                    </select>
-                    <span class="cam-det-label">Event-Auslöser</span>
-                  </div>
-                  <div class="cam-det-field">
-                    <select name="post_motion_tail_s">
-                      <option value="0">Standard (3s)</option>
-                      <option value="3">3s</option>
-                      <option value="5">5s</option>
-                      <option value="8">8s</option>
-                      <option value="10">10s</option>
-                      <option value="15">15s</option>
-                    </select>
-                    <span class="cam-det-label">Nachlauf nach Bewegung</span>
-                  </div>
-                </div>
-                <div class="cam-det-help">Nur Objekte = weniger Fehlalarme. Längerer Nachlauf = vollständigere Clips.</div>
-                <div class="cam-det-motionoff" hidden>Motion deaktiviert — nur Objekt-Erkennung aktiv</div>
-              </div>
+              <div class="field-help" style="margin-top:6px">Innerhalb des Zeitplans gilt erhöhte Alarmstufe.</div>
             </div>
 
             <!-- Panel: Zonen -->

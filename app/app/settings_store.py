@@ -77,7 +77,11 @@ class SettingsStore:
             "resolution": cam.get("resolution", "auto"),
             "frame_interval_ms": cam.get("frame_interval_ms", 350),
             "snapshot_interval_s": cam.get("snapshot_interval_s", 3),
+            # Scroll-level per-camera tuning sliders — were missing from the
+            # persisted dict so saves silently dropped them.
+            "motion_sensitivity": float(cam.get("motion_sensitivity") or 0.5),
             "detection_min_score": float(cam.get("detection_min_score") or 0.0),
+            "bottom_crop_px": int(cam.get("bottom_crop_px") or 0),
             "motion_enabled": cam.get("motion_enabled", True),
             "detection_trigger": cam.get("detection_trigger", "motion_and_objects"),
             "post_motion_tail_s": float(cam.get("post_motion_tail_s") or 0.0),

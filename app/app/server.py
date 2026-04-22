@@ -586,6 +586,7 @@ def api_cameras():
         s["schedule"] = cam.get("schedule", {"enabled": False, "start": "22:00", "end": "06:00"})
         s["bottom_crop_px"] = cam.get("bottom_crop_px", 0)
         s["motion_sensitivity"] = cam.get("motion_sensitivity", 0.5)
+        s["detection_min_score"] = float(cam.get("detection_min_score") or 0.0)
         s["motion_enabled"] = cam.get("motion_enabled", True)
         s["detection_trigger"] = cam.get("detection_trigger", "motion_and_objects")
         s["post_motion_tail_s"] = float(cam.get("post_motion_tail_s") or 0.0)
