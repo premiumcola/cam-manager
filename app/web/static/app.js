@@ -70,14 +70,20 @@ function _renderLbLabels(){
   const el=byId('lightboxLabels');
   if(!el||!_lbItem) return;
   const active=new Set(_lbItem.labels||[]);
-  el.innerHTML=TL_LABELS.map(l=>{
+  const species=_lbItem.bird_species||'';
+  const birdColor=colors.bird||'#0ea5e9';
+  const bubbles=TL_LABELS.map(l=>{
     const isActive=active.has(l);
     const rawSvg=OBJ_SVG[l]||OBJ_SVG.alarm;
     const svg=rawSvg.replace('width="16" height="16"','width="38" height="38"');
     const title=OBJ_LABEL[l]||l;
     const c=colors[l]||colors.unknown;
-    return `<span data-label="${l}" title="${title}" style="width:54px;height:54px;border-radius:50%;background:${isActive?c+'30':'rgba(0,0,0,0.60)'};filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;pointer-events:auto;transition:background .15s,opacity .15s,border-color .15s;opacity:${isActive?'1':'0.6'};border:2px solid ${isActive?c+'cc':'rgba(255,255,255,0.08)'}">${svg}</span>`;
+    const speciesSub=(l==='bird' && species && isActive)
+      ? `<span style="position:absolute;top:calc(100% + 4px);left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.72);color:${birdColor};font-size:11px;font-weight:700;padding:3px 8px;border-radius:8px;white-space:nowrap;border:1px solid ${birdColor}55;pointer-events:none">${esc(species)}</span>`
+      : '';
+    return `<span data-label="${l}" title="${title}" style="position:relative;width:54px;height:54px;border-radius:50%;background:${isActive?c+'30':'rgba(0,0,0,0.60)'};filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;pointer-events:auto;transition:background .15s,opacity .15s,border-color .15s;opacity:${isActive?'1':'0.6'};border:2px solid ${isActive?c+'cc':'rgba(255,255,255,0.08)'}">${svg}${speciesSub}</span>`;
   }).join('');
+  el.innerHTML=bubbles;
   el.querySelectorAll('[data-label]').forEach(btn=>{
     btn.onclick=async()=>{
       const lbl=btn.dataset.label;
@@ -1234,7 +1240,14 @@ function hydrateSettings(){
   const hint=byId('coralStatusHint');
   if(hint){
     const reason=cam0?.coral_reason||'—';
-    hint.textContent=coralAvail?'✅ Coral TPU erkannt und aktiv.':`⚠️ Coral nicht verfügbar: ${reason}`;
+    const lines=[coralAvail?'✅ Coral TPU erkannt und aktiv.':`⚠️ Coral nicht verfügbar: ${reason}`];
+    if(birdActive && proc.bird_model_available===false){
+      const p=proc.bird_model_path||'inat_bird_quant.tflite';
+      lines.push(`⚠️ Vogelarten-Modell nicht gefunden. Bitte <code>${esc(p.split('/').pop())}</code> in <code>models/</code> ablegen.`);
+    } else if(birdActive && cam0?.bird_species_available===false && cam0?.bird_species_reason){
+      lines.push(`⚠️ Vogelarten-Klassifikation: ${esc(cam0.bird_species_reason)}`);
+    }
+    hint.innerHTML=lines.join('<br>');
   }
   // Coral device info from /api/system (async, non-blocking)
   _updateCoralDeviceInfo();
@@ -1796,7 +1809,9 @@ async function _runCoralTest(){
     const pillsHtml=dets.length
       ? dets.map(d=>{
           const c=_coralLabelColor(d.label);
-          return `<span class="ct-pill" style="border-left-color:${c}">${esc(d.label)}<span class="ct-pct">${(d.score*100).toFixed(0)}%</span></span>`;
+          const spPct=d.species_score!=null?` ${(d.species_score*100).toFixed(0)}%`:'';
+          const speciesTag=d.species?`<span class="ct-species" style="color:${c}">→ ${esc(d.species)}${spPct}</span>`:'';
+          return `<span class="ct-pill" style="border-left-color:${c}">${esc(d.label)}<span class="ct-pct">${(d.score*100).toFixed(0)}%</span>${speciesTag}</span>`;
         }).join('')
       : '';
     const overlayBottom=dets.length
@@ -1852,7 +1867,9 @@ function _renderCoralBatchResult(out,r,folder){
     const pills=dets.length
       ? dets.map(d=>{
           const c=_coralLabelColor(d.label);
-          return `<span class="ct-pill" style="border-left-color:${c}">${esc(d.label)}<span class="ct-pct">${(d.score*100).toFixed(0)}%</span></span>`;
+          const spPct=d.species_score!=null?` ${(d.species_score*100).toFixed(0)}%`:'';
+          const speciesTag=d.species?`<span class="ct-species" style="color:${c}">→ ${esc(d.species)}${spPct}</span>`:'';
+          return `<span class="ct-pill" style="border-left-color:${c}">${esc(d.label)}<span class="ct-pct">${(d.score*100).toFixed(0)}%</span>${speciesTag}</span>`;
         }).join('')
       : '<span class="cb-empty">Keine Objekte erkannt</span>';
     const img=item.image_b64
@@ -2932,7 +2949,9 @@ function mediaCardHTML(item){
   // Pick most-specific label (first non-motion) for the top-left badge; fall back to motion
   const _badgeLabel=(item.labels||[]).find(l=>l && l!=='motion') || 'motion';
   const _badgeColor=colors[_badgeLabel]||colors.motion||'#93c5fd';
-  const _badgeText=OBJ_LABEL[_badgeLabel]||_badgeLabel;
+  // When the bird classifier has identified a species, show it instead of the
+  // generic "Vogel" — keeps bird colour + icon but tells the user what kind.
+  const _badgeText=(_badgeLabel==='bird' && item.bird_species) ? item.bird_species : (OBJ_LABEL[_badgeLabel]||_badgeLabel);
   // Inline overrides only border-color and text color; .mmc-tl-badge supplies dark bg + blur + shadow
   const motionBadge=`<div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge" style="border-color:${hexToRgba(_badgeColor,0.7)};color:${_badgeColor}">${objIconSvg(_badgeLabel,12)}${esc(_badgeText)}</span></div>`;
   const errorBadge=item.encode_error?`<div style="position:absolute;bottom:7px;left:50%;transform:translateX(-50%);z-index:4"><span title="${esc(item.encode_error)}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(250,204,21,.18);border:1px solid rgba(250,204,21,.5);color:#facc15;font-size:13px;font-weight:800;backdrop-filter:blur(4px)">⚠</span></div>`:'';

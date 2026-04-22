@@ -507,6 +507,12 @@ def api_bootstrap():
 @app.get('/api/config')
 def api_config():
     c = get_effective_config()
+    proc = c.get("processing", {}) or {}
+    bird_cfg = proc.get("bird_species", {}) or {}
+    bird_model_path = bird_cfg.get("model_path")
+    bird_cpu_path = bird_cfg.get("cpu_model_path")
+    bird_labels_path = bird_cfg.get("labels_path")
+    bird_model_available = any(p and Path(p).exists() for p in (bird_model_path, bird_cpu_path))
     return jsonify({
         "app": c.get("app", {}),
         "server": {"public_base_url": c.get("server", {}).get("public_base_url", "")},
@@ -514,8 +520,15 @@ def api_config():
         "cameras": c.get("cameras", []),
         "camera_groups": c.get("camera_groups", []),
         "coral": {
-            "mode": c.get("processing", {}).get("detection", {}).get("mode", "none"),
-            "bird_species_enabled": bool(c.get("processing", {}).get("bird_species", {}).get("enabled")),
+            "mode": proc.get("detection", {}).get("mode", "none"),
+            "bird_species_enabled": bool(bird_cfg.get("enabled")),
+        },
+        "processing": {
+            "detection": proc.get("detection", {}),
+            "bird_species_enabled": bool(bird_cfg.get("enabled")),
+            "bird_model_available": bird_model_available,
+            "bird_labels_available": bool(bird_labels_path and Path(bird_labels_path).exists()),
+            "bird_model_path": bird_model_path,
         },
         "telegram": {"enabled": bool(c.get("telegram", {}).get("enabled")), "chat_id": c.get("telegram", {}).get("chat_id", ""), "token": c.get("telegram", {}).get("token", "")},
         "mqtt": {"enabled": bool(c.get("mqtt", {}).get("enabled")), "base_topic": c.get("mqtt", {}).get("base_topic", "tam-spy"), "host": c.get("mqtt", {}).get("host", ""), "port": c.get("mqtt", {}).get("port", 1883), "username": c.get("mqtt", {}).get("username", ""), "password": c.get("mqtt", {}).get("password", "")},
@@ -680,6 +693,13 @@ def api_settings_cameras_delete(cam_id):
 @app.get('/api/settings/app')
 def api_settings_app():
     proc = settings.data.get("processing", {})
+    eff = get_effective_config().get("processing", {}) or {}
+    bird_cfg = eff.get("bird_species", {}) or {}
+    model_path = bird_cfg.get("model_path")
+    cpu_model_path = bird_cfg.get("cpu_model_path")
+    labels_path = bird_cfg.get("labels_path")
+    bird_model_available = any(p and Path(p).exists() for p in (model_path, cpu_model_path))
+    bird_labels_available = bool(labels_path and Path(labels_path).exists())
     return jsonify({
         "app": settings.data.get("app", {}),
         "server": settings.data.get("server", {}),
@@ -689,6 +709,9 @@ def api_settings_app():
         "processing": {
             "coral_enabled": proc.get("detection", {}).get("mode", "none") == "coral",
             "bird_species_enabled": bool(proc.get("bird_species", {}).get("enabled", False)),
+            "bird_model_available": bird_model_available,
+            "bird_labels_available": bird_labels_available,
+            "bird_model_path": model_path,
         },
     })
 
@@ -1623,13 +1646,14 @@ def api_coral_test():
     frame as base64, the detector mode + reason, inference time in ms,
     and the matching lsusb line."""
     import base64 as _b64, time as _time, subprocess as _sp
-    from .detectors import CoralObjectDetector, Detection, draw_detections
+    from .detectors import CoralObjectDetector, BirdSpeciesClassifier, Detection, draw_detections
     payload = request.get_json(silent=True) or {}
     cam_id = (payload.get("camera_id") or "").strip() or None
 
     # Detection config from the effective runtime config
     eff = get_effective_config()
     det_cfg = (eff.get("processing", {}) or {}).get("detection", {}) or {}
+    bird_cfg = (eff.get("processing", {}) or {}).get("bird_species", {}) or {}
 
     # Source frame: camera runtime → snapshot; otherwise a test pattern
     frame = None
@@ -1674,6 +1698,37 @@ def api_coral_test():
         except Exception as e:
             err_msg = str(e)
 
+    # Optional bird species classification on each bird crop — gives the user
+    # immediate feedback in the Coral test panel ("bird 87% → Amsel 72%")
+    # instead of only seeing the generic COCO label.
+    bird_species_mode = "none"
+    bird_species_reason = "disabled"
+    if detections and bird_cfg.get("enabled"):
+        bird_clf = BirdSpeciesClassifier(bird_cfg)
+        bird_species_mode = bird_clf.mode
+        bird_species_reason = bird_clf.reason
+        if bird_clf.available:
+            h_full, w_full = frame.shape[:2]
+            for d in detections:
+                if d.label != "bird":
+                    continue
+                x1, y1, x2, y2 = d.bbox
+                # Expand the bbox slightly so the classifier sees a little
+                # context around the bird — the COCO bbox tends to be tight.
+                pad = 6
+                cx1 = max(0, x1 - pad); cy1 = max(0, y1 - pad)
+                cx2 = min(w_full, x2 + pad); cy2 = min(h_full, y2 + pad)
+                crop = frame[cy1:cy2, cx1:cx2]
+                if crop is None or crop.size == 0:
+                    continue
+                try:
+                    sp, sp_score = bird_clf.classify_crop(crop)
+                except Exception:
+                    sp, sp_score = None, None
+                if sp:
+                    d.species = sp
+                    d.species_score = float(sp_score) if sp_score is not None else None
+
     annotated = draw_detections(frame, detections)
     # Keep the preview small for transport (max width 640, JPEG q=80)
     h, w = annotated.shape[:2]
@@ -1701,6 +1756,8 @@ def api_coral_test():
         "detector_available": detector.available,
         "detector_reason": detector.reason,
         "model_path": det_cfg.get("model_path"),
+        "bird_species_mode": bird_species_mode,
+        "bird_species_reason": bird_species_reason,
         "source": source,
         "camera_id": cam_id,
         "camera_name": camera_name,
@@ -1761,12 +1818,13 @@ def api_coral_test_batch():
     sanity-check object-detection quality without live camera feeds."""
     import base64 as _b64
     import time as _time
-    from .detectors import CoralObjectDetector, draw_detections
+    from .detectors import CoralObjectDetector, BirdSpeciesClassifier, draw_detections
     payload = request.get_json(silent=True) or {}
     folder_filter = (payload.get("folder") or "").strip()
 
     eff = get_effective_config()
     det_cfg = (eff.get("processing", {}) or {}).get("detection", {}) or {}
+    bird_cfg = (eff.get("processing", {}) or {}).get("bird_species", {}) or {}
     storage_root = Path(eff.get("storage", {}).get("root", "storage"))
     base = storage_root / "test_images"
     if not base.exists():
@@ -1795,11 +1853,16 @@ def api_coral_test_batch():
             "results": [],
         })
 
+    # Second-stage bird classifier — only runs when enabled and a bird is
+    # detected in the frame. Built once per batch for speed.
+    bird_clf = BirdSpeciesClassifier(bird_cfg) if bird_cfg.get("enabled") else None
+
     results: list = []
     by_label: dict = {}
     total_images = 0
     with_detections = 0
     inference_times: list = []
+    species_counts: dict = {}
 
     for d in candidate_dirs:
         if not d.is_dir():
@@ -1826,6 +1889,27 @@ def api_coral_test_batch():
                     "error": str(e),
                 })
                 continue
+            # Species classification on each bird crop when the classifier is on
+            if dets and bird_clf is not None and bird_clf.available:
+                hh, ww = frame.shape[:2]
+                for dd in dets:
+                    if dd.label != "bird":
+                        continue
+                    x1, y1, x2, y2 = dd.bbox
+                    pad = 6
+                    cx1 = max(0, x1 - pad); cy1 = max(0, y1 - pad)
+                    cx2 = min(ww, x2 + pad); cy2 = min(hh, y2 + pad)
+                    crop = frame[cy1:cy2, cx1:cx2]
+                    if crop is None or crop.size == 0:
+                        continue
+                    try:
+                        sp, sp_score = bird_clf.classify_crop(crop)
+                    except Exception:
+                        sp, sp_score = None, None
+                    if sp:
+                        dd.species = sp
+                        dd.species_score = float(sp_score) if sp_score is not None else None
+                        species_counts[sp] = species_counts.get(sp, 0) + 1
             # Annotate frame with bounding boxes and encode to base64 (max 480px wide for transport)
             annotated = draw_detections(frame, dets)
             h, w = annotated.shape[:2]
@@ -1843,6 +1927,8 @@ def api_coral_test_batch():
                     "label": dd.label,
                     "score": round(float(dd.score), 3),
                     "bbox": list(dd.bbox),
+                    "species": dd.species,
+                    "species_score": round(float(dd.species_score), 3) if dd.species_score is not None else None,
                 } for dd in dets],
             })
             total_images += 1
@@ -1856,11 +1942,14 @@ def api_coral_test_batch():
         "ok": True,
         "detector_mode": detector.mode,
         "detector_reason": detector.reason,
+        "bird_species_mode": bird_clf.mode if bird_clf else "none",
+        "bird_species_reason": bird_clf.reason if bird_clf else "disabled",
         "model_path": det_cfg.get("model_path"),
         "summary": {
             "total_images": total_images,
             "with_detections": with_detections,
             "by_label": by_label,
+            "by_species": species_counts,
             "avg_ms": round(sum(inference_times) / len(inference_times), 1) if inference_times else 0.0,
         },
         "results": results,

@@ -15,6 +15,7 @@ services:
     ports:
       - "8099:8099"
     volumes:
+      - ./app/app:/app/app
       - ./app/config:/app/config
       - ./app/web:/app/web
       - ./storage:/app/storage

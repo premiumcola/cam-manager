@@ -9,6 +9,15 @@ log = logging.getLogger(__name__)
 
 
 def load_label_map(path: str | None) -> dict[int, str]:
+    """Load a TFLite label file.
+
+    Supports two formats:
+      A) numeric-prefixed (e.g. Coral COCO)   "16 bird"     / "16: bird"
+      B) plain lines      (e.g. Coral iNat)   "Turdus merula (Common Blackbird)"
+
+    In format B the line index (0-based) becomes the label id, which is what
+    the classifier output layer uses for iNaturalist-style models.
+    """
     if not path:
         return {}
     p = Path(path)
@@ -16,10 +25,12 @@ def load_label_map(path: str | None) -> dict[int, str]:
         return {}
     text = p.read_text(encoding="utf-8", errors="ignore").splitlines()
     out: dict[int, str] = {}
+    lines_nonblank: list[str] = []
     for line in text:
         line = line.strip()
         if not line or line.startswith("#"):
             continue
+        lines_nonblank.append(line)
         if ":" in line:
             k, v = line.split(":", 1)
         elif " " in line:
@@ -30,6 +41,9 @@ def load_label_map(path: str | None) -> dict[int, str]:
             out[int(k.strip())] = v.strip()
         except Exception:
             continue
+    if not out and lines_nonblank:
+        # Format B — plain labels, one per line, indexed by position.
+        out = {i: s for i, s in enumerate(lines_nonblank)}
     return out
 
 
@@ -39,6 +53,7 @@ class Detection:
     score: float
     bbox: tuple[int, int, int, int]
     species: str | None = None
+    species_score: float | None = None
     identity: str | None = None
 
     def to_dict(self):
@@ -48,6 +63,7 @@ class Detection:
             "score": round(float(self.score), 4),
             "bbox": {"x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2)},
             "species": self.species,
+            "species_score": round(float(self.species_score), 4) if self.species_score is not None else None,
             "identity": self.identity,
         }
 
@@ -188,6 +204,93 @@ class CoralObjectDetector:
         return out
 
 
+# Latin binomial → German common name. Used to rewrite iNaturalist labels like
+# "Turdus merula (Common Blackbird)" to the German "Amsel" for Bavarian garden
+# birds. Falls back to the raw iNat label when a species is not in the table.
+_BIRD_LATIN_TO_DE: dict[str, str] = {
+    "Turdus merula":                  "Amsel",
+    "Cyanistes caeruleus":            "Blaumeise",
+    "Parus caeruleus":                "Blaumeise",
+    "Parus major":                    "Kohlmeise",
+    "Erithacus rubecula":             "Rotkehlchen",
+    "Fringilla coelebs":              "Buchfink",
+    "Chloris chloris":                "Grünfink",
+    "Carduelis chloris":              "Grünfink",
+    "Passer domesticus":              "Haussperling",
+    "Passer montanus":                "Feldsperling",
+    "Sturnus vulgaris":               "Star",
+    "Pica pica":                      "Elster",
+    "Corvus corone":                  "Rabenkrähe",
+    "Corvus cornix":                  "Nebelkrähe",
+    "Corvus monedula":                "Dohle",
+    "Corvus frugilegus":              "Saatkrähe",
+    "Columba palumbus":               "Ringeltaube",
+    "Columba livia":                  "Straßentaube",
+    "Streptopelia decaocto":          "Türkentaube",
+    "Sitta europaea":                 "Kleiber",
+    "Dendrocopos major":              "Buntspecht",
+    "Troglodytes troglodytes":        "Zaunkönig",
+    "Phoenicurus ochruros":           "Hausrotschwanz",
+    "Phoenicurus phoenicurus":        "Gartenrotschwanz",
+    "Motacilla alba":                 "Bachstelze",
+    "Carduelis carduelis":            "Stieglitz",
+    "Spinus spinus":                  "Erlenzeisig",
+    "Coccothraustes coccothraustes":  "Kernbeißer",
+    "Pyrrhula pyrrhula":              "Gimpel",
+    "Prunella modularis":             "Heckenbraunelle",
+    "Sylvia atricapilla":             "Mönchsgrasmücke",
+    "Phylloscopus collybita":         "Zilpzalp",
+    "Phylloscopus trochilus":         "Fitis",
+    "Emberiza citrinella":            "Goldammer",
+    "Garrulus glandarius":            "Eichelhäher",
+    "Serinus serinus":                "Girlitz",
+    "Aegithalos caudatus":            "Schwanzmeise",
+    "Periparus ater":                 "Tannenmeise",
+    "Lophophanes cristatus":          "Haubenmeise",
+    "Poecile palustris":              "Sumpfmeise",
+    "Turdus philomelos":              "Singdrossel",
+    "Turdus pilaris":                 "Wacholderdrossel",
+    "Turdus viscivorus":              "Misteldrossel",
+    "Regulus regulus":                "Wintergoldhähnchen",
+    "Regulus ignicapilla":            "Sommergoldhähnchen",
+    "Certhia brachydactyla":          "Gartenbaumläufer",
+    "Certhia familiaris":             "Waldbaumläufer",
+    "Hirundo rustica":                "Rauchschwalbe",
+    "Delichon urbicum":               "Mehlschwalbe",
+    "Apus apus":                      "Mauersegler",
+}
+
+
+def _pretty_bird_label(raw: str | None) -> str | None:
+    """Transform an iNaturalist label into its German common name when known.
+
+    Input shapes:
+      - "Turdus merula (Common Blackbird)"  → "Amsel"
+      - "Turdus merula"                      → "Amsel"
+      - "PARUS MAJOR"                        → "Kohlmeise"
+      - "Passer_domesticus"                  → "Haussperling"
+    Unknown species return the raw label unchanged so the UI still shows
+    something useful (Latin + English).
+    """
+    if not raw:
+        return raw
+    base = str(raw).strip()
+    if not base:
+        return None
+    # "Turdus merula (Common Blackbird)" → strip trailing parenthetical
+    latin = base.split("(", 1)[0].strip().replace("_", " ")
+    if not latin:
+        return base
+    # Normalize to "Genus species" casing for lookup
+    parts = latin.split()
+    if len(parts) >= 2:
+        key = parts[0].capitalize() + " " + parts[1].lower()
+        de = _BIRD_LATIN_TO_DE.get(key)
+        if de:
+            return de
+    return base
+
+
 class BirdSpeciesClassifier:
     """Optional second stage classifier for bird crops.
 
@@ -213,6 +316,12 @@ class BirdSpeciesClassifier:
         if not model_path:
             self.reason = "missing model_path"
             return
+        if not Path(model_path).exists():
+            cpu_alt = self.cfg.get("cpu_model_path")
+            if not (cpu_alt and Path(cpu_alt).exists()):
+                self.reason = f"model file not found: {model_path}"
+                log.warning("Bird classifier: %s", self.reason)
+                return
 
         # ── Tier 1: pycoral ───────────────────────────────────────────────
         try:
@@ -273,28 +382,42 @@ class BirdSpeciesClassifier:
         if not classes:
             return None, None
         c = classes[0]
-        label = self.labels.get(int(c.id), str(c.id))
-        return label, float(c.score)
+        raw = self.labels.get(int(c.id), str(c.id))
+        return _pretty_bird_label(raw), float(c.score)
 
     def _classify_cpu(self, crop: np.ndarray) -> tuple[str | None, float | None]:
         input_details = self.interpreter.get_input_details()
         output_details = self.interpreter.get_output_details()
         in_h = input_details[0]['shape'][1]
         in_w = input_details[0]['shape'][2]
+        in_dtype = input_details[0]['dtype']
         rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
         resized = cv2.resize(rgb, (in_w, in_h))
         inp = np.expand_dims(resized, axis=0)
-        if input_details[0]['dtype'] == np.float32:
+        if in_dtype == np.float32:
             inp = inp.astype(np.float32) / 255.0
+        else:
+            inp = inp.astype(in_dtype)
         self.interpreter.set_tensor(input_details[0]['index'], inp)
         self.interpreter.invoke()
         scores = self.interpreter.get_tensor(output_details[0]['index'])[0]
         best_id = int(np.argmax(scores))
-        best_score = float(scores[best_id])
+        raw_score = float(scores[best_id])
+        # Quantized classifiers (uint8/int8) return raw logits in the integer
+        # range — apply the TFLite quantization params to get a 0..1 probability.
+        out_dtype = output_details[0]['dtype']
+        if out_dtype in (np.uint8, np.int8):
+            scale, zero_point = output_details[0].get('quantization', (0.0, 0))
+            if scale:
+                best_score = (raw_score - zero_point) * float(scale)
+            else:
+                best_score = raw_score / 255.0
+        else:
+            best_score = raw_score
         if best_score < self.min_score:
             return None, None
-        label = self.labels.get(best_id, str(best_id))
-        return label, best_score
+        raw = self.labels.get(best_id, str(best_id))
+        return _pretty_bird_label(raw), best_score
 
 
 def draw_detections(frame: np.ndarray, detections: list[Detection]) -> np.ndarray:

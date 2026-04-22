@@ -46,9 +46,10 @@ processing:
     device: usb
   bird_species:
     enabled: false
-    model_path: /app/models/bavarian_birds_edgetpu.tflite
-    labels_path: /app/config/bavarian_birds_common.txt
-    min_score: 0.45
+    model_path: /app/models/inat_bird_quant_edgetpu.tflite
+    cpu_model_path: /app/models/inat_bird_quant.tflite
+    labels_path: /app/models/inat_bird_labels.txt
+    min_score: 0.35
     device: usb
   cat_identity:
     match_threshold: 10
