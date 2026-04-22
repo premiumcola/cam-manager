@@ -1208,13 +1208,22 @@ function hydrateSettings(){
   const birdActive=!!(proc.bird_species_enabled ?? coral.bird_species_enabled);
   const coralSwitch=byId('coralTpuSwitch'); if(coralSwitch) coralSwitch.classList.toggle('on',coralActive);
   const birdSwitch=byId('birdSpeciesSwitch'); if(birdSwitch) birdSwitch.classList.toggle('on',birdActive);
-  const coralBadge=byId('coralStatusBadge');
-  if(coralBadge){coralBadge.textContent=coralActive?'aktiv':'aus';coralBadge.className='set-status-badge '+(coralActive?'set-status-badge--on':'set-status-badge--off');}
+  const cam0=state.cameras[0];
+  const coralAvail=!!cam0?.coral_available;
+  const chip=byId('coralStatusChip');
+  if(chip){
+    let label='⏸ Aus', cls='coral-chip--off';
+    if(coralActive){
+      if(coralAvail){label='⚡ Coral TPU';cls='coral-chip--active';}
+      else{label='💻 CPU Fallback';cls='coral-chip--cpu';}
+    }
+    chip.textContent=label;
+    chip.className='coral-status-chip '+cls;
+  }
   const hint=byId('coralStatusHint');
   if(hint){
-    const cam=state.cameras[0];
-    const available=cam?.coral_available; const reason=cam?.coral_reason||'—';
-    hint.textContent=available?'✅ Coral TPU erkannt und aktiv.':`⚠️ Coral nicht verfügbar: ${reason}`;
+    const reason=cam0?.coral_reason||'—';
+    hint.textContent=coralAvail?'✅ Coral TPU erkannt und aktiv.':`⚠️ Coral nicht verfügbar: ${reason}`;
   }
   // Coral device info from /api/system (async, non-blocking)
   _updateCoralDeviceInfo();
@@ -1729,6 +1738,8 @@ function _populateCoralTestCameras(){
     cams.map(c=>`<option value="${esc(c.id)}">${esc(c.name||c.id)}</option>`).join('');
   if(current&&[...sel.options].some(o=>o.value===current)) sel.value=current;
 }
+const _CORAL_LABEL_COLORS={person:'#6e6eff',cat:'#a06eff',bird:'#54d662',dog:'#00b0ff'};
+function _coralLabelColor(lbl){return _CORAL_LABEL_COLORS[String(lbl||'').toLowerCase()]||'#ffb400';}
 async function _runCoralTest(){
   const btn=byId('coralTestBtn'); const out=byId('coralTestResult');
   if(!btn||!out) return;
@@ -1738,28 +1749,38 @@ async function _runCoralTest(){
   try{
     const r=await j('/api/coral/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({camera_id:camId||undefined})});
     const mode=r.detector_mode||'motion_only';
-    const modeColor=mode==='coral'?'#4ade80':mode==='cpu'?'#facc15':'rgba(255,255,255,0.4)';
-    const modeLabel=mode==='coral'?'Coral TPU (EdgeTPU)':mode==='cpu'?'CPU-Fallback (tflite-runtime)':'Nur Bewegungserkennung';
-    const src=r.source==='camera'?`Live-Frame: ${esc(r.camera_name||r.camera_id||'?')}`:'Test-Muster (keine Kamera gewählt/aktiv)';
+    const modeColor=mode==='coral'?'#4ade80':mode==='cpu'?'#facc15':'rgba(255,255,255,0.6)';
+    const modeLabel=mode==='coral'?'⚡ Coral TPU':mode==='cpu'?'💻 CPU-Fallback':'⏸ Bewegung';
+    const srcLabel=r.source==='camera'?(r.camera_name||r.camera_id||'?'):'Testmuster';
     const dets=r.detections||[];
-    const detHtml=dets.length
-      ? `<div style="display:flex;flex-direction:column;gap:3px;margin-top:6px">${dets.map(d=>`<div style="font-size:12px"><code>${esc(d.label)}</code> — ${(d.score*100).toFixed(1)}%</div>`).join('')}</div>`
-      : '<div class="field-help" style="margin-top:6px">Keine Objekte erkannt.</div>';
-    const img=r.image_b64?`<img src="${r.image_b64}" style="display:block;max-height:300px;width:auto;border-radius:8px;margin-top:8px;background:#0a0e1a">`:'';
+    const pillsHtml=dets.length
+      ? dets.map(d=>{
+          const c=_coralLabelColor(d.label);
+          return `<span class="ct-pill" style="border-left-color:${c}">${esc(d.label)}<span class="ct-pct">${(d.score*100).toFixed(0)}%</span></span>`;
+        }).join('')
+      : '';
+    const overlayBottom=dets.length
+      ? `<div class="coral-test-overlay-bottom">${pillsHtml}</div>`
+      : `<div class="coral-test-empty">Keine Objekte erkannt</div>`;
+    const imgBlock=r.image_b64
+      ? `<div class="coral-test-imgwrap">
+           <img src="${r.image_b64}" alt="Coral test result"/>
+           <div class="coral-test-overlay-top">
+             <span class="ct-mode" style="color:${modeColor}">● ${esc(modeLabel)}</span>
+             ${r.inference_ms>0?`<span class="ct-ms">${r.inference_ms} ms</span>`:''}
+             <span class="ct-src">${esc(srcLabel)}</span>
+           </div>
+           ${overlayBottom}
+         </div>`
+      : `<div style="background:var(--surface);padding:10px;border-radius:10px;font-size:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+           <span style="font-weight:700;color:${modeColor}">● ${esc(modeLabel)}</span>
+           ${r.inference_ms>0?`<span style="color:var(--muted)">${r.inference_ms} ms</span>`:''}
+           <span style="color:var(--muted);margin-left:auto">${esc(srcLabel)}</span>
+         </div>`;
+    const reasonRow=(r.detector_reason&&r.detector_reason!=='ok')?`<div class="field-help" style="margin-top:6px;font-family:monospace">${esc(r.detector_reason)}</div>`:'';
+    const usbRow=r.usb_info?`<div class="field-help" style="margin-top:4px;color:#a78bfa">🔌 ${esc(r.usb_info)}</div>`:'';
     const errRow=r.inference_error?`<div style="color:#fca5a5;margin-top:6px;font-size:12px">Inferenz-Fehler: ${esc(r.inference_error)}</div>`:'';
-    out.innerHTML=`
-      <div style="background:var(--surface);padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.06)">
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:700;color:${modeColor}">● ${esc(modeLabel)}</span>
-          ${r.inference_ms>0?`<span style="font-size:11px;color:var(--muted)">${r.inference_ms} ms</span>`:''}
-          <span style="font-size:11px;color:var(--muted);margin-left:auto">${esc(src)}</span>
-        </div>
-        ${r.detector_reason&&r.detector_reason!=='ok'?`<div class="field-help" style="margin-top:4px;font-family:monospace">${esc(r.detector_reason)}</div>`:''}
-        ${r.usb_info?`<div class="field-help" style="margin-top:4px;color:#a78bfa">🔌 ${esc(r.usb_info)}</div>`:''}
-        ${errRow}
-        ${img}
-        ${detHtml}
-      </div>`;
+    out.innerHTML=imgBlock+reasonRow+usbRow+errRow;
   }catch(e){
     out.innerHTML=`<div style="color:#fca5a5">Test fehlgeschlagen: ${esc(String(e))}</div>`;
   }finally{
@@ -1768,6 +1789,11 @@ async function _runCoralTest(){
 }
 byId('coralTestBtn')?.addEventListener('click',_runCoralTest);
 
+function _truncMid(s,max){
+  s=String(s||''); if(s.length<=max) return s;
+  const keep=Math.max(8,Math.floor((max-1)/2));
+  return s.slice(0,keep)+'…'+s.slice(-keep);
+}
 async function _loadCoralModels(){
   const list=byId('coralModelsList'); if(!list) return;
   list.innerHTML='<div class="field-help" style="color:var(--muted)">Lade Modelle…</div>';
@@ -1778,27 +1804,23 @@ async function _loadCoralModels(){
       list.innerHTML=`<div class="field-help">Keine Modelle in <code>${esc(r.models_dir||'/app/models')}</code> gefunden.</div>`;
       return;
     }
-    list.innerHTML=models.map(m=>{
-      const badge=m.edgetpu
-        ? '<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(77,204,133,.15);color:#4ade80;letter-spacing:.04em">EDGETPU</span>'
-        : '<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:rgba(250,204,21,.12);color:#facc15;letter-spacing:.04em">CPU</span>';
-      const activeBg=m.active?'rgba(77,204,133,.08)':'var(--surface)';
-      const activeBorder=m.active?'1.5px solid rgba(77,204,133,.55)':'1px solid rgba(255,255,255,0.06)';
-      const activeMark=m.active?'<span style="color:#4ade80;font-weight:800;margin-left:auto;font-size:11px">● aktiv</span>':'';
-      return `<div class="coral-model-card" data-path="${esc(m.path)}" style="background:${activeBg};border:${activeBorder};border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:${m.active?'default':'pointer'};transition:background .15s">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <code style="font-size:12px;font-weight:700;color:var(--text)">${esc(m.filename)}</code>
-          ${badge}
-          <span style="font-size:10px;color:var(--muted);margin-left:4px">${m.size_mb} MB</span>
-          ${activeMark}
-        </div>
-        <div style="font-size:11px;color:var(--muted);margin-top:3px">${esc(m.description)}</div>
+    list.innerHTML='<div class="coral-mlist">'+models.map(m=>{
+      const badgeCls=m.edgetpu?'coral-mbadge--tpu':'coral-mbadge--cpu';
+      const badgeText=m.edgetpu?'EDGETPU':'CPU';
+      const activeMark=m.active?'<span class="coral-mcard-active" title="Aktives Modell">●</span>':'';
+      const fname=esc(_truncMid(m.filename,40));
+      const sizeStr=m.size_mb!=null?`${m.size_mb} MB`:'';
+      return `<div class="coral-mcard${m.active?' active':''}" data-path="${esc(m.path)}" title="${esc(m.filename)}${m.description?' — '+esc(m.description):''}">
+        <span class="coral-mcard-name">${fname}</span>
+        <span class="coral-mcard-badge ${badgeCls}">${badgeText}</span>
+        <span class="coral-mcard-size">${sizeStr}</span>
+        ${activeMark}
       </div>`;
-    }).join('');
-    list.querySelectorAll('.coral-model-card').forEach(card=>{
+    }).join('')+'</div>';
+    list.querySelectorAll('.coral-mcard').forEach(card=>{
       card.addEventListener('click',async()=>{
         const p=card.dataset.path;
-        if(!p||card.style.cursor==='default') return;
+        if(!p||card.classList.contains('active')) return;
         card.style.opacity='0.6';
         try{
           const r=await j('/api/coral/models/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:p})});

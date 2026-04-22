@@ -556,47 +556,65 @@
 
         <!-- 5. Coral & Objekterkennung -->
         <div class="set-section" id="set-coral">
-          <div class="set-hd-row">
-            <button type="button" class="set-hd" style="flex:1" onclick="toggleSetSection('set-coral')">
-              <span class="set-icon">🧠</span><span>Coral &amp; Objekterkennung</span><span id="coralStatusBadge" class="set-status-badge set-status-badge--off">aus</span>
-            </button>
-            <button type="button" class="btn-reconnect" style="margin:0 6px;flex-shrink:0" onclick="reloadCoralRuntime()" title="Coral neu initialisieren"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg> Reload</button>
-            <span class="set-chevron" style="padding:0 16px 0 4px">▶</span>
-          </div>
-          <div class="set-bd"><div class="set-inner">
-            <div style="display:grid;gap:10px;padding-top:4px">
-              <div class="coral-toggle-row">
-                <span class="coral-toggle-label">Coral TPU</span>
-                <span class="io-switch" id="coralTpuSwitch" onclick="window._toggleCoralSetting('coral_enabled',this)">
-                  <span class="io-lbl io-lbl-1">1</span>
-                  <span class="io-track"><span class="io-thumb"></span></span>
-                  <span class="io-lbl io-lbl-0">0</span>
-                </span>
+          <button type="button" class="set-hd" onclick="toggleSetSection('set-coral')">
+            <span class="set-icon">🧠</span><span>Coral &amp; Objekterkennung</span><span id="coralStatusChip" class="coral-status-chip coral-chip--off">⏸ Aus</span><span class="set-chevron">▶</span>
+          </button>
+          <div class="set-bd"><div class="set-inner coral-inner-wrap">
+            <!-- a) Settings card (blue) -->
+            <div class="coral-card coral-card--blue">
+              <div class="coral-card-head">
+                <span class="coral-card-title">⚙️ Einstellungen</span>
+                <button type="button" class="coral-card-btn coral-card-btn--blue" onclick="reloadCoralRuntime()" title="Coral neu initialisieren">
+                  <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg>
+                  Reload Runtime
+                </button>
               </div>
-              <div class="coral-toggle-row">
-                <span class="coral-toggle-label">Vogelarten-Klassifikation</span>
-                <span class="io-switch" id="birdSpeciesSwitch" onclick="window._toggleCoralSetting('bird_species_enabled',this)">
-                  <span class="io-lbl io-lbl-1">1</span>
-                  <span class="io-track"><span class="io-thumb"></span></span>
-                  <span class="io-lbl io-lbl-0">0</span>
-                </span>
+              <div class="coral-card-body">
+                <div class="coral-toggle-row">
+                  <span class="coral-toggle-label">Coral TPU</span>
+                  <span class="io-switch" id="coralTpuSwitch" onclick="window._toggleCoralSetting('coral_enabled',this)">
+                    <span class="io-lbl io-lbl-1">1</span>
+                    <span class="io-track"><span class="io-thumb"></span></span>
+                    <span class="io-lbl io-lbl-0">0</span>
+                  </span>
+                </div>
+                <div class="coral-toggle-row">
+                  <span class="coral-toggle-label">Vogelarten-Klassifikation</span>
+                  <span class="io-switch" id="birdSpeciesSwitch" onclick="window._toggleCoralSetting('bird_species_enabled',this)">
+                    <span class="io-lbl io-lbl-1">1</span>
+                    <span class="io-track"><span class="io-thumb"></span></span>
+                    <span class="io-lbl io-lbl-0">0</span>
+                  </span>
+                </div>
+                <div id="coralStatusHint" class="field-help" style="margin-top:2px"></div>
+                <div id="coralDeviceInfo"></div>
               </div>
-              <div id="coralStatusHint" class="field-help" style="margin-top:2px"></div>
-              <div id="coralDeviceInfo"></div>
-              <!-- Coral Test panel -->
-              <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06)">
+            </div>
+
+            <!-- b) Inferenz-Test card (amber) -->
+            <div class="coral-card coral-card--amber">
+              <div class="coral-card-head">
+                <span class="coral-card-title">🧪 Inferenz-Test</span>
+              </div>
+              <div class="coral-card-body">
                 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                   <select id="coralTestCamSel" style="flex:1;min-width:180px;padding:7px 10px;border-radius:8px;background:var(--surface);color:var(--text);border:none;font-size:13px"></select>
-                  <button type="button" id="coralTestBtn" class="btn-action action-green" style="flex-shrink:0">Coral testen</button>
+                  <button type="button" id="coralTestBtn" class="coral-card-btn coral-card-btn--amber" style="flex-shrink:0">▶ Coral testen</button>
                 </div>
                 <div id="coralTestResult" style="margin-top:10px"></div>
               </div>
-              <!-- Coral Model browser -->
-              <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06)">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-                  <span style="font-size:13px;font-weight:700">Verfügbare Modelle</span>
-                  <button type="button" id="coralModelsReload" class="btn-action" style="padding:4px 10px;font-size:11px;margin-left:auto">Aktualisieren</button>
-                </div>
+            </div>
+
+            <!-- c) Modelle card (purple) -->
+            <div class="coral-card coral-card--purple">
+              <div class="coral-card-head">
+                <span class="coral-card-title">📦 Modelle</span>
+                <button type="button" id="coralModelsReload" class="coral-card-btn coral-card-btn--purple" title="Liste neu laden">
+                  <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg>
+                  Aktualisieren
+                </button>
+              </div>
+              <div class="coral-card-body">
                 <div id="coralModelsList"></div>
                 <div class="field-help" style="margin-top:8px">Eigene <code>.tflite</code>-Modelle einfach in den <code>models/</code>-Ordner ablegen — sie erscheinen hier beim nächsten Aktualisieren.</div>
               </div>
