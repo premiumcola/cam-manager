@@ -292,6 +292,11 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
    underneath gets a subtly lighter fill so the two areas read as
    layered. */
 .cam-item.editing .cam-item-head{background:#2e3650}
+/* Expand chevron sits at the far right of the row, rotates 90° when the
+   camera's edit panel is open. */
+.cam-item-chevron{color:var(--muted);transition:transform .25s cubic-bezier(.4,0,.2,1),color .15s;flex-shrink:0;margin-left:2px;pointer-events:none}
+.cam-item:hover .cam-item-chevron{color:var(--text)}
+.cam-item.editing .cam-item-chevron{transform:rotate(90deg);color:var(--text)}
 /* Camera edit slide-down panel */
 /* Expanded edit body — neutral darker fill than the top header bar. No
    colour accents; clean separation by background contrast only. */

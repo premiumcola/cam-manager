@@ -793,6 +793,8 @@ function renderCameraSettings(){
               <line x1="6.5" y1="7" x2="6.5" y2="11"/><line x1="9.5" y1="7" x2="9.5" y2="11"/>
             </svg>
           </button>
+          <!-- Expand chevron — pure visual cue; the whole row is clickable. -->
+          <svg class="cam-item-chevron" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
         </div>
       </div>
     </div>`;}).join('');
@@ -847,11 +849,13 @@ function _initCameraFormListeners(){
     const v=parseFloat(f['motion_sensitivity'].value||0);
     const lbl=byId('motionSensLabel'); if(lbl) lbl.textContent=Math.round(v*100)+'%';
   });
-  f['detection_min_score']?.addEventListener('input',()=>{ const v=parseFloat(f['detection_min_score'].value); byId('detectionMinScoreLabel').textContent=v.toFixed(2); });
-  // Frame interval slider
-  f['frame_interval_ms']?.addEventListener('input',()=>{ byId('frameIntervalLabel').textContent=f['frame_interval_ms'].value+'ms'; });
-  // Snapshot interval slider
-  f['snapshot_interval_s']?.addEventListener('input',()=>{ byId('snapshotIntervalLabel').textContent=f['snapshot_interval_s'].value+'s'; });
+  // Sliders update a sibling label. Each label lookup is null-guarded so
+  // that a template change that removes the label element doesn't abort
+  // the whole event handler — any future refactor can hide a slider
+  // safely just by not rendering the label.
+  f['detection_min_score']?.addEventListener('input',()=>{ const v=parseFloat(f['detection_min_score'].value); const el=byId('detectionMinScoreLabel'); if(el) el.textContent=v.toFixed(2); });
+  f['frame_interval_ms']?.addEventListener('input',()=>{ const el=byId('frameIntervalLabel'); if(el) el.textContent=f['frame_interval_ms'].value+'ms'; });
+  f['snapshot_interval_s']?.addEventListener('input',()=>{ const el=byId('snapshotIntervalLabel'); if(el) el.textContent=f['snapshot_interval_s'].value+'s'; });
   // Motion toggle → grey out the trigger dropdown + show hint
   f['motion_enabled']?.addEventListener('change',_updateMotionOffState);
 }
@@ -999,7 +1003,7 @@ function editCamera(camId){
     const globalMs=state.config?.processing?.detection?.min_score ?? 0.55;
     const cms=(c.detection_min_score && c.detection_min_score>0) ? c.detection_min_score : globalMs;
     f['detection_min_score'].value=cms;
-    byId('detectionMinScoreLabel').textContent=Number(cms).toFixed(2);
+    const el=byId('detectionMinScoreLabel'); if(el) el.textContent=Number(cms).toFixed(2);
   }
   // Erkennung & Aufnahme trio
   if(f['motion_enabled']){
@@ -1014,8 +1018,20 @@ function editCamera(camId){
     f['post_motion_tail_s'].value=presets.includes(String(tail))?String(tail):'0';
   }
   if(f['resolution']) f['resolution'].value=c.resolution||'auto';
-  if(f['frame_interval_ms']){const fi=c.frame_interval_ms||350; f['frame_interval_ms'].value=fi; byId('frameIntervalLabel').textContent=fi+'ms';}
-  if(f['snapshot_interval_s']){const si=c.snapshot_interval_s||3; f['snapshot_interval_s'].value=si; byId('snapshotIntervalLabel').textContent=si+'s';}
+  // frame_interval_ms / snapshot_interval_s are hidden inputs since the
+  // Qualität tab was removed; their visible labels (#frameIntervalLabel /
+  // #snapshotIntervalLabel) no longer exist. Guard the textContent write
+  // so a null byId() lookup doesn't throw and abort the whole expand.
+  if(f['frame_interval_ms']){
+    const fi=c.frame_interval_ms||350;
+    f['frame_interval_ms'].value=fi;
+    const el=byId('frameIntervalLabel'); if(el) el.textContent=fi+'ms';
+  }
+  if(f['snapshot_interval_s']){
+    const si=c.snapshot_interval_s||3;
+    f['snapshot_interval_s'].value=si;
+    const el=byId('snapshotIntervalLabel'); if(el) el.textContent=si+'s';
+  }
   _whitelistState=[...(c.whitelist_names||[])]; _updateWhitelistHidden();
   shapeState.camera=camId; shapeState.zones=JSON.parse(JSON.stringify(c.zones||[])); shapeState.masks=JSON.parse(JSON.stringify(c.masks||[])); shapeState.points=[];
   f['zones_json'].value=JSON.stringify(shapeState.zones); f['masks_json'].value=JSON.stringify(shapeState.masks);
