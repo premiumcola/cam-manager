@@ -2784,10 +2784,14 @@ function mediaCardHTML(item){
   const playBg=hexToRgba(accent,0.18);
   const playBorder=hexToRgba(accent,0.5);
   const subBadge=`${subBadgeBase};color:${accent}`;
-  const motionBg=hexToRgba(colors.motion,0.18);
-  const motionBorder=hexToRgba(colors.motion,0.35);
-  const motionBadge=`<div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge" style="background:${motionBg};border:1px solid ${motionBorder};color:${colors.motion}">${objIconSvg('motion',12)}Bewegung</span></div>`;
-  const errorBadge=item.encode_error?`<div style="position:absolute;top:6px;right:6px;z-index:4"><span title="${esc(item.encode_error)}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(250,204,21,.18);border:1px solid rgba(250,204,21,.5);color:#facc15;font-size:13px;font-weight:800;backdrop-filter:blur(4px)">⚠</span></div>`:'';
+  // Pick most-specific label (first non-motion) for the top-left badge; fall back to motion
+  const _badgeLabel=(item.labels||[]).find(l=>l && l!=='motion') || 'motion';
+  const _badgeColor=colors[_badgeLabel]||colors.motion||'#93c5fd';
+  const _badgeText=OBJ_LABEL[_badgeLabel]||_badgeLabel;
+  const labelBg=hexToRgba(_badgeColor,0.18);
+  const labelBorder=hexToRgba(_badgeColor,0.35);
+  const motionBadge=`<div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge" style="background:${labelBg};border:1px solid ${labelBorder};color:${_badgeColor}">${objIconSvg(_badgeLabel,12)}${esc(_badgeText)}</span></div>`;
+  const errorBadge=item.encode_error?`<div style="position:absolute;bottom:7px;left:50%;transform:translateX(-50%);z-index:4"><span title="${esc(item.encode_error)}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(250,204,21,.18);border:1px solid rgba(250,204,21,.5);color:#facc15;font-size:13px;font-weight:800;backdrop-filter:blur(4px)">⚠</span></div>`:'';
   const vidDate=fmtMediaDate(item.time||'');
   const vidTime=fmtMediaTimeOnly(item.time||'');
   const vidDur=fmtDur(item.duration_s);
@@ -3166,15 +3170,22 @@ window.deleteMediaCard=async(btn)=>{
   if(!eventId||!camId) return;
   try{
     await j(`/api/camera/${encodeURIComponent(camId)}/events/${encodeURIComponent(eventId)}`,{method:'DELETE'});
-    // Remove from pool, recalculate pages, re-slice so current page stays full
-    state._allMedia=(state._allMedia||[]).filter(x=>x.event_id!==eventId);
-    const ps_d=calcItemsPerPage();
-    state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps_d));
-    state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
-    state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
-    _decrementMediaOverviewCount(camId);
-    renderMediaGrid();
-    renderMediaPagination();
+    // Brief fade-out animation, then re-render
+    if(card){
+      card.style.transition='opacity .25s,transform .25s';
+      card.style.opacity='0';
+      card.style.transform='scale(0.95)';
+    }
+    setTimeout(()=>{
+      state._allMedia=(state._allMedia||[]).filter(x=>x.event_id!==eventId);
+      const ps_d=calcItemsPerPage();
+      state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps_d));
+      state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
+      state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
+      _decrementMediaOverviewCount(camId);
+      renderMediaGrid();
+      renderMediaPagination();
+    },250);
   }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
 };
 window.deleteTLCard=async(camId,filename,eventId)=>{
@@ -3196,16 +3207,26 @@ window.deleteTLCard=async(camId,filename,eventId)=>{
   }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
 };
 window.confirmMediaCard=async(camId,eventId,btn)=>{
+  // Brief scale animation on tap
+  if(btn){
+    btn.classList.add('mmc-confirm--anim');
+    setTimeout(()=>btn.classList.remove('mmc-confirm--anim'),200);
+  }
   try{
     await j(`/api/camera/${encodeURIComponent(camId)}/events/${encodeURIComponent(eventId)}/confirm`,{method:'POST'});
-    // update state.media in place so lightbox nav stays in sync
+    // update state.media + state._allMedia in place so lightbox nav and re-renders stay in sync
     const sIdx=(state.media||[]).findIndex(x=>x.event_id===eventId);
     if(sIdx>=0) state.media[sIdx].confirmed=true;
+    const aIdx=(state._allMedia||[]).findIndex(x=>x.event_id===eventId);
+    if(aIdx>=0) state._allMedia[aIdx].confirmed=true;
     const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(eventId)}"]`);
     if(card){
-      card.classList.add('mmc-confirmed');
-      const actions=card.querySelector('.mmc-actions');
-      if(actions) actions.outerHTML='<span class="media-confirmed-badge">✓</span>';
+      // Wait for the scale anim to finish, then swap actions for the ✓ badge
+      setTimeout(()=>{
+        card.classList.add('mmc-confirmed');
+        const actions=card.querySelector('.mmc-actions');
+        if(actions) actions.outerHTML='<span class="media-confirmed-badge">✓</span>';
+      },200);
     }
   }catch(e){showToast('Bestätigen fehlgeschlagen: '+e.message,'error');}
 };
