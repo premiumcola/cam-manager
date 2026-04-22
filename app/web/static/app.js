@@ -1742,12 +1742,25 @@ async function _updateCoralDeviceInfo(){
     }
   }catch(e){panel.innerHTML='';}
 }
-function _populateCoralTestCameras(){
+async function _populateCoralTestCameras(){
   const sel=byId('coralTestCamSel'); if(!sel) return;
   const cams=state.cameras||[];
   const current=sel.value;
-  sel.innerHTML='<option value="">Testbild (ohne Kamera)</option>'+
-    cams.map(c=>`<option value="${esc(c.id)}">${esc(c.name||c.id)}</option>`).join('');
+  // Fetch test-image folders (best-effort; degrade silently if endpoint missing/empty)
+  let folders=[];
+  try{const r=await j('/api/coral/test-images'); folders=r.folders||[];}catch{}
+  let html='<option value="">Testbild (ohne Kamera)</option>';
+  if(cams.length){
+    html+='<optgroup label="— Kameras —">'+
+      cams.map(c=>`<option value="${esc(c.id)}">${esc(c.name||c.id)}</option>`).join('')+
+      '</optgroup>';
+  }
+  if(folders.length){
+    html+='<optgroup label="— Testbilder —">'+
+      folders.map(f=>`<option value="test:${esc(f.name)}">${esc(f.icon||'📁')} ${esc(f.label||f.name)} (${f.count} Bilder)</option>`).join('')+
+      '</optgroup>';
+  }
+  sel.innerHTML=html;
   if(current&&[...sel.options].some(o=>o.value===current)) sel.value=current;
 }
 const _CORAL_LABEL_COLORS={person:'#6e6eff',cat:'#a06eff',bird:'#54d662',dog:'#00b0ff'};
@@ -1755,8 +1768,23 @@ function _coralLabelColor(lbl){return _CORAL_LABEL_COLORS[String(lbl||'').toLowe
 async function _runCoralTest(){
   const btn=byId('coralTestBtn'); const out=byId('coralTestResult');
   if(!btn||!out) return;
-  const camId=byId('coralTestCamSel')?.value||'';
+  const sel=byId('coralTestCamSel')?.value||'';
   btn.disabled=true; const orig=btn.textContent; btn.textContent='Teste…';
+  // Batch mode: "test:<folder>" runs every image in storage/test_images/<folder>/
+  if(sel.startsWith('test:')){
+    const folder=sel.slice(5);
+    out.innerHTML=`<div class="field-help" style="color:var(--muted)">Lade Testbilder aus <code>${esc(folder)}/</code> …</div>`;
+    try{
+      const r=await j('/api/coral/test-batch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({folder})});
+      _renderCoralBatchResult(out,r,folder);
+    }catch(e){
+      out.innerHTML=`<div style="color:#fca5a5">Batch-Test fehlgeschlagen: ${esc(String(e))}</div>`;
+    }finally{
+      btn.disabled=false; btn.textContent=orig;
+    }
+    return;
+  }
+  const camId=sel;
   out.innerHTML='<div class="field-help" style="color:var(--muted)">Führe Inferenz aus…</div>';
   try{
     const r=await j('/api/coral/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({camera_id:camId||undefined})});
@@ -1798,6 +1826,50 @@ async function _runCoralTest(){
   }finally{
     btn.disabled=false; btn.textContent=orig;
   }
+}
+function _renderCoralBatchResult(out,r,folder){
+  if(r && r.ok===false){
+    out.innerHTML=`<div style="color:#fca5a5;padding:8px">Detector nicht verfügbar: ${esc(r.error||'?')}<div class="field-help" style="margin-top:4px">${esc(r.detector_reason||'')}</div></div>`;
+    return;
+  }
+  const results=r.results||[];
+  const summary=r.summary||{};
+  const total=summary.total_images||0;
+  const hits=summary.with_detections||0;
+  const rate=total>0?(hits/total):0;
+  const avg=summary.avg_ms||0;
+  const mode=r.detector_mode||'?';
+  const modeLabel=mode==='coral'?'⚡ Coral TPU':mode==='cpu'?'💻 CPU-Fallback':'⏸ Bewegung';
+  let summaryClass='cb-sum--ok',summaryIcon='✅',interp='';
+  if(rate>=0.75){summaryClass='cb-sum--ok';summaryIcon='✅';interp=`${modeLabel} erkennt diese Kategorie zuverlässig.`;}
+  else if(rate>=0.5){summaryClass='cb-sum--warn';summaryIcon='⚠️';interp='Mittlere Erkennungsrate — ggf. Modell oder min_score prüfen.';}
+  else{summaryClass='cb-sum--bad';summaryIcon='❌';interp='Niedrige Erkennungsrate — min_score zu hoch oder falsches Modell?';}
+  const cards=results.map(item=>{
+    if(item.error){
+      return `<div class="cb-card"><div class="cb-card-err">${esc(item.filename)}: ${esc(item.error)}</div></div>`;
+    }
+    const dets=item.detections||[];
+    const pills=dets.length
+      ? dets.map(d=>{
+          const c=_coralLabelColor(d.label);
+          return `<span class="ct-pill" style="border-left-color:${c}">${esc(d.label)}<span class="ct-pct">${(d.score*100).toFixed(0)}%</span></span>`;
+        }).join('')
+      : '<span class="cb-empty">Keine Objekte erkannt</span>';
+    const img=item.image_b64
+      ? `<img src="${item.image_b64}" alt="${esc(item.filename)}" loading="lazy"/>`
+      : '<div class="cb-noimg">Kein Bild</div>';
+    return `<div class="cb-card">
+      <div class="cb-imgwrap">${img}<span class="cb-ms">${item.inference_ms||0} ms</span></div>
+      <div class="cb-fname" title="${esc(item.filename)}">${esc(_truncMid(item.filename,40))}</div>
+      <div class="cb-pills">${pills}</div>
+    </div>`;
+  }).join('');
+  out.innerHTML=`
+    <div class="cb-summary ${summaryClass}">
+      <div class="cb-sum-line">${summaryIcon} <strong>${hits} von ${total} Bildern</strong>: Objekte erkannt · Ø ${avg} ms</div>
+      <div class="cb-sum-interp">${esc(interp)}</div>
+    </div>
+    <div class="cb-grid">${cards}</div>`;
 }
 byId('coralTestBtn')?.addEventListener('click',_runCoralTest);
 

@@ -1712,15 +1712,56 @@ def api_coral_test():
     })
 
 
+_TEST_FOLDER_LABELS = {
+    "bird":     {"label": "Vogel",        "icon": "🐦"},
+    "cat":      {"label": "Katze",        "icon": "🐱"},
+    "person":   {"label": "Person",       "icon": "🚶"},
+    "car":      {"label": "Auto",         "icon": "🚗"},
+    "squirrel": {"label": "Eichhörnchen", "icon": "🐿️"},
+}
+_TEST_VALID_EXT = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+@app.get('/api/coral/test-images')
+def api_coral_test_images():
+    """List subfolders under storage/test_images/ with image counts so the
+    Coral test-panel dropdown can populate a 'Testbilder' optgroup."""
+    eff = get_effective_config()
+    storage_root = Path(eff.get("storage", {}).get("root", "storage"))
+    base = storage_root / "test_images"
+    if not base.exists():
+        return jsonify({"folders": [], "expected_at": str(base)})
+    folders = []
+    for d in sorted(base.iterdir()):
+        if not d.is_dir() or d.name.startswith("_"):
+            continue
+        count = sum(
+            1 for p in d.iterdir()
+            if p.is_file() and p.suffix.lower() in _TEST_VALID_EXT
+        )
+        if count == 0:
+            continue
+        meta = _TEST_FOLDER_LABELS.get(d.name, {})
+        folders.append({
+            "name":  d.name,
+            "count": count,
+            "label": meta.get("label", d.name.capitalize()),
+            "icon":  meta.get("icon", "📁"),
+        })
+    return jsonify({"folders": folders})
+
+
 @app.post('/api/coral/test-batch')
 def api_coral_test_batch():
     """Run detect_frame on every image under storage/test_images/<folder>/.
 
     Body: {"folder": "bird"} runs only that folder. Empty body runs all.
-    Returns a per-image breakdown plus a summary of label counts so the user
-    can sanity-check object-detection quality without live camera feeds."""
+    Returns a per-image breakdown (incl. annotated image_b64 with bounding
+    boxes drawn on it) plus a summary of label counts so the user can
+    sanity-check object-detection quality without live camera feeds."""
+    import base64 as _b64
     import time as _time
-    from .detectors import CoralObjectDetector
+    from .detectors import CoralObjectDetector, draw_detections
     payload = request.get_json(silent=True) or {}
     folder_filter = (payload.get("folder") or "").strip()
 
@@ -1754,17 +1795,17 @@ def api_coral_test_batch():
             "results": [],
         })
 
-    valid_ext = {".jpg", ".jpeg", ".png", ".webp"}
     results: list = []
     by_label: dict = {}
     total_images = 0
     with_detections = 0
+    inference_times: list = []
 
     for d in candidate_dirs:
         if not d.is_dir():
             continue
         for img_path in sorted(d.iterdir()):
-            if img_path.suffix.lower() not in valid_ext:
+            if img_path.suffix.lower() not in _TEST_VALID_EXT:
                 continue
             frame = cv2.imread(str(img_path))
             if frame is None:
@@ -1785,10 +1826,19 @@ def api_coral_test_batch():
                     "error": str(e),
                 })
                 continue
+            # Annotate frame with bounding boxes and encode to base64 (max 480px wide for transport)
+            annotated = draw_detections(frame, dets)
+            h, w = annotated.shape[:2]
+            if w > 480:
+                scale = 480 / w
+                annotated = cv2.resize(annotated, (480, int(h * scale)))
+            ok, buf = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            image_b64 = ("data:image/jpeg;base64," + _b64.b64encode(buf.tobytes()).decode('ascii')) if ok else None
             results.append({
                 "folder": d.name,
                 "filename": img_path.name,
                 "inference_ms": ms,
+                "image_b64": image_b64,
                 "detections": [{
                     "label": dd.label,
                     "score": round(float(dd.score), 3),
@@ -1796,6 +1846,7 @@ def api_coral_test_batch():
                 } for dd in dets],
             })
             total_images += 1
+            inference_times.append(ms)
             if dets:
                 with_detections += 1
                 for dd in dets:
@@ -1810,6 +1861,7 @@ def api_coral_test_batch():
             "total_images": total_images,
             "with_detections": with_detections,
             "by_label": by_label,
+            "avg_ms": round(sum(inference_times) / len(inference_times), 1) if inference_times else 0.0,
         },
         "results": results,
     })
