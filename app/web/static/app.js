@@ -2593,17 +2593,35 @@ byId('lightboxNext').onclick=()=>{const nav=_lbNavList();const i=nav.findIndex(x
 document.addEventListener('keydown',(e)=>{
   // Live view ESC close (takes priority)
   if(e.key==='Escape'&&!byId('liveViewModal')?.classList.contains('hidden')){closeLiveView();return;}
-  if(byId('lightboxModal').classList.contains('hidden')) return;
+  const lbOpen=!byId('lightboxModal').classList.contains('hidden');
+  if(!lbOpen){
+    // Drilldown back-nav: Backspace or Escape returns to overview when no lightbox is open.
+    // Skip when the user is typing in an input/textarea so editable fields keep their normal behavior.
+    if((e.key==='Escape'||e.key==='Backspace')
+       && byId('mediaDrilldown')?.style.display!=='none'){
+      const t=e.target;
+      const isEditable=t && (t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.isContentEditable);
+      if(!isEditable){e.preventDefault();closeMediaDrilldown();return;}
+    }
+    return;
+  }
   if(e.key==='ArrowLeft'){e.preventDefault();const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>0) openLightbox(nav[i-1]);}
   else if(e.key==='ArrowRight'){e.preventDefault();const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>=0&&i<nav.length-1) openLightbox(nav[i+1]);}
   else if(e.key==='ArrowUp'){e.preventDefault();byId('lightboxConfirm').click();}
   else if(e.key==='ArrowDown'){e.preventDefault();_lbHandleDeleteKey();}
+  else if(e.key===' '){
+    // Spacebar toggles video play/pause (also prevents page scroll)
+    const v=byId('lightboxVideo');
+    if(v && v.style.display!=='none' && v.src){
+      e.preventDefault();
+      if(v.paused) v.play().catch(()=>{}); else v.pause();
+    }
+  }
   else if(e.key==='Escape') closeLightbox();
 });
 _updateLbConfirmBtn(false);
 byId('lightboxDelete').innerHTML=_LB_TRASH_HTML;
 _initFsBtn('liveViewFsBtn',byId('liveViewWrap'),()=>byId('liveViewWrap'));
-_initFsBtn('lightboxFsBtn',byId('lightboxMediaWrap'),()=>{const v=byId('lightboxVideo');return(v&&v.style.display!=='none')?v:byId('lightboxMediaWrap');});
 // Swipe navigation on the lightbox media area (mobile)
 (function initLightboxSwipe(){
   const wrap=byId('lightboxMediaWrap');
@@ -3099,6 +3117,10 @@ window._tlItems=[];
 async function openAllMediaDrilldown(){
   state.mediaCamera=null;
   state.mediaLabels=new Set(); state.mediaPeriod='week'; state.mediaPage=0;
+  state.media=[]; state._allMedia=[];
+  const grid=byId('mediaGrid');
+  if(grid) grid.innerHTML='<div style="padding:32px;text-align:center;color:var(--muted)">Lade Medien…</div>';
+  const pag=byId('mediaPagination'); if(pag) pag.innerHTML='';
   syncMediaPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
@@ -3109,6 +3131,12 @@ window.openAllMediaDrilldown=openAllMediaDrilldown;
 async function openMediaDrilldown(camId){
   state.mediaCamera=camId;
   state.mediaLabels=new Set(); state.mediaPeriod='week'; state.mediaPage=0;
+  // Clear stale state and grid immediately so the previous camera's thumbnails
+  // don't flash before the new fetch resolves.
+  state.media=[]; state._allMedia=[];
+  const grid=byId('mediaGrid');
+  if(grid) grid.innerHTML='<div style="padding:32px;text-align:center;color:var(--muted)">Lade Medien…</div>';
+  const pag=byId('mediaPagination'); if(pag) pag.innerHTML='';
   syncMediaPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
