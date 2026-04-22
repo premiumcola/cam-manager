@@ -183,8 +183,7 @@ class CoralObjectDetector:
             x2 = min(w, int(xmax * w))
             y2 = min(h, int(ymax * h))
             cls_id = int(classes[i])
-            # tflite SSD models use 1-based COCO IDs in output (0=background)
-            label = self.labels.get(cls_id + 1, self.labels.get(cls_id, str(cls_id)))
+            label = self.labels.get(cls_id, str(cls_id))
             out.append(Detection(label=label, score=score, bbox=(x1, y1, x2, y2)))
         return out
 

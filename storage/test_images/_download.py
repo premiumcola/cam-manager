@@ -41,20 +41,47 @@ CATEGORIES: dict[str, list[tuple[str, int]]] = {
         ("Sciurus_vulgaris", 4),
     ],
     "bird": [
-        ("Turdus_merula",       2),  # Amsel
-        ("Cyanistes_caeruleus", 2),  # Blaumeise
-        ("Parus_major",         2),  # Kohlmeise
-        ("Erithacus_rubecula",  1),  # Rotkehlchen
-        ("Fringilla_coelebs",   1),  # Buchfink
-        ("Chloris_chloris",     1),  # Grünfink
-        ("Dendrocopos_major",   1),  # Buntspecht
-        ("Garrulus_glandarius", 1),  # Eichelhäher
+        ("Turdus_merula",                  1),  # Amsel
+        ("Cyanistes_caeruleus",            1),  # Blaumeise
+        ("Parus_major",                    1),  # Kohlmeise
+        ("Erithacus_rubecula",             1),  # Rotkehlchen
+        ("Fringilla_coelebs",              1),  # Buchfink
+        ("Chloris_chloris",                1),  # Grünfink
+        ("Passer_domesticus",              1),  # Haussperling
+        ("Passer_montanus",                1),  # Feldsperling
+        ("Sturnus_vulgaris",               1),  # Star
+        ("Pica_pica",                      1),  # Elster
+        ("Corvus_corone",                  1),  # Rabenkrähe
+        ("Columba_palumbus",               1),  # Ringeltaube
+        ("Streptopelia_decaocto",          1),  # Türkentaube
+        ("Sitta_europaea",                 1),  # Kleiber
+        ("Dendrocopos_major",              1),  # Buntspecht
+        ("Troglodytes_troglodytes",        1),  # Zaunkönig
+        ("Phoenicurus_ochruros",           1),  # Hausrotschwanz
+        ("Motacilla_alba",                 1),  # Bachstelze
+        ("Carduelis_carduelis",            1),  # Stieglitz
+        ("Spinus_spinus",                  1),  # Erlenzeisig
+        ("Coccothraustes_coccothraustes",  1),  # Kernbeißer
+        ("Pyrrhula_pyrrhula",              1),  # Gimpel
+        ("Prunella_modularis",             1),  # Heckenbraunelle
+        ("Sylvia_atricapilla",             1),  # Mönchsgrasmücke
+        ("Phylloscopus_collybita",         1),  # Zilpzalp
+        ("Emberiza_citrinella",            1),  # Goldammer
+        ("Garrulus_glandarius",            1),  # Eichelhäher
+        ("Serinus_serinus",                1),  # Girlitz
+        ("Aegithalos_caudatus",            1),  # Schwanzmeise
+        ("Periparus_ater",                 1),  # Tannenmeise
     ],
 }
 
 VALID_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 # Skip obvious non-photo assets that end up in Commons species categories
-SKIP_SUBSTR = ("distribution map", "range map", "diagram", "phylogeny", "taxonomy")
+SKIP_SUBSTR = (
+    "distribution map", "range map", "rangemap", "iucn", "_map", " map",
+    "map.jpg", "map.jpeg", "map.png", "diagram", "phylogeny", "taxonomy",
+    "locator", "skeleton", "skull", "egg ", "_egg", "nest only", "habitat map",
+    "vocalizations", "call.ogg", "song.ogg", "audio", "spectrogram",
+)
 
 
 def list_images(category: str, want: int) -> list[tuple[str, str]]:

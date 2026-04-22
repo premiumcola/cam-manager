@@ -258,7 +258,7 @@ def run_inference_cpu(model_path: str, labels: dict, tflite):
         if high_scores:
             ok(f"{len(high_scores)} Objekt(e) über Score 0.1:")
             for cls_id, sc in sorted(high_scores, key=lambda x: -x[1])[:5]:
-                label = labels.get(cls_id + 1, labels.get(cls_id, str(cls_id)))
+                label = labels.get(cls_id, str(cls_id))
                 print(f"    • {label} ({sc:.2%})")
         else:
             info("Keine Objekte über Score 0.1 (synthetisches Bild – normal)")
