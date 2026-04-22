@@ -398,10 +398,10 @@ function renderDashboard(){
     const bellOn=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2.2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`;
     const bellOff=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
 
-    return `<article class="cv-card" data-camid="${esc(c.id)}" onclick="_cvCardClick(event,'${esc(c.id)}')">
+    return `<article class="cv-card" data-camid="${esc(c.id)}" data-cam-name="${esc(c.name||c.id)}" onclick="_cvCardClick(event,'${esc(c.id)}')">
   <div class="cv-frame">
     <div class="cv-img-wrap">
-      <div class="cv-loading-placeholder">${!isActive?_makeSquirrelHTML():'<div class="cv-loading-icon">⟳</div><div class="cv-loading-text">Verbinde…</div>'}</div>
+      <div class="cv-loading-placeholder">${isActive?_makeConnectingPlaceholder(c.name||c.id):_makeOfflinePlaceholder(c.name||c.id)}</div>
       <img class="cv-img cam-snap" src="${snapUrl}" alt="${esc(c.name)}" data-hd-mode="${hdOn?'1':'0'}"
         onload="this.classList.add('loaded');this.previousElementSibling.style.display='none'"
         onerror="_camImgRetry(this)" />
@@ -1500,26 +1500,6 @@ async function finishWizard(){
 
 byId('reloadConfigBtn').onclick=()=>loadAll();
 
-const _RELOAD_MSGS=["Squirrel catches cam… 🐿️","Nut detected, reconnecting! 🌰","Hold still, camera! 🐿️💨","Signal acquired. Maybe. 📡🐿️","On it. Probably. 🐿️"];
-const _SQ_SVG=`<svg viewBox="0 0 40 32" width="40" height="32" xmlns="http://www.w3.org/2000/svg">
-  <path d="M28 8 Q36 4 37 12 Q38 18 32 20 Q36 22 35 28" stroke="#c8651a" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <ellipse cx="18" cy="20" rx="12" ry="8" fill="#c8651a"/>
-  <circle cx="10" cy="14" r="7" fill="#c8651a"/>
-  <ellipse cx="7" cy="10" rx="3" ry="4" fill="#c8651a"/>
-  <circle cx="8" cy="13" r="2" fill="#111"/>
-  <circle cx="7.5" cy="12.5" r=".8" fill="#fff"/>
-</svg>`;
-function showReloadToast(){
-  const msg=_RELOAD_MSGS[Math.floor(Math.random()*_RELOAD_MSGS.length)];
-  const t=document.createElement('div');
-  t.style.cssText='position:fixed;bottom:24px;right:24px;z-index:2000;min-width:220px;background:var(--panel);border-radius:16px;padding:12px 16px;box-shadow:0 4px 24px rgba(0,0,0,.5);pointer-events:none';
-  t.innerHTML=`<div style="overflow:hidden;height:36px;position:relative;margin-bottom:6px">
-    <span style="position:absolute;animation:squirrel-chase 1.8s linear forwards;display:inline-flex;align-items:center;gap:4px">${_SQ_SVG}<span style="font-size:18px">📷</span></span>
-  </div>
-  <div style="font-size:12px;color:var(--muted);text-align:center">${esc(msg)}</div>`;
-  document.body.appendChild(t);
-  setTimeout(()=>{t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(()=>t.remove(),450);},1900);
-}
 byId('tlRangeSlider').addEventListener('input',e=>{
   state.tlHours=parseInt(e.target.value);
   j(`/api/timeline?hours=${state.tlHours}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`).then(data=>{state.timeline=data;renderTimeline();});
@@ -1952,17 +1932,88 @@ async function _loadCoralModels(){
   }
 }
 byId('coralModelsReload')?.addEventListener('click',_loadCoralModels);
-function _makeSquirrelHTML(){
-  const msg=_RELOAD_MSGS[Math.floor(Math.random()*_RELOAD_MSGS.length)];
-  const bigSvg=_SQ_SVG.replace('width="40" height="32"','width="82" height="76"');
-  return `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:8px">
-    <div class="cv-sq-runner"><div class="cv-sq-sprite">${bigSvg}<span class="cv-sq-cam">📷</span></div></div>
-    <div class="cv-reload-msg">${esc(msg)}</div>
+// ── Camera card placeholders ─────────────────────────────────────────────────
+// Two states share a full-bleed monitoring-UI look: grid pattern, four corner
+// brackets, a top-left name + status pill, and a top-right status dot.
+// State-specific animation goes in the centre.
+function _placeholderShell(name, accent, stateLabel, centerHtml, bracketKeyframe, dotStyle){
+  const n=esc(name||'');
+  return `<div class="cv-ph cv-ph--${accent}">
+    <div class="cv-ph-grid"></div>
+    <svg class="cv-ph-brackets" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <g stroke-width="1.5" fill="none" style="animation:${bracketKeyframe} 2s ease-in-out infinite">
+        <polyline points="0,10 0,0 10,0"/>
+        <polyline points="90,0 100,0 100,10" style="animation-delay:.5s"/>
+        <polyline points="100,90 100,100 90,100" style="animation-delay:1s"/>
+        <polyline points="10,100 0,100 0,90" style="animation-delay:1.5s"/>
+      </g>
+    </svg>
+    <div class="cv-ph-header">
+      <span class="cv-ph-name">${n}</span>
+      <span class="cv-ph-pill">${esc(stateLabel)}</span>
+    </div>
+    <span class="cv-ph-dot" style="${dotStyle}"></span>
+    <div class="cv-ph-center">${centerHtml}</div>
   </div>`;
 }
+
+const _CAM_OFF_SVG=`<svg viewBox="0 0 48 48" width="42" height="42" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M32 18v-2a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2v-2l8 6V12l-8 6z"/>
+  <line x1="4" y1="4" x2="44" y2="44" stroke-width="2.5"/>
+</svg>`;
+const _CAM_SM_SVG=`<svg viewBox="0 0 48 48" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <path d="M32 18v-2a2 2 0 0 0-2-2H10a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h20a2 2 0 0 0 2-2v-2l8 6V12l-8 6z"/>
+  <circle cx="20" cy="24" r="5"/>
+</svg>`;
+
+function _makeOfflinePlaceholder(name){
+  // Red: four expanding rings + crosshair + struck-through camera icon.
+  const rings=[0, 1, 2, 3].map(i=>
+    `<span class="cv-ph-ring" style="animation-delay:${i}s"></span>`
+  ).join('');
+  const center=`
+    <div class="cv-ph-crosshair"></div>
+    ${rings}
+    <div class="cv-ph-icon cv-ph-icon--glitch" style="color:rgba(239,68,68,0.55)">${_CAM_OFF_SVG}</div>
+    <div class="cv-ph-label cv-ph-label--flicker">KEIN SIGNAL</div>
+  `;
+  return _placeholderShell(name, 'red', 'OFFLINE', center, 'bracketPulseRed',
+    'background:#ef4444;box-shadow:0 0 10px rgba(239,68,68,.7)');
+}
+
+function _makeConnectingPlaceholder(name){
+  // Blue: rotating radar cone + orbiting dots + small camera icon.
+  const center=`
+    <svg class="cv-ph-guides" viewBox="-100 -100 200 200" aria-hidden="true">
+      <circle cx="0" cy="0" r="30" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
+      <circle cx="0" cy="0" r="55" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
+      <circle cx="0" cy="0" r="80" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
+    </svg>
+    <svg class="cv-ph-radar" viewBox="-100 -100 200 200" aria-hidden="true">
+      <defs>
+        <linearGradient id="cvRadarGrad" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stop-color="rgba(59,130,246,0)"/>
+          <stop offset="100%" stop-color="rgba(59,130,246,0.35)"/>
+        </linearGradient>
+      </defs>
+      <path d="M0,0 L85,-49 A98,98 0 0 1 85,49 Z" fill="rgba(59,130,246,0.12)"/>
+      <line x1="0" y1="0" x2="85" y2="49" stroke="rgba(59,130,246,0.5)" stroke-width="1.5"/>
+      <circle cx="85" cy="49" r="3" fill="rgba(59,130,246,0.9)"/>
+    </svg>
+    <span class="cv-ph-orbit cv-ph-orbit--1"></span>
+    <span class="cv-ph-orbit cv-ph-orbit--2"></span>
+    <span class="cv-ph-orbit cv-ph-orbit--3"></span>
+    <div class="cv-ph-icon" style="color:rgba(59,130,246,0.35)">${_CAM_SM_SVG}</div>
+    <div class="cv-ph-label" style="color:rgba(59,130,246,0.55)">VERBINDE…</div>
+  `;
+  return _placeholderShell(name, 'blue', 'SUCHE…', center, 'bracketPulseBlue',
+    'background:#3b82f6;box-shadow:0 0 10px rgba(59,130,246,.7)');
+}
+
 function _restorePlaceholder(card){
+  const camName=card.dataset.camName||'';
   const placeholder=card.querySelector('.cv-loading-placeholder');
-  if(placeholder) placeholder.innerHTML='<div class="cv-loading-icon">⟳</div><div class="cv-loading-text">Verbinde…</div>';
+  if(placeholder) placeholder.innerHTML=_makeOfflinePlaceholder(camName);
   const img=card.querySelector('.cv-img');
   if(img){const base=img.src.split('?')[0];img.src=base+'?t='+Date.now();}
 }
@@ -1974,8 +2025,9 @@ function showCameraReloadAnimation(camId){
   cards.filter(Boolean).forEach(card=>{
     const placeholder=card.querySelector('.cv-loading-placeholder');
     const img=card.querySelector('.cv-img');
-    if(placeholder && !placeholder.querySelector('.cv-sq-runner'))
-      placeholder.innerHTML=_makeSquirrelHTML();
+    const camName=card.dataset.camName||'';
+    if(placeholder && !placeholder.querySelector('.cv-ph--blue'))
+      placeholder.innerHTML=_makeConnectingPlaceholder(camName);
     if(img){img.classList.remove('loaded');img.style.opacity='0';}
     const targetCamId=card.dataset.camid;
     let attempts=0;
