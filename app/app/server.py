@@ -589,6 +589,8 @@ def api_cameras():
         s["motion_enabled"] = cam.get("motion_enabled", True)
         s["detection_trigger"] = cam.get("detection_trigger", "motion_and_objects")
         s["post_motion_tail_s"] = float(cam.get("post_motion_tail_s") or 0.0)
+        # Per-camera alarm profile (empty string = inherit from group)
+        s["alarm_profile"] = cam.get("alarm_profile") or ""
         s["zones"] = cam.get("zones", [])
         s["masks"] = cam.get("masks", [])
         s["resolution"] = cam.get("resolution", "auto")

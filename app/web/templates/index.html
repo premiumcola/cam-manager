@@ -259,10 +259,8 @@
               </div>
               <div class="field-wrap"><input name="rtsp_url" readonly style="color:var(--muted);font-size:11px" /><span class="field-label">RTSP-URL (automatisch)</span></div>
               <div class="field-wrap"><input name="snapshot_url" placeholder="http://…" /><span class="field-label">Snapshot-URL – optional</span></div>
-              <div class="row" style="grid-template-columns:1fr 1fr">
-                <div class="field-wrap"><select name="group_id" id="groupSelect"></select><span class="field-label">Gruppe</span></div>
-                <div class="field-wrap"><input name="object_filter" placeholder="person,cat,bird" /><span class="field-label">Objektfilter</span></div>
-              </div>
+              <div class="field-wrap"><select name="group_id" id="groupSelect"></select><span class="field-label">Gruppe (Organisation)</span></div>
+              <input type="hidden" name="object_filter" />
               <!-- Connection health diagnostics (populated by JS on open) -->
               <div id="camDiagnostics" style="display:none;margin-top:10px">
                 <div class="settings-divider" style="margin-bottom:6px">Verbindungsdiagnose</div>
@@ -282,14 +280,35 @@
 
             <!-- Panel: Alarm -->
             <div class="cam-tab-panel" id="cam-tab-alarm">
-              <label class="toggle-row"><span>Armed – Alarmierung aktiv</span><label class="switch"><input type="checkbox" name="armed" checked /><span class="slider"></span></label></label>
+
+              <!-- Objekte erkennen — pill bar wired via camObjectFilter renderer -->
+              <div class="settings-divider">Objekte erkennen</div>
+              <div id="camObjectFilter" class="cam-objfilter-bar"></div>
+              <div class="field-help" style="margin-top:4px">Nur ausgewählte Objekte lösen Events aus.</div>
+
+              <div class="settings-divider" style="margin-top:12px">Alarmprofil</div>
+              <div class="field-wrap">
+                <select name="alarm_profile" id="camAlarmProfileSelect" onchange="_updateAlarmProfileHint()">
+                  <option value="hard">Hart · Person/Auto lösen Alarm + Telegram aus</option>
+                  <option value="medium">Mittel · Alle Objekte: Info + Telegram</option>
+                  <option value="soft" selected>Weich · Alles melden</option>
+                  <option value="info">Info · Nur Tiere, kein Motion-Alarm</option>
+                </select>
+                <span class="field-label">Alarmprofil</span>
+              </div>
+              <div id="camAlarmProfileHint" class="field-help" style="margin-top:4px">Weich: Jedes Event wird als Info geloggt und gesendet.</div>
+
+              <div class="settings-divider" style="margin-top:12px">Benachrichtigung</div>
+              <label class="toggle-row"><span class="toggle-row-label">Stumm (armed=false blockt Telegram)<span class="toggle-row-sublabel">Aufnahmen laufen weiter, nur Telegram wird unterdrückt</span></span><label class="switch"><input type="checkbox" name="armed" checked /><span class="slider"></span></label></label>
+
               <div id="camScheduleSection">
-                <div class="settings-divider">Zeitplan</div>
-                <label class="toggle-row"><span>Zeitplan aktiv</span><label class="switch"><input type="checkbox" name="schedule_enabled" /><span class="slider"></span></label></label>
+                <div class="settings-divider" style="margin-top:12px">Nachtmodus / Zeitplan — wann ist die Kamera scharf?</div>
+                <label class="toggle-row"><span class="toggle-row-label">Zeitplan aktiv</span><label class="switch"><input type="checkbox" name="schedule_enabled" /><span class="slider"></span></label></label>
                 <div class="row" style="grid-template-columns:1fr 1fr;margin-top:4px">
                   <div class="field-wrap"><input name="schedule_start" placeholder="22:00" /><span class="field-label">Von</span></div>
                   <div class="field-wrap"><input name="schedule_end" placeholder="06:00" /><span class="field-label">Bis</span></div>
                 </div>
+                <div class="field-help" style="margin-top:6px">Innerhalb des Zeitplans gilt erhöhte Alarmstufe (Nachtmodus).</div>
               </div>
             </div>
 

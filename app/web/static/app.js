@@ -33,8 +33,8 @@ function _resolveConfirm(val){
   if(_confirmResolve){_confirmResolve(val);_confirmResolve=null;}
 }
 // Wire confirm buttons after DOM ready (done at bottom of file)
-const colors={person:'#7c4dff',cat:'#e91e8c',bird:'#0ea5e9',car:'#f59e0b',motion:'#93c5fd',alarm:'#ef4444',unknown:'#4a6477',timelapse:'#c4b5fd',motion_objects:'#818cf8'};
-const OBJ_LABEL={person:'Person',cat:'Katze',bird:'Vogel',car:'Auto',motion:'Bewegung',alarm:'Alarm',timelapse:'Timelapse',motion_objects:'Motion · Objekte'};
+const colors={person:'#7c4dff',cat:'#e91e8c',bird:'#0ea5e9',car:'#f59e0b',motion:'#93c5fd',alarm:'#ef4444',unknown:'#4a6477',timelapse:'#c4b5fd',motion_objects:'#818cf8',dog:'#0ea5e9'};
+const OBJ_LABEL={person:'Person',cat:'Katze',bird:'Vogel',car:'Auto',dog:'Hund',motion:'Bewegung',alarm:'Alarm',timelapse:'Timelapse',motion_objects:'Motion · Objekte'};
 const OBJ_SVG={
   // Person: head circle + body arc — clean silhouette, purple
   person:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="7" r="4.5" fill="#7c4dff"/><path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#7c4dff" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>`,
@@ -51,7 +51,9 @@ const OBJ_SVG={
   // Timelapse: hourglass — top/bottom lines + filled top triangle + outline bottom triangle, purple
   timelapse:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round"><line x1="6" y1="3" x2="18" y2="3"/><line x1="6" y1="21" x2="18" y2="21"/><polygon points="7,4 17,4 12,12" fill="#c4b5fd" opacity=".8"/><polygon points="12,12 7,20 17,20" fill="#c4b5fd" opacity=".5"/></svg>`,
   // Motion+Objects: left sine wave + center divider + right wireframe 3D box — blue/indigo split
-  motion_objects:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M1 12 C2.5 7.5 4.5 7.5 6 12 C7.5 16.5 9.5 16.5 11 12" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round" fill="none"/><line x1="12.5" y1="5" x2="12.5" y2="19" stroke="#a5b4fc" stroke-width=".8" stroke-linecap="round"/><rect x="14.5" y="9.5" width="6" height="6" stroke="#818cf8" stroke-width="1.4" fill="none"/><path d="M14.5 9.5L16.5 7L22.5 7L22.5 13.5" stroke="#818cf8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/><line x1="20.5" y1="9.5" x2="22.5" y2="7" stroke="#818cf8" stroke-width="1.4" stroke-linecap="round"/><line x1="20.5" y1="15.5" x2="22.5" y2="13.5" stroke="#818cf8" stroke-width="1.4" stroke-linecap="round"/></svg>`
+  motion_objects:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M1 12 C2.5 7.5 4.5 7.5 6 12 C7.5 16.5 9.5 16.5 11 12" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round" fill="none"/><line x1="12.5" y1="5" x2="12.5" y2="19" stroke="#a5b4fc" stroke-width=".8" stroke-linecap="round"/><rect x="14.5" y="9.5" width="6" height="6" stroke="#818cf8" stroke-width="1.4" fill="none"/><path d="M14.5 9.5L16.5 7L22.5 7L22.5 13.5" stroke="#818cf8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/><line x1="20.5" y1="9.5" x2="22.5" y2="7" stroke="#818cf8" stroke-width="1.4" stroke-linecap="round"/><line x1="20.5" y1="15.5" x2="22.5" y2="13.5" stroke="#818cf8" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+  // Dog: head + snout + eye dots + floppy ear — sky blue
+  dog:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polygon points="3.5,3 4.5,11 9.5,9" fill="#0ea5e9"/><polygon points="20.5,3 19.5,11 14.5,9" fill="#0ea5e9"/><ellipse cx="12" cy="13.5" rx="7.5" ry="6.5" fill="#0ea5e9"/><ellipse cx="12" cy="17.5" rx="3.5" ry="2" fill="#38bdf8"/><circle cx="12" cy="17" r=".9" fill="#0b3b5e"/><circle cx="9.5" cy="12" r="1.2" fill="#fff" opacity=".9"/><circle cx="14.5" cy="12" r="1.2" fill="#fff" opacity=".9"/><circle cx="9.5" cy="12" r=".6" fill="#0b3b5e"/><circle cx="14.5" cy="12" r=".6" fill="#0b3b5e"/></svg>`
 };
 function objBubble(label,size=22){
   const raw=OBJ_SVG[label]||OBJ_SVG.alarm;
@@ -787,6 +789,49 @@ function _initCameraFormListeners(){
   f['motion_enabled']?.addEventListener('change',_updateMotionOffState);
 }
 
+// Per-camera object-filter pills (Person/Katze/Vogel/Auto/Hund). Same
+// visual recipe as the Mediathek filter bar — active pill fills with the
+// object colour via --cb. _camObjectFilterState is kept in sync with the
+// hidden input so the existing save flow doesn't need to change.
+const _CAM_OBJ_OPTIONS=[
+  {k:'person', label:'Person', cb:'#a855f7'},
+  {k:'cat',    label:'Katze',  cb:'#ec4899'},
+  {k:'bird',   label:'Vogel',  cb:'#06b6d4'},
+  {k:'car',    label:'Auto',   cb:'#f59e0b'},
+  {k:'dog',    label:'Hund',   cb:'#0ea5e9'},
+];
+let _camObjectFilterState=[];
+function _renderCamObjectPills(){
+  const host=byId('camObjectFilter'); if(!host) return;
+  const active=new Set(_camObjectFilterState);
+  host.innerHTML=_CAM_OBJ_OPTIONS.map(o=>{
+    const on=active.has(o.k);
+    return `<button type="button" class="cam-obj-pill${on?' active':''}" data-obj="${o.k}" style="--cb:${o.cb}"><span class="cop-ico">${objIconSvg(o.k,16)||''}</span><span>${o.label}</span></button>`;
+  }).join('');
+  host.querySelectorAll('.cam-obj-pill').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const k=btn.dataset.obj;
+      if(active.has(k)){active.delete(k); btn.classList.remove('active');}
+      else{active.add(k); btn.classList.add('active');}
+      _camObjectFilterState=[..._CAM_OBJ_OPTIONS.map(o=>o.k).filter(x=>active.has(x))];
+      const hidden=byId('cameraForm').elements['object_filter'];
+      if(hidden) hidden.value=_camObjectFilterState.join(',');
+    });
+  });
+}
+
+const _ALARM_PROFILE_HINTS={
+  hard:   'Hart: Person oder Auto → lauter Alarm + Telegram. Tiere/Motion ohne Benachrichtigung.',
+  medium: 'Mittel: Alle erkannten Objekte → Info-Event + Telegram.',
+  soft:   'Weich: Jedes Event wird als Info geloggt und gesendet.',
+  info:   'Info: Nur Tiere (Katze/Vogel) lösen Telegram aus. Motion allein bleibt still.',
+};
+window._updateAlarmProfileHint=function(){
+  const sel=byId('camAlarmProfileSelect'); const hint=byId('camAlarmProfileHint');
+  if(!sel||!hint) return;
+  hint.textContent=_ALARM_PROFILE_HINTS[sel.value]||'';
+};
+
 function _updateMotionOffState(){
   const f=byId('cameraForm')?.elements; if(!f) return;
   const off=!(f['motion_enabled']?.checked);
@@ -816,7 +861,16 @@ function editCamera(camId){
   if(f['rtsp_path']) f['rtsp_path'].value=matchedPath?matchedPath.value:RTSP_PATH_OPTS[0].value;
   f['rtsp_url'].value=c.rtsp_url||'';
   f['snapshot_url'].value=c.snapshot_url||''; f['group_id'].value=c.group_id||'';
-  f['object_filter'].value=(c.object_filter||[]).join(',');
+  // Object filter is now rendered as a pill bar; keep the hidden input in
+  // sync so the existing save flow (reads from f['object_filter'].value)
+  // still works unchanged.
+  _camObjectFilterState=[...(c.object_filter||['person','cat','bird'])];
+  f['object_filter'].value=_camObjectFilterState.join(',');
+  _renderCamObjectPills();
+  // Alarm profile — empty string means "inherit" for back-compat; default
+  // the dropdown to "soft" in that case.
+  const apSel=byId('camAlarmProfileSelect');
+  if(apSel){ apSel.value=(c.alarm_profile||'soft'); _updateAlarmProfileHint(); }
   if(f['enabled']) f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed;
   f['schedule_start'].value=(c.schedule&&c.schedule.start)||''; f['schedule_end'].value=(c.schedule&&c.schedule.end)||''; f['schedule_enabled'].checked=!!(c.schedule&&c.schedule.enabled);
   if(f['telegram_enabled']) f['telegram_enabled'].checked=(c.telegram_enabled!==false);
@@ -959,15 +1013,10 @@ function renderGroups(){
 }
 function _renderGroupContent(g){
   const content=byId('grpContent'); if(!content) return;
-  const s=g.schedule||{};
   const isNew=!g.id;
-  const active=new Set(g.coarse_objects||[]);
-  const fm=new Set(g.fine_models||[]);
-  const pills=_GRP_COARSE.map(obj=>{
-    const on=active.has(obj);
-    return `<button type="button" class="grp-obj-pill${on?' active':''}" data-obj="${obj}"
-      style="padding:7px 14px;border-radius:999px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;background:${on?'var(--accent)':'var(--surface)'};color:${on?'#fff':'var(--muted)'}">${objBubble(obj,18)} ${OBJ_LABEL[obj]||obj}</button>`;
-  }).join('');
+  // Groups are now purely organisational — name + category, nothing else.
+  // All operational settings (alarm profile, schedule, object filter,
+  // detection modes) live on the camera.
   content.innerHTML=`<form class="group-edit-grid" onsubmit="saveGroup(event)" style="padding-top:4px">
     <input type="hidden" name="id" value="${esc(g.id||'')}" />
     <div style="grid-column:1/-1">
@@ -975,34 +1024,12 @@ function _renderGroupContent(g){
         oninput="(()=>{const f=this.closest('form');const el=f.querySelector('.grp-gen-id');if(el&&!f.elements['id'].value)el.textContent='ID: '+_groupGenId(this.value);})()"/>
       <div class="grp-gen-id small muted" style="margin-top:4px;padding-left:4px">${isNew?'ID: auto':'ID: '+esc(g.id)}</div>
     </div>
-    <div><select name="category" style="${_GRP_SELECT}">${_GRP_CATS.map(c=>`<option${g.category===c?' selected':''}>${esc(c)}</option>`).join('')}</select><span class="field-label">Kategorie</span></div>
-    <div><select name="alarm_profile" style="${_GRP_SELECT}">${['hard','medium','soft','info'].map(p=>`<option${g.alarm_profile===p?' selected':''}>${p}</option>`).join('')}</select><span class="field-label">Alarmprofil</span></div>
-    <div style="grid-column:1/-1">
-      <div class="grp-obj-pills" style="display:flex;gap:8px;flex-wrap:wrap">${pills}</div>
-      <input type="hidden" name="coarse_objects" value="${esc((g.coarse_objects||[]).join(','))}" />
-      <span class="field-label" style="margin-top:6px;display:block">Grob-Objekte</span>
-    </div>
-    <div style="grid-column:1/-1;display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding:4px 0">
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="fm_bird"${fm.has('bird_species')?' checked':''} style="width:auto;accent-color:var(--accent)" /> Vogelarten</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="fm_cat"${fm.has('cat_identity')?' checked':''} style="width:auto;accent-color:var(--accent)" /> Katzen-ID</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="fm_person"${fm.has('person_identity')?' checked':''} style="width:auto;accent-color:var(--accent)" /> Personen-ID</label>
-      <span class="field-label" style="margin-left:auto">Fine-Models</span>
-    </div>
-    <div style="grid-column:1/-1;display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-height:44px">
-      <label class="switch"><input type="checkbox" name="schedule_enabled"${s.enabled?' checked':''}
-        onchange="this.closest('form').querySelector('.grp-sched-times').style.display=this.checked?'flex':'none'" /><span class="slider"></span></label>
-      <span style="font-size:13px;font-weight:600">Zeitplan</span>
-      <div class="grp-sched-times" style="display:${s.enabled?'flex':'none'};align-items:center;gap:8px">
-        ${_groupTimeSelect('schedule_start',s.start||'22:00')}
-        <span class="muted" style="font-size:13px">→</span>
-        ${_groupTimeSelect('schedule_end',s.end||'06:00')}
-      </div>
-    </div>
+    <div style="grid-column:1/-1"><select name="category" style="${_GRP_SELECT}">${_GRP_CATS.map(c=>`<option${g.category===c?' selected':''}>${esc(c)}</option>`).join('')}</select><span class="field-label">Kategorie</span></div>
+    <div class="field-help" style="grid-column:1/-1;margin:4px 0 2px">Gruppen dienen nur der Organisation. Alarm-Profil, Zeitplan und Objektfilter werden pro Kamera eingestellt.</div>
     <div style="grid-column:1/-1">
       <button type="submit" style="width:100%;min-height:42px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer">Gruppe speichern</button>
     </div>
   </form>`;
-  _wireGroupPills(content.querySelector('form'));
 }
 window.selectGroup=function(groupId){
   document.querySelectorAll('#grpTabs .sec-tab-btn').forEach(b=>b.classList.toggle('active',b.id===`grpTab_${groupId}`));
@@ -1010,102 +1037,20 @@ window.selectGroup=function(groupId){
   if(g) _renderGroupContent(g);
 };
 
-const _GRP_COARSE=['person','cat','bird','car','motion'];
-// _GRP_ICONS replaced by OBJ_SVG + OBJ_LABEL
 const _GRP_CATS=['Sicherheit','Bereichsübersicht','Tierbeobachtung','Eingangskamera','Sonstiges'];
 function _groupGenId(name){
   return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
 }
-function _groupTimeOpts(sel){
-  let s='';for(let h=0;h<24;h++)for(let m of[0,30]){const v=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');s+=`<option${v===sel?' selected':''}>${v}</option>`;}return s;
-}
-function _groupTimeSelect(name,val){
-  return `<select name="${name}" style="background:var(--surface);color:var(--text);border:none;border-radius:10px;padding:7px 10px;font:inherit;font-size:13px">${_groupTimeOpts(val)}</select>`;
-}
 const _GRP_INPUT='background:var(--surface);color:var(--text);border:none;border-radius:10px;padding:9px 12px;width:100%;font:inherit;box-sizing:border-box';
 const _GRP_SELECT='background:var(--surface);color:var(--text);border:none;border-radius:10px;padding:9px 12px;width:100%;font:inherit';
-function groupEditHTML(g){
-  const s=g.schedule||{};
-  const isNew=!g.id;
-  const active=new Set(g.coarse_objects||[]);
-  const fm=new Set(g.fine_models||[]);
-  const pills=_GRP_COARSE.map(obj=>{
-    const on=active.has(obj);
-    return `<button type="button" class="grp-obj-pill${on?' active':''}" data-obj="${obj}"
-      style="padding:7px 14px;border-radius:999px;border:none;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:6px;background:${on?'var(--accent)':'var(--surface)'};color:${on?'#fff':'var(--muted)'}">${objBubble(obj,18)} ${OBJ_LABEL[obj]||obj}</button>`;
-  }).join('');
-  return `<div class="group-inline"><form class="group-edit-grid" onsubmit="saveGroup(event)">
-    <input type="hidden" name="id" value="${esc(g.id||'')}" />
-    <div style="grid-column:1/-1">
-      <input name="name" value="${esc(g.name||'')}" placeholder="Anzeigename" required style="${_GRP_INPUT}"
-        oninput="(()=>{const f=this.closest('form');const el=f.querySelector('.grp-gen-id');if(el&&!f.elements['id'].value)el.textContent='ID: '+_groupGenId(this.value);})()"/>
-      <div class="grp-gen-id small muted" style="margin-top:4px;padding-left:4px">${isNew?'ID: auto':'ID: '+esc(g.id)}</div>
-    </div>
-    <div><select name="category" style="${_GRP_SELECT}">${_GRP_CATS.map(c=>`<option${g.category===c?' selected':''}>${esc(c)}</option>`).join('')}</select><span class="field-label">Kategorie</span></div>
-    <div><select name="alarm_profile" style="${_GRP_SELECT}">${['hard','medium','soft','info'].map(p=>`<option${g.alarm_profile===p?' selected':''}>${p}</option>`).join('')}</select><span class="field-label">Alarmprofil</span></div>
-    <div style="grid-column:1/-1">
-      <div class="grp-obj-pills" style="display:flex;gap:8px;flex-wrap:wrap">${pills}</div>
-      <input type="hidden" name="coarse_objects" value="${esc((g.coarse_objects||[]).join(','))}" />
-      <span class="field-label" style="margin-top:6px;display:block">Grob-Objekte</span>
-    </div>
-    <div style="grid-column:1/-1;display:flex;gap:20px;align-items:center;flex-wrap:wrap;padding:4px 0">
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="fm_bird"${fm.has('bird_species')?' checked':''} style="width:auto;accent-color:var(--accent)" /> Vogelarten</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="fm_cat"${fm.has('cat_identity')?' checked':''} style="width:auto;accent-color:var(--accent)" /> Katzen-ID</label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="checkbox" name="fm_person"${fm.has('person_identity')?' checked':''} style="width:auto;accent-color:var(--accent)" /> Personen-ID</label>
-      <span class="field-label" style="margin-left:auto">Fine-Models</span>
-    </div>
-    <div style="grid-column:1/-1;display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-height:44px">
-      <label class="switch"><input type="checkbox" name="schedule_enabled"${s.enabled?' checked':''}
-        onchange="this.closest('form').querySelector('.grp-sched-times').style.display=this.checked?'flex':'none'" /><span class="slider"></span></label>
-      <span style="font-size:13px;font-weight:600">Zeitplan</span>
-      <div class="grp-sched-times" style="display:${s.enabled?'flex':'none'};align-items:center;gap:8px">
-        ${_groupTimeSelect('schedule_start',s.start||'22:00')}
-        <span class="muted" style="font-size:13px">→</span>
-        ${_groupTimeSelect('schedule_end',s.end||'06:00')}
-      </div>
-    </div>
-    <div style="grid-column:1/-1;display:flex;gap:10px;margin-top:4px">
-      <button type="button" style="background:var(--surface);color:var(--text);border:none;border-radius:12px;padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer" onclick="this.closest('.group-inline').remove()">Abbrechen</button>
-      <button type="submit" style="flex:1;min-height:42px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer">Gruppe speichern</button>
-    </div>
-  </form></div>`;
-}
-function _wireGroupPills(form){
-  form.querySelectorAll('.grp-obj-pill').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      btn.classList.toggle('active');
-      const on=btn.classList.contains('active');
-      btn.style.background=on?'var(--accent)':'var(--surface)';
-      btn.style.color=on?'#fff':'var(--muted)';
-      const h=form.querySelector('[name="coarse_objects"]');
-      if(h) h.value=[...form.querySelectorAll('.grp-obj-pill.active')].map(b=>b.dataset.obj).join(',');
-    });
-  });
-}
-function toggleGroupEdit(g){
-  document.querySelectorAll('.group-inline').forEach(el=>el.remove());
-  const item=document.querySelector('[data-gid="'+g.id+'"]');
-  if(!item) return;
-  item.insertAdjacentHTML('afterend',groupEditHTML(g));
-  const form=item.nextElementSibling?.querySelector('form');
-  if(form) _wireGroupPills(form);
-  item.nextElementSibling?.scrollIntoView({behavior:'smooth',block:'nearest'});
-}
-window.toggleGroupEdit=toggleGroupEdit;
+
 async function saveGroup(e){
   e.preventDefault();
   const f=e.target.elements;
   const name=f['name'].value;
   const id=f['id'].value||_groupGenId(name);
-  const fine_models=[
-    ...(f['fm_bird']?.checked?['bird_species']:[]),
-    ...(f['fm_cat']?.checked?['cat_identity']:[]),
-    ...(f['fm_person']?.checked?['person_identity']:[]),
-  ];
-  const payload={id,name,category:f['category'].value,alarm_profile:f['alarm_profile'].value,
-    coarse_objects:f['coarse_objects'].value.split(',').map(x=>x.trim()).filter(Boolean),
-    fine_models,
-    schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'}};
+  // Minimal payload: groups are purely organisational now.
+  const payload={id,name,category:f['category'].value};
   await fetch('/api/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   await loadAll();
   // Re-select saved group so tabs update correctly
@@ -1727,6 +1672,7 @@ byId('cameraForm').onsubmit=async(e)=>{
     motion_enabled:f['motion_enabled']?f['motion_enabled'].checked:true,
     detection_trigger:f['detection_trigger']?.value||'motion_and_objects',
     post_motion_tail_s:parseFloat(f['post_motion_tail_s']?.value||0),
+    alarm_profile:f['alarm_profile']?.value||'soft',
     detection_min_score:parseFloat(f['detection_min_score']?.value||0),
     resolution:f['resolution']?.value||'auto',
     frame_interval_ms:parseInt(f['frame_interval_ms']?.value||350),
@@ -1746,7 +1692,7 @@ byId('addGroupBtn').onclick=(e)=>{
     const list=byId('groupList');
     if(list) list.innerHTML=`<div class="sec-tabs" id="grpTabs" style="margin-bottom:0"></div><div class="sec-content" id="grpContent"></div>`;
   }
-  _renderGroupContent({id:'',name:'',category:'Sonstiges',alarm_profile:'soft',coarse_objects:[],fine_models:[],schedule:{enabled:false,start:'22:00',end:'06:00'}});
+  _renderGroupContent({id:'',name:'',category:'Sonstiges'});
   byId('grpContent')?.scrollIntoView({behavior:'smooth',block:'nearest'});
 };
 // ── Section-level save functions ──────────────────────────────────────────────

@@ -542,12 +542,20 @@ class CameraRuntime:
         person_match = next((d.identity for d in detections if d.label == "person" and d.identity), None)
         bird_species = next((d.species for d in detections if d.label == "bird" and d.species), None)
         group = self._group()
-        after_hours = is_in_schedule(self.cfg.get("schedule") or group.get("schedule") or {})
+        # Schedule: per-camera only. Group schedule was never really used
+        # outside the defaults and is now deprecated — camera wins, period.
+        after_hours = is_in_schedule(self.cfg.get("schedule") or {})
         whitelisted = bool(person_match and (person_match in (self.cfg.get("whitelist_names") or [])))
         if self.person_registry and person_match:
             p = self.person_registry.get_profile(person_match) or {}
             whitelisted = whitelisted or bool(p.get("whitelisted"))
-        level, notify = choose_alarm_level(group, list(sorted(set(labels))), after_hours, whitelisted)
+        # Per-camera alarm profile (preferred). Legacy group.alarm_profile
+        # stays as a fallback so existing deployments don't silently drop
+        # to "soft" on upgrade.
+        profile = (self.cfg.get("alarm_profile") or "").strip() \
+                  or (group or {}).get("alarm_profile") \
+                  or "soft"
+        level, notify = choose_alarm_level(profile, list(sorted(set(labels))), after_hours, whitelisted)
         # "Stumm" kill-switch: armed=false suppresses all Telegram alerts
         # but keeps the event recording and archive path intact.
         if not self.cfg.get("armed", True):

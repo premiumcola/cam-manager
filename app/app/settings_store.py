@@ -16,42 +16,10 @@ from .schema import (
 log = logging.getLogger(__name__)
 
 DEFAULT_GROUPS = [
-    {
-        "id": "sicherheit",
-        "name": "Sicherheit",
-        "category": "Sicherheit",
-        "alarm_profile": "hard",
-        "coarse_objects": ["person", "car", "cat", "bird", "motion"],
-        "fine_models": [],
-        "schedule": {"enabled": True, "start": "22:00", "end": "06:00"},
-    },
-    {
-        "id": "bereichsuebersicht",
-        "name": "Bereichsübersicht",
-        "category": "Bereichsübersicht",
-        "alarm_profile": "soft",
-        "coarse_objects": ["person", "car", "cat", "bird", "motion"],
-        "fine_models": [],
-        "schedule": {"enabled": False, "start": "00:00", "end": "00:00"},
-    },
-    {
-        "id": "tierbeobachtung",
-        "name": "Tierbeobachtung",
-        "category": "Tierbeobachtung",
-        "alarm_profile": "info",
-        "coarse_objects": ["bird", "cat", "motion", "person"],
-        "fine_models": ["bird_species", "squirrel"],
-        "schedule": {"enabled": False, "start": "00:00", "end": "00:00"},
-    },
-    {
-        "id": "eingangskamera",
-        "name": "Eingangskamera",
-        "category": "Eingangskamera",
-        "alarm_profile": "medium",
-        "coarse_objects": ["person", "cat", "bird", "motion"],
-        "fine_models": ["cat_identity", "person_identity"],
-        "schedule": {"enabled": True, "start": "23:00", "end": "06:00"},
-    },
+    {"id": "sicherheit",        "name": "Sicherheit",         "category": "Sicherheit"},
+    {"id": "bereichsuebersicht","name": "Bereichsübersicht",  "category": "Bereichsübersicht"},
+    {"id": "tierbeobachtung",   "name": "Tierbeobachtung",    "category": "Tierbeobachtung"},
+    {"id": "eingangskamera",    "name": "Eingangskamera",     "category": "Eingangskamera"},
 ]
 
 
@@ -113,6 +81,9 @@ class SettingsStore:
             "motion_enabled": cam.get("motion_enabled", True),
             "detection_trigger": cam.get("detection_trigger", "motion_and_objects"),
             "post_motion_tail_s": float(cam.get("post_motion_tail_s") or 0.0),
+            # Per-camera alarm profile. Empty string = inherit from the
+            # assigned group's legacy alarm_profile (if any) for back-compat.
+            "alarm_profile": (cam.get("alarm_profile") or "").strip(),
         }
 
     def _build_defaults(self, base_config: dict) -> dict:

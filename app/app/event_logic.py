@@ -26,8 +26,16 @@ def is_in_schedule(schedule: dict, now: datetime | None = None) -> bool:
     return cur >= start or cur < end
 
 
-def choose_alarm_level(group: dict, labels: list[str], after_hours: bool, whitelisted: bool) -> tuple[str, bool]:
-    profile = (group or {}).get("alarm_profile", "soft")
+def choose_alarm_level(profile, labels: list[str], after_hours: bool, whitelisted: bool) -> tuple[str, bool]:
+    """Decide (alarm_level, notify) for an event.
+
+    `profile` is a string — "hard", "medium", "soft", or "info". For
+    backward compatibility we also accept a dict with an "alarm_profile"
+    key, which was the old signature (group dict).
+    """
+    if isinstance(profile, dict):
+        profile = profile.get("alarm_profile", "soft")
+    profile = (profile or "soft").strip() or "soft"
     labels = labels or ["motion"]
     if whitelisted:
         return "logged", False

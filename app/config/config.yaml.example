@@ -67,35 +67,14 @@ processing:
   person_identity:
     match_threshold: 10
 
+# Groups are purely organisational — a label for filtering and
+# categorisation. Every operational setting (alarm_profile, schedule,
+# object_filter, detection modes) lives on the camera itself.
 camera_groups:
-  - id: sicherheit
-    name: Sicherheit
-    category: Sicherheit
-    alarm_profile: hard
-    coarse_objects: [person, car, cat, bird, motion]
-    fine_models: []
-    schedule: { enabled: true, start: "22:00", end: "06:00" }
-  - id: bereichsuebersicht
-    name: Bereichsübersicht
-    category: Bereichsübersicht
-    alarm_profile: soft
-    coarse_objects: [person, car, cat, bird, motion]
-    fine_models: []
-    schedule: { enabled: false, start: "00:00", end: "00:00" }
-  - id: tierbeobachtung
-    name: Tierbeobachtung
-    category: Tierbeobachtung
-    alarm_profile: info
-    coarse_objects: [bird, cat, motion, person]
-    fine_models: [bird_species, squirrel]
-    schedule: { enabled: false, start: "00:00", end: "00:00" }
-  - id: eingangskamera
-    name: Eingangskamera
-    category: Eingangskamera
-    alarm_profile: medium
-    coarse_objects: [person, cat, bird, motion]
-    fine_models: [cat_identity, person_identity]
-    schedule: { enabled: true, start: "23:00", end: "06:00" }
+  - { id: sicherheit,         name: Sicherheit,         category: Sicherheit }
+  - { id: bereichsuebersicht, name: Bereichsübersicht,  category: Bereichsübersicht }
+  - { id: tierbeobachtung,    name: Tierbeobachtung,    category: Tierbeobachtung }
+  - { id: eingangskamera,     name: Eingangskamera,     category: Eingangskamera }
 
 cameras:
   - id: cam-beispiel-1
@@ -114,6 +93,11 @@ cameras:
     mqtt_enabled: true
     whitelist_names: []
     schedule: { enabled: false, start: "22:00", end: "06:00" }
+    # New per-camera detection / alarm settings (all have sensible defaults):
+    alarm_profile: info            # hard | medium | soft | info
+    motion_enabled: true
+    detection_trigger: motion_and_objects   # motion_and_objects | objects_only | motion_only
+    post_motion_tail_s: 0          # 0 = inherit global default
     timelapse:
       enabled: true
       fps: 25

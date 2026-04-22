@@ -100,6 +100,10 @@ CAMERA_SCHEMA: dict = {
     "detection_trigger":   (str,   "motion_and_objects"),
     "post_motion_tail_s":  (float, 0.0),  # 0 = use global default
     "detection_min_score": (float, 0.0),
+    # Per-camera alarm profile (previously group-level). Values: "hard",
+    # "medium", "soft", "info". Empty string → fall back to group profile
+    # for backward compatibility.
+    "alarm_profile":       (str,   ""),
     "object_filter":       (list,  []),
     "zones":               (list,  []),
     "masks":               (list,  []),
@@ -109,15 +113,15 @@ CAMERA_SCHEMA: dict = {
 }
 
 # ── Group ──────────────────────────────────────────────────────────────────────
-
+# Groups are now purely organisational — name + category, nothing else.
+# Alarm profile, schedule, object filter, and fine models all live on the
+# camera itself. Extra fields in existing settings.json (alarm_profile,
+# coarse_objects, fine_models, schedule) are ignored but left untouched by
+# validate_and_coerce, which silently passes through unknown keys.
 GROUP_SCHEMA: dict = {
-    "id":             (str,  REQUIRED),
-    "name":           (str,  REQUIRED),
-    "category":       (str,  ""),
-    "alarm_profile":  (str,  "soft"),
-    "coarse_objects": (list, []),
-    "fine_models":    (list, []),
-    "schedule":       (dict, {}),
+    "id":       (str, REQUIRED),
+    "name":     (str, REQUIRED),
+    "category": (str, ""),
 }
 
 # ── Section schemas (for update_section; all fields optional) ──────────────────
