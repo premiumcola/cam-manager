@@ -395,7 +395,7 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .set-bd{display:grid;grid-template-rows:0fr;transition:grid-template-rows .33s cubic-bezier(.4,0,.2,1)}
 .set-section.open .set-bd{grid-template-rows:1fr}
 .set-inner{overflow:hidden;min-height:0;padding:0 16px}
-.set-section.open .set-inner{padding:0 16px 16px}
+.set-section.open .set-inner{padding:14px 16px 16px}
 .group-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 4px;border-bottom:1px solid rgba(255,255,255,.04)}.group-row:last-child{border-bottom:none}.group-row-info{display:flex;flex-direction:column;gap:2px;min-width:0}.group-inline{padding:12px 0}
 .group-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px;background:var(--bg);border-radius:14px;margin-top:2px}.settings-save-btn{width:100%;min-height:46px;padding:13px 16px;background:var(--accent);color:#fff;font-weight:700;border:none;border-radius:14px;font-size:15px;cursor:pointer;margin-top:6px}
 .settings-save-btn:hover{background:#2563eb}
@@ -626,13 +626,16 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .coral-chip--cpu{background:rgba(250,204,21,.14);color:#facc15;box-shadow:inset 0 0 0 1px rgba(250,204,21,.3)}
 .coral-chip--off{background:rgba(255,255,255,.06);color:var(--muted);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
 .coral-inner-wrap{padding-top:14px;display:grid;gap:12px}
-.coral-card{position:relative;border-radius:12px;padding:14px 16px;background:linear-gradient(135deg,var(--bg) 0%,rgba(30,34,53,0.6) 100%);overflow:hidden}
+/* Inner cards sit inside a set-section (var(--surface) #29304a). They need
+   to be LIGHTER than the section to step forward, not darker. Accent-tinted
+   background + matching subtle border. */
+.coral-card{position:relative;border-radius:12px;padding:14px 16px;overflow:hidden}
 .coral-card::before{content:'';position:absolute;top:0;left:0;bottom:0;width:3px;border-radius:12px 0 0 12px}
-.coral-card--blue{box-shadow:inset 0 0 0 1px rgba(59,130,246,.18)}
+.coral-card--blue{background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.18)}
 .coral-card--blue::before{background:linear-gradient(180deg,#3b82f6 0%,#60a5fa 100%)}
-.coral-card--amber{box-shadow:inset 0 0 0 1px rgba(245,158,11,.18)}
+.coral-card--amber{background:rgba(250,204,21,.08);border:1px solid rgba(250,204,21,.18)}
 .coral-card--amber::before{background:linear-gradient(180deg,#f59e0b 0%,#fbbf24 100%)}
-.coral-card--purple{box-shadow:inset 0 0 0 1px rgba(168,85,247,.2)}
+.coral-card--purple{background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.18)}
 .coral-card--purple::before{background:linear-gradient(180deg,#a855f7 0%,#c084fc 100%)}
 .coral-card-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
 .coral-card-title{font-size:13px;font-weight:700;color:var(--text);letter-spacing:.01em}
@@ -681,7 +684,36 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .cb-pills{display:flex;gap:4px;flex-wrap:wrap;min-height:20px;align-items:center}
 .cb-empty{font-size:10px;color:rgba(255,255,255,.4);font-style:italic}
 
-/* Compact model cards */
+/* ── Grouped model browser ─────────────────────────────────────────────── */
+.mcat{margin-bottom:14px}
+.mcat:last-child{margin-bottom:0}
+.mcat-head{font-size:11px;font-weight:800;color:var(--text);text-transform:uppercase;letter-spacing:.09em;margin-bottom:3px}
+.mcat-desc{font-size:11px;color:var(--muted);line-height:1.4;margin-bottom:8px}
+.mpair{border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px 12px;margin-bottom:6px;background:rgba(255,255,255,.025)}
+.mpair:last-child{margin-bottom:0}
+.mpair-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.mpair-name{font-family:ui-monospace,monospace;font-weight:700;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.mpair-labels{font-size:10px;color:var(--muted);font-family:ui-monospace,monospace;flex-shrink:0}
+.mpair-labels--missing{color:#f59e0b}
+.mpair-desc{font-size:11px;color:var(--muted);line-height:1.35;margin-bottom:8px}
+.mpair-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:600px){.mpair-row{grid-template-columns:1fr}}
+.mvar{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);cursor:pointer;transition:background .15s,border-color .15s;min-height:34px}
+.mvar:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.12)}
+.mvar--active{background:rgba(34,197,94,.09);border-color:rgba(34,197,94,.45);cursor:default}
+.mvar--active:hover{background:rgba(34,197,94,.09)}
+.mvar--missing{opacity:.5;cursor:not-allowed;font-style:italic}
+.mvar--missing:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.06)}
+.mvar-kind{font-size:10px;font-weight:800;letter-spacing:.05em;padding:2px 7px;border-radius:4px;flex-shrink:0}
+.mvar-kind--cpu{background:rgba(250,204,21,.14);color:#facc15}
+.mvar-kind--edgetpu{background:rgba(77,204,133,.18);color:#4ade80}
+.mvar-size{font-size:11px;color:var(--muted);font-weight:600;flex:1;text-align:left}
+.mvar-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.08);color:var(--muted);flex-shrink:0}
+.mvar--active .mvar-badge{background:rgba(34,197,94,.22);color:#4ade80}
+.mvar-empty{font-size:11px;color:rgba(255,255,255,.35);margin-left:auto}
+.mpair-note{font-size:10px;color:rgba(255,255,255,.4);margin-top:6px;font-style:italic}
+
+/* Compact model cards (legacy — kept for any view still using it) */
 .coral-mlist{display:grid;gap:6px}
 .coral-mcard{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:10px;background:var(--surface);border:1px solid rgba(255,255,255,.06);transition:background .15s,border-color .15s;cursor:pointer;min-height:38px;font-size:12px}
 .coral-mcard:hover{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12)}

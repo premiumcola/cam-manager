@@ -1958,6 +1958,25 @@ function _truncMid(s,max){
   const keep=Math.max(8,Math.floor((max-1)/2));
   return s.slice(0,keep)+'…'+s.slice(-keep);
 }
+// Category metadata — headings shown for each group of models.
+const _MODEL_CATEGORIES=[
+  {id:'detection',    title:'Objekt-Erkennung (COCO)',           desc:'Erkennt 80 Alltagsobjekte: Personen, Autos, Vögel, Katzen, Hunde etc.'},
+  {id:'bird_species', title:'Vogelarten-Klassifikation (iNaturalist)', desc:'Bestimmt ~960 Vogelarten weltweit. Läuft als zweite Stufe nach COCO-Erkennung.'},
+  {id:'wildlife',     title:'Wildtier-Erkennung (ImageNet)',     desc:'1000 ImageNet-Klassen inkl. Eichhörnchen, Fuchs, Igel, Reh. Zweite Stufe für Tiere außerhalb COCO.'},
+  {id:'other',        title:'Sonstige Modelle',                  desc:'Eigene .tflite-Modelle, die keiner der obigen Kategorien zuzuordnen sind.'},
+];
+
+// Strip the EdgeTPU / CPU suffix so CPU + TPU variants of the same model
+// collapse onto a single "pair" row.
+function _stemFromFilename(fn){
+  return String(fn||'').toLowerCase()
+    .replace(/_edgetpu\.tflite$/,'')
+    .replace(/\.tflite$/,'')
+    .replace(/_quant$/,'')
+    .replace(/_quant_postprocess$/,'')
+    .replace(/_postprocess$/,'');
+}
+
 async function _loadCoralModels(){
   const list=byId('coralModelsList'); if(!list) return;
   list.innerHTML='<div class="field-help" style="color:var(--muted)">Lade Modelle…</div>';
@@ -1968,23 +1987,65 @@ async function _loadCoralModels(){
       list.innerHTML=`<div class="field-help">Keine Modelle in <code>${esc(r.models_dir||'/app/models')}</code> gefunden.</div>`;
       return;
     }
-    list.innerHTML='<div class="coral-mlist">'+models.map(m=>{
-      const badgeCls=m.edgetpu?'coral-mbadge--tpu':'coral-mbadge--cpu';
-      const badgeText=m.edgetpu?'EDGETPU':'CPU';
-      const activeMark=m.active?'<span class="coral-mcard-active" title="Aktives Modell">●</span>':'';
-      const fname=esc(_truncMid(m.filename,40));
-      const sizeStr=m.size_mb!=null?`${m.size_mb} MB`:'';
-      return `<div class="coral-mcard${m.active?' active':''}" data-path="${esc(m.path)}" title="${esc(m.filename)}${m.description?' — '+esc(m.description):''}">
-        <span class="coral-mcard-name">${fname}</span>
-        <span class="coral-mcard-badge ${badgeCls}">${badgeText}</span>
-        <span class="coral-mcard-size">${sizeStr}</span>
-        ${activeMark}
-      </div>`;
-    }).join('')+'</div>';
-    list.querySelectorAll('.coral-mcard').forEach(card=>{
+    // 1) Group by category, then by stem (to pair CPU + TPU variants).
+    const byCat={};
+    for(const m of models){
+      const cat=m.model_category||'other';
+      (byCat[cat]=byCat[cat]||{}) ;
+      const stem=_stemFromFilename(m.filename);
+      (byCat[cat][stem]=byCat[cat][stem]||[]).push(m);
+    }
+    // 2) Render each category that has at least one model.
+    let html='';
+    for(const cat of _MODEL_CATEGORIES){
+      const stems=byCat[cat.id];
+      if(!stems||!Object.keys(stems).length) continue;
+      html+=`<div class="mcat"><div class="mcat-head">${esc(cat.title)}</div><div class="mcat-desc">${esc(cat.desc)}</div>`;
+      // Stable stem order: active-first, then alphabetical
+      const stemKeys=Object.keys(stems).sort();
+      for(const stem of stemKeys){
+        const variants=stems[stem];
+        const cpu=variants.find(v=>!v.edgetpu);
+        const tpu=variants.find(v=>v.edgetpu);
+        const anyActive=variants.find(v=>v.active_in_category);
+        const labelInfo=(anyActive||variants[0]).labels||{};
+        const labelPill=labelInfo.filename
+          ? (labelInfo.exists
+              ? `<span class="mpair-labels" title="${esc(labelInfo.path||'')}">Labels: ${esc(labelInfo.filename)}${labelInfo.count?` (${labelInfo.count} Einträge)`:''}</span>`
+              : `<span class="mpair-labels mpair-labels--missing">⚠ Labels fehlen: ${esc(labelInfo.filename)}</span>`)
+          : '';
+        const mkVariantHtml=(v,label)=>{
+          if(!v) return `<div class="mvar mvar--missing"><span class="mvar-kind">${esc(label)}</span><span class="mvar-empty">nicht vorhanden</span></div>`;
+          const active=v.active_in_category;
+          return `<div class="mvar${active?' mvar--active':''}" data-path="${esc(v.path)}">
+            <span class="mvar-kind mvar-kind--${label.toLowerCase()}">${esc(label)}</span>
+            <span class="mvar-size">${v.size_mb!=null?v.size_mb+' MB':''}</span>
+            <span class="mvar-badge">${active?'aktiv':'verfügbar'}</span>
+          </div>`;
+        };
+        // Title row: model stem + description
+        const anyVar=cpu||tpu;
+        html+=`<div class="mpair">
+          <div class="mpair-head">
+            <span class="mpair-name" title="${esc(anyVar.filename)}">${esc(stem)}</span>
+            ${labelPill}
+          </div>
+          <div class="mpair-desc">${esc(anyVar.description||'')}</div>
+          <div class="mpair-row">
+            ${mkVariantHtml(cpu,'CPU')}
+            ${mkVariantHtml(tpu,'EDGETPU')}
+          </div>
+          <div class="mpair-note">EdgeTPU: ~5 ms auf Coral TPU · CPU: ~130 ms Fallback · Automatische Auswahl</div>
+        </div>`;
+      }
+      html+='</div>';
+    }
+    list.innerHTML=html;
+    // Wire click-to-switch (only on rendered variant cards)
+    list.querySelectorAll('.mvar[data-path]').forEach(card=>{
       card.addEventListener('click',async()=>{
         const p=card.dataset.path;
-        if(!p||card.classList.contains('active')) return;
+        if(!p||card.classList.contains('mvar--active')) return;
         card.style.opacity='0.6';
         try{
           const r=await j('/api/coral/models/select',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path:p})});
