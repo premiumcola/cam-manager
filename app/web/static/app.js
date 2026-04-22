@@ -76,7 +76,7 @@ function _renderLbLabels(){
     const svg=rawSvg.replace('width="16" height="16"','width="38" height="38"');
     const title=OBJ_LABEL[l]||l;
     const c=colors[l]||colors.unknown;
-    return `<span data-label="${l}" title="${title}" style="width:54px;height:54px;border-radius:50%;background:${isActive?c+'30':'rgba(0,0,0,0.60)'};box-shadow:0 1px 8px rgba(0,0,0,0.55);display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;transition:background .15s,opacity .15s,border-color .15s;opacity:${isActive?'1':'0.6'};border:2px solid ${isActive?c+'cc':'rgba(255,255,255,0.08)'}">${svg}</span>`;
+    return `<span data-label="${l}" title="${title}" style="width:54px;height:54px;border-radius:50%;background:${isActive?c+'30':'rgba(0,0,0,0.60)'};filter:drop-shadow(0 2px 8px rgba(0,0,0,0.8));display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;pointer-events:auto;transition:background .15s,opacity .15s,border-color .15s;opacity:${isActive?'1':'0.6'};border:2px solid ${isActive?c+'cc':'rgba(255,255,255,0.08)'}">${svg}</span>`;
   }).join('');
   el.querySelectorAll('[data-label]').forEach(btn=>{
     btn.onclick=async()=>{
@@ -2540,8 +2540,6 @@ function _lbResetToPhoto(){
   if(errEl) errEl.style.display='none';
   const confirmBtn=byId('lightboxConfirm');
   if(confirmBtn) confirmBtn.style.display='';
-  const labGrad=byId('lightboxLabelsGrad');
-  if(labGrad) labGrad.style.display='';
 }
 function _lbShowError(text){
   let errEl=byId('lightboxErrorMsg');
@@ -2627,7 +2625,6 @@ function openTLPlayer(item){
   const videoSrc=(item.video_relpath?'/media/'+item.video_relpath:'')||item.video_url||item.url||(item.relpath?'/media/'+item.relpath:'');
   videoEl.style.display='block'; videoEl.src=videoSrc; videoEl.load(); videoEl.play().catch(()=>{});
   const confirmBtn=byId('lightboxConfirm'); if(confirmBtn) confirmBtn.style.display='none';
-  const labGrad=byId('lightboxLabelsGrad'); if(labGrad) labGrad.style.display='none';
   byId('lightboxLabels').innerHTML='';
   const delBtn=byId('lightboxDelete');
   if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML=_LB_TRASH_HTML;delBtn.title='Timelapse löschen';}
@@ -2655,7 +2652,6 @@ function closeLightbox(){
   if(videoEl){videoEl.pause();videoEl.src='';videoEl.style.display='none';}
   byId('lightboxImg').style.display='';
   const confirmBtn=byId('lightboxConfirm'); if(confirmBtn) confirmBtn.style.display='';
-  const labGrad=byId('lightboxLabelsGrad'); if(labGrad) labGrad.style.display='';
 }
 byId('lightboxClose').onclick=closeLightbox;
 byId('lightboxModal').onclick=(e)=>{if(e.target===byId('lightboxModal')) closeLightbox();};
@@ -2677,20 +2673,68 @@ document.addEventListener('keydown',(e)=>{
     }
     return;
   }
-  if(e.key==='ArrowLeft'){e.preventDefault();const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>0) openLightbox(nav[i-1]);}
-  else if(e.key==='ArrowRight'){e.preventDefault();const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>=0&&i<nav.length-1) openLightbox(nav[i+1]);}
+  const _v=byId('lightboxVideo');
+  const _videoActive=!!(_v && _v.style.display!=='none' && _v.src);
+  if(e.key==='ArrowLeft'){
+    e.preventDefault();
+    if(_videoActive){
+      _v.currentTime=Math.max(0,(_v.currentTime||0)-10);
+      _lbShowSeekOverlay('−10s');
+    } else {
+      const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);
+      if(i>0) openLightbox(nav[i-1]);
+    }
+  }
+  else if(e.key==='ArrowRight'){
+    e.preventDefault();
+    if(_videoActive){
+      const dur=_v.duration||0;
+      const next=(_v.currentTime||0)+10;
+      _v.currentTime=dur>0?Math.min(dur,next):next;
+      _lbShowSeekOverlay('+10s');
+    } else {
+      const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);
+      if(i>=0&&i<nav.length-1) openLightbox(nav[i+1]);
+    }
+  }
   else if(e.key==='ArrowUp'){e.preventDefault();byId('lightboxConfirm').click();}
   else if(e.key==='ArrowDown'){e.preventDefault();_lbHandleDeleteKey();}
   else if(e.key===' '){
-    // Spacebar toggles video play/pause (also prevents page scroll)
-    const v=byId('lightboxVideo');
-    if(v && v.style.display!=='none' && v.src){
+    if(_videoActive){
       e.preventDefault();
-      if(v.paused) v.play().catch(()=>{}); else v.pause();
+      if(_v.paused) _v.play().catch(()=>{}); else _v.pause();
+    }
+  }
+  else if(e.key==='f'||e.key==='F'){
+    if(_videoActive){
+      e.preventDefault();
+      const fsElem=document.fullscreenElement||document.webkitFullscreenElement;
+      if(fsElem){
+        (document.exitFullscreen||document.webkitExitFullscreen||function(){}).call(document).catch(()=>{});
+      } else {
+        const req=_v.requestFullscreen||_v.webkitRequestFullscreen||_v.webkitEnterFullscreen;
+        if(req) req.call(_v).catch(()=>{});
+      }
     }
   }
   else if(e.key==='Escape') closeLightbox();
 });
+let _lbSeekOverlayTimer=null;
+function _lbShowSeekOverlay(text){
+  const wrap=byId('lightboxMediaWrap'); if(!wrap) return;
+  let el=byId('lightboxSeekOverlay');
+  if(!el){
+    el=document.createElement('div');
+    el.id='lightboxSeekOverlay';
+    el.style.cssText='position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.72);color:#fff;font-size:34px;font-weight:800;padding:14px 26px;border-radius:14px;pointer-events:none;z-index:5;backdrop-filter:blur(8px);opacity:0;transition:opacity .2s ease;letter-spacing:.02em';
+    wrap.appendChild(el);
+  }
+  el.textContent=text;
+  // force reflow so a rapid second press retriggers the fade-in
+  el.style.opacity='0'; void el.offsetWidth; el.style.opacity='1';
+  clearTimeout(_lbSeekOverlayTimer);
+  _lbSeekOverlayTimer=setTimeout(()=>{el.style.opacity='0';},600);
+}
 _updateLbConfirmBtn(false);
 byId('lightboxDelete').innerHTML=_LB_TRASH_HTML;
 _initFsBtn('liveViewFsBtn',byId('liveViewWrap'),()=>byId('liveViewWrap'));
@@ -2858,7 +2902,7 @@ function mediaCardHTML(item){
         <div style="position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center">
           <div class="mmc-play-btn" style="background:${tlPlayBg};border:1.5px solid ${tlPlayBorder}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="color:${tlAccent};margin-left:2px"><polygon points="5,3 19,12 5,21"/></svg></div>
         </div>
-        <div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none">
+        <div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none;width:fit-content">
           ${datePart?`<div style="${badgeStyle}">${esc(datePart)}</div>`:''}
           ${timePart?`<div style="${tlSubBadge}">${esc(timePart)}</div>`:''}
         </div>
@@ -2912,7 +2956,7 @@ function mediaCardHTML(item){
       <div style="position:absolute;inset:0;z-index:1;display:flex;align-items:center;justify-content:center">
         <div class="mmc-play-btn" style="background:${playBg};border:1.5px solid ${playBorder}"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="color:${accent};margin-left:3px"><polygon points="5,3 19,12 5,21"/></svg></div>
       </div>
-      ${(vidDate||vidTime)?`<div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none">
+      ${(vidDate||vidTime)?`<div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none;width:fit-content">
         ${vidDate?`<div style="${badgeStyle}">${esc(vidDate)}</div>`:''}
         ${vidTime?`<div style="${subBadge}">${esc(vidTime)}</div>`:''}
       </div>`:''}
