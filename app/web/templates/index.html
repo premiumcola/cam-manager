@@ -101,17 +101,15 @@
     </aside>
     <main class="main">
       <section class="hero panel">
-        <div style="display:flex;align-items:center;gap:16px">
+        <div style="display:flex;align-items:center;gap:16px;flex:1;min-width:0">
           <div class="hero-logo" id="heroSquirrel" style="flex-shrink:0"></div>
           <div>
             <div class="eyebrow" id="appName">TAM-spy</div>
-            <h2 id="appTagline">Schlicht, funktional, analytisch</h2>
-            <p class="muted" style="margin-top:4px">PoE · Coral · MQTT</p>
-            <p class="muted" style="margin-top:2px;font-size:12px">
-              <span id="heroBuildCount"></span>
-            </p>
+            <h2 id="appTagline">Motion · Objekte · Timelapse</h2>
+            <p class="muted" id="appSubtitle" style="margin-top:4px">RTSP-Streams · KI-Erkennung · Vogelarten · Telegram-Alerts</p>
           </div>
         </div>
+        <div id="heroBuildInfo" class="hero-build" aria-label="Build-Info"></div>
         <button id="openWizardBtn" class="btn-action ghost hidden">⚙️ Setup-Wizard</button>
       </section>
 

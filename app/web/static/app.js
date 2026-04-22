@@ -353,7 +353,9 @@ function renderShell(){
   byId('appName').textContent=state.config.app.name||'TAM-spy';
   const _sideAppName=byId('sideAppName'); if(_sideAppName) _sideAppName.textContent=state.config.app.name||'TAM-spy';
   const tb=byId('topbarTitle'); if(tb) tb.textContent=state.config.app.name||'TAM-spy';
-  byId('appTagline').textContent=state.config.app.tagline||'Schlicht, funktional, analytisch';
+  byId('appTagline').textContent=state.config.app.tagline||'Motion · Objekte · Timelapse';
+  const subEl=byId('appSubtitle');
+  if(subEl) subEl.textContent=state.config.app.subtitle||'RTSP-Streams · KI-Erkennung · Vogelarten · Telegram-Alerts';
   byId('groupSelect').innerHTML=state.groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
 }
 
@@ -411,7 +413,7 @@ function renderDashboard(){
     <div class="cv-title-wrap">
       <div class="cv-name-row">
         <div class="cv-name">${esc(c.name)}</div>
-        ${tlOn?`<span class="cv-tl-dot" title="Timelapse aktiv">${objIconSvg('timelapse',12)}</span>`:''}
+        ${tlOn?`<span class="cv-tl-dot" title="Timelapse aktiv">${objIconSvg('timelapse',15)}</span>`:''}
       </div>
       ${c.location?`<div class="cv-loc">${esc(c.location)}</div>`:''}
       <span class="cv-group-pill">${esc(c.group_id||'—')}</span>
@@ -424,8 +426,8 @@ function renderDashboard(){
           <div class="cv-live-collapsed">
             <div class="cv-pdot"></div>
             <span>Live</span>
-            ${previewFps?`<span style="color:rgba(134,239,172,.55);font-size:10px;font-weight:400;margin-left:3px">${previewFps} FPS</span>`:''}
-            <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="rgba(200,245,224,.55)" stroke-width="1.8" stroke-linecap="round" style="margin-left:auto;flex-shrink:0"><path d="M3 4.5l3 3 3-3"/></svg>
+            ${previewFps?`<span style="color:rgba(134,239,172,.55);font-size:10px;font-weight:400;margin-left:3px">${previewFps} fps</span>`:''}
+            <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="rgba(200,245,224,.55)" stroke-width="1.8" stroke-linecap="round" style="margin-left:auto;margin-right:2px;flex-shrink:0"><path d="M3 4.5l3 3 3-3"/></svg>
           </div>
           <div class="cv-live-expanded">
             <div class="cv-live-exp-header">
@@ -1279,10 +1281,14 @@ async function updateSystemPanel(){
     const commit=b.commit||'dev';
     const date=b.date||'—';
     const count=b.count||'—';
-    const countEl=byId('heroBuildCount');
-    if(countEl&&b.count&&b.count!=='—'){
+    const heroEl=byId('heroBuildInfo');
+    if(heroEl){
       const url='https://github.com/premiumcola/cam-manager/commits/main/';
-      countEl.innerHTML=`Build <a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none">#${esc(String(b.count))}</a> · ${esc(b.date||'')}`;
+      const shortCommit=commit.length>7?commit.slice(0,7):commit;
+      const countPart=(b.count&&b.count!=='—')?`<a href="${url}" target="_blank" class="hero-build-count">Build #${esc(String(b.count))}</a>`:`<span class="hero-build-count hero-build-count--dev">Build · dev</span>`;
+      const commitPart=`<code class="hero-build-commit" title="Git commit">${esc(shortCommit)}</code>`;
+      const datePart=b.date&&b.date!=='—'?`<span class="hero-build-date">${esc(b.date)}</span>`:'';
+      heroEl.innerHTML=`${countPart}<span class="hero-build-sep">·</span>${commitPart}${datePart?`<span class="hero-build-sep">·</span>${datePart}`:''}`;
     }
     const memUsed=s.mem_used_mb||0;
     const memTotal=s.mem_total_mb||0;
