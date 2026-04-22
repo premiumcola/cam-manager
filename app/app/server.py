@@ -772,12 +772,14 @@ def api_media_storage_stats():
     active_ids = {c["id"] for c in active_cams}
 
     TRACKED_LABELS = {'person', 'cat', 'bird', 'car', 'motion'}
+    OBJECT_LABELS = {'person', 'cat', 'bird', 'car'}
 
     def _cam_stats_dict(cam_id: str, name_hint: str = "") -> dict:
         size_bytes = 0
         jpg_count = 0
         json_count = 0
         latest_snap_url = None
+        latest_object_snap_url = None
         resolved_name = name_hint or cam_id
         label_counts: dict = {}
         cam_dir = events_dir / cam_id
@@ -793,15 +795,20 @@ def api_media_storage_stats():
                         pass
             json_files = list(cam_dir.rglob("*.json"))
             json_count = len(json_files)
+            # Sorted reverse → newest first; break out of the snap searches once both are populated.
             for jf in sorted(json_files, reverse=True):
                 try:
                     ev = _json.loads(jf.read_text(encoding="utf-8"))
                     if resolved_name == cam_id:
                         resolved_name = ev.get("camera_name", cam_id)
                     rel = ev.get("snapshot_relpath")
-                    if not latest_snap_url and rel and (storage_root / rel).exists():
-                        latest_snap_url = f"/media/{rel}"
-                    for lbl in ev.get("labels", []):
+                    labels = ev.get("labels") or []
+                    if rel and (storage_root / rel).exists():
+                        if not latest_snap_url:
+                            latest_snap_url = f"/media/{rel}"
+                        if not latest_object_snap_url and any(l in OBJECT_LABELS for l in labels):
+                            latest_object_snap_url = f"/media/{rel}"
+                    for lbl in labels:
                         if lbl in TRACKED_LABELS:
                             label_counts[lbl] = label_counts.get(lbl, 0) + 1
                 except Exception:
@@ -824,6 +831,7 @@ def api_media_storage_stats():
             "event_count": json_count,
             "timelapse_count": tl_count,
             "latest_snap_url": latest_snap_url,
+            "latest_object_snap_url": latest_object_snap_url,
             "label_counts": label_counts,
         }
 

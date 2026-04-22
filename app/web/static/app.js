@@ -2857,7 +2857,13 @@ const _ARCHIVE_ICON=`<svg width="13" height="12" viewBox="0 0 13 12" fill="none"
 // All-media multi-camera grid icon — 4 quads: TL=timelapse(violet), TR=motion(blue), BL=person(blue), BR=object(amber)
 const _MOC_ALL_SVG=`<svg width="140" height="88" viewBox="0 0 80 50" fill="none" aria-hidden="true"><rect x="1" y="1" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="45" y="1" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="1" y="28" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="45" y="28" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><circle cx="6" cy="6" r="2" fill="#2a4460"/><circle cx="50" cy="6" r="2" fill="#2a4460"/><circle cx="6" cy="33" r="2" fill="#2a4460"/><circle cx="50" cy="33" r="2" fill="#2a4460"/><!-- TL: timelapse hourglass (violet) --><line x1="9" y1="7.5" x2="25" y2="7.5" stroke="#c4b5fd" stroke-width="1.2" stroke-linecap="round" opacity=".9"/><polygon points="9,8.5 25,8.5 17,13" fill="#c4b5fd" opacity=".75"/><polygon points="17,13 9,17 25,17" fill="#c4b5fd" opacity=".5"/><line x1="9" y1="17.5" x2="25" y2="17.5" stroke="#c4b5fd" stroke-width="1.2" stroke-linecap="round" opacity=".9"/><!-- TR: running person / motion (blue) --><circle cx="64" cy="7" r="2" fill="#93c5fd" opacity=".8"/><path d="M63.5 9L61 14L59 19" stroke="#93c5fd" stroke-width="1.4" stroke-linecap="round" fill="none" opacity=".75"/><path d="M62 11L59.5 9.5" stroke="#93c5fd" stroke-width="1.2" stroke-linecap="round" opacity=".7"/><path d="M62 11L65 10.5" stroke="#93c5fd" stroke-width="1.2" stroke-linecap="round" opacity=".7"/><path d="M61 14L59 19" stroke="#93c5fd" stroke-width="1.4" stroke-linecap="round" opacity=".75"/><path d="M61 14L64 19" stroke="#93c5fd" stroke-width="1.4" stroke-linecap="round" opacity=".75"/><!-- BL: person detection (sky blue) --><circle cx="18" cy="34" r="2.8" fill="#60a5fa" opacity=".7"/><path d="M12 48C12 42 24 42 24 48" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" fill="none" opacity=".65"/><!-- BR: object box (amber) --><rect x="57" y="34" width="14" height="10" rx="1.5" fill="#f59e0b" opacity=".55"/><rect x="59.5" y="31.5" width="5" height="3" rx="1" fill="#f59e0b" opacity=".45"/><!-- Center connector --><circle cx="40" cy="25" r="5.5" fill="#1a2a40" stroke="#3a5878" stroke-width="1.2"/><polygon points="38,22.5 44,25 38,27.5" fill="#4a7090"/></svg>`;
 // Count chips for media overview cards
+const _MOC_OBJECT_TYPES={person:1,cat:1,bird:1,car:1};
 function _mocChip(type,count,title){
+  // Object-label chips (person/cat/bird/car): CAT_COLORS + objIconSvg
+  if(_MOC_OBJECT_TYPES[type]){
+    const col=CAT_COLORS[type]||'#8888aa';
+    return `<span class="moc-count-chip" title="${esc(title)}" style="background:${hexToRgba(col,0.18)};color:${col};border-radius:8px">${objIconSvg(type,10)} ${count}</span>`;
+  }
   const icons={
     event:`<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="3.8" stroke="#4a6477" stroke-width="1.3"/><path d="M5 3v2l1.5 1" stroke="#4a6477" stroke-width="1.1" stroke-linecap="round"/></svg>`,
     snap:`<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="2.5" width="8" height="6" rx="1.5" stroke="#4a6477" stroke-width="1.2"/><circle cx="5" cy="5.5" r="1.6" fill="#4a6477"/><path d="M3.5 2.5l.4-1h2.2l.4 1" stroke="#4a6477" stroke-width=".9" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
@@ -2871,7 +2877,22 @@ function _mocChip(type,count,title){
     motion:{bg:'rgba(147,197,253,.15)', color:'#93c5fd',       radius:'8px'},
   };
   const st=styles[type]||styles.event;
-  return `<span class="moc-count-chip" title="${title}" style="background:${st.bg};color:${st.color};border-radius:${st.radius}">${icons[type]||icons.event} ${count}</span>`;
+  return `<span class="moc-count-chip" title="${esc(title)}" style="background:${st.bg};color:${st.color};border-radius:${st.radius}">${icons[type]||icons.event} ${count}</span>`;
+}
+// Build the full chip HTML for a stats entry: objects → motion_only → timelapse
+function _buildMocChips(stats){
+  const lc=stats.label_counts||{};
+  const order=['person','cat','bird','car'];
+  const objTotal=order.reduce((n,k)=>n+(lc[k]||0),0);
+  const motionOnly=Math.max(0,(stats.event_count||0)-objTotal);
+  let html='';
+  for(const k of order){
+    const n=lc[k]||0;
+    if(n>0) html+=_mocChip(k,n,OBJ_LABEL[k]||k);
+  }
+  if(motionOnly>0) html+=_mocChip('motion',motionOnly,'Bewegung');
+  if((stats.timelapse_count||0)>0) html+=_mocChip('tl',stats.timelapse_count,'Timelapse');
+  return html;
 }
 function renderMediaOverview(){
   const ov=byId('mediaOverview'); if(!ov) return;
@@ -2899,8 +2920,7 @@ function renderMediaOverview(){
       <div class="moc-name">Alle Medien</div>
       <div class="moc-desc">${cams.length} Kamera${cams.length!==1?'s':''} · Gesamtarchiv</div>
       <div class="moc-counts">
-        ${_mocChip('motion',totalStats.event_count||0,'Bewegung')}
-        ${_mocChip('tl',totalStats.timelapse_count||0,'Timelapse')}
+        ${_buildMocChips(totalStats)}
       </div>
     </div>
   </div>`;
@@ -2909,7 +2929,9 @@ function renderMediaOverview(){
   const camCards=cams.map(c=>{
     const s=statsByid[c.id]||{};
     const icon=getCameraIcon(c.name||c.id);
-    const storedSnap=s.latest_snap_url||'';
+    // Prefer newest object-labelled snapshot (person/cat/bird/car) over generic latest snap;
+    // fall back to the generic latest, then the live snapshot.
+    const storedSnap=s.latest_object_snap_url||s.latest_snap_url||'';
     const liveSnap=`/api/camera/${encodeURIComponent(c.id)}/snapshot.jpg?t=${ts}`;
     const thumbSrc=storedSnap||liveSnap;
     const placeholderInner=`<span style="font-size:48px;opacity:.25">${icon}</span>`;
@@ -2923,8 +2945,7 @@ function renderMediaOverview(){
         <div class="moc-name">${icon} ${esc(c.name)}${groupInline}</div>
         ${locationDesc}
         <div class="moc-counts">
-          ${_mocChip('motion',s.event_count||0,'Bewegung')}
-          ${_mocChip('tl',s.timelapse_count||0,'Timelapse')}
+          ${_buildMocChips(s)}
         </div>
       </div>
     </div>`;
