@@ -748,6 +748,7 @@ function _initCameraFormListeners(){
   });
   // Motion sensitivity slider
   f['motion_sensitivity']?.addEventListener('input',()=>{ byId('motionSensLabel').textContent=f['motion_sensitivity'].value; });
+  f['detection_min_score']?.addEventListener('input',()=>{ const v=parseFloat(f['detection_min_score'].value); byId('detectionMinScoreLabel').textContent=v.toFixed(2); });
   // Frame interval slider
   f['frame_interval_ms']?.addEventListener('input',()=>{ byId('frameIntervalLabel').textContent=f['frame_interval_ms'].value+'ms'; });
   // Snapshot interval slider
@@ -782,6 +783,12 @@ function editCamera(camId){
   if(f['mqtt_enabled']) f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
   if(f['bottom_crop_px']) f['bottom_crop_px'].value=c.bottom_crop_px||0;
   if(f['motion_sensitivity']){const ms=c.motion_sensitivity!=null?c.motion_sensitivity:0.5; f['motion_sensitivity'].value=ms; byId('motionSensLabel').textContent=ms;}
+  if(f['detection_min_score']){
+    const globalMs=state.config?.processing?.detection?.min_score ?? 0.55;
+    const cms=(c.detection_min_score && c.detection_min_score>0) ? c.detection_min_score : globalMs;
+    f['detection_min_score'].value=cms;
+    byId('detectionMinScoreLabel').textContent=Number(cms).toFixed(2);
+  }
   if(f['resolution']) f['resolution'].value=c.resolution||'auto';
   if(f['frame_interval_ms']){const fi=c.frame_interval_ms||350; f['frame_interval_ms'].value=fi; byId('frameIntervalLabel').textContent=fi+'ms';}
   if(f['snapshot_interval_s']){const si=c.snapshot_interval_s||3; f['snapshot_interval_s'].value=si; byId('snapshotIntervalLabel').textContent=si+'s';}
@@ -1661,6 +1668,7 @@ byId('cameraForm').onsubmit=async(e)=>{
     schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},
     bottom_crop_px:parseInt(f['bottom_crop_px']?.value||0),
     motion_sensitivity:parseFloat(f['motion_sensitivity']?.value||0.5),
+    detection_min_score:parseFloat(f['detection_min_score']?.value||0),
     resolution:f['resolution']?.value||'auto',
     frame_interval_ms:parseInt(f['frame_interval_ms']?.value||350),
     snapshot_interval_s:parseInt(f['snapshot_interval_s']?.value||3),
@@ -2791,9 +2799,8 @@ function mediaCardHTML(item){
   const _badgeLabel=(item.labels||[]).find(l=>l && l!=='motion') || 'motion';
   const _badgeColor=colors[_badgeLabel]||colors.motion||'#93c5fd';
   const _badgeText=OBJ_LABEL[_badgeLabel]||_badgeLabel;
-  const labelBg=hexToRgba(_badgeColor,0.18);
-  const labelBorder=hexToRgba(_badgeColor,0.35);
-  const motionBadge=`<div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge" style="background:${labelBg};border:1px solid ${labelBorder};color:${_badgeColor}">${objIconSvg(_badgeLabel,12)}${esc(_badgeText)}</span></div>`;
+  // Inline overrides only border-color and text color; .mmc-tl-badge supplies dark bg + blur + shadow
+  const motionBadge=`<div style="position:absolute;top:6px;left:6px;z-index:2"><span class="mmc-tl-badge" style="border-color:${hexToRgba(_badgeColor,0.7)};color:${_badgeColor}">${objIconSvg(_badgeLabel,12)}${esc(_badgeText)}</span></div>`;
   const errorBadge=item.encode_error?`<div style="position:absolute;bottom:7px;left:50%;transform:translateX(-50%);z-index:4"><span title="${esc(item.encode_error)}" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:rgba(250,204,21,.18);border:1px solid rgba(250,204,21,.5);color:#facc15;font-size:13px;font-weight:800;backdrop-filter:blur(4px)">⚠</span></div>`:'';
   const vidDate=fmtMediaDate(item.time||'');
   const vidTime=fmtMediaTimeOnly(item.time||'');

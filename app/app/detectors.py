@@ -122,21 +122,23 @@ class CoralObjectDetector:
         self.reason = f"pycoral: {coral_error}"
         log.warning("Kein Detektor verfügbar – nur Bewegungserkennung aktiv")
 
-    def detect_frame(self, frame: np.ndarray) -> list[Detection]:
+    def detect_frame(self, frame: np.ndarray, min_score: float | None = None) -> list[Detection]:
         if not self.available:
             return []
+        threshold = float(min_score) if (min_score is not None and min_score > 0) else self.min_score
         if self._cpu_mode:
-            return self._detect_cpu(frame)
-        return self._detect_coral(frame)
+            return self._detect_cpu(frame, threshold)
+        return self._detect_coral(frame, threshold)
 
-    def _detect_coral(self, frame: np.ndarray) -> list[Detection]:
+    def _detect_coral(self, frame: np.ndarray, threshold: float | None = None) -> list[Detection]:
         """Inference via pycoral + EdgeTPU."""
+        score_threshold = threshold if threshold is not None else self.min_score
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         width, height = self.common.input_size(self.interpreter)
         resized = cv2.resize(rgb, (width, height))
         self.common.set_input(self.interpreter, resized)
         self.interpreter.invoke()
-        objs = self.detect.get_objects(self.interpreter, score_threshold=self.min_score)
+        objs = self.detect.get_objects(self.interpreter, score_threshold=score_threshold)
         h, w = frame.shape[:2]
         out: list[Detection] = []
         sx = w / float(width)
@@ -151,8 +153,9 @@ class CoralObjectDetector:
             out.append(Detection(label=label, score=float(obj.score), bbox=(x1, y1, x2, y2)))
         return out
 
-    def _detect_cpu(self, frame: np.ndarray) -> list[Detection]:
+    def _detect_cpu(self, frame: np.ndarray, threshold: float | None = None) -> list[Detection]:
         """Inference via tflite-runtime on CPU (SSD MobileNet layout)."""
+        score_threshold = threshold if threshold is not None else self.min_score
         input_details = self.interpreter.get_input_details()
         output_details = self.interpreter.get_output_details()
         in_h = input_details[0]['shape'][1]
@@ -172,7 +175,7 @@ class CoralObjectDetector:
         out: list[Detection] = []
         for i in range(len(scores)):
             score = float(scores[i])
-            if score < self.min_score:
+            if score < score_threshold:
                 continue
             ymin, xmin, ymax, xmax = boxes[i]
             x1 = max(0, int(xmin * w))

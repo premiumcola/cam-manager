@@ -109,6 +109,7 @@ class SettingsStore:
             "resolution": cam.get("resolution", "auto"),
             "frame_interval_ms": cam.get("frame_interval_ms", 350),
             "snapshot_interval_s": cam.get("snapshot_interval_s", 3),
+            "detection_min_score": float(cam.get("detection_min_score") or 0.0),
         }
 
     def _build_defaults(self, base_config: dict) -> dict:

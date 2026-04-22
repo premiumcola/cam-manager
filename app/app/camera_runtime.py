@@ -1491,7 +1491,8 @@ class CameraRuntime:
                 motion_confirmed = sum(self._motion_confirm) >= 2
                 effective_motion = motion_labels if motion_confirmed else []
                 effective_bbox = motion_bbox if motion_confirmed else None
-                detections = self.detector.detect_frame(proc_frame)
+                cam_min_score = self.cfg.get("detection_min_score") or None
+                detections = self.detector.detect_frame(proc_frame, min_score=cam_min_score)
                 allowed = set(self.cfg.get("object_filter") or [])
                 if allowed:
                     detections = [d for d in detections if d.label in allowed]

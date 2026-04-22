@@ -96,6 +96,7 @@ CAMERA_SCHEMA: dict = {
     "snapshot_interval_s": (int,   3),
     "bottom_crop_px":      (int,   0),
     "motion_sensitivity":  (float, 0.5),
+    "detection_min_score": (float, 0.0),
     "object_filter":       (list,  []),
     "zones":               (list,  []),
     "masks":               (list,  []),
