@@ -1670,6 +1670,54 @@ def api_achievements_unlock():
     return jsonify({"ok": True, "already_had": already, "achievements": data})
 
 
+@app.get('/api/achievements/<species_id>/media')
+def api_achievements_media(species_id: str):
+    """All media events for a species, across every camera. The species
+    is identified by its achievement ID (e.g. "gruenfink"); we walk the
+    camera_runtime._SPECIES_TO_ACH_ID reverse-map to find every German
+    variant that collapses into that ID ("Grünfink" / "Gruenfink") and
+    union the results."""
+    from .camera_runtime import _SPECIES_TO_ACH_ID
+    sid = (species_id or "").strip().lower()
+    # Collect every species-name key that maps to this achievement ID
+    name_variants = {name for name, ach in _SPECIES_TO_ACH_ID.items() if ach == sid}
+    if not name_variants:
+        return jsonify({"items": [], "total_count": 0})
+    try:
+        limit = max(1, int(request.args.get('limit') or 24))
+    except ValueError:
+        limit = 24
+    try:
+        offset = max(0, int(request.args.get('offset') or 0))
+    except ValueError:
+        offset = 0
+    cams = get_effective_config().get("cameras", []) or []
+    seen_ids: set[str] = set()
+    pool: list = []
+    for cam in cams:
+        cam_id = cam.get("id")
+        if not cam_id:
+            continue
+        for variant in name_variants:
+            # list_events sorts desc by time internally. media_only skips
+            # metadata-only entries — the drilldown only wants visible cards.
+            for ev in store.list_events(cam_id, bird_species=variant, media_only=True, limit=5000):
+                eid = ev.get("event_id")
+                if not eid or eid in seen_ids:
+                    continue
+                seen_ids.add(eid)
+                # Attach any stored review so the drilldown matches what the
+                # main Mediathek shows for the same event.
+                review = settings.get_review(f"{cam_id}:{eid}")
+                if review:
+                    ev["review"] = review
+                pool.append(ev)
+    pool.sort(key=lambda x: x.get("time", ""), reverse=True)
+    total = len(pool)
+    page = pool[offset:offset + limit]
+    return jsonify({"items": page, "total_count": total})
+
+
 # ── System info ──────────────────────────────────────────────────────────────
 @app.post('/api/coral/test')
 def api_coral_test():

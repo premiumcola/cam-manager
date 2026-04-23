@@ -64,15 +64,19 @@ class EventStore:
                        labels: list | None = None,
                        start: str | None = None, end: str | None = None,
                        media_only: bool = False,
-                       type: str | None = None):
+                       type: str | None = None,
+                       bird_species: str | None = None):
         """Filter events for a camera. `labels` (list) takes precedence over `label` (str).
         Multi-label filter uses OR logic: event matches if any of its labels is in the filter set.
-        media_only=True: skip metadata-only events (no snapshot/video file) — used by the viewer."""
+        media_only=True: skip metadata-only events (no snapshot/video file) — used by the viewer.
+        bird_species: case-insensitive exact match against event.bird_species (used by the
+        Sichtungen drilldown to pull every photo of e.g. "Grünfink")."""
         filter_set: set | None = None
         if labels:
             filter_set = set(labels)
         elif label:
             filter_set = {label}
+        species_key = (bird_species or "").lower().strip() or None
 
         items = []
         cam_dir = self._cam_dir(camera_id)
@@ -98,6 +102,9 @@ class EventStore:
                 extras = {obj.get("cat_name"), obj.get("bird_species")} - {None}
                 if not (filter_set & (evt_labels | extras)):
                     continue
+            if species_key is not None:
+                if (obj.get("bird_species") or "").lower().strip() != species_key:
+                    continue
             items.append(obj)
         items.sort(key=lambda x: x.get("time", ""), reverse=True)
         return items
@@ -107,16 +114,21 @@ class EventStore:
                     start: str | None = None, end: str | None = None,
                     limit: int = 24, offset: int = 0,
                     media_only: bool = False,
-                    type: str | None = None):
+                    type: str | None = None,
+                    bird_species: str | None = None):
         items = self._filter_events(camera_id, label=label, labels=labels,
-                                    start=start, end=end, media_only=media_only, type=type)
+                                    start=start, end=end, media_only=media_only, type=type,
+                                    bird_species=bird_species)
         return items[offset:offset + limit]
 
     def count_events(self, camera_id: str, label: str | None = None,
                      labels: list | None = None,
                      start: str | None = None, end: str | None = None,
-                     media_only: bool = False) -> int:
-        return len(self._filter_events(camera_id, label=label, labels=labels, start=start, end=end, media_only=media_only))
+                     media_only: bool = False,
+                     bird_species: str | None = None) -> int:
+        return len(self._filter_events(camera_id, label=label, labels=labels,
+                                       start=start, end=end, media_only=media_only,
+                                       bird_species=bird_species))
 
     def stats_range(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None):
         from collections import Counter, defaultdict
