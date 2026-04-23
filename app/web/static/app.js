@@ -3330,7 +3330,7 @@ function mediaCardHTML(item){
   // Primary (bold white) badge — shared across all card types
   const badgeStyle='font-size:10px;font-weight:700;color:#e2e8f0;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);padding:2px 6px;border-radius:4px;line-height:1.45;white-space:nowrap';
   // Secondary (dimmer, accent-colored) badge — color added per-branch via accent
-  const subBadgeBase='font-size:10px;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);padding:1px 6px;border-radius:4px;line-height:1.45;white-space:nowrap;margin-top:2px;opacity:0.85';
+  const subBadgeBase='font-size:10px;background:none;backdrop-filter:blur(3px);padding:0 6px;border-radius:4px;line-height:1.45;white-space:nowrap;margin-top:1px;opacity:0.85';
   const isTL=item.type==='timelapse';
   if(isTL){
     const wk=item.window_key||item.day||'';
