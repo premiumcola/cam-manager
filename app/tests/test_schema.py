@@ -12,7 +12,6 @@ if _pkg_root not in sys.path:
 from app.schema import (  # noqa: E402
     validate_and_coerce,
     CAMERA_SCHEMA,
-    GROUP_SCHEMA,
     SECTION_SCHEMAS,
     REQUIRED,
 )
@@ -33,11 +32,6 @@ class TestValidateAndCoerce:
     def test_missing_required_raises(self):
         with pytest.raises(ValueError) as exc_info:
             validate_and_coerce({"name": "Camera 1"}, CAMERA_SCHEMA)
-        assert "Missing field: id" in str(exc_info.value)
-
-    def test_missing_required_group_id(self):
-        with pytest.raises(ValueError) as exc_info:
-            validate_and_coerce({"name": "Garden"}, GROUP_SCHEMA)
         assert "Missing field: id" in str(exc_info.value)
 
     # ── 3. Wrong type with successful coercion ───────────────────────────────

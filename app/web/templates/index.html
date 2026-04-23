@@ -69,12 +69,6 @@
             <input id="wiz_cam_rtsp" placeholder="RTSP URL · Beispiel: rtsp://user:pass@192.168.X.X:554/Streaming/Channels/101" />
             <div class="field-help">Snapshot URL = einzelnes JPG-Bild der Kamera. Optional. Beispiel: <code>http://user:pass@192.168.X.X/cgi-bin/snapshot.cgi</code></div>
             <input id="wiz_cam_snapshot" placeholder="Snapshot URL optional · Beispiel: http://user:pass@192.168.X.X/cgi-bin/snapshot.cgi" />
-            <select id="wiz_cam_group">
-              <option value="sicherheit">Sicherheit</option>
-              <option value="bereichsuebersicht">Bereichsübersicht</option>
-              <option value="tierbeobachtung">Tierbeobachtung</option>
-              <option value="eingangskamera">Eingangskamera</option>
-            </select>
           </div>
         </section>
       </div>
@@ -267,7 +261,6 @@
                 <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen">👁</button>
                 <span class="field-label">Snapshot-URL – optional</span>
               </div>
-              <div class="field-wrap"><select name="group_id" id="groupSelect"></select><span class="field-label">Gruppe (Organisation)</span></div>
               <input type="hidden" name="object_filter" />
               <!-- Connection health diagnostics — collapsible; shows a one-line
                    summary when collapsed, auto-opens on error. Populated by JS. -->
@@ -478,17 +471,6 @@
           </div></div>
         </div>
 
-        <!-- 3. Kameragruppen -->
-        <div class="set-section" id="set-groups" data-accent="96,165,250">
-          <button type="button" class="set-hd" onclick="toggleSetSection('set-groups')">
-            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span>Kameragruppen</span><span class="set-chevron">▶</span>
-          </button>
-          <div class="set-bd"><div class="set-inner">
-            <div id="groupList"></div>
-            <button type="button" id="addGroupBtn" class="btn-action action-green" style="width:100%;margin-top:10px;justify-content:center"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="2" x2="8" y2="14"/><line x1="2" y1="8" x2="14" y2="8"/></svg> Neue Gruppe</button>
-          </div></div>
-        </div>
-
         <!-- 4. Katzen & Personen -->
         <div class="set-section" id="set-profiles" data-accent="244,114,182">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-profiles')">
@@ -551,9 +533,7 @@
             </div>
 
             <div id="tg-panel-wann" class="tg-tab-panel">
-              <p class="field-help" style="margin-top:8px">Pro Kameragruppe: ob, wann und bei welchen Objekten Nachrichten gesendet werden.</p>
-              <div id="tgGroupRules" style="margin-top:10px;display:grid;gap:10px"></div>
-              <button type="button" id="saveTgGroupRulesBtn" class="settings-save-btn" style="margin-top:12px">💾 Regeln speichern</button>
+              <p class="field-help" style="margin-top:8px">Filterung erfolgt jetzt pro Kamera (Alarmprofil + Zeitplan in der Kamera-Konfiguration).</p>
             </div>
 
             <div id="tg-panel-was" class="tg-tab-panel">
@@ -582,7 +562,7 @@
                 </div>
                 <div class="tg-flow-step">
                   <div class="tg-flow-main">
-                    <div class="tg-flow-node tgn-decision">📨 Telegram für Gruppe aktiv?</div>
+                    <div class="tg-flow-node tgn-decision">📨 Telegram für Kamera aktiv?</div>
                     <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
                   </div>
                   <div class="tg-flow-yes-label">↓ Ja</div>

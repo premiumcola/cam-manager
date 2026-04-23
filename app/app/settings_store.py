@@ -9,18 +9,10 @@ import yaml
 from .schema import (
     validate_and_coerce,
     CAMERA_SCHEMA,
-    GROUP_SCHEMA,
     SECTION_SCHEMAS,
 )
 
 log = logging.getLogger(__name__)
-
-DEFAULT_GROUPS = [
-    {"id": "sicherheit",        "name": "Sicherheit",         "category": "Sicherheit"},
-    {"id": "bereichsuebersicht","name": "Bereichsübersicht",  "category": "Bereichsübersicht"},
-    {"id": "tierbeobachtung",   "name": "Tierbeobachtung",    "category": "Tierbeobachtung"},
-    {"id": "eingangskamera",    "name": "Eingangskamera",     "category": "Eingangskamera"},
-]
 
 
 class SettingsStore:
@@ -55,8 +47,6 @@ class SettingsStore:
             "snapshot_url": cam.get("snapshot_url", ""),
             "username": cam.get("username", ""),
             "password": cam.get("password", ""),
-            "group_id": cam.get("group_id", "bereichsuebersicht"),
-            "role": cam.get("role", cam.get("group_id", "Bereichsübersicht")),
             "object_filter": cam.get("object_filter", ["person", "cat", "bird"]),
             "timelapse": {
                 "enabled": _tl.get("enabled", False),
@@ -85,8 +75,6 @@ class SettingsStore:
             "motion_enabled": cam.get("motion_enabled", True),
             "detection_trigger": cam.get("detection_trigger", "motion_and_objects"),
             "post_motion_tail_s": float(cam.get("post_motion_tail_s") or 0.0),
-            # Per-camera alarm profile. Empty string = inherit from the
-            # assigned group's legacy alarm_profile (if any) for back-compat.
             "alarm_profile": (cam.get("alarm_profile") or "").strip(),
         }
 
@@ -116,7 +104,6 @@ class SettingsStore:
                 "password": base_config.get("mqtt", {}).get("password", ""),
                 "base_topic": base_config.get("mqtt", {}).get("base_topic", "tam-spy"),
             },
-            "camera_groups": deepcopy(DEFAULT_GROUPS),
             "cameras": cams,
             "telegram_actions": [],
             "review": {},
@@ -134,7 +121,6 @@ class SettingsStore:
                 self.data.update(loaded)
             except Exception:
                 pass
-        self._ensure_groups()
         self._ensure_camera_defaults()
         self._ensure_timelapse_settings()
         self._ensure_timelapse_profiles()
@@ -191,12 +177,6 @@ class SettingsStore:
             if tl.get("enabled") and not any(p.get("enabled") for p in profiles.values()):
                 profiles["daily"]["enabled"] = True
 
-    def _ensure_groups(self):
-        existing = {g.get("id") for g in self.data.get("camera_groups", [])}
-        for g in DEFAULT_GROUPS:
-            if g["id"] not in existing:
-                self.data.setdefault("camera_groups", []).append(deepcopy(g))
-
     def _ensure_camera_defaults(self):
         cameras = self.data.setdefault("cameras", [])
         by_id = {c.get("id"): c for c in cameras}
@@ -232,15 +212,6 @@ class SettingsStore:
             return True
         return False
 
-    def upsert_group(self, group: dict):
-        group = validate_and_coerce(group, GROUP_SCHEMA)
-        existing = next((g for g in self.data.get("camera_groups", []) if g.get("id") == group.get("id")), None)
-        if existing:
-            existing.update(group)
-        else:
-            self.data.setdefault("camera_groups", []).append(group)
-        self.save()
-
     def update_section(self, section: str, payload: dict):
         payload = payload or {}
         section_schema = SECTION_SCHEMAS.get(section)
@@ -270,7 +241,6 @@ class SettingsStore:
         cfg["telegram"] = deepcopy(self.data.get("telegram", {}))
         cfg["mqtt"] = deepcopy(self.data.get("mqtt", {}))
         cfg["cameras"] = deepcopy(self.data.get("cameras", []))
-        cfg["camera_groups"] = deepcopy(self.data.get("camera_groups", []))
         # Merge processing overrides (e.g. coral_enabled, bird_species_enabled) from settings
         if "processing" in self.data:
             base_proc = deepcopy(base_cfg.get("processing", {}))
@@ -295,11 +265,10 @@ class SettingsStore:
         loaded = yaml.safe_load(text) if format == "yaml" else json.loads(text)
         if not isinstance(loaded, dict):
             raise ValueError("Import muss ein Objekt enthalten")
-        allowed = {"app", "server", "telegram", "mqtt", "camera_groups", "cameras", "ui", "review", "telegram_actions", "timelapse_settings"}
+        allowed = {"app", "server", "telegram", "mqtt", "cameras", "ui", "review", "telegram_actions", "timelapse_settings"}
         for key, value in loaded.items():
             if key in allowed:
                 self.data[key] = value
-        self._ensure_groups()
         self._ensure_camera_defaults()
         self.data.setdefault("ui", {})["wizard_completed"] = bool(self.data.get("cameras")) or bool(self.data.get("ui", {}).get("wizard_completed"))
         self.save()

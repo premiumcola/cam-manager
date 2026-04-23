@@ -25,7 +25,6 @@ _BASE_CFG = {
     "storage": {"root": _tmpdir, "retention_days": 14},
     "server": {"host": "0.0.0.0", "port": 8099},
     "cameras": [],
-    "camera_groups": [],
     "processing": {"detection": {"mode": "none"}, "bird_species": {"enabled": False},
                    "cat_identity": {"match_threshold": 10},
                    "person_identity": {"match_threshold": 10}},
@@ -62,7 +61,7 @@ _cl_mod.load_config = MagicMock(return_value=copy.deepcopy(_BASE_CFG))
 # app.settings_store
 _ss_inst = MagicMock()
 _ss_inst.export_effective_config.return_value = copy.deepcopy(_BASE_CFG)
-_ss_inst.data = {"cameras": [], "camera_groups": [], "telegram_actions": []}
+_ss_inst.data = {"cameras": [], "telegram_actions": []}
 _ss_inst.bootstrap_state.return_value = {"needs_wizard": False}
 _ss_inst.get_camera.return_value = None
 _ss_mod = _make_stub("app.settings_store")

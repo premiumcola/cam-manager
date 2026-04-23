@@ -1,5 +1,5 @@
 
-const state={config:null,cameras:[],groups:[],timeline:null,media:[],_allMedia:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),mediaPeriod:'week',tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false};
+const state={config:null,cameras:[],timeline:null,media:[],_allMedia:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),mediaPeriod:'week',tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false};
 let _hmTip=null; // fixed-position heatmap tooltip, bypasses overflow-x:auto clipping
 const STAT_MEDIA_DRILLDOWN=true;
 
@@ -264,14 +264,12 @@ async function loadAll(){
   _restoreEditWrapper();
   state.bootstrap=await j('/api/bootstrap');
   state.config=await j('/api/config');
-  state.groups=(await j('/api/groups')).groups||[];
   state.cameras=(await j('/api/cameras')).cameras||[];
   state.timeline=await j(`/api/timeline?hours=${state.tlHours||168}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`);
   await loadMediaStorageStats();
   renderShell();
   renderDashboard();
   renderTimeline();
-  renderGroups();
   renderCameraSettings();
   await renderProfiles();
   await renderAudit();
@@ -369,7 +367,6 @@ function renderShell(){
   byId('appTagline').textContent=state.config.app.tagline||'Motion · Objekte · Timelapse';
   const subEl=byId('appSubtitle');
   if(subEl) subEl.textContent=state.config.app.subtitle||'RTSP-Streams · KI-Erkennung · Vogelarten · Telegram-Alerts';
-  byId('groupSelect').innerHTML=state.groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
 }
 
 function _camGridCols(n){
@@ -442,7 +439,6 @@ function renderDashboard(){
         ${tlOn?`<span class="cv-tl-dot" title="Timelapse aktiv">${objIconSvg('timelapse',15)}</span>`:''}
       </div>
       ${c.location?`<div class="cv-loc">${esc(c.location)}</div>`:''}
-      <span class="cv-group-pill">${esc(c.group_id||'—')}</span>
     </div>
 ${isActive?`
     <!-- top-right: [Live + HD] row, then alarm pill below -->
@@ -752,18 +748,6 @@ window.toggleCameraEnabled=async function(camId,enabled){
   await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...cam,enabled})});
   await loadAll();
 };
-// Group category → accent RGB triplet. Unknown groups fall through to a
-// neutral white so --ca defaults don't crash the CSS.
-const _GROUP_ACCENTS={
-  sicherheit:        '239,68,68',     // red
-  tierbeobachtung:   '180,120,40',    // amber/brown
-  bereichsuebersicht:'59,130,246',    // blue
-  eingangskamera:    '34,197,94',     // green
-};
-function _groupAccent(group_id){
-  return _GROUP_ACCENTS[String(group_id||'').toLowerCase()]||'255,255,255';
-}
-
 function renderCameraSettings(){
   byId('cameraSettingsList').innerHTML=state.cameras.map(c=>{
     return `
@@ -772,7 +756,6 @@ function renderCameraSettings(){
         <div class="cam-item-head-left">
           <span class="cam-item-head-icon">${getCameraIcon(c.name)}</span>
           <span class="cam-item-head-name">${esc(c.name)}</span>
-          <span class="cam-item-head-group">${esc(c.group_id||'—')}</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
           <label class="switch" title="${c.enabled?'Aktiv · klicken zum Deaktivieren':'Inaktiv · klicken zum Aktivieren'}">
@@ -982,7 +965,7 @@ function editCamera(camId){
   if(f['telegram_enabled']) f['telegram_enabled'].checked=(c.telegram_enabled!==false);
   if(f['mqtt_enabled']) f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
   // Populate global status rows on the Erkennung tab
-  _renderGlobalStatusRows(); f['group_id'].value=c.group_id||'';
+  _renderGlobalStatusRows();
   // Object filter is now rendered as a pill bar; keep the hidden input in
   // sync so the existing save flow (reads from f['object_filter'].value)
   // still works unchanged.
@@ -1155,65 +1138,6 @@ byId('deleteCameraBtn').onclick=async()=>{
   _restoreEditWrapper();
   await loadAll();
 };
-
-function renderGroups(){
-  const groups=state.groups||[];
-  const grpList=byId('groupList'); if(!grpList) return;
-  if(!groups.length){
-    grpList.innerHTML='<div class="small muted" style="padding:8px 2px">Noch keine Gruppen.</div>';
-    return;
-  }
-  const tabs=groups.map((g,i)=>`<button type="button" class="sec-tab-btn${i===0?' active':''}" id="grpTab_${esc(g.id)}" onclick="selectGroup('${esc(g.id)}')">${esc(g.name)}</button>`).join('');
-  grpList.innerHTML=`<div class="sec-tabs" id="grpTabs" style="margin-bottom:0">${tabs}</div><div class="sec-content" id="grpContent"></div>`;
-  _renderGroupContent(groups[0]);
-}
-function _renderGroupContent(g){
-  const content=byId('grpContent'); if(!content) return;
-  const isNew=!g.id;
-  // Groups are now purely organisational — name + category, nothing else.
-  // All operational settings (alarm profile, schedule, object filter,
-  // detection modes) live on the camera.
-  content.innerHTML=`<form class="group-edit-grid" onsubmit="saveGroup(event)" style="padding-top:4px">
-    <input type="hidden" name="id" value="${esc(g.id||'')}" />
-    <div style="grid-column:1/-1">
-      <input name="name" value="${esc(g.name||'')}" placeholder="Anzeigename" required style="${_GRP_INPUT}"
-        oninput="(()=>{const f=this.closest('form');const el=f.querySelector('.grp-gen-id');if(el&&!f.elements['id'].value)el.textContent='ID: '+_groupGenId(this.value);})()"/>
-      <div class="grp-gen-id small muted" style="margin-top:4px;padding-left:4px">${isNew?'ID: auto':'ID: '+esc(g.id)}</div>
-    </div>
-    <div style="grid-column:1/-1"><select name="category" style="${_GRP_SELECT}">${_GRP_CATS.map(c=>`<option${g.category===c?' selected':''}>${esc(c)}</option>`).join('')}</select><span class="field-label">Kategorie</span></div>
-    <div class="field-help" style="grid-column:1/-1;margin:4px 0 2px">Gruppen dienen nur der Organisation. Alarm-Profil, Zeitplan und Objektfilter werden pro Kamera eingestellt.</div>
-    <div style="grid-column:1/-1">
-      <button type="submit" style="width:100%;min-height:42px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer">Gruppe speichern</button>
-    </div>
-  </form>`;
-}
-window.selectGroup=function(groupId){
-  document.querySelectorAll('#grpTabs .sec-tab-btn').forEach(b=>b.classList.toggle('active',b.id===`grpTab_${groupId}`));
-  const g=(state.groups||[]).find(g=>g.id===groupId);
-  if(g) _renderGroupContent(g);
-};
-
-const _GRP_CATS=['Sicherheit','Bereichsübersicht','Tierbeobachtung','Eingangskamera','Sonstiges'];
-function _groupGenId(name){
-  return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
-}
-const _GRP_INPUT='background:var(--surface);color:var(--text);border:none;border-radius:10px;padding:9px 12px;width:100%;font:inherit;box-sizing:border-box';
-const _GRP_SELECT='background:var(--surface);color:var(--text);border:none;border-radius:10px;padding:9px 12px;width:100%;font:inherit';
-
-async function saveGroup(e){
-  e.preventDefault();
-  const f=e.target.elements;
-  const name=f['name'].value;
-  const id=f['id'].value||_groupGenId(name);
-  // Minimal payload: groups are purely organisational now.
-  const payload={id,name,category:f['category'].value};
-  await fetch('/api/groups',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  await loadAll();
-  // Re-select saved group so tabs update correctly
-  const savedId=id;
-  setTimeout(()=>{ const tab=byId(`grpTab_${savedId}`); if(tab) selectGroup(savedId); },50);
-}
-window.saveGroup=saveGroup;
 
 async function renderProfiles(){
   const cats=await j('/api/cats'); const persons=await j('/api/persons');
@@ -1487,7 +1411,6 @@ window.saveAppSettingsDebounced=function(){
 };
 
 // ── Telegram page hydrate & logic ─────────────────────────────────────────────
-const TG_OBJECTS=['person','cat','bird','car','motion'];
 
 function hydrateTelegram(){
   const tg=state.config?.telegram||{};
@@ -1496,12 +1419,9 @@ function hydrateTelegram(){
   if(tgBadge){tgBadge.textContent=tg.enabled?'aktiv':'aus';tgBadge.className='set-status-badge '+(tg.enabled?'set-status-badge--on':'set-status-badge--off');}
   const tok=byId('tg_token'); if(tok) tok.value=tg.token||'';
   const cid=byId('tg_chat_id'); if(cid) cid.value=tg.chat_id||'';
-  // Format
   const fmt=tg.format||'photo';
   document.querySelectorAll('[name="tg_format"]').forEach(r=>r.checked=r.value===fmt);
   renderTgFormatPreview(fmt);
-  // Group rules
-  renderTgGroupRules();
 }
 
 function initCameraEditTabs(){
@@ -1533,57 +1453,6 @@ function initTelegramTabs(){
   });
 }
 
-function renderTgGroupRules(){
-  const container=byId('tgGroupRules'); if(!container) return;
-  const tgGroups=(state.config?.telegram||{}).groups||{};
-  if(!state.groups.length){
-    container.innerHTML='<div class="small muted">Keine Kameragruppen konfiguriert.</div>';
-    return;
-  }
-  container.innerHTML=state.groups.map(g=>{
-    const rule=tgGroups[g.id]||{enabled:true,from:'',to:'',objects:[...TG_OBJECTS]};
-    const objList=rule.objects||TG_OBJECTS;
-    return `<div class="tg-group-rule" data-gid="${esc(g.id)}">
-      <div class="tg-gr-head">
-        <span class="tg-gr-name">${esc(g.name)}</span>
-        <label class="tg-gr-toggle"><span class="small muted">Telegram</span><label class="switch switch-sm"><input type="checkbox" class="tg-gr-enabled" ${rule.enabled!==false?'checked':''}><span class="slider"></span></label></label>
-      </div>
-      <div class="tg-gr-body">
-        <div class="tg-gr-time">
-          <span class="small muted">Zeitfenster:</span>
-          <input class="disc-input tg-gr-from" type="time" value="${esc(rule.from||'')}" title="Von (leer = immer)" style="width:100px"/>
-          <span class="small muted">–</span>
-          <input class="disc-input tg-gr-to" type="time" value="${esc(rule.to||'')}" title="Bis" style="width:100px"/>
-          <span class="small muted">(leer = immer)</span>
-        </div>
-        <div class="tg-gr-objects">
-          ${TG_OBJECTS.map(obj=>`<label class="tg-obj-chip${objList.includes(obj)?' active':''}">
-            <input type="checkbox" ${objList.includes(obj)?'checked':''} data-obj="${esc(obj)}" />
-            ${objBubble(obj,18)}<span>${OBJ_LABEL[obj]||esc(obj)}</span>
-          </label>`).join('')}
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-  // Wire chip interactivity
-  container.querySelectorAll('.tg-obj-chip input').forEach(cb=>{
-    cb.addEventListener('change',()=>cb.closest('.tg-obj-chip').classList.toggle('active',cb.checked));
-  });
-}
-
-function readTgGroupRules(){
-  const rules={};
-  document.querySelectorAll('#tgGroupRules .tg-group-rule').forEach(row=>{
-    const gid=row.dataset.gid;
-    const enabled=row.querySelector('.tg-gr-enabled')?.checked??true;
-    const from=row.querySelector('.tg-gr-from')?.value||'';
-    const to=row.querySelector('.tg-gr-to')?.value||'';
-    const objects=[...row.querySelectorAll('.tg-gr-objects input:checked')].map(cb=>cb.dataset.obj);
-    rules[gid]={enabled,from,to,objects};
-  });
-  return rules;
-}
-
 function renderTgFormatPreview(fmt){
   const preview=byId('tgFormatPreview'); if(!preview) return;
   const cam=state.cameras?.[0];
@@ -1608,7 +1477,6 @@ byId('telegramForm')?.addEventListener('submit',async e=>{
     token,
     chat_id:byId('tg_chat_id')?.value||'',
     format:(state.config?.telegram||{}).format||'photo',
-    groups:(state.config?.telegram||{}).groups||{}
   }};
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   showToast('Telegram-Verbindung gespeichert.','success');
@@ -1626,16 +1494,6 @@ byId('saveTgFormatBtn')?.addEventListener('click',async()=>{
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   showToast('Format gespeichert.','success');
   await loadAll();
-});
-
-byId('saveTgGroupRulesBtn')?.addEventListener('click',async()=>{
-  const rules=readTgGroupRules();
-  const existing=state.config?.telegram||{};
-  const payload={telegram:{...existing,groups:rules}};
-  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  await loadAll();
-  const btn=byId('saveTgGroupRulesBtn');
-  if(btn){const orig=btn.textContent;btn.textContent='✓ Gespeichert';setTimeout(()=>btn.textContent=orig,2000);}
 });
 
 function getCanvasCtx(){ return byId('maskCanvas').getContext('2d'); }
@@ -1772,7 +1630,7 @@ async function finishWizard(){
     server:{default_discovery_subnet:byId('wiz_subnet').value||'192.168.1.0/24'},
     telegram:{enabled:byId('wiz_tg_enabled').checked,token:byId('wiz_tg_token').value||'',chat_id:byId('wiz_tg_chat_id').value||''},
     mqtt:{enabled:byId('wiz_mqtt_enabled').checked,host:byId('wiz_mqtt_host').value||'',port:Number(byId('wiz_mqtt_port').value||1883),username:byId('wiz_mqtt_username').value||'',password:byId('wiz_mqtt_password').value||'',base_topic:byId('wiz_mqtt_topic').value||'tam-spy'},
-    cameras: camId ? [{id:camId,name:byId('wiz_cam_name').value||camId,location:byId('wiz_cam_location').value||'',rtsp_url:byId('wiz_cam_rtsp').value||'',snapshot_url:byId('wiz_cam_snapshot').value||'',group_id:byId('wiz_cam_group').value||'bereichsuebersicht',role:byId('wiz_cam_group').selectedOptions[0].textContent,enabled:true,armed:true,object_filter:['person','cat','bird'],timelapse:{enabled:false,fps:25},zones:[],masks:[],schedule:{enabled:false,start:'22:00',end:'06:00'},telegram_enabled:true,mqtt_enabled:true,whitelist_names:[]}] : []
+    cameras: camId ? [{id:camId,name:byId('wiz_cam_name').value||camId,location:byId('wiz_cam_location').value||'',rtsp_url:byId('wiz_cam_rtsp').value||'',snapshot_url:byId('wiz_cam_snapshot').value||'',enabled:true,armed:true,object_filter:['person','cat','bird'],timelapse:{enabled:false,fps:25},zones:[],masks:[],schedule:{enabled:false,start:'22:00',end:'06:00'},telegram_enabled:true,mqtt_enabled:true,whitelist_names:[]}] : []
   };
   await fetch('/api/wizard/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   closeWizard();
@@ -1829,7 +1687,6 @@ function _renderDiscoveryResults(){
     const uid=x.ip.replace(/\./g,'_');
     const already=allConfigured.has(x.ip);
     const vendor=x.guess==='Unbekannte Kamera'?`Unbekannte Kamera (${x.ip})`:esc(x.guess||'Unbekannte Kamera');
-    const groupOpts=state.groups.map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('');
     const computedId=x.hostname?_hostnameToId(x.hostname):'cam-'+x.ip.replace(/\./g,'-');
     const displayName=x.hostname?esc(x.hostname.charAt(0).toUpperCase()+x.hostname.slice(1)):'';
     const defaultPath=_defaultRtspPath(x);
@@ -1854,7 +1711,6 @@ function _renderDiscoveryResults(){
         <div id="disc_add_form_${uid}" class="disc-add-form hidden">
           <div class="discovery-creds" style="margin-top:8px">
             <input id="disc_name_${uid}" class="disc-input" placeholder="${x.hostname?'Kameraname':esc(vendor)}" value="${displayName}" style="flex:1.5"/>
-            <select id="disc_group_${uid}" class="disc-select" style="flex:1">${groupOpts}</select>
           </div>
           <div style="display:flex;gap:8px;margin-top:10px">
             <button class="btn-action accent" style="flex:1;min-height:40px" onclick="saveDiscoveryCamera('${esc(x.ip)}')"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3,8 7,12 13,4"/></svg> Kamera speichern</button>
@@ -1901,13 +1757,12 @@ window.saveDiscoveryCamera=async(ip)=>{
   const pass=byId(`disc_pass_${uid}`)?.value||'';
   const path=byId(`disc_path_${uid}`)?.value||'/Streaming/Channels/101';
   const name=byId(`disc_name_${uid}`)?.value||ip;
-  const groupId=byId(`disc_group_${uid}`)?.value||state.groups[0]?.id||'';
   const rtsp=`rtsp://${user}:${_rtspEnc(pass)}@${ip}:554${path}`;
   const snap=`http://${user}:${_rtspEnc(pass)}@${ip}/cgi-bin/snapshot.cgi`;
   const _item=_discoveryItems.find(x=>x.ip===ip);
   const camId=_item?.hostname?_hostnameToId(_item.hostname):'cam-'+ip.replace(/\./g,'-');
   const payload={id:camId,name,location:'',rtsp_url:rtsp,snapshot_url:snap,
-    group_id:groupId,enabled:true,armed:true,
+    enabled:true,armed:true,
     object_filter:['person','cat','bird'],
     timelapse:{enabled:false,fps:25},zones:[],masks:[],
     schedule:{enabled:false,start:'22:00',end:'06:00'},
@@ -1940,7 +1795,6 @@ byId('cameraForm').onsubmit=async(e)=>{
     icon:f['icon']?.value||getCameraIcon(f['name'].value),
     rtsp_url:f['rtsp_url'].value,snapshot_url:f['snapshot_url'].value,
     username:f['rtsp_user']?.value||'',password:f['rtsp_pass']?.value||'',
-    group_id:f['group_id'].value,role:f['group_id'].selectedOptions[0]?.textContent||f['group_id'].value,
     object_filter:f['object_filter'].value.split(',').map(x=>x.trim()).filter(Boolean),
     enabled:f['enabled']?f['enabled'].checked:(existingCam?.enabled??true),
     armed:f['armed'].checked,
@@ -1966,18 +1820,6 @@ byId('cameraForm').onsubmit=async(e)=>{
   await loadAll(); editCamera(_savedId);
 };
 byId('closeCameraEdit')?.addEventListener('click',()=>_closeEditPanel());
-byId('addGroupBtn').onclick=(e)=>{
-  e.stopPropagation();
-  // Deactivate all group tabs
-  document.querySelectorAll('#grpTabs .sec-tab-btn').forEach(b=>b.classList.remove('active'));
-  // Ensure grpContent exists (if no groups yet, create the shell)
-  if(!byId('grpContent')){
-    const list=byId('groupList');
-    if(list) list.innerHTML=`<div class="sec-tabs" id="grpTabs" style="margin-bottom:0"></div><div class="sec-content" id="grpContent"></div>`;
-  }
-  _renderGroupContent({id:'',name:'',category:'Sonstiges'});
-  byId('grpContent')?.scrollIntoView({behavior:'smooth',block:'nearest'});
-};
 // ── Section-level save functions ──────────────────────────────────────────────
 window.saveAppSettings=async function(){
   const payload={
@@ -3678,12 +3520,11 @@ function renderMediaOverview(){
     const placeholderInner=`<span style="font-size:48px;opacity:.25">${icon}</span>`;
     const fallback=storedSnap?`this.onerror=function(){this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'${placeholderInner}',style:'display:flex;align-items:center;justify-content:center;width:100%;height:100%'}))};this.src='${liveSnap}'`
       :`this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'${placeholderInner}',style:'display:flex;align-items:center;justify-content:center;width:100%;height:100%'}))`;
-    const groupInline=c.group_id?` <em style="font-size:11px;color:var(--muted);font-weight:400">(${esc(c.group_id)})</em>`:'';
     const locationDesc=c.location?`<div class="moc-desc">${esc(c.location)}</div>`:'';
     return `<div class="moc-card" onclick="openMediaDrilldown('${esc(c.id)}')">
       <div class="moc-thumb"><img src="${esc(thumbSrc)}" alt="${esc(c.name)}" onerror="${esc(fallback)}" loading="lazy"/><div style="${thumbBadgeStyle}">${_fmtMb(s.size_mb||0)}</div></div>
       <div class="moc-body">
-        <div class="moc-name">${icon} ${esc(c.name)}${groupInline}</div>
+        <div class="moc-name">${icon} ${esc(c.name)}</div>
         ${locationDesc}
         <div class="moc-counts">
           ${_buildMocChips(s)}

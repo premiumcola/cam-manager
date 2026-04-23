@@ -525,7 +525,6 @@ def api_config():
         "server": {"public_base_url": c.get("server", {}).get("public_base_url", "")},
         "default_discovery_subnet": c.get("server", {}).get("default_discovery_subnet", "192.168.1.0/24"),
         "cameras": c.get("cameras", []),
-        "camera_groups": c.get("camera_groups", []),
         "coral": {
             "mode": proc.get("detection", {}).get("mode", "none"),
             "bird_species_enabled": bool(bird_cfg.get("enabled")),
@@ -565,7 +564,7 @@ def api_cameras():
         rt = runtimes.get(cam["id"])
         s = rt.status() if rt else {
             "id": cam["id"], "name": cam.get("name", cam["id"]), "location": cam.get("location", ""), "enabled": cam.get("enabled", True),
-            "group_id": cam.get("group_id"), "role": cam.get("role"), "armed": cam.get("armed", True), "status": "disabled", "today_events": 0
+            "armed": cam.get("armed", True), "status": "disabled", "today_events": 0
         }
         # snap_url / stream_url are dashboard-display-only derived URLs.
         # They MUST use a distinct key so they are never confused with the persisted
@@ -590,7 +589,6 @@ def api_cameras():
         s["motion_enabled"] = cam.get("motion_enabled", True)
         s["detection_trigger"] = cam.get("detection_trigger", "motion_and_objects")
         s["post_motion_tail_s"] = float(cam.get("post_motion_tail_s") or 0.0)
-        # Per-camera alarm profile (empty string = inherit from group)
         s["alarm_profile"] = cam.get("alarm_profile") or ""
         s["zones"] = cam.get("zones", [])
         s["masks"] = cam.get("masks", [])
@@ -610,22 +608,6 @@ def api_status():
         "person_profiles": person_registry.list_profiles(),
         "telegram_actions": settings.data.get("telegram_actions", [])[:12],
     })
-
-
-@app.get('/api/groups')
-def api_groups():
-    return jsonify({"groups": settings.data.get("camera_groups", [])})
-
-
-@app.post('/api/groups')
-def api_groups_save():
-    payload = request.get_json(force=True) or {}
-    try:
-        settings.upsert_group(payload)
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 422
-    rebuild_runtimes()
-    return jsonify({"ok": True, "group": payload})
 
 
 @app.get('/api/settings/cameras')
@@ -803,8 +785,6 @@ def api_wizard_complete():
             settings.update_section("telegram", payload["telegram"])
         if payload.get("mqtt"):
             settings.update_section("mqtt", payload["mqtt"])
-        for group in payload.get("camera_groups", []) or []:
-            settings.upsert_group(group)
         for cam in payload.get("cameras", []) or []:
             if cam.get("id"):
                 settings.upsert_camera(cam)

@@ -703,10 +703,6 @@ class CameraRuntime:
         x1, y1, x2, y2 = bbox
         return frame[max(0, y1):max(0, y2), max(0, x1):max(0, x2)]
 
-    def _group(self):
-        groups = {g.get("id"): g for g in self.global_cfg.get("camera_groups", [])}
-        return groups.get(self.cfg.get("group_id"), {})
-
     def _build_event_meta(self, ts: datetime, labels: list, detections: list,
                           drawn_frame, effective_bbox) -> dict:
         """Snapshot of all event metadata at the moment motion recording starts."""
@@ -715,20 +711,12 @@ class CameraRuntime:
         cat_match = next((d.identity for d in detections if d.label == "cat" and d.identity), None)
         person_match = next((d.identity for d in detections if d.label == "person" and d.identity), None)
         bird_species = next((d.species for d in detections if d.label == "bird" and d.species), None)
-        group = self._group()
-        # Schedule: per-camera only. Group schedule was never really used
-        # outside the defaults and is now deprecated — camera wins, period.
         after_hours = is_in_schedule(self.cfg.get("schedule") or {})
         whitelisted = bool(person_match and (person_match in (self.cfg.get("whitelist_names") or [])))
         if self.person_registry and person_match:
             p = self.person_registry.get_profile(person_match) or {}
             whitelisted = whitelisted or bool(p.get("whitelisted"))
-        # Per-camera alarm profile (preferred). Legacy group.alarm_profile
-        # stays as a fallback so existing deployments don't silently drop
-        # to "soft" on upgrade.
-        profile = (self.cfg.get("alarm_profile") or "").strip() \
-                  or (group or {}).get("alarm_profile") \
-                  or "soft"
+        profile = (self.cfg.get("alarm_profile") or "").strip() or "soft"
         level, notify = choose_alarm_level(profile, list(sorted(set(labels))), after_hours, whitelisted)
         # "Stumm" kill-switch: armed=false suppresses all Telegram alerts
         # but keeps the event recording and archive path intact.
@@ -761,7 +749,6 @@ class CameraRuntime:
             "alarm_level": level,
             "after_hours": after_hours,
             "notify": notify,
-            "group": group,
             "thumb_bytes": thumb_bytes,
         }
 
@@ -823,8 +810,6 @@ class CameraRuntime:
             "event_id": event_id,
             "camera_id": self.camera_id,
             "camera_name": self.cfg.get("name", self.camera_id),
-            "group_id": self.cfg.get("group_id"),
-            "camera_role": self.cfg.get("role"),
             "armed": bool(self.cfg.get("armed", True)),
             "after_hours": meta["after_hours"],
             "alarm_level": meta["alarm_level"],
@@ -1197,8 +1182,6 @@ class CameraRuntime:
             "event_id": event_id,
             "camera_id": self.camera_id,
             "camera_name": self.cfg.get("name", self.camera_id),
-            "group_id": self.cfg.get("group_id"),
-            "camera_role": self.cfg.get("role"),
             "armed": bool(self.cfg.get("armed", True)),
             "after_hours": meta["after_hours"],
             "alarm_level": meta["alarm_level"],
@@ -1244,19 +1227,6 @@ class CameraRuntime:
         if not self.cfg.get("armed", True):
             notify = False
         _send_tg = notify and self.cfg.get("telegram_enabled", True)
-        if _send_tg:
-            tg_cfg = self.global_cfg.get("telegram", {})
-            tg_groups = tg_cfg.get("groups", {})
-            g_id = self.cfg.get("group_id")
-            if g_id and g_id in tg_groups:
-                gr = tg_groups[g_id]
-                if not gr.get("enabled", True):
-                    _send_tg = False
-                elif gr.get("objects") and not any(lbl in set(gr["objects"]) for lbl in meta["labels"]):
-                    _send_tg = False
-                elif gr.get("from") and gr.get("to"):
-                    if not is_in_schedule({"enabled": True, "start": gr["from"], "end": gr["to"]}):
-                        _send_tg = False
         if _send_tg and self.notifier:
             labels = meta["labels"]
             cat_match = meta.get("cat_name")
@@ -1973,8 +1943,6 @@ class CameraRuntime:
                             "event_id": event_id,
                             "camera_id": self.camera_id,
                             "camera_name": self.cfg.get("name", self.camera_id),
-                            "group_id": self.cfg.get("group_id"),
-                            "camera_role": self.cfg.get("role"),
                             "armed": bool(self.cfg.get("armed", True)),
                             "after_hours": ev_meta["after_hours"],
                             "alarm_level": ev_meta["alarm_level"],
@@ -1998,19 +1966,6 @@ class CameraRuntime:
                         # Defensive: "Stumm" cameras never send Telegram.
                         if not self.cfg.get("armed", True):
                             _send_tg = False
-                        if _send_tg:
-                            tg_cfg = self.global_cfg.get("telegram", {})
-                            tg_groups = tg_cfg.get("groups", {})
-                            g_id = self.cfg.get("group_id")
-                            if g_id and g_id in tg_groups:
-                                gr = tg_groups[g_id]
-                                if not gr.get("enabled", True):
-                                    _send_tg = False
-                                elif gr.get("objects") and not any(lbl in set(gr["objects"]) for lbl in labels):
-                                    _send_tg = False
-                                elif gr.get("from") and gr.get("to"):
-                                    if not is_in_schedule({"enabled": True, "start": gr["from"], "end": gr["to"]}):
-                                        _send_tg = False
                         if _send_tg and self.notifier:
                             with open(snap_path, "rb") as fh:
                                 thumb = fh.read()
@@ -2065,8 +2020,6 @@ class CameraRuntime:
             "name": cfg.get("name", self.camera_id),
             "location": cfg.get("location", ""),
             "enabled": cfg.get("enabled", True),
-            "group_id": cfg.get("group_id"),
-            "role": cfg.get("role"),
             "armed": cfg.get("armed", True),
             "source": "rtsp" if cfg.get("rtsp_url") else "snapshot",
             "last_error": self.last_error,
