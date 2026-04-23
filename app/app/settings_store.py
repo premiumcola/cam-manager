@@ -76,6 +76,9 @@ class SettingsStore:
             "detection_trigger": cam.get("detection_trigger", "motion_and_objects"),
             "post_motion_tail_s": float(cam.get("post_motion_tail_s") or 0.0),
             "alarm_profile": (cam.get("alarm_profile") or "").strip(),
+            "recording_schedule_enabled": bool(cam.get("recording_schedule_enabled", False)),
+            "recording_schedule_start": cam.get("recording_schedule_start", "08:00"),
+            "recording_schedule_end": cam.get("recording_schedule_end", "22:00"),
         }
 
     def _build_defaults(self, base_config: dict) -> dict:

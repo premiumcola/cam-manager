@@ -345,6 +345,20 @@
               </div>
               <div class="field-help">Wie lange nach letzter Bewegung weiter aufnehmen.</div>
 
+              <div class="cam-sep"></div>
+              <div class="cam-field-label">Aufnahme-Zeitplan</div>
+              <label class="toggle-row" style="margin-top:4px">
+                <span class="toggle-row-label">Zeitplan aktiv
+                  <span class="toggle-row-sublabel">Außerhalb: Erkennung läuft, aber keine Aufnahme &amp; kein Telegram</span>
+                </span>
+                <label class="switch"><input type="checkbox" name="recording_schedule_enabled" /><span class="slider"></span></label>
+              </label>
+              <div class="row" style="grid-template-columns:1fr 1fr;margin-top:4px">
+                <div class="field-wrap"><input name="recording_schedule_start" placeholder="08:00" /><span class="field-label">Von</span></div>
+                <div class="field-wrap"><input name="recording_schedule_end" placeholder="22:00" /><span class="field-label">Bis</span></div>
+              </div>
+              <div class="field-help" style="margin-top:6px">Außerhalb des Zeitfensters: Kamera läuft weiter, aber es werden keine Events gespeichert und kein Telegram gesendet.</div>
+
               <!-- Hidden: field still saved, controlled by global setting. -->
               <input type="hidden" name="motion_enabled" value="true" />
               <!-- Legacy fields kept hidden so save payload shape stays stable. -->

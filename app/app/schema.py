@@ -99,6 +99,9 @@ CAMERA_SCHEMA: dict = {
     "post_motion_tail_s":  (float, 0.0),  # 0 = use global default
     "detection_min_score": (float, 0.0),
     "alarm_profile":       (str,   ""),
+    "recording_schedule_enabled": (bool, False),
+    "recording_schedule_start":   (str,  "08:00"),
+    "recording_schedule_end":     (str,  "22:00"),
     "object_filter":       (list,  []),
     "zones":               (list,  []),
     "masks":               (list,  []),

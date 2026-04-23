@@ -590,6 +590,9 @@ def api_cameras():
         s["detection_trigger"] = cam.get("detection_trigger", "motion_and_objects")
         s["post_motion_tail_s"] = float(cam.get("post_motion_tail_s") or 0.0)
         s["alarm_profile"] = cam.get("alarm_profile") or ""
+        s["recording_schedule_enabled"] = bool(cam.get("recording_schedule_enabled", False))
+        s["recording_schedule_start"] = cam.get("recording_schedule_start", "08:00")
+        s["recording_schedule_end"] = cam.get("recording_schedule_end", "22:00")
         s["zones"] = cam.get("zones", [])
         s["masks"] = cam.get("masks", [])
         s["resolution"] = cam.get("resolution", "auto")

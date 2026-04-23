@@ -1823,6 +1823,21 @@ class CameraRuntime:
                 else:
                     has_motion = bool(labels)
 
+                # Per-camera recording schedule: outside the window we still
+                # detect, but we never start a new event. In-progress recordings
+                # finalize normally (the gate only fires when has_motion AND
+                # we're not already recording).
+                if (has_motion and not self._recording
+                        and self.cfg.get("recording_schedule_enabled")):
+                    in_window = is_in_schedule({
+                        "enabled": True,
+                        "start": self.cfg.get("recording_schedule_start", "08:00"),
+                        "end":   self.cfg.get("recording_schedule_end",   "22:00"),
+                    })
+                    if not in_window:
+                        time.sleep(interval)
+                        continue
+
                 if self.cfg.get("rtsp_url"):
                     # ── RTSP: pre-buffer + per-session video recording ────────
                     # Measure main-stream FPS over a rolling 5s window

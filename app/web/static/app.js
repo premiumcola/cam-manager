@@ -1000,6 +1000,9 @@ function editCamera(camId){
     const presets=['0','3','5','8','10','15'];
     f['post_motion_tail_s'].value=presets.includes(String(tail))?String(tail):'0';
   }
+  if(f['recording_schedule_enabled']) f['recording_schedule_enabled'].checked=!!c.recording_schedule_enabled;
+  if(f['recording_schedule_start']) f['recording_schedule_start'].value=c.recording_schedule_start||'08:00';
+  if(f['recording_schedule_end']) f['recording_schedule_end'].value=c.recording_schedule_end||'22:00';
   if(f['resolution']) f['resolution'].value=c.resolution||'auto';
   // frame_interval_ms / snapshot_interval_s are hidden inputs since the
   // Qualität tab was removed; their visible labels (#frameIntervalLabel /
@@ -1809,6 +1812,9 @@ byId('cameraForm').onsubmit=async(e)=>{
     motion_enabled:f['motion_enabled']?f['motion_enabled'].checked:true,
     detection_trigger:f['detection_trigger']?.value||'motion_and_objects',
     post_motion_tail_s:parseFloat(f['post_motion_tail_s']?.value||0),
+    recording_schedule_enabled:!!f['recording_schedule_enabled']?.checked,
+    recording_schedule_start:f['recording_schedule_start']?.value||'08:00',
+    recording_schedule_end:f['recording_schedule_end']?.value||'22:00',
     alarm_profile:f['alarm_profile']?.value||'soft',
     detection_min_score:parseFloat(f['detection_min_score']?.value||0),
     resolution:f['resolution']?.value||'auto',
