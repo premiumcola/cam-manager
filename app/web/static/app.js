@@ -1282,7 +1282,6 @@ function hydrateSettings(){
   // App section
   const pubEl=byId('set_public_base_url'); if(pubEl) pubEl.value=server.public_base_url||'';
   const subEl=byId('set_discovery_subnet'); if(subEl) subEl.value=state.config.default_discovery_subnet||'';
-  updateAppInfoPanel();
   updateSystemPanel();
   // MQTT section
   const mqttEn=byId('mqtt_enabled'); if(mqttEn) mqttEn.checked=!!mqtt.enabled;
@@ -1350,18 +1349,9 @@ function hydrateSettings(){
   const acEl=byId('ms_auto_cleanup'); if(acEl) acEl.checked=!!storageSec.auto_cleanup_enabled;
 }
 
-function updateAppInfoPanel(){
-  const panel=byId('appInfoPanel'); if(!panel) return;
-  const stor=state.config?.storage||{};
-  const storagePath=stor.root||'storage/';
-  // Build info will be filled by updateSystemPanel via /api/system
-  panel.innerHTML=`
-    <div class="app-info-item"><span class="app-info-label">Storage-Pfad</span><span class="app-info-val"><code>${esc(storagePath)}</code></span></div>
-  `;
-}
-
 async function updateSystemPanel(){
   const panel=byId('systemInfoPanel'); if(!panel) return;
+  const storagePath=state.config?.storage?.root||'storage/';
   try{
     const s=await j('/api/system');
     const b=s.build||{};
@@ -1369,8 +1359,6 @@ async function updateSystemPanel(){
     const date=b.date||'—';
     const count=b.count||'—';
     // Letzter Neustart — the Flask process start time, NOT the build date.
-    // Build date only updates on rebuild; this always reflects the last
-    // container restart.
     let restartShort='—';
     if(s.process_start){
       try{
@@ -1394,15 +1382,20 @@ async function updateSystemPanel(){
     const procMem=s.proc_mem_mb||0;
     const uptime=s.uptime_s||0;
     const uptimeStr=uptime>3600?`${Math.floor(uptime/3600)}h ${Math.floor((uptime%3600)/60)}m`:uptime>60?`${Math.floor(uptime/60)}m`:`${Math.round(uptime)}s`;
+    const shortCommit=commit.length>7?commit.slice(0,7):commit;
     panel.innerHTML=`
-      <div class="app-info-grid" style="margin-bottom:0">
-        <div class="app-info-item"><span class="app-info-label">Build</span><span class="app-info-val"><code>${esc(commit)}</code> · ${esc(date)}</span></div>
-        <div class="app-info-item"><span class="app-info-label">Commits</span><span class="app-info-val">${esc(String(count))}</span></div>
-        ${s.process_start?`<div class="app-info-item"><span class="app-info-label">Letzter Neustart</span><span class="app-info-val" title="${esc(s.process_start)}">${esc(restartShort)}</span></div>`:''}
-        ${memTotal?`<div class="app-info-item"><span class="app-info-label">RAM (System)</span><span class="app-info-val">${memUsed} / ${memTotal} MB</span></div>`:''}
-        ${procMem?`<div class="app-info-item"><span class="app-info-label">RAM (App)</span><span class="app-info-val">${procMem} MB</span></div>`:''}
-        ${uptime?`<div class="app-info-item"><span class="app-info-label">Container-Uptime</span><span class="app-info-val">${uptimeStr}</span></div>`:''}
-        ${s.camera_count!==undefined?`<div class="app-info-item"><span class="app-info-label">Aktive Runtimes</span><span class="app-info-val">${s.camera_count}</span></div>`:''}
+      <div class="app-info-block">
+        <div class="app-info-section-title">Build &amp; System</div>
+        <div class="app-info-row"><span class="app-info-row-label">Build</span><span class="app-info-row-val"><code>${esc(shortCommit)}</code> · ${esc(date)}</span></div>
+        <div class="app-info-row"><span class="app-info-row-label">Commits</span><span class="app-info-row-val">${esc(String(count))}</span></div>
+        ${s.process_start?`<div class="app-info-row"><span class="app-info-row-label">Letzter Neustart</span><span class="app-info-row-val" title="${esc(s.process_start)}">${esc(restartShort)}</span></div>`:''}
+        ${uptime?`<div class="app-info-row"><span class="app-info-row-label">Container-Uptime</span><span class="app-info-row-val">${uptimeStr}</span></div>`:''}
+        ${s.camera_count!==undefined?`<div class="app-info-row"><span class="app-info-row-label">Aktive Kameras</span><span class="app-info-row-val">${s.camera_count}</span></div>`:''}
+
+        <div class="app-info-section-title">Ressourcen</div>
+        ${procMem?`<div class="app-info-row"><span class="app-info-row-label">RAM (App)</span><span class="app-info-row-val">${procMem} MB</span></div>`:''}
+        ${memTotal?`<div class="app-info-row"><span class="app-info-row-label">RAM (System)</span><span class="app-info-row-val">${memUsed} / ${memTotal} MB</span></div>`:''}
+        <div class="app-info-row"><span class="app-info-row-label">Storage</span><span class="app-info-row-val"><code>${esc(storagePath)}</code></span></div>
       </div>`;
   }catch(e){/* silent — system info optional */}
 }

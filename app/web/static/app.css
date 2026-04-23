@@ -613,11 +613,14 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .tg-tab-panel.active{display:block}
 
 /* App info panel */
-.app-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
-#appInfoPanel.app-info-grid{grid-template-columns:1fr;margin-bottom:6px}
-.app-info-item{background:var(--bg);border-radius:12px;padding:10px 14px;display:flex;flex-direction:column;gap:3px}
-.app-info-label{font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
-.app-info-val{font-size:13px;color:var(--text);font-weight:500}
+.app-info-block{display:grid;gap:0;padding:2px 0 10px}
+.app-info-row{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.05);gap:12px}
+.app-info-row:last-child{border-bottom:none}
+.app-info-row-label{font-size:12px;color:var(--muted);font-weight:500;flex-shrink:0}
+.app-info-row-val{font-size:13px;color:var(--text);font-weight:600;text-align:right}
+.app-info-row-val code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.app-info-section-title{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:rgba(255,255,255,.25);font-weight:700;padding:12px 0 4px}
+.app-info-section-title:first-child{padding-top:0}
 .tg-obj-chip:hover{border-color:var(--accent)}
 
 /* Dependency tree / flow diagram */
