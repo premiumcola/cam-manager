@@ -937,14 +937,19 @@ select option{background:#1a2236;color:var(--text)}
 .btn-cam-delete:active{background:rgba(239,68,68,.4)}
 
 /* ── Timelapse mode grid (3 cols desktop → 2 tablet → 1 mobile) ─────────── */
-.tl-modes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.tl-modes-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:12px}
 @media(max-width:900px){.tl-modes-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:480px){.tl-modes-grid{grid-template-columns:1fr}}
-.tl-mode-col{border-radius:12px;background:var(--surface);padding:12px 14px;border:1.5px solid rgba(255,255,255,.06);transition:border-color .15s,background .15s;display:flex;flex-direction:column;gap:9px}
-.tl-mode-col--on{border-color:rgba(168,85,247,.5);background:rgba(168,85,247,.07)}
+/* Flat mode column — left accent bar instead of a nested rounded card. */
+.tl-mode-col{border:none;border-left:2px solid rgba(255,255,255,.08);border-radius:0;background:transparent;padding:4px 0 6px 12px;transition:border-left-color .15s,background .15s;display:flex;flex-direction:column;gap:9px}
+.tl-mode-col--on{border-left-color:#a855f7;background:linear-gradient(90deg,rgba(168,85,247,.16),rgba(168,85,247,.03) 70%,transparent)}
 .tl-mode-col-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .tl-mode-col-name{font-weight:700;font-size:13px;line-height:1.2}
+.tl-mode-col--on .tl-mode-col-name{color:#d8b4fe}
 .tl-mode-col-desc{font-size:11px;color:var(--muted);line-height:1.4;min-height:58px;overflow:hidden}
+/* Remove the rounded inner box from .sec-content inside timelapse so
+   we only have one outer container instead of three stacked rounded boxes. */
+#set-timelapse .sec-content{background:transparent;padding:4px 0 8px;border-radius:0}
 .tl-drow{display:flex;align-items:center;gap:6px;margin-bottom:5px;color:var(--muted)}
 .tl-drow:last-child{margin-bottom:0}
 .tl-drow-ico{display:flex;align-items:center;flex-shrink:0}
