@@ -803,6 +803,14 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .coral-tab-content{display:block}
 .coral-tab-content[hidden]{display:none}
 
+/* ── Coral section: pink (#f472b6 / #f9a8d4) accent override ──────────── */
+#set-coral .coral-tab.active{color:#f9a8d4;border-bottom-color:#f472b6}
+#set-coral .coral-tab:hover:not(.active){color:#fbcfe8}
+#set-coral .btn-action.ghost{border-color:rgba(244,114,182,.45)!important;color:#f9a8d4}
+#set-coral .btn-action.ghost:hover{background:rgba(244,114,182,.10)!important;color:#fbcfe8}
+/* Pink CPU-fallback badge — keeps the green --on indicator unchanged. */
+#set-coral .set-status-badge--cpu{background:rgba(244,114,182,.14);color:#f9a8d4}
+
 /* Test pane row: dropdown + button */
 .coral-test-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .coral-test-row select{flex:1;min-width:180px}
