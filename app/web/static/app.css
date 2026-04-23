@@ -342,6 +342,8 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .cam-edit-wrapper.slide-open{grid-template-rows:1fr}
 .cam-edit-inner{overflow:hidden;min-height:0;padding:0 16px;background:#212940}
 .cam-edit-wrapper.slide-open .cam-edit-inner{padding:16px;overflow:hidden}
+.cam-edit-inner::-webkit-scrollbar{display:none}
+.cam-edit-inner{scrollbar-width:none}
 .cam-edit-header{display:none}  /* Redundant with the camera row header above; hide. */
 /* Compact user+pass side by side */
 .cam-userpass{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -526,6 +528,8 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .set-section.open .set-bd{grid-template-rows:1fr}
 .set-inner{overflow:hidden;min-height:0;padding:0 16px}
 .set-section.open .set-inner{padding:14px 16px 16px}
+.set-inner::-webkit-scrollbar{display:none}
+.set-inner{scrollbar-width:none}
 
 /* Inner cards (sub-groups inside a section) — always NEUTRAL gray. Accent
    colour lives on the outer section border only; inner content never
