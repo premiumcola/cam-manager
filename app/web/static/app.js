@@ -33,7 +33,7 @@ function _resolveConfirm(val){
   if(_confirmResolve){_confirmResolve(val);_confirmResolve=null;}
 }
 // Wire confirm buttons after DOM ready (done at bottom of file)
-const colors={person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#475569',motion:'#cbd5e1',alarm:'#ef4444',unknown:'#4a6477',timelapse:'#a855f7',motion_objects:'#c084fc',coral:'#f472b6',dog:'#38bdf8'};
+const colors={person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',motion:'#cbd5e1',alarm:'#ef4444',unknown:'#4a6477',timelapse:'#a855f7',motion_objects:'#c084fc',coral:'#f472b6',dog:'#38bdf8'};
 const OBJ_LABEL={person:'Person',cat:'Katze',bird:'Vogel',car:'Auto',dog:'Hund',motion:'Bewegung',alarm:'Alarm',timelapse:'Timelapse',motion_objects:'Motion · Objekte'};
 const OBJ_SVG={
   // Person: head circle + body arc — bright yellow silhouette
@@ -42,8 +42,8 @@ const OBJ_SVG={
   cat:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polygon points="5,11 2,4 9.5,9" fill="#fb923c"/><polygon points="19,11 22,4 14.5,9" fill="#fb923c"/><circle cx="12" cy="15" r="7" fill="#fb923c"/><circle cx="9" cy="14.5" r="1.6" fill="#fff" opacity=".9"/><circle cx="15" cy="14.5" r="1.6" fill="#fff" opacity=".9"/><circle cx="9" cy="14.5" r=".7" fill="#7c2d12"/><circle cx="15" cy="14.5" r=".7" fill="#7c2d12"/><path d="M10 18q2 1.5 4 0" stroke="#fff" stroke-width="1.2" stroke-linecap="round" fill="none" opacity=".75"/></svg>`,
   // Bird: spread wings + oval body + round head — sky blue
   bird:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M2 12C5.5 7 9.5 9 12 13C14.5 9 18.5 7 22 12" fill="#38bdf8"/><ellipse cx="12" cy="15.5" rx="3.5" ry="2.5" fill="#38bdf8"/><circle cx="17.5" cy="10.5" r="2" fill="#38bdf8"/><circle cx="18.5" cy="10" r=".85" fill="#fff" opacity=".9"/><path d="M12 18v3" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-  // Car: dark slate body with lighter highlights — near-black but readable
-  car:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="11" width="20" height="8" rx="2.5" fill="#1e293b"/><rect x="6" y="7" width="11" height="5" rx="2" fill="#475569"/><circle cx="7" cy="20" r="2.5" fill="#0f172a"/><circle cx="17" cy="20" r="2.5" fill="#0f172a"/><circle cx="7" cy="20" r="1.2" fill="#64748b"/><circle cx="17" cy="20" r="1.2" fill="#64748b"/><rect x="14.5" y="8" width="3" height="3.5" rx=".75" fill="rgba(203,213,225,.45)"/></svg>`,
+  // Car: coral-red body with lighter salmon highlights — reads as warning/vehicle
+  car:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="11" width="20" height="8" rx="2.5" fill="#f87171"/><rect x="6" y="7" width="11" height="5" rx="2" fill="#fca5a5"/><circle cx="7" cy="20" r="2.5" fill="#1e293b"/><circle cx="17" cy="20" r="2.5" fill="#1e293b"/><circle cx="7" cy="20" r="1.2" fill="#7f1d1d"/><circle cx="17" cy="20" r="1.2" fill="#7f1d1d"/><rect x="14.5" y="8" width="3" height="3.5" rx=".75" fill="rgba(255,255,255,.35)"/></svg>`,
   // Motion: horizontal sine wave — wind-white
   motion:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M1 12 C4 5 7 5 9 12 C11 19 14 19 16 12 C18 5 21 5 23 12" stroke="#cbd5e1" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>`,
   // Alarm: bell body + clapper dot + handle — red, classic bell shape
@@ -496,7 +496,7 @@ ${isActive?`
 }
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
-const CAT_COLORS={alle:'#8888aa',motion:'#cbd5e1',person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#475569',timelapse:'#a855f7'};
+const CAT_COLORS={alle:'#8888aa',motion:'#cbd5e1',person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',timelapse:'#a855f7'};
 const TL_LANES=['person','cat','bird','car','motion'];
 const GAP_MS=2*60*1000;
 let _tlActiveLanes=new Set(TL_LANES);
