@@ -4079,13 +4079,132 @@ const MAMMAL_SVGS={
 'eichhoernchen_hell':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><path d="M 52 70 Q 72 58 70 34 Q 68 18 54 20 Q 40 22 44 40 Q 48 56 52 70Z" fill="#c4a878"/><path d="M 52 70 Q 66 56 64 36 Q 62 24 54 26 Q 46 28 48 42 Q 50 58 52 70Z" fill="#b49460"/><ellipse cx="36" cy="60" rx="15" ry="11" fill="#d4bea0"/><circle cx="38" cy="42" r="14" fill="#d4bea0"/><circle cx="28" cy="29" r="7" fill="#d4bea0"/><circle cx="28" cy="29" r="4" fill="#e0cca8"/><circle cx="44" cy="27" r="7" fill="#d4bea0"/><circle cx="44" cy="27" r="4" fill="#e0cca8"/><circle cx="44" cy="39" r="3.5" fill="#111"/><circle cx="43" cy="38" r="1.2" fill="#fff"/><ellipse cx="48" cy="45" rx="5" ry="3.5" fill="#c4b088"/><circle cx="50" cy="44" r="1.5" fill="#333"/><ellipse cx="28" cy="68" rx="4" ry="7" fill="#a08458"/><ellipse cx="38" cy="69" rx="4" ry="6" fill="#a08458"/></svg>`
 };
 
-// ── Achievement drill-down (placeholder) ─────────────────────────────────────
-function openAchievementDrilldown(id, name){
-  // navigate to media filtered by species
-  state.mediaLabels=new Set();
-  state.mediaCamera=null;
-  document.querySelector('a[href="#media"]')?.click();
+// ── Sichtungen drilldown (inline accordion) ──────────────────────────────────
+// State is module-level so the renderer can reflect the open card with an
+// outline+highlight and the wrap stays consistent across re-renders.
+let _achOpenId = null;
+let _achDrillItems = [];
+let _achDrillTotal = 0;
+let _achDrillPage = 0;
+const _ACH_DRILL_LIMIT = 24;
+let _achDrillLoading = false;
+
+// Lightbox navigation uses state.media — we save whatever was there so the
+// main Mediathek keeps its own list intact while the user pages through a
+// Sichtungen drilldown.
+let _achDrillSavedMedia = null;
+function _achDrillStashMedia(){
+  if(_achDrillSavedMedia === null) _achDrillSavedMedia = state.media;
+  state.media = _achDrillItems;
 }
+function _achDrillRestoreMedia(){
+  if(_achDrillSavedMedia !== null){
+    state.media = _achDrillSavedMedia;
+    _achDrillSavedMedia = null;
+  }
+}
+
+async function _achDrillFetch(speciesId, offset){
+  try{
+    const r = await j(`/api/achievements/${encodeURIComponent(speciesId)}/media?limit=${_ACH_DRILL_LIMIT}&offset=${offset}`);
+    return r || {items:[], total_count:0};
+  }catch(e){
+    return {items:[], total_count:0};
+  }
+}
+
+function _achDrillRenderItems(){
+  const grid = byId('achDrillGrid'); if(!grid) return;
+  if(!_achDrillItems.length){
+    grid.innerHTML = '<div class="item muted" style="padding:16px;grid-column:1/-1">Noch keine archivierten Aufnahmen für diese Art.</div>';
+  }else{
+    grid.innerHTML = _achDrillItems.map(mediaCardHTML).join('');
+  }
+  const more = byId('achDrillMore');
+  if(more){
+    more.style.display = _achDrillItems.length < _achDrillTotal ? '' : 'none';
+  }
+  const countEl = byId('achDrillCount');
+  if(countEl){
+    const shown = _achDrillItems.length;
+    countEl.textContent = _achDrillTotal <= shown ? `${shown}` : `${shown} von ${_achDrillTotal}`;
+  }
+  // Cards click → openLightbox with our item list in scope
+  _achDrillStashMedia();
+  grid.querySelectorAll('.media-card').forEach(card=>{
+    const eid = card.dataset.eventId;
+    card.style.cursor = 'pointer';
+    card.onclick = (ev) => {
+      // Leave stop-propagation for inner buttons (confirm/delete already
+      // call event.stopPropagation() in their onclick), so this only fires
+      // when the card body itself is clicked.
+      if(ev.target.closest('.mmc-actions, .media-confirmed-badge')) return;
+      const it = _achDrillItems.find(x=>x.event_id===eid);
+      if(it) openLightbox(it);
+    };
+  });
+}
+
+async function toggleAchDrilldown(id, name){
+  // Second click on the same card → close.
+  if(_achOpenId === id){
+    closeAchDrilldown();
+    return;
+  }
+  _achOpenId = id;
+  _achDrillItems = [];
+  _achDrillTotal = 0;
+  _achDrillPage = 0;
+  // Re-render grid so the previous active card loses its highlight and
+  // the newly-active one gains it; the drilldown wrap below the grid is
+  // recreated empty as part of that render.
+  renderAchievements();
+  const wrap = byId('achDrilldownWrap'); if(!wrap) return;
+  const nameEl = byId('achDrillName'); if(nameEl) nameEl.textContent = name || id;
+  const grid = byId('achDrillGrid'); if(grid) grid.innerHTML = '<div class="field-help" style="padding:16px;grid-column:1/-1">Lade Sichtungen…</div>';
+  // Expand the accordion first so the fetch result slots into a visible container.
+  wrap.classList.add('ach-drilldown-wrap--open');
+  // Scroll the drilldown into view once the height transition starts.
+  setTimeout(()=>{ byId('achDrilldownWrap')?.scrollIntoView({behavior:'smooth', block:'nearest'}); }, 60);
+  _achDrillLoading = true;
+  const r = await _achDrillFetch(id, 0);
+  _achDrillLoading = false;
+  // Check the user didn't close / switch the drilldown while we were waiting.
+  if(_achOpenId !== id) return;
+  _achDrillItems = r.items || [];
+  _achDrillTotal = r.total_count || 0;
+  _achDrillRenderItems();
+}
+window.toggleAchDrilldown = toggleAchDrilldown;
+
+async function loadMoreAchDrill(){
+  if(!_achOpenId || _achDrillLoading) return;
+  _achDrillLoading = true;
+  _achDrillPage += 1;
+  const r = await _achDrillFetch(_achOpenId, _achDrillPage * _ACH_DRILL_LIMIT);
+  _achDrillLoading = false;
+  if(r && r.items && r.items.length){
+    _achDrillItems = _achDrillItems.concat(r.items);
+    _achDrillTotal = r.total_count || _achDrillItems.length;
+    _achDrillRenderItems();
+  }
+}
+window.loadMoreAchDrill = loadMoreAchDrill;
+
+function closeAchDrilldown(){
+  const wrap = byId('achDrilldownWrap');
+  if(wrap) wrap.classList.remove('ach-drilldown-wrap--open');
+  _achOpenId = null;
+  _achDrillItems = [];
+  _achDrillTotal = 0;
+  _achDrillPage = 0;
+  _achDrillRestoreMedia();
+  renderAchievements();
+}
+window.closeAchDrilldown = closeAchDrilldown;
+
+// Legacy name kept so any lingering inline callers don't break.
+function openAchievementDrilldown(id, name){ toggleAchDrilldown(id, name); }
 
 // ── Achievements / Sichtungen ─────────────────────────────────────────────────
 // Top 20 Bavarian garden birds (LBV Stunde der Gartenvögel 2025 Bayern),
@@ -4240,8 +4359,9 @@ function renderAchievements(){
     const baseName=nameParts?.[1]||a.name;
     const variantSuffix=nameParts?.[2]||'';
     const nameHtml=`${esc(baseName)}${variantSuffix?`<span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);font-style:italic;margin-left:3px">${esc(variantSuffix)}</span>`:''}`;
-    const clickable=isUnlocked?`onclick="openAchievementDrilldown('${esc(a.id)}','${esc(a.name)}')" style="cursor:pointer"`:'';
-    return `<div class="ach-card ${tier}" ${clickable}>
+    const clickable=isUnlocked?`onclick="toggleAchDrilldown('${esc(a.id)}','${esc(a.name)}')" style="cursor:pointer"`:'';
+    const activeCls = (isUnlocked && _achOpenId === a.id) ? ' ach-card--active' : '';
+    return `<div class="ach-card ${tier}${activeCls}" ${clickable}>
       <div class="medal-wrap">
         ${medalHtml}
         ${emojiOverlay}
@@ -4260,7 +4380,29 @@ function renderAchievements(){
     return (a.rank||99) - (b.rank||99);
   });
   const cards = sorted.map(_renderCard).join('');
-  byId('achievementsGrid').innerHTML=`<div class="ach-cards-grid">${cards}</div>`+legend;
+  // Drilldown accordion — sits BETWEEN the grid and the legend so the
+  // opening card's context stays close.
+  const drilldown = `
+    <div class="ach-drilldown-wrap${_achOpenId ? ' ach-drilldown-wrap--open' : ''}" id="achDrilldownWrap">
+      <div class="ach-drilldown">
+        <div class="ach-drill-header">
+          <div class="ach-drill-title">🌿 <span id="achDrillName"></span></div>
+          <span class="ach-drill-count" id="achDrillCount"></span>
+          <button type="button" class="ach-drill-close" onclick="closeAchDrilldown()" aria-label="Schließen">✕</button>
+        </div>
+        <div class="ach-drill-grid" id="achDrillGrid"></div>
+        <div class="ach-drill-more" id="achDrillMore" style="display:none">
+          <button type="button" class="btn-action" onclick="loadMoreAchDrill()">Mehr laden</button>
+        </div>
+      </div>
+    </div>`;
+  byId('achievementsGrid').innerHTML=`<div class="ach-cards-grid">${cards}</div>${drilldown}`+legend;
+  // If we re-rendered while a drilldown was open, re-populate the grid
+  // from the in-memory cache so the user sees items immediately instead
+  // of a "Lade…" placeholder on every click elsewhere.
+  if(_achOpenId && _achDrillItems.length){
+    _achDrillRenderItems();
+  }
 }
 
 // Wire confirm modal
