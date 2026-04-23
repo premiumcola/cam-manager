@@ -803,6 +803,11 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .coral-tab-content{display:block}
 .coral-tab-content[hidden]{display:none}
 
+/* ── Profiles section: yellow (#fbbf24) accent override ──────────────── */
+#set-profiles .set-inner>div>div>.small.muted{color:#fbbf24}
+#set-profiles .set-inner>div:last-child{border-top-color:rgba(251,191,36,.18)!important}
+#set-profiles .set-inner>div:last-child>.small.muted{color:#fbbf24}
+
 /* ── Coral section: pink (#f472b6 / #f9a8d4) accent override ──────────── */
 #set-coral .coral-tab.active{color:#f9a8d4;border-bottom-color:#f472b6}
 #set-coral .coral-tab:hover:not(.active){color:#fbcfe8}
