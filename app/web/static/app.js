@@ -3275,6 +3275,10 @@ byId('lightboxDelete').onclick=async()=>{
     state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps_lb));
     state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
     state.media=state._allMedia.slice(state.mediaPage*ps_lb,(state.mediaPage+1)*ps_lb);
+    if(state.media.length===0&&state.mediaPage>0){
+      state.mediaPage--;
+      state.media=state._allMedia.slice(state.mediaPage*ps_lb,(state.mediaPage+1)*ps_lb);
+    }
     _decrementMediaOverviewCount(camera_id);
     renderMediaGrid();
     renderMediaPagination();
@@ -3811,6 +3815,10 @@ window.deleteMediaCard=async(btn)=>{
       state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps_d));
       state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
       state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
+      if(state.media.length===0&&state.mediaPage>0){
+        state.mediaPage--;
+        state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
+      }
       _decrementMediaOverviewCount(camId);
       renderMediaGrid();
       renderMediaPagination();
@@ -3828,8 +3836,17 @@ window.deleteTLCard=async(camId,filename,eventId)=>{
     }
     const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(eventId)}"]`);
     if(card) card.remove();
-    state.media=(state.media||[]).filter(x=>x.event_id!==eventId);
     state._allMedia=(state._allMedia||[]).filter(x=>x.event_id!==eventId);
+    const ps_d=calcItemsPerPage();
+    state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps_d));
+    state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
+    state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
+    if(state.media.length===0&&state.mediaPage>0){
+      state.mediaPage--;
+      state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
+    }
+    renderMediaGrid();
+    renderMediaPagination();
     if(!byId('mediaGrid').querySelector('.media-card')){
       byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
     }
