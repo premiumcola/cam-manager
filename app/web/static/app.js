@@ -783,7 +783,7 @@ function renderCameraSettings(){
             </svg>
           </button>
           <!-- Expand chevron — pure visual cue; the whole row is clickable. -->
-          <svg class="cam-item-chevron" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+          <svg class="cam-item-chevron" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
         </div>
       </div>
     </div>`;}).join('');
@@ -3590,7 +3590,7 @@ function renderMediaOverview(){
   },{size_mb:0,event_count:0,jpg_count:0,timelapse_count:0,label_counts:{}});
 
   const thumbBadgeStyle='position:absolute;bottom:6px;right:6px;font-size:10px;font-weight:700;color:#e2e8f0;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);padding:2px 6px;border-radius:4px;z-index:2';
-  const allCard=`<div class="moc-card" onclick="openAllMediaDrilldown()">
+  const allCard=`<div class="moc-card" data-cam-id="__all__" onclick="openAllMediaDrilldown()">
     <div class="moc-all-thumb">${_MOC_ALL_SVG}<div style="${thumbBadgeStyle}">${_fmtMb(totalStats.size_mb)}</div></div>
     <div class="moc-body">
       <div class="moc-name">Alle Medien</div>
@@ -3614,7 +3614,7 @@ function renderMediaOverview(){
     const fallback=storedSnap?`this.onerror=function(){this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'${placeholderInner}',style:'display:flex;align-items:center;justify-content:center;width:100%;height:100%'}))};this.src='${liveSnap}'`
       :`this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'${placeholderInner}',style:'display:flex;align-items:center;justify-content:center;width:100%;height:100%'}))`;
     const locationDesc=c.location?`<div class="moc-desc">${esc(c.location)}</div>`:'';
-    return `<div class="moc-card" onclick="openMediaDrilldown('${esc(c.id)}')">
+    return `<div class="moc-card" data-cam-id="${esc(c.id)}" onclick="openMediaDrilldown('${esc(c.id)}')">
       <div class="moc-thumb"><img src="${esc(thumbSrc)}" alt="${esc(c.name)}" onerror="${esc(fallback)}" loading="lazy"/><div style="${thumbBadgeStyle}">${_fmtMb(s.size_mb||0)}</div></div>
       <div class="moc-body">
         <div class="moc-name">${icon} ${esc(c.name)}</div>
@@ -3635,7 +3635,7 @@ function renderMediaOverview(){
         ?`<img src="${esc(a.latest_snap_url)}" alt="${esc(a.name)}" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;filter:grayscale(.45) brightness(.8)"/>`
         :`<span style="font-size:36px;opacity:.18">📦</span>`;
       const archBadgeStyle='position:absolute;bottom:6px;right:6px;font-size:10px;font-weight:700;color:#a5bfce;background:rgba(0,0,0,.68);backdrop-filter:blur(3px);padding:2px 6px;border-radius:4px;z-index:2';
-      return `<div class="moc-card moc-archived" onclick="openMediaDrilldown('${esc(a.id)}')">
+      return `<div class="moc-card moc-archived" data-cam-id="${esc(a.id)}" onclick="openMediaDrilldown('${esc(a.id)}')">
         <div class="moc-thumb moc-arch-thumb">${thumbInner}<div style="${archBadgeStyle}">${_fmtMb(a.size_mb||0)}</div></div>
         <div class="moc-body">
           <div class="moc-name" style="display:flex;align-items:center;gap:6px">${_ARCHIVE_ICON} <span>${esc(a.name)}</span></div>
@@ -3771,6 +3771,14 @@ function renderMediaGrid(){
   });
 }
 window._tlItems=[];
+// Single source of truth for which moc-card is highlighted. data-cam-id is
+// stable across re-renders; pass null/undefined to clear all (used when the
+// drilldown closes or "Alle Medien" opens).
+function _setActiveMocCard(camId){
+  document.querySelectorAll('.moc-card').forEach(c=>{
+    c.classList.toggle('moc-active', !!camId && c.dataset.camId===camId);
+  });
+}
 async function openAllMediaDrilldown(){
   state.mediaCamera=null;
   state.mediaLabels=new Set(); state.mediaPeriod='week'; state.mediaPage=0;
@@ -3781,6 +3789,7 @@ async function openAllMediaDrilldown(){
   syncMediaPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
+  _setActiveMocCard('__all__');
   await loadMedia();
   renderMediaGrid();
 }
@@ -3797,7 +3806,7 @@ async function openMediaDrilldown(camId){
   syncMediaPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
-  document.querySelectorAll('.moc-card').forEach(c=>c.classList.toggle('moc-active',c.onclick?.toString().includes(`'${camId}'`)));
+  _setActiveMocCard(camId);
   await loadMedia();
   renderMediaGrid();
 }
@@ -3805,6 +3814,7 @@ function closeMediaDrilldown(){
   state.mediaCamera=null; state.media=[];
   byId('mediaDrilldown').style.display='none';
   byId('mediaOverview').style.display='';
+  _setActiveMocCard(null);
 }
 function syncMediaPills(){
   const labels=state.mediaLabels;
