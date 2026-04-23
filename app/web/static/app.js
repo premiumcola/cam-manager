@@ -33,13 +33,13 @@ function _resolveConfirm(val){
   if(_confirmResolve){_confirmResolve(val);_confirmResolve=null;}
 }
 // Wire confirm buttons after DOM ready (done at bottom of file)
-const colors={person:'#7c4dff',cat:'#e91e8c',bird:'#0ea5e9',car:'#f59e0b',motion:'#93c5fd',alarm:'#ef4444',unknown:'#4a6477',timelapse:'#c4b5fd',motion_objects:'#818cf8',dog:'#0ea5e9'};
+const colors={person:'#f59e0b',cat:'#fbbf24',bird:'#0ea5e9',car:'#e07b00',motion:'#93c5fd',alarm:'#ef4444',unknown:'#4a6477',timelapse:'#c4b5fd',motion_objects:'#818cf8',dog:'#0ea5e9'};
 const OBJ_LABEL={person:'Person',cat:'Katze',bird:'Vogel',car:'Auto',dog:'Hund',motion:'Bewegung',alarm:'Alarm',timelapse:'Timelapse',motion_objects:'Motion · Objekte'};
 const OBJ_SVG={
   // Person: head circle + body arc — clean silhouette, purple
-  person:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="7" r="4.5" fill="#7c4dff"/><path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#7c4dff" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>`,
+  person:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="7" r="4.5" fill="#f59e0b"/><path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#f59e0b" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>`,
   // Cat: round face with ear triangles and dot eyes — clear face, pink
-  cat:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polygon points="5,11 2,4 9.5,9" fill="#e91e8c"/><polygon points="19,11 22,4 14.5,9" fill="#e91e8c"/><circle cx="12" cy="15" r="7" fill="#e91e8c"/><circle cx="9" cy="14.5" r="1.6" fill="#fff" opacity=".9"/><circle cx="15" cy="14.5" r="1.6" fill="#fff" opacity=".9"/><circle cx="9" cy="14.5" r=".7" fill="#c0175e"/><circle cx="15" cy="14.5" r=".7" fill="#c0175e"/><path d="M10 18q2 1.5 4 0" stroke="#fff" stroke-width="1.2" stroke-linecap="round" fill="none" opacity=".75"/></svg>`,
+  cat:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polygon points="5,11 2,4 9.5,9" fill="#fbbf24"/><polygon points="19,11 22,4 14.5,9" fill="#fbbf24"/><circle cx="12" cy="15" r="7" fill="#fbbf24"/><circle cx="9" cy="14.5" r="1.6" fill="#fff" opacity=".9"/><circle cx="15" cy="14.5" r="1.6" fill="#fff" opacity=".9"/><circle cx="9" cy="14.5" r=".7" fill="#92570a"/><circle cx="15" cy="14.5" r=".7" fill="#92570a"/><path d="M10 18q2 1.5 4 0" stroke="#fff" stroke-width="1.2" stroke-linecap="round" fill="none" opacity=".75"/></svg>`,
   // Bird: spread wings (M-shape) + oval body + round head — clear flight silhouette, blue
   bird:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M2 12C5.5 7 9.5 9 12 13C14.5 9 18.5 7 22 12" fill="#0ea5e9"/><ellipse cx="12" cy="15.5" rx="3.5" ry="2.5" fill="#0ea5e9"/><circle cx="17.5" cy="10.5" r="2" fill="#0ea5e9"/><circle cx="18.5" cy="10" r=".85" fill="#fff" opacity=".9"/><path d="M12 18v3" stroke="#0ea5e9" stroke-width="1.8" stroke-linecap="round"/></svg>`,
   // Car: body + cab + wheels — amber, clear vehicle shape
@@ -496,7 +496,7 @@ ${isActive?`
 }
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
-const CAT_COLORS={alle:'#8888aa',motion:'#93c5fd',person:'#a855f7',cat:'#ec4899',bird:'#06b6d4',car:'#f59e0b',timelapse:'#c4b5fd'};
+const CAT_COLORS={alle:'#8888aa',motion:'#93c5fd',person:'#f59e0b',cat:'#fbbf24',bird:'#06b6d4',car:'#e07b00',timelapse:'#c4b5fd'};
 const TL_LANES=['person','cat','bird','car','motion'];
 const GAP_MS=2*60*1000;
 let _tlActiveLanes=new Set(TL_LANES);
