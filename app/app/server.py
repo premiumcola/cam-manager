@@ -1622,7 +1622,7 @@ def api_camera_timelapse_rolling(cam_id):
     return jsonify({"ok": True, "minutes": minutes, "url": f"/media/{rel.as_posix()}"})
 
 
-# ── Achievements / Trophäen ──────────────────────────────────────────────────
+# ── Achievements / Sichtungen ────────────────────────────────────────────────
 import json as _json_mod
 import threading as _threading_mod
 

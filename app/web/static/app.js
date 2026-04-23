@@ -4087,7 +4087,7 @@ function openAchievementDrilldown(id, name){
   document.querySelector('a[href="#media"]')?.click();
 }
 
-// ── Achievements / Trophäen ───────────────────────────────────────────────────
+// ── Achievements / Sichtungen ─────────────────────────────────────────────────
 // Top 20 Bavarian garden birds (LBV Stunde der Gartenvögel 2025 Bayern),
 // sorted by frequency (most common first). freq values drive rarity pills.
 const ACH_DEFS=[
@@ -4204,7 +4204,7 @@ function renderAchievements(){
   const total=ACH_DEFS.length;
   const pct=Math.round(unlocked.length/total*100);
   byId('achievementsProgress').innerHTML=`
-    <span class="ach-progress-text">🏆 ${unlocked.length} von ${total} entdeckt</span>
+    <span class="ach-progress-text">🌿 ${unlocked.length} von ${total} gesichtet</span>
     <div class="ach-progress-track"><div class="ach-progress-fill" style="width:${pct}%"></div></div>
     <span class="ach-progress-pct">${pct}%</span>`;
 

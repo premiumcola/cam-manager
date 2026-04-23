@@ -1216,7 +1216,7 @@ class CameraRuntime:
             newly_unlocked = self._try_unlock_achievement(bird_species, bird_species)
             if newly_unlocked and self.notifier:
                 try:
-                    ach_msg = (f"🏆 Neue Trophäe freigeschaltet: {bird_species}!\n"
+                    ach_msg = (f"🌿 Neue Sichtung entdeckt: {bird_species}!\n"
                                f"📷 Kamera: {self.cfg.get('name', self.camera_id)}")
                     threading.Thread(target=self.notifier.send_alert_sync,
                                      kwargs={"caption": ach_msg}, daemon=True).start()
