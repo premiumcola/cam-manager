@@ -144,7 +144,13 @@ class CameraRuntime:
         self.frame_ts: float = 0.0          # epoch of last frame written to self.frame
         self._reconnect_count: int = 0      # how many times capture was reopened
         self._stale_incidents: int = 0      # how often timelapse saw a stale frame buffer
-        self._stale_streak: int = 0         # consecutive stale capture intervals (reset on fresh frame)
+        # Camera-wide mirror of the highest-active profile's stale streak
+        # — used by /api/camera/<id>/status for the diagnostic dashboard.
+        # The authoritative per-profile counter lives as a local inside
+        # _timelapse_profile_loop() so parallel profiles can't stomp on
+        # each other. Main loop resets this to 0 on forced reconnect as
+        # a fresh-start signal for the UI.
+        self._stale_streak: int = 0
         self._force_reconnect: bool = False  # timelapse sets True to request RTSP reopen from _loop
         # ── Preview stream metrics ────────────────────────────────────────────
         self._preview_fps: float = 0.0          # measured sub-stream FPS (rolling 5s window)
@@ -281,6 +287,14 @@ class CameraRuntime:
             cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
             cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 8000)
             cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            # Read timeout — without this, cap.read() blocks indefinitely
+            # when the network pipe goes black mid-stream and the main loop
+            # can't check self._force_reconnect / self.running until a frame
+            # eventually arrives (which may never happen). 6 s is long
+            # enough that healthy streams with occasional packet loss don't
+            # trip it, short enough that a real dropout reaches the
+            # exception handler and reconnect path quickly.
+            cap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 6000)
             _RES_MAP = {"720p": (1280, 720), "1080p": (1920, 1080), "4k": (3840, 2160)}
             _res = self.cfg.get("resolution", "auto")
             if _res in _RES_MAP:
@@ -299,6 +313,7 @@ class CameraRuntime:
                     os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
                     pcap = cv2.VideoCapture(sub_url, cv2.CAP_FFMPEG)
                     pcap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                    pcap.set(cv2.CAP_PROP_READ_TIMEOUT_MSEC, 6000)
                     with self._preview_cap_lock:
                         old = self.preview_cap
                         if pcap.isOpened():
@@ -1524,6 +1539,11 @@ class CameraRuntime:
         window_key: str | None = None
         window_start_t: float = 0.0
         _last_frame_ts: float = 0.0   # frame_ts at last capture — detects stale buffer
+        # Per-profile stale streak — local instead of a self. attribute so
+        # two profiles running at different cadences don't corrupt each
+        # other's counter. self._stale_streak is still written for the
+        # status UI (acts as a "max recent" mirror).
+        stale_streak: int = 0
 
         while self.running:
             tl = self.cfg.get("timelapse") or {}
@@ -1592,21 +1612,31 @@ class CameraRuntime:
                     if frame_ts == _last_frame_ts:
                         age_s = time.time() - frame_ts
                         self._stale_incidents += 1
-                        self._stale_streak += 1
-                        log_tl.warning("[%s][%s] stale frame buffer (age=%.0fs, streak=%d) — RTSP stream may be stuck",
-                                      self.camera_id, profile_name, age_s, self._stale_streak)
+                        stale_streak += 1
+                        self._stale_streak = stale_streak  # mirror for status UI
+                        # Noise control: only surface streak 1 and 5 at
+                        # WARNING (first sign + "this is getting bad"),
+                        # everything in between goes to DEBUG. The reconnect
+                        # decision still uses the full streak.
+                        if stale_streak in (1, 5):
+                            log_tl.warning("[%s][%s] stale frame buffer (age=%.0fs, streak=%d) — RTSP stream may be stuck",
+                                          self.camera_id, profile_name, age_s, stale_streak)
+                        else:
+                            log_tl.debug("[%s][%s] stale frame buffer (age=%.0fs, streak=%d)",
+                                         self.camera_id, profile_name, age_s, stale_streak)
                         # After 15 consecutive stale intervals, request a forced RTSP reconnect
-                        if self._stale_streak >= 15 and not self._force_reconnect:
+                        if stale_streak >= 15 and not self._force_reconnect:
                             log_tl.error("[%s][%s] stale streak exceeded threshold — requesting RTSP reconnect",
                                         self.camera_id, profile_name)
                             self._force_reconnect = True
                         # Don't advance _last_frame_ts so we keep detecting stale each interval
                     else:
                         _last_frame_ts = frame_ts
-                        if self._stale_streak > 0:
+                        if stale_streak > 0:
                             log_cam.info("[%s][%s] stream recovered after %d stale intervals",
-                                         self.camera_id, profile_name, self._stale_streak)
-                        self._stale_streak = 0  # reset streak on any fresh frame
+                                         self.camera_id, profile_name, stale_streak)
+                        stale_streak = 0  # reset local streak on any fresh frame
+                        self._stale_streak = 0  # clear the UI mirror too
                         # Validate frame quality before saving — reject corrupted/blank frames
                         from .timelapse import TimelapseBuilder as _TLB_check
                         ok, reason = _TLB_check._is_valid_frame(frame)
@@ -1636,6 +1666,35 @@ class CameraRuntime:
         else:
             interval = max(1.0, float(self.cfg.get("snapshot_interval_s") or 3))
         cooldown = max(10, int(self.global_cfg.get("processing", {}).get("event_cooldown_seconds", 10)))
+
+        # ── Watchdog: hard-kill a wedged capture handle ──────────────────
+        # CAP_PROP_READ_TIMEOUT_MSEC isn't reliably honoured across every
+        # OpenCV/FFmpeg build — some combos still block forever on a dead
+        # TCP half-open. The watchdog releases the capture after 20 s of
+        # silence so the next loop iteration is guaranteed to enter the
+        # reconnect branch via self.capture becoming None / not-opened.
+        # Updated on every successful frame inside the loop below.
+        self._last_activity = time.time()
+        def _watchdog():
+            while self.running:
+                time.sleep(10.0)
+                if not self.running:
+                    return
+                if self.cfg.get("rtsp_url") and (time.time() - self._last_activity) > 20:
+                    log_cam.warning("[%s] watchdog: capture silent >20s, forcing release",
+                                    self.camera_id)
+                    try:
+                        if self.capture is not None:
+                            self.capture.release()
+                    except Exception:
+                        pass
+                    self.capture = None
+                    # Bump the activity marker so we don't fire again on the
+                    # very next tick before the reconnect attempt completes.
+                    self._last_activity = time.time()
+        threading.Thread(target=_watchdog, daemon=True,
+                         name=f"cam-wd-{self.camera_id}").start()
+
         while self.running:
             # Timelapse threads may request a forced reconnect when they detect a stale stream
             if self._force_reconnect:
@@ -1657,6 +1716,8 @@ class CameraRuntime:
                 with self.lock:
                     self.frame = frame
                     self.frame_ts = time.time()
+                # Feed the watchdog — any successful grab resets the silence clock.
+                self._last_activity = time.time()
                 if self._error_streak > 0:
                     log_cam.info("[%s] Stream wiederhergestellt nach %d Fehlern", self.camera_id, self._error_streak)
                 self.last_error = None
