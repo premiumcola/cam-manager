@@ -793,6 +793,7 @@
       <div id="lightboxMediaWrap" style="position:relative;width:100%;border-radius:18px;overflow:hidden;background:#080510;min-height:240px">
         <img id="lightboxImg" src="" alt="Event" style="width:100%;max-height:80vh;object-fit:contain;background:#081119;display:block;transition:transform .18s ease-in,opacity .18s ease-in" />
         <video id="lightboxVideo" style="display:none;width:100%;max-height:80vh;object-fit:contain;background:#080510;outline:none;border-radius:18px" controls playsinline preload="metadata"></video>
+        <canvas id="lightboxDetections" style="position:absolute;inset:0;pointer-events:none;z-index:3"></canvas>
         <button id="lightboxClose" type="button">✕</button>
         <button id="lightboxPrev" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15,18 9,12 15,6"/></svg></button>
         <button id="lightboxNext" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9,18 15,12 9,6"/></svg></button>
