@@ -215,14 +215,25 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@me
 /* Rescan button scan animation */
 #rescanMediaBtn.scanning svg{animation:spin 1s linear infinite;transform-origin:center}
 /* ── Unified category filter button ─────────────────────────────── */
-.cat-filter-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;min-height:44px;border-radius:10px;border:none;cursor:pointer;font-size:13px;font-weight:500;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:background .15s,box-shadow .15s;background:color-mix(in srgb,var(--cb,#8888aa) 12%,transparent);color:rgba(255,255,255,.7)}
-.cat-filter-btn:hover{background:color-mix(in srgb,var(--cb,#8888aa) 22%,transparent);color:rgba(255,255,255,.9)}
+/* Flat filled filter pill — no border, bg tint of object colour, text/icon
+   also in object colour. Hover/active deepen the fill; icon keeps its own
+   colour so the badge reads as a tinted object chip. */
+.cat-filter-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;min-height:44px;border-radius:10px;border:none;outline:none;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:background .15s,box-shadow .15s;background:color-mix(in srgb,var(--cb,#8888aa) 15%,transparent);color:var(--cb,#94a3b8)}
+.cat-filter-btn:hover{background:color-mix(in srgb,var(--cb,#8888aa) 24%,transparent)}
 .cat-filter-btn:active{opacity:.85}
 .cat-filter-btn.tl-lane-btn-empty{opacity:0.35;cursor:default}
 .cat-filter-btn.tl-lane-btn-empty:hover{opacity:0.5}
 .cat-filter-btn .cfb-icon{display:inline-flex;align-items:center;flex-shrink:0}
-.cat-filter-btn.active{background:color-mix(in srgb,var(--cb,#8888aa) 42%,transparent);color:#fff;font-weight:600;box-shadow:inset 0 0 12px color-mix(in srgb,var(--cb,#8888aa) 20%,transparent)}
-.cat-filter-btn.active .cfb-icon{filter:brightness(0) invert(1)}
+.cat-filter-btn.active{background:color-mix(in srgb,var(--cb,#8888aa) 38%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cb,#8888aa) 55%,transparent);color:#fff}
+/* Special: "Alle" uses a neutral tint */
+.cat-filter-btn[data-val=""]{background:rgba(255,255,255,.07);color:#94a3b8}
+.cat-filter-btn[data-val=""]:hover{background:rgba(255,255,255,.12)}
+.cat-filter-btn[data-val=""].active{background:rgba(255,255,255,.18);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
+/* Special: "Bewegung" uses an inverted solid light fill with dark text —
+   the wind-white motion colour is too faint against a dark surface at .15. */
+.cat-filter-btn[data-val="motion"]{background:rgba(203,213,225,.85);color:#334155}
+.cat-filter-btn[data-val="motion"]:hover{background:rgba(203,213,225,.95)}
+.cat-filter-btn[data-val="motion"].active{background:#e2e8f0;color:#0f172a;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
 .moc-body{padding:12px 14px;display:flex;flex-direction:column;gap:5px;flex:1}
 .moc-name{font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
 .moc-desc{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.4}
@@ -963,10 +974,15 @@ select option{background:#1a2236;color:var(--text)}
 .tg-panels-wrap{border-radius:14px;background:var(--bg);padding:12px 14px;margin-top:4px}
 .grp-tab-subtitle{font-size:11px;font-style:italic;color:#4e7c62;font-weight:400;margin-left:8px}
 .stat-empty{color:var(--muted);font-size:13px;padding:20px 0;text-align:center}
-/* Override media-pill base styles when cat-filter-btn is also applied */
-.media-pill.cat-filter-btn{border:none;padding:8px 14px;border-radius:10px;min-width:0;background:color-mix(in srgb,var(--cb,#8888aa) 12%,transparent);color:rgba(255,255,255,.7)}
-.media-pill.cat-filter-btn:hover{background:color-mix(in srgb,var(--cb,#8888aa) 22%,transparent);border-color:transparent;color:rgba(255,255,255,.9)}
-.media-pill.cat-filter-btn.active{background:color-mix(in srgb,var(--cb,#8888aa) 42%,transparent);color:#fff;font-weight:600;border-color:transparent;box-shadow:inset 0 0 12px color-mix(in srgb,var(--cb,#8888aa) 20%,transparent)}
-.media-pill.cat-filter-btn.active .cfb-icon{filter:brightness(0) invert(1)}
+/* Override media-pill base styles when cat-filter-btn is also applied —
+   delegate to the .cat-filter-btn flat style above so both bars look the same. */
+.media-pill.cat-filter-btn{border:none;padding:8px 14px;border-radius:10px;min-width:0;background:color-mix(in srgb,var(--cb,#8888aa) 15%,transparent);color:var(--cb,#94a3b8);font-weight:700}
+.media-pill.cat-filter-btn:hover{background:color-mix(in srgb,var(--cb,#8888aa) 24%,transparent);border-color:transparent}
+.media-pill.cat-filter-btn.active{background:color-mix(in srgb,var(--cb,#8888aa) 38%,transparent);color:#fff;border-color:transparent;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cb,#8888aa) 55%,transparent)}
+.media-pill.cat-filter-btn[data-val=""]{background:rgba(255,255,255,.07);color:#94a3b8}
+.media-pill.cat-filter-btn[data-val=""].active{background:rgba(255,255,255,.18);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
+.media-pill.cat-filter-btn[data-val="motion"]{background:rgba(203,213,225,.85);color:#334155}
+.media-pill.cat-filter-btn[data-val="motion"]:hover{background:rgba(203,213,225,.95)}
+.media-pill.cat-filter-btn[data-val="motion"].active{background:#e2e8f0;color:#0f172a;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
 /* ── Fullscreen button ───────────────────────────────────────────────────── */
 .fake-fullscreen{position:fixed!important;inset:0!important;z-index:9999!important;width:100vw!important;height:100dvh!important;border-radius:0!important;background:#000!important;margin:0!important}
