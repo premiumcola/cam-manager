@@ -875,10 +875,10 @@ function _renderCamObjectPills(){
 }
 
 const _ALARM_PROFILE_HINTS={
-  hard:   'Hart: Person oder Auto → lauter Alarm + Telegram. Tiere/Motion ohne Benachrichtigung.',
-  medium: 'Mittel: Alle erkannten Objekte → Info-Event + Telegram.',
-  soft:   'Weich: Jedes Event wird als Info geloggt und gesendet.',
-  info:   'Info: Nur Tiere (Katze/Vogel) lösen Telegram aus. Motion allein bleibt still.',
+  hard:   'Telegram nur bei Person/Auto. Tiere & reine Bewegung werden ignoriert.',
+  medium: 'Telegram bei Person/Auto (Alarm) und bei Tieren (Info-Meldung). Reine Bewegung still.',
+  soft:   'Telegram bei jedem Event — Person, Tier oder reine Bewegung.',
+  info:   'Telegram nur bei Tieren (Katze, Vogel, Fuchs …). Personen & Bewegung still.',
 };
 window._updateAlarmProfileHint=function(){
   const sel=byId('camAlarmProfileSelect'); const hint=byId('camAlarmProfileHint');

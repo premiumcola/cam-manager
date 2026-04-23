@@ -358,10 +358,10 @@
             <div class="cam-tab-panel" id="cam-tab-alerting">
               <div class="field-wrap">
                 <select name="alarm_profile" id="camAlarmProfileSelect" onchange="_updateAlarmProfileHint()">
-                  <option value="hard">Hart — Person/Auto löst Alarm + Telegram aus</option>
-                  <option value="medium">Mittel — Alle Objekte melden via Telegram</option>
-                  <option value="soft" selected>Weich — Alles melden inkl. reine Bewegung</option>
-                  <option value="info">Info — Nur Tiere, kein Motion-Alarm</option>
+                  <option value="hard">Hart — nur Person &amp; Auto lösen Alarm aus, Tiere werden ignoriert</option>
+                  <option value="medium">Mittel — Person &amp; Auto: Alarm · Tiere: Info-Meldung</option>
+                  <option value="soft" selected>Weich — alles wird gemeldet (Person, Tier, Bewegung)</option>
+                  <option value="info">Tier-Fokus — nur Tiere melden, Personen &amp; Bewegung ignoriert</option>
                 </select>
                 <span class="field-label">Alarmprofil</span>
               </div>
@@ -376,13 +376,13 @@
 
               <div class="cam-sep"></div>
 
-              <div class="cam-field-label">Zeitplan (Nachtmodus)</div>
+              <div class="cam-field-label">Zeitplan</div>
               <label class="toggle-row" style="margin-top:4px"><span class="toggle-row-label">Zeitplan aktiv</span><label class="switch"><input type="checkbox" name="schedule_enabled" /><span class="slider"></span></label></label>
               <div class="row" style="grid-template-columns:1fr 1fr;margin-top:4px">
                 <div class="field-wrap"><input name="schedule_start" placeholder="22:00" /><span class="field-label">Von</span></div>
                 <div class="field-wrap"><input name="schedule_end" placeholder="06:00" /><span class="field-label">Bis</span></div>
               </div>
-              <div class="field-help" style="margin-top:6px">Innerhalb des Zeitplans gilt erhöhte Alarmstufe.</div>
+              <div class="field-help" style="margin-top:6px">Innerhalb dieses Zeitfensters gilt: Person-Erkennung löst bei Profil Hart/Mittel immer Alarm aus — unabhängig von sonstigen Einstellungen. Aufnahmen laufen durchgehend.</div>
             </div>
 
             <!-- Panel: Zonen -->
