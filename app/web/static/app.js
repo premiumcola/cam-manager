@@ -582,7 +582,7 @@ function renderTimeline(){
       TL_LANES.map(l=>{
         const empty=!labelsInRange.has(l);
         const cls=`cat-filter-btn${_tlActiveLanes.has(l)?' active':''}${empty?' tl-lane-btn-empty':''}`;
-        return `<button class="${cls}" data-lane="${l}" style="--cb:${CAT_COLORS[l]||'#8888aa'}"><span class="cfb-icon">${objIconSvg(l,18)}</span><span>${OBJ_LABEL[l]||l}</span></button>`;
+        return `<button class="${cls}" data-lane="${l}" data-val="${l}" style="--cb:${CAT_COLORS[l]||'#8888aa'}"><span class="cfb-icon">${objIconSvg(l,18)}</span><span>${OBJ_LABEL[l]||l}</span></button>`;
       }).join('');
     leg.querySelectorAll('.cat-filter-btn[data-lane]').forEach(btn=>{
       btn.onclick=()=>{
@@ -3664,7 +3664,7 @@ function renderMediaOverview(){
   ];
   const catBtns=_CAT_DEFS.map(({label,name,clr})=>{
     const icon=(label==='timelapse'?objIconSvg('timelapse',18):(OBJ_SVG[label]||'').replace('width="16" height="16"','width="18" height="18"'));
-    return `<button class="cat-filter-btn" onclick="openCategoryDrilldown('${esc(label)}')" style="--cb:${clr}">
+    return `<button class="cat-filter-btn" data-val="${esc(label)}" onclick="openCategoryDrilldown('${esc(label)}')" style="--cb:${clr}">
       <span class="cfb-icon">${icon}</span><span>${esc(name)}</span>
     </button>`;
   }).join('');
@@ -4437,13 +4437,18 @@ function _renderStatistik(monthData,dayData){
   const topLabels=top3.length
     ?top3.map(([label,cnt])=>{
       const pct=Math.round(cnt/totalLabels*100);
-      const color=_STAT_LABEL_COLORS[label]||'var(--accent)';
+      // Pull colour + icon from the central tables so this list always
+      // matches the rest of the UI. Wildlife species not in OBJ_SVG fall
+      // back to the legacy emoji so they still render.
+      const color=colors[label]||_STAT_LABEL_COLORS[label]||'var(--accent)';
+      const icon=OBJ_SVG[label]?objIconSvg(label,18):(_STAT_LABEL_ICONS[label]||'🔍');
+      const name=OBJ_LABEL[label]||label;
       const lblCls=STAT_MEDIA_DRILLDOWN?'stat-label-row stat-drillable':'stat-label-row';
       const lblClick=STAT_MEDIA_DRILLDOWN?`onclick="_statOpenMedia('','${esc(label)}')"`:'' ;
       return `<div class="${lblCls}" ${lblClick}>
-        <div class="stat-label-icon">${_STAT_LABEL_ICONS[label]||'🔍'}</div>
+        <div class="stat-label-icon">${icon}</div>
         <div class="stat-label-info">
-          <div class="stat-label-name">${esc(label)}</div>
+          <div class="stat-label-name">${esc(name)}</div>
           <div class="stat-label-bar-wrap"><div class="stat-label-bar" style="width:${pct}%;background:${color}"></div></div>
         </div>
         <div class="stat-label-meta">${cnt}&thinsp;·&thinsp;${pct}%</div>
