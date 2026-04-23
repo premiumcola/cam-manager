@@ -338,12 +338,13 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 /* Camera edit slide-down panel */
 /* Expanded edit body — neutral darker fill than the top header bar. No
    colour accents; clean separation by background contrast only. */
-.cam-edit-wrapper{display:grid;grid-template-rows:0fr;transition:grid-template-rows .38s cubic-bezier(.4,0,.2,1);overflow:hidden}
+.cam-edit-wrapper{display:grid;grid-template-rows:0fr;transition:grid-template-rows .38s cubic-bezier(.4,0,.2,1);overflow:hidden;scrollbar-width:none}
+.cam-edit-wrapper::-webkit-scrollbar{display:none}
 .cam-edit-wrapper.slide-open{grid-template-rows:1fr}
-.cam-edit-inner{overflow:hidden;min-height:0;padding:0 16px;background:#212940}
+.cam-edit-inner{overflow:hidden;min-height:0;padding:0 16px;background:#212940;scrollbar-width:none}
 .cam-edit-wrapper.slide-open .cam-edit-inner{padding:16px;overflow:hidden}
-.cam-edit-inner::-webkit-scrollbar{display:none}
-.cam-edit-inner{scrollbar-width:none}
+.cam-edit-inner::-webkit-scrollbar,
+.cam-edit-inner ::-webkit-scrollbar-button{display:none;width:0;height:0}
 .cam-edit-header{display:none}  /* Redundant with the camera row header above; hide. */
 /* Compact user+pass side by side */
 .cam-userpass{display:grid;grid-template-columns:1fr 1fr;gap:8px}
