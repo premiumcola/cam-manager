@@ -33,27 +33,27 @@ function _resolveConfirm(val){
   if(_confirmResolve){_confirmResolve(val);_confirmResolve=null;}
 }
 // Wire confirm buttons after DOM ready (done at bottom of file)
-const colors={person:'#f59e0b',cat:'#fbbf24',bird:'#0ea5e9',car:'#e07b00',motion:'#93c5fd',alarm:'#ef4444',unknown:'#4a6477',timelapse:'#c4b5fd',motion_objects:'#818cf8',dog:'#0ea5e9'};
+const colors={person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#475569',motion:'#cbd5e1',alarm:'#ef4444',unknown:'#4a6477',timelapse:'#a855f7',motion_objects:'#c084fc',coral:'#f472b6',dog:'#38bdf8'};
 const OBJ_LABEL={person:'Person',cat:'Katze',bird:'Vogel',car:'Auto',dog:'Hund',motion:'Bewegung',alarm:'Alarm',timelapse:'Timelapse',motion_objects:'Motion · Objekte'};
 const OBJ_SVG={
-  // Person: head circle + body arc — clean silhouette, purple
-  person:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="7" r="4.5" fill="#f59e0b"/><path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#f59e0b" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>`,
-  // Cat: round face with ear triangles and dot eyes — clear face, pink
-  cat:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polygon points="5,11 2,4 9.5,9" fill="#fbbf24"/><polygon points="19,11 22,4 14.5,9" fill="#fbbf24"/><circle cx="12" cy="15" r="7" fill="#fbbf24"/><circle cx="9" cy="14.5" r="1.6" fill="#fff" opacity=".9"/><circle cx="15" cy="14.5" r="1.6" fill="#fff" opacity=".9"/><circle cx="9" cy="14.5" r=".7" fill="#92570a"/><circle cx="15" cy="14.5" r=".7" fill="#92570a"/><path d="M10 18q2 1.5 4 0" stroke="#fff" stroke-width="1.2" stroke-linecap="round" fill="none" opacity=".75"/></svg>`,
-  // Bird: spread wings (M-shape) + oval body + round head — clear flight silhouette, blue
-  bird:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M2 12C5.5 7 9.5 9 12 13C14.5 9 18.5 7 22 12" fill="#0ea5e9"/><ellipse cx="12" cy="15.5" rx="3.5" ry="2.5" fill="#0ea5e9"/><circle cx="17.5" cy="10.5" r="2" fill="#0ea5e9"/><circle cx="18.5" cy="10" r=".85" fill="#fff" opacity=".9"/><path d="M12 18v3" stroke="#0ea5e9" stroke-width="1.8" stroke-linecap="round"/></svg>`,
-  // Car: body + cab + wheels — amber, clear vehicle shape
-  car:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="11" width="20" height="8" rx="2.5" fill="#f59e0b"/><rect x="6" y="7" width="11" height="5" rx="2" fill="#fbbf24"/><circle cx="7" cy="20" r="2.5" fill="#92400e"/><circle cx="17" cy="20" r="2.5" fill="#92400e"/><circle cx="7" cy="20" r="1.2" fill="#f59e0b"/><circle cx="17" cy="20" r="1.2" fill="#f59e0b"/><rect x="14.5" y="8" width="3" height="3.5" rx=".75" fill="rgba(0,0,0,.2)"/></svg>`,
-  // Motion: horizontal sine wave 1.5 periods — light blue
-  motion:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M1 12 C4 5 7 5 9 12 C11 19 14 19 16 12 C18 5 21 5 23 12" stroke="#93c5fd" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>`,
+  // Person: head circle + body arc — bright yellow silhouette
+  person:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="7" r="4.5" fill="#facc15"/><path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#facc15" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>`,
+  // Cat: round face with ear triangles and dot eyes — orange
+  cat:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polygon points="5,11 2,4 9.5,9" fill="#fb923c"/><polygon points="19,11 22,4 14.5,9" fill="#fb923c"/><circle cx="12" cy="15" r="7" fill="#fb923c"/><circle cx="9" cy="14.5" r="1.6" fill="#fff" opacity=".9"/><circle cx="15" cy="14.5" r="1.6" fill="#fff" opacity=".9"/><circle cx="9" cy="14.5" r=".7" fill="#7c2d12"/><circle cx="15" cy="14.5" r=".7" fill="#7c2d12"/><path d="M10 18q2 1.5 4 0" stroke="#fff" stroke-width="1.2" stroke-linecap="round" fill="none" opacity=".75"/></svg>`,
+  // Bird: spread wings + oval body + round head — sky blue
+  bird:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M2 12C5.5 7 9.5 9 12 13C14.5 9 18.5 7 22 12" fill="#38bdf8"/><ellipse cx="12" cy="15.5" rx="3.5" ry="2.5" fill="#38bdf8"/><circle cx="17.5" cy="10.5" r="2" fill="#38bdf8"/><circle cx="18.5" cy="10" r=".85" fill="#fff" opacity=".9"/><path d="M12 18v3" stroke="#38bdf8" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+  // Car: dark slate body with lighter highlights — near-black but readable
+  car:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="2" y="11" width="20" height="8" rx="2.5" fill="#1e293b"/><rect x="6" y="7" width="11" height="5" rx="2" fill="#475569"/><circle cx="7" cy="20" r="2.5" fill="#0f172a"/><circle cx="17" cy="20" r="2.5" fill="#0f172a"/><circle cx="7" cy="20" r="1.2" fill="#64748b"/><circle cx="17" cy="20" r="1.2" fill="#64748b"/><rect x="14.5" y="8" width="3" height="3.5" rx=".75" fill="rgba(203,213,225,.45)"/></svg>`,
+  // Motion: horizontal sine wave — wind-white
+  motion:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M1 12 C4 5 7 5 9 12 C11 19 14 19 16 12 C18 5 21 5 23 12" stroke="#cbd5e1" stroke-width="2.5" stroke-linecap="round" fill="none"/></svg>`,
   // Alarm: bell body + clapper dot + handle — red, classic bell shape
   alarm:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 3C7 3 4 7.5 4 12C4 17 7 19 7 19H17C17 19 20 17 20 12C20 7.5 17 3 12 3Z" fill="#ef4444"/><rect x="11" y="19" width="2" height="2.5" rx=".75" fill="#ef4444"/><rect x="9.5" y="21.5" width="5" height="1.5" rx=".75" fill="#ef4444"/><rect x="11.2" y="8" width="1.6" height="5.5" rx=".75" fill="#fff"/><circle cx="12" cy="15.5" r="1.1" fill="#fff"/></svg>`,
-  // Timelapse: hourglass — top/bottom lines + filled top triangle + outline bottom triangle, purple
-  timelapse:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round"><line x1="6" y1="3" x2="18" y2="3"/><line x1="6" y1="21" x2="18" y2="21"/><polygon points="7,4 17,4 12,12" fill="#c4b5fd" opacity=".8"/><polygon points="12,12 7,20 17,20" fill="#c4b5fd" opacity=".5"/></svg>`,
-  // Motion+Objects: left sine wave + center divider + right wireframe 3D box — blue/indigo split
-  motion_objects:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M1 12 C2.5 7.5 4.5 7.5 6 12 C7.5 16.5 9.5 16.5 11 12" stroke="#93c5fd" stroke-width="1.8" stroke-linecap="round" fill="none"/><line x1="12.5" y1="5" x2="12.5" y2="19" stroke="#a5b4fc" stroke-width=".8" stroke-linecap="round"/><rect x="14.5" y="9.5" width="6" height="6" stroke="#818cf8" stroke-width="1.4" fill="none"/><path d="M14.5 9.5L16.5 7L22.5 7L22.5 13.5" stroke="#818cf8" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/><line x1="20.5" y1="9.5" x2="22.5" y2="7" stroke="#818cf8" stroke-width="1.4" stroke-linecap="round"/><line x1="20.5" y1="15.5" x2="22.5" y2="13.5" stroke="#818cf8" stroke-width="1.4" stroke-linecap="round"/></svg>`,
-  // Dog: head + snout + eye dots + floppy ear — sky blue
-  dog:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polygon points="3.5,3 4.5,11 9.5,9" fill="#0ea5e9"/><polygon points="20.5,3 19.5,11 14.5,9" fill="#0ea5e9"/><ellipse cx="12" cy="13.5" rx="7.5" ry="6.5" fill="#0ea5e9"/><ellipse cx="12" cy="17.5" rx="3.5" ry="2" fill="#38bdf8"/><circle cx="12" cy="17" r=".9" fill="#0b3b5e"/><circle cx="9.5" cy="12" r="1.2" fill="#fff" opacity=".9"/><circle cx="14.5" cy="12" r="1.2" fill="#fff" opacity=".9"/><circle cx="9.5" cy="12" r=".6" fill="#0b3b5e"/><circle cx="14.5" cy="12" r=".6" fill="#0b3b5e"/></svg>`
+  // Timelapse: hourglass — vivid violet
+  timelapse:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round"><line x1="6" y1="3" x2="18" y2="3"/><line x1="6" y1="21" x2="18" y2="21"/><polygon points="7,4 17,4 12,12" fill="#a855f7" opacity=".8"/><polygon points="12,12 7,20 17,20" fill="#a855f7" opacity=".5"/></svg>`,
+  // Motion+Objects combo: wind-white wave + purple-mix wireframe box
+  motion_objects:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M1 12 C2.5 7.5 4.5 7.5 6 12 C7.5 16.5 9.5 16.5 11 12" stroke="#cbd5e1" stroke-width="1.8" stroke-linecap="round" fill="none"/><line x1="12.5" y1="5" x2="12.5" y2="19" stroke="rgba(255,255,255,.25)" stroke-width=".8" stroke-linecap="round"/><rect x="14.5" y="9.5" width="6" height="6" stroke="#c084fc" stroke-width="1.4" fill="none"/><path d="M14.5 9.5L16.5 7L22.5 7L22.5 13.5" stroke="#c084fc" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/><line x1="20.5" y1="9.5" x2="22.5" y2="7" stroke="#c084fc" stroke-width="1.4" stroke-linecap="round"/><line x1="20.5" y1="15.5" x2="22.5" y2="13.5" stroke="#c084fc" stroke-width="1.4" stroke-linecap="round"/></svg>`,
+  // Dog: head + snout + eye dots + floppy ear — sky blue (matches bird family)
+  dog:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polygon points="3.5,3 4.5,11 9.5,9" fill="#38bdf8"/><polygon points="20.5,3 19.5,11 14.5,9" fill="#38bdf8"/><ellipse cx="12" cy="13.5" rx="7.5" ry="6.5" fill="#38bdf8"/><ellipse cx="12" cy="17.5" rx="3.5" ry="2" fill="#7dd3fc"/><circle cx="12" cy="17" r=".9" fill="#0b3b5e"/><circle cx="9.5" cy="12" r="1.2" fill="#fff" opacity=".9"/><circle cx="14.5" cy="12" r="1.2" fill="#fff" opacity=".9"/><circle cx="9.5" cy="12" r=".6" fill="#0b3b5e"/><circle cx="14.5" cy="12" r=".6" fill="#0b3b5e"/></svg>`
 };
 function objBubble(label,size=22){
   const raw=OBJ_SVG[label]||OBJ_SVG.alarm;
@@ -496,7 +496,7 @@ ${isActive?`
 }
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
-const CAT_COLORS={alle:'#8888aa',motion:'#93c5fd',person:'#f59e0b',cat:'#fbbf24',bird:'#06b6d4',car:'#e07b00',timelapse:'#c4b5fd'};
+const CAT_COLORS={alle:'#8888aa',motion:'#cbd5e1',person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#475569',timelapse:'#a855f7'};
 const TL_LANES=['person','cat','bird','car','motion'];
 const GAP_MS=2*60*1000;
 let _tlActiveLanes=new Set(TL_LANES);
