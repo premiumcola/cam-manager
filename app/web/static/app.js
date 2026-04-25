@@ -1797,22 +1797,29 @@ function _defaultRtspPath(x){
   return RTSP_PATH_OPTS[0].value;
 }
 function _renderDiscoveryResults(){
-  const hideConfigured=byId('discoveryHideConfigured')?.checked;
+  const hideConfigured=!!byId('discoveryHideConfigured')?.checked;
   const pathOpts=RTSP_PATHS.map(p=>`<option value="${esc(p.value)}">${esc(p.label)}</option>`).join('');
-  // Collect IPs from existing configured cameras
-  const configuredIPs=new Set((state.config?.cameras||[]).map(c=>{
-    try{ return new URL(c.rtsp_url||'http://x').hostname; }catch{ return ''; }
-  }).concat((state.cameras||[]).map(c=>c.id)).filter(Boolean));
-  // Also check rtsp_url/snapshot_url IPs
-  const configuredIPsFromUrl=new Set();
-  (state.config?.cameras||[]).forEach(c=>{
-    ['rtsp_url','snapshot_url'].forEach(k=>{
-      try{ const u=new URL((c[k]||'').replace(/^rtsp:/,'http:')); if(u.hostname) configuredIPsFromUrl.add(u.hostname); }catch{}
-    });
-  });
-  const allConfigured=new Set([...configuredIPs,...configuredIPsFromUrl]);
+  // Collect IPs that already belong to a configured camera. Source of truth
+  // is the rtsp_url / snapshot_url hostname — we never mix in camera IDs
+  // (those are slugs like "cam-werkstatt", not IPs, and only added noise
+  // to the lookup set).
+  const allConfigured=new Set();
+  for(const list of [state.config?.cameras||[], state.cameras||[]]){
+    for(const c of list){
+      for(const k of ['rtsp_url','snapshot_url']){
+        const raw=c?.[k];
+        if(!raw) continue;
+        try{
+          const u=new URL(raw.replace(/^rtsp:/,'http:'));
+          if(u.hostname) allConfigured.add(u.hostname);
+        }catch{}
+      }
+    }
+  }
 
-  const visible=hideConfigured?_discoveryItems.filter(x=>!allConfigured.has(x.ip)):_discoveryItems;
+  // Unchecked → show every found IP, including configured ones (they get a
+  // green "✓ Bereits konfiguriert" badge but the card still renders).
+  const visible=hideConfigured?_discoveryItems.filter(x=>!allConfigured.has(x.ip)):_discoveryItems.slice();
   const alreadyCount=_discoveryItems.filter(x=>allConfigured.has(x.ip)).length;
 
   // Hint shown when fewer than two candidates were found — covers the

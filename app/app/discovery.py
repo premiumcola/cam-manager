@@ -9,15 +9,16 @@ from concurrent.futures import ThreadPoolExecutor
 log = logging.getLogger(__name__)
 
 # Phase-1 sweep: only these ports are checked across ALL hosts in parallel.
-# A host that responds on any of these is a camera candidate.
-# Reolink-specific: 80 (HTTP UI), 554 (RTSP), 8000 (ONVIF — Reolink uses 8000
-# for ONVIF, not the IANA-default 2020), plus legacy media port 9000.
-# Other vendors: 8554 (alt RTSP), 34567 (Hikvision SDK), 37777 (Dahua SDK).
-# 2020 was removed — no Reolink uses it and it caused false positives.
-CAMERA_INDICATOR_PORTS = [80, 554, 8000, 8554, 9000, 34567, 37777]
+# Every port here MUST be camera-private — anything generic (80, 443, 8080)
+# turns every router/repeater/PC into a "candidate" and floods the results.
+# 554/8554: RTSP. 8000: Reolink ONVIF (Reolink uses 8000, not IANA 2020).
+# 9000: Reolink legacy media. 34567/37777: Hikvision/Dahua SDK ports.
+CAMERA_INDICATOR_PORTS = [554, 8554, 8000, 9000, 37777, 34567]
 
-# Phase-2 extras: checked only on confirmed camera candidates for better fingerprinting
-EXTRA_PORTS = [443, 8080, 8443]
+# Phase-2 extras: only checked on confirmed candidates so we can read HTTP
+# banners (vendor name, WWW-Authenticate realm). Port 80 lives here, not in
+# phase 1 — too generic for an initial-sweep filter.
+EXTRA_PORTS = [80, 443, 8080, 8443]
 
 
 def _tcp_open(ip: str, port: int, timeout: float = 0.8) -> bool:
@@ -88,9 +89,17 @@ def _guess(open_ports: list[int], banners: dict) -> str:
     body = banners.get("body", "")  # already lowercased in _http_banner
 
     rtsp_open = any(p in open_ports for p in (554, 8554))
+    # Camera-private ports — without at least one of these, the host is just
+    # a generic web server / router / PC. SDK ports (34567/37777) on their
+    # own are not enough either: a real camera also exposes RTSP or HTTP API.
+    cam_signal = any(p in open_ports for p in (554, 8554, 8000, 9000))
+    if not cam_signal:
+        # Even slipped through (e.g. only 37777 open) — never label as a vendor.
+        return "Unbekannte Kamera"
 
-    # Check banner content for vendor hints. body is included because Reolink
-    # firmware ships the vendor name as inline JS strings, not in <title>.
+    # Banner-based vendor wins when a recognisable string is present anywhere
+    # in Server header / WWW-Authenticate realm / <title> / first 2 KB of body.
+    # Reolink in particular ships the vendor as inline JS strings.
     for keyword, vendor in [
         ("reolink", "Reolink"), ("hikvision", "Hikvision"), ("hik", "Hikvision"),
         ("dahua", "Dahua"), ("amcrest", "Amcrest"), ("axis", "Axis"),
@@ -100,40 +109,31 @@ def _guess(open_ports: list[int], banners: dict) -> str:
         if keyword in server or keyword in title or keyword in www_auth or keyword in body:
             return vendor
 
-    # Strong Reolink signal even without a banner match: the HTTP-UI port 80
-    # is open AND the Reolink-specific ONVIF port 8000 is open. Hikvision
-    # also uses 8000, but for that the banner check above would already have
-    # fired ("realm=Hikvision" in www_auth, "hikvision" in server, etc).
-    if 80 in open_ports and 8000 in open_ports:
-        return "Reolink"
-
-    # Two Reolink-private ports together with no other vendor match are also
-    # a strong signal — covers the case where HTTP UI is firewalled but RTSP
-    # and the legacy media port are reachable.
-    if 9000 in open_ports and 554 in open_ports:
+    # Two Reolink-private ports together with no banner match — RTSP main +
+    # legacy media port 9000 is a uniquely Reolink combination.
+    if 554 in open_ports and 9000 in open_ports:
         return "Reolink"
 
     if rtsp_open:
-        # Hikvision uses 8000 as its SDK port AND has a recognisable HTTP banner;
-        # only claim Hikvision here when the banner / WWW-Auth confirms it,
-        # otherwise port 8000 likely belongs to a Reolink HTTP API.
-        if 8000 in open_ports and ("hikvision" in server or "hikvision" in www_auth):
-            return "Hikvision"
+        # Hikvision and Reolink both use 8000. Without a banner saying Hikvision
+        # we can't tell them apart by port alone, so fall back to RTSP-Kamera.
         if 37777 in open_ports:
             return "Dahua / Amcrest"
-        if 9000 in open_ports or 8000 in open_ports:
+        if 9000 in open_ports:
             return "Reolink"
         return "RTSP-Kamera"
 
+    # No RTSP, but one of the camera-private signals fired:
     if 9000 in open_ports:
         return "Reolink"
     if 37777 in open_ports:
         return "Dahua / Amcrest"
     if 34567 in open_ports:
         return "Hikvision"
-    # Reolink HTTP API on 8000 alone — RTSP may be slow to ACK or disabled.
+    # 8000 alone with no banner confirmation — still surfaced as a candidate
+    # so the user can choose to add it manually, but no vendor guess.
     if 8000 in open_ports:
-        return "Reolink"
+        return "Unbekannte Kamera"
 
     if www_auth and "realm" in www_auth:
         return "IP-Kamera (HTTP-Auth)"
