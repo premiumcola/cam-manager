@@ -258,8 +258,11 @@ select option{background:#1e1e1e;color:#c8c8c8}
 .cat-filter-btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;min-height:44px;border-radius:10px;border:none;outline:none;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;-webkit-tap-highlight-color:transparent;transition:background .15s,box-shadow .15s;background:color-mix(in srgb,var(--cb,#8888aa) 15%,transparent);color:var(--cb,#94a3b8)}
 .cat-filter-btn:hover{background:color-mix(in srgb,var(--cb,#8888aa) 24%,transparent)}
 .cat-filter-btn:active{opacity:.85}
-.cat-filter-btn.tl-lane-btn-empty{opacity:0.35;cursor:default}
-.cat-filter-btn.tl-lane-btn-empty:hover{opacity:0.5}
+/* Empty: no events of this label in the current time range. Pill stays
+   visible and clickable (you can still toggle it off proactively) but
+   sits at ~40% opacity so the eye snaps to active categories first. */
+.cat-filter-btn.tl-lane-btn-empty{opacity:0.4}
+.cat-filter-btn.tl-lane-btn-empty:hover{opacity:0.7}
 .cat-filter-btn .cfb-icon{display:inline-flex;align-items:center;flex-shrink:0}
 .cat-filter-btn.active{background:color-mix(in srgb,var(--cb,#8888aa) 38%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cb,#8888aa) 55%,transparent);color:#fff}
 /* Special: "Alle" uses a neutral tint */
@@ -882,12 +885,16 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .stat-label-bar{height:100%;border-radius:4px;transition:width .6s cubic-bezier(.4,0,.2,1)}
 .stat-label-meta{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap;flex-shrink:0;min-width:68px;text-align:right}
 .stat-heatmap-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.stat-hm-grid{min-width:360px}
-.stat-hm-header,.stat-hm-row{display:flex;align-items:center}
+/* Layout: CSS grid with the first column sized at runtime by JS so the
+   widest camera name fits without being clipped. The 24 hour cells fill
+   the rest equally (1fr each). --hm-label-w is set inline by JS. */
+.stat-hm-grid{min-width:360px;--hm-label-w:130px}
+.stat-hm-header,.stat-hm-row{display:grid;align-items:center;grid-template-columns:var(--hm-label-w) repeat(24,1fr);column-gap:2px}
 .stat-hm-header{margin-bottom:4px}
-.stat-hm-cam-col,.stat-hm-cam{width:130px;flex-shrink:0;padding-right:10px}
+.stat-hm-cam-col,.stat-hm-cam{padding-right:10px}
 .stat-hm-cam{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:32px;display:flex;align-items:center}
-.stat-hm-hours,.stat-hm-cells{flex:1;display:flex;gap:2px}
+.stat-hm-hours{display:contents}
+.stat-hm-cells{display:contents}
 .stat-hm-hlabel{flex:1;font-size:9px;color:var(--muted);font-weight:600;text-align:center;min-width:0;padding:0 1px}
 .stat-hm-cell{flex:1;min-height:28px;border-radius:4px;position:relative;cursor:default;transition:filter .15s}
 .stat-hm-cell:hover{filter:brightness(1.25)}

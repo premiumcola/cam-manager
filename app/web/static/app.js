@@ -548,7 +548,10 @@ ${isActive?`
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
 const CAT_COLORS={alle:'#8888aa',motion:'#cbd5e1',person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',dog:'#7c2d12',timelapse:'#a855f7'};
-const TL_LANES=['person','cat','bird','car','dog','motion'];
+// Order matches the Mediathek filter bar exactly so both filter rows read
+// the same left-to-right (Bewegung first, then per-class). Timelapse stays
+// out of the timeline lanes — only physical detection labels here.
+const TL_LANES=['motion','person','cat','bird','car','dog'];
 const GAP_MS=2*60*1000;
 let _tlActiveLanes=new Set(TL_LANES);
 
@@ -620,15 +623,18 @@ function renderTimeline(){
     });
   });
 
-  // Legend as filter pills (TASK 5) — render before tracks so pills are always visible
+  // Filter pills — same .cat-filter-btn class + data-val attribute the
+  // Mediathek bar uses, so both rows render visually identical. No
+  // "Filter:" prefix, exact label order: motion · person · cat · bird ·
+  // car · dog. Pills with no events in the current time range get the
+  // dim class (still clickable, but visually backgrounded).
   const leg=byId('tlLegend');
   if(leg){
-    leg.innerHTML=`<span class="tl-leg-prefix">Filter:</span>`+
-      TL_LANES.map(l=>{
-        const empty=!labelsInRange.has(l);
-        const cls=`cat-filter-btn${_tlActiveLanes.has(l)?' active':''}${empty?' tl-lane-btn-empty':''}`;
-        return `<button class="${cls}" data-lane="${l}" data-val="${l}" style="--cb:${CAT_COLORS[l]||'#8888aa'}"><span class="cfb-icon">${objIconSvg(l,18)}</span><span>${OBJ_LABEL[l]||l}</span></button>`;
-      }).join('');
+    leg.innerHTML=TL_LANES.map(l=>{
+      const empty=!labelsInRange.has(l);
+      const cls=`media-pill cat-filter-btn${_tlActiveLanes.has(l)?' active':''}${empty?' tl-lane-btn-empty':''}`;
+      return `<button class="${cls}" data-lane="${l}" data-val="${l}" style="--cb:${CAT_COLORS[l]||'#8888aa'}"><span class="cfb-icon">${objIconSvg(l,18)}</span><span>${OBJ_LABEL[l]||l}</span></button>`;
+    }).join('');
     leg.querySelectorAll('.cat-filter-btn[data-lane]').forEach(btn=>{
       btn.onclick=()=>{
         const lane=btn.dataset.lane;
@@ -4908,6 +4914,27 @@ function _renderStatistik(monthData,dayData){
   // 5: last 24h heatmap — rendered after the static timeline block (#4)
   const hmBlock=byId('statHeatmapBlock');
   if(hmBlock) hmBlock.innerHTML=`<div class="stat-card" style="margin-top:0"><div class="stat-card-title">Letzte 24h · Aktivität nach Stunde</div>${heatmap}</div>`;
+
+  // Camera label column auto-sizes to the widest entry so long names like
+  // "Squirrel Town 'Nut Bar'" don't get clipped. Measure with the same
+  // font as .stat-hm-cam (12px, weight 600). Clamp 80–180 px.
+  if(hmBlock && cameras.length){
+    const grid=hmBlock.querySelector('.stat-hm-grid');
+    if(grid){
+      const probe=document.createElement('canvas').getContext('2d');
+      probe.font='600 12px Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif';
+      let widest=0;
+      for(const c of cameras){
+        // Same content the row renders: icon + nbsp + name. Icon is one
+        // emoji wide (~16px); pad 12px for the cell's right padding.
+        const txt=`${getCameraIcon(c.name||c.id)} ${c.name||c.id}`;
+        const w=probe.measureText(txt).width;
+        if(w>widest) widest=w;
+      }
+      const labelW=Math.max(80, Math.min(180, Math.ceil(widest)+24));
+      grid.style.setProperty('--hm-label-w', labelW+'px');
+    }
+  }
 
   // Wire fixed-position tooltip for heatmap cells (CSS ::after clips inside overflow-x:auto)
   if(!_hmTip){
