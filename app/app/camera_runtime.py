@@ -137,7 +137,8 @@ class CameraRuntime:
         self._ensure_zone_image(log_summary=True)
         self._ach_lock = threading.Lock()
         self._ach_path = Path(self.global_cfg["storage"]["root"]) / "achievements.json"
-        self._motion_confirm: deque = deque(maxlen=3)  # multi-frame confirmation
+        self._motion_confirm: deque = deque(maxlen=3)  # multi-frame confirmation (normal threshold)
+        self._motion_confirm_wl: deque = deque(maxlen=3)  # wildlife low-threshold confirmation
         self._tl_thread = None   # legacy single timelapse thread
         self._tl_threads: dict = {}  # profile_name → Thread
         # ── Connection health / diagnostics ──────────────────────────────────
@@ -748,10 +749,10 @@ class CameraRuntime:
         # Per-camera kill-switch — skips all motion work (saves CPU when
         # the camera is in objects-only mode).
         if not self.cfg.get("motion_enabled", True):
-            return [], None
+            return [], None, False
         proc = self.global_cfg.get("processing", {}).get("motion", {})
         if not proc.get("enabled", True):
-            return [], None
+            return [], None, False
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         blur_size = int(proc.get("blur_size", 15))
         if blur_size % 2 == 0:
@@ -762,7 +763,7 @@ class CameraRuntime:
             self.prev_gray = None
         if self.prev_gray is None:
             self.prev_gray = gray
-            return [], None
+            return [], None, False
         # Brightness normalisation: scale current frame to match previous mean so that
         # gradual global illumination changes (clouds, day/night) don't produce diff.
         mean_prev = float(np.mean(self.prev_gray))
@@ -799,26 +800,46 @@ class CameraRuntime:
             thresh = cv2.bitwise_and(thresh, zone_resized)
         # Per-camera sensitivity → scales minimum contour area
         sensitivity = self.cfg.get("motion_sensitivity")
+        h_f, w_f = frame.shape[:2]
+        frame_area = h_f * w_f
+        base_min_area = frame_area * 0.005
         if sensitivity is not None:
             sensitivity = float(sensitivity)
-            h_f, w_f = frame.shape[:2]
-            frame_area = h_f * w_f
-            base_min_area = frame_area * 0.005
             min_area = int(base_min_area / max(0.1, sensitivity))
         else:
             min_area = int(proc.get("min_area", 3000))
+        # Wildlife uses a parallel, more sensitive threshold so small animals
+        # (squirrel/fox/hedgehog) can wake the wildlife classifier even when
+        # the normal motion gate doesn't fire. 0.0 = "auto" → 1.4× the normal
+        # sensitivity, capped at 1.0.
+        wl_sens = self.cfg.get("wildlife_motion_sensitivity")
+        if wl_sens is None or float(wl_sens) <= 0.0:
+            base_sens = float(sensitivity) if sensitivity is not None else 0.5
+            wl_sens = min(1.0, base_sens * 1.4)
+        else:
+            wl_sens = float(wl_sens)
+        wl_min_area = int(base_min_area / max(0.1, wl_sens))
         # Minimum changed-pixel count: a global brightness shift produces many small
-        # changed pixels but no large contour — reject if total changed area < 1% of frame.
+        # changed pixels but no large contour. We use a 0.5% floor (down from 1%)
+        # so a single squirrel/fox can still trigger the wildlife threshold —
+        # the actual per-contour size check below remains the primary filter
+        # for real motion vs. noise.
         h_f2, w_f2 = thresh.shape[:2]
-        if int(np.sum(thresh > 0)) < int(h_f2 * w_f2 * 0.01):
-            return [], None
+        if int(np.sum(thresh > 0)) < int(h_f2 * w_f2 * 0.005):
+            return [], None, False
         contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        big = [c for c in contours if cv2.contourArea(c) >= min_area]
-        if not big:
-            return [], None
-        all_pts = np.concatenate(big)
+        # Two parallel checks against the same contour set — cheap.
+        big_normal = [c for c in contours if cv2.contourArea(c) >= min_area]
+        big_wl     = [c for c in contours if cv2.contourArea(c) >= wl_min_area]
+        wildlife_motion_low = bool(big_wl) and not big_normal
+        if not big_normal:
+            # Normal motion didn't trigger — but tell the caller whether the
+            # lower wildlife threshold did so the wildlife stage can still
+            # run. No labels/bbox returned in this case (no event).
+            return [], None, wildlife_motion_low
+        all_pts = np.concatenate(big_normal)
         bbox = cv2.boundingRect(all_pts)
-        return ["motion"], bbox
+        return ["motion"], bbox, wildlife_motion_low
 
     def _crop(self, frame, bbox):
         x1, y1, x2, y2 = bbox
@@ -1834,10 +1855,19 @@ class CameraRuntime:
                 if self.connect_time and time.time() - self.connect_time < 3.0:
                     time.sleep(interval)
                     continue
-                motion_labels, motion_bbox = self._motion_detect(proc_frame)
-                # Multi-frame confirmation: only trigger on motion in ≥2 of last 3 frames
+                motion_labels, motion_bbox, wildlife_motion_low = self._motion_detect(proc_frame)
+                # Multi-frame confirmation: only trigger on motion in ≥2 of last 3 frames.
+                # Two parallel deques — one for the regular threshold (which gates
+                # event recording + COCO) and one for the lower wildlife threshold
+                # (which extends the gate for the wildlife classifier only).
                 self._motion_confirm.append(1 if motion_labels else 0)
+                # Wildlife deque counts BOTH normal motion and wildlife-only motion;
+                # wildlife is by definition more sensitive, so anything that
+                # registers as normal motion must also register as wildlife motion.
+                self._motion_confirm_wl.append(1 if (motion_labels or wildlife_motion_low) else 0)
                 motion_confirmed = sum(self._motion_confirm) >= 2
+                wlmotion_confirmed = sum(self._motion_confirm_wl) >= 2
+                wildlife_motion_only = wlmotion_confirmed and not motion_confirmed
                 effective_motion = motion_labels if motion_confirmed else []
                 effective_bbox = motion_bbox if motion_confirmed else None
                 cam_min_score = self.cfg.get("detection_min_score") or None
@@ -1880,7 +1910,7 @@ class CameraRuntime:
                 # catches fox / squirrel / hedgehog, which don't exist as
                 # COCO classes. Runs on the full frame — cheap enough.
                 if (
-                    motion_confirmed
+                    (motion_confirmed or wildlife_motion_only)
                     and self.wildlife_classifier.available
                     and not any(d.label in ("bird", "cat", "dog", "person") for d in detections)
                 ):

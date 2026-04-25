@@ -1007,6 +1007,7 @@ function _initCameraFormListeners(){
   // the whole event handler — any future refactor can hide a slider
   // safely just by not rendering the label.
   f['detection_min_score']?.addEventListener('input',()=>{ const v=parseFloat(f['detection_min_score'].value); const el=byId('detectionMinScoreLabel'); if(el) el.textContent=v.toFixed(2); });
+  f['wildlife_motion_sensitivity']?.addEventListener('input',()=>{ const v=parseFloat(f['wildlife_motion_sensitivity'].value); const el=byId('wildlifeMotionLabel'); if(el) el.textContent=Math.round(v*100)+'%'; });
   f['label_threshold_person']?.addEventListener('input',()=>{ const v=parseFloat(f['label_threshold_person'].value); const el=byId('labelThresholdPersonLabel'); if(el) el.textContent=v.toFixed(2); });
   f['frame_interval_ms']?.addEventListener('input',()=>{ const el=byId('frameIntervalLabel'); if(el) el.textContent=f['frame_interval_ms'].value+'ms'; });
   f['snapshot_interval_s']?.addEventListener('input',()=>{ const el=byId('snapshotIntervalLabel'); if(el) el.textContent=f['snapshot_interval_s'].value+'s'; });
@@ -1105,6 +1106,16 @@ function _updateMotionOffState(){
   const hint=block.querySelector('.cam-det-motionoff'); if(hint) hint.hidden=!off;
 }
 
+// Wildlife-only form fields are hidden when the global wildlife model
+// switch is off — there's nothing to tune in that case. Read the global
+// checkbox state (populated by hydrateSettings) and toggle the wrap.
+function _updateWildlifeFormVisibility(){
+  const on = !!byId('wildlifeEnabled')?.checked;
+  document.querySelectorAll('.field-wrap--wildlife-only,.field-help--wildlife-only').forEach(el=>{
+    el.style.display = on ? '' : 'none';
+  });
+}
+window._updateWildlifeFormVisibility = _updateWildlifeFormVisibility;
 function editCamera(camId){
   const c=(state.config?.cameras||[]).find(x=>x.id===camId)||(state.cameras||[]).find(x=>x.id===camId);
   if(!c){console.error('editCamera: not found',camId); return;}
@@ -1115,6 +1126,7 @@ function editCamera(camId){
   _initCameraFormListeners();
   initCameraEditTabs();
   initRtspBuilder();
+  _updateWildlifeFormVisibility();
   const f=byId('cameraForm').elements;
   f['id'].value=c.id||''; f['id'].dataset.autoGen='0';
   f['name'].value=c.name||'';
@@ -1153,6 +1165,17 @@ function editCamera(camId){
   if(f['mqtt_enabled']) f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
   if(f['bottom_crop_px']) f['bottom_crop_px'].value=c.bottom_crop_px||0;
   if(f['motion_sensitivity']){const ms=c.motion_sensitivity!=null?c.motion_sensitivity:0.5; f['motion_sensitivity'].value=ms; const lbl=byId('motionSensLabel'); if(lbl) lbl.textContent=Math.round(parseFloat(ms)*100)+'%';}
+  if(f['wildlife_motion_sensitivity']){
+    const raw=c.wildlife_motion_sensitivity;
+    // 0.0 = "auto" → display the derived 1.4× motion_sensitivity preview
+    // (capped at 1.0). The actual value persisted on save is whatever
+    // the slider shows after the user touches it.
+    const ms=parseFloat(c.motion_sensitivity)||0.5;
+    const auto=Math.min(1.0, ms*1.4);
+    const v=(raw!=null && parseFloat(raw)>0) ? parseFloat(raw) : auto;
+    f['wildlife_motion_sensitivity'].value=v.toFixed(1);
+    const lbl=byId('wildlifeMotionLabel'); if(lbl) lbl.textContent=Math.round(v*100)+'%';
+  }
   if(f['detection_min_score']){
     const globalMs=state.config?.processing?.detection?.min_score ?? 0.55;
     const cms=(c.detection_min_score && c.detection_min_score>0) ? c.detection_min_score : globalMs;
@@ -1518,6 +1541,7 @@ function hydrateSettings(){
   }
   // Coral device info from /api/system (async, non-blocking)
   _updateCoralDeviceInfo();
+  _renderCoralPipelineTree();
   _populateCoralTestCameras();
   // Models list is now behind the Modelle sub-tab; load it lazily on
   // first open via toggleCoralTab, so hydrate doesn't spin up a request
@@ -2162,6 +2186,7 @@ byId('cameraForm').onsubmit=async(e)=>{
     schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},
     bottom_crop_px:parseInt(f['bottom_crop_px']?.value||0),
     motion_sensitivity:parseFloat(f['motion_sensitivity']?.value||0.5),
+    wildlife_motion_sensitivity:parseFloat(f['wildlife_motion_sensitivity']?.value||0),
     motion_enabled:f['motion_enabled']?f['motion_enabled'].checked:true,
     detection_trigger:f['detection_trigger']?.value||'motion_and_objects',
     post_motion_tail_s:parseFloat(f['post_motion_tail_s']?.value||0),
@@ -2220,6 +2245,10 @@ window._toggleCoralSetting=async function(key,inputEl){
   const wildlifeOn  =key==='wildlife_enabled'?nowOn:!!(byId('wildlifeEnabled')?.checked);
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({processing:{coral_enabled:coralEnabled,bird_species_enabled:birdEnabled,wildlife_enabled:wildlifeOn}})});
   showToast('Coral gespeichert · Kameras werden neu gestartet.','success');
+  // Reflect the new toggle state in any currently-open camera form +
+  // the pipeline-tree opacity before loadAll() rebuilds everything.
+  _updateWildlifeFormVisibility?.();
+  _renderCoralPipelineTree?.();
   await loadAll();
 };
 window.reloadCoralRuntime=async function(){
@@ -2240,6 +2269,37 @@ window.toggleCoralTab=function(tabId){
     _loadCoralModels?.();
   }
 };
+// Pipeline tree visualisation. Renders the per-frame detection flow inside
+// the Objekterkennung settings card; opacity reflects the current global
+// toggle state (Coral / bird species / wildlife). Re-rendered on every
+// settings hydrate + every toggle change.
+function _renderCoralPipelineTree(){
+  const host = byId('coralPipelineTree'); if(!host) return;
+  const coralOn    = !!byId('coralTpuEnabled')?.checked;
+  const birdOn     = !!byId('birdSpeciesEnabled')?.checked;
+  const wildlifeOn = !!byId('wildlifeEnabled')?.checked;
+  const offTag = '<span class="cpt-tag-off">inaktiv</span>';
+  const node = (cls, title, sub, list, prefix, off) => `
+    <div class="cpt-row${off?' cpt-node--off':''}">
+      <span class="cpt-prefix">${prefix}</span>
+      <div class="cpt-node">
+        <div class="cpt-node-head"><span class="cpt-node-icon ${cls}">${title.icon}</span><span class="cpt-node-title">${esc(title.text)}</span>${off?offTag:''}</div>
+        ${sub?`<div class="cpt-node-sub">${esc(sub)}</div>`:''}
+        ${list?`<div class="cpt-node-list">${esc(list)}</div>`:''}
+      </div>
+    </div>`;
+  host.innerHTML = `
+    <div class="cpt-title">KI-Pipeline · pro Frame</div>
+    ${node('cpt-accent--end', {icon:'🎬', text:'Kameraframe (alle N ms)'}, 'Frame-Eingang aus dem Sub-Stream', '', '', false)}
+    ${node('cpt-accent--motion', {icon:'🔲', text:'Bewegungserkennung (Pixel-Differenz)'}, 'Masken & Zonen werden hier angewandt', '', '│', false)}
+    ${node('cpt-accent--coco', {icon:'🟡', text:'Normal-Threshold → COCO-Objekterkennung'}, '', 'Person · Katze · Vogel · Auto · Hund', '│   ├─►', !coralOn)}
+    ${node('cpt-accent--bird', {icon:'🐦', text:'Wenn Vogel → Vogelarten-Klassifikation'}, 'iNaturalist ~960 Arten', 'Amsel · Blaumeise · Buchfink · Haussperling · …', '│   │     └─►', !(coralOn && birdOn))}
+    ${node('cpt-accent--wildlife', {icon:'🦔', text:'Wildlife-Threshold → Wildlife-Klassifikation'}, 'ImageNet MobileNet, niedrigere Schwelle für kleine Tiere', 'Eichhörnchen · Fuchs · Igel', '│   └─►', !wildlifeOn)}
+    ${node('cpt-accent--end', {icon:'⊘', text:'Kein Treffer → kein Event, keine Aufnahme'}, '', '', '└─►', false)}
+  `;
+}
+window._renderCoralPipelineTree = _renderCoralPipelineTree;
+
 async function _updateCoralDeviceInfo(){
   const panel=byId('coralDeviceInfo'); if(!panel) return;
   try{

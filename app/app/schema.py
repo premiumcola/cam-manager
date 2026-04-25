@@ -100,6 +100,12 @@ CAMERA_SCHEMA: dict = {
     "snapshot_interval_s": (int,   3),
     "bottom_crop_px":      (int,   0),
     "motion_sensitivity":  (float, 0.5),
+    # Higher = more sensitive (smaller motions count). Used as a parallel
+    # second-pass in _motion_detect when the wildlife classifier is on,
+    # so e.g. a single squirrel jump can trigger the wildlife stage even
+    # when the regular motion threshold doesn't fire. 0.0 → derived from
+    # motion_sensitivity (40% more sensitive, capped at 1.0).
+    "wildlife_motion_sensitivity": (float, 0.0),
     "motion_enabled":      (bool,  True),
     "detection_trigger":   (str,   "motion_and_objects"),
     "post_motion_tail_s":  (float, 0.0),  # 0 = use global default

@@ -48,6 +48,10 @@ class SettingsStore:
             "username": cam.get("username", ""),
             "password": cam.get("password", ""),
             "object_filter": cam.get("object_filter", ["person", "cat", "bird"]),
+            # 0.0 = "auto" — runtime derives 1.4× motion_sensitivity (capped
+            # at 1.0) so wildlife stays more sensitive than normal motion
+            # without forcing the user to set both sliders.
+            "wildlife_motion_sensitivity": cam.get("wildlife_motion_sensitivity", 0.0),
             # Per-label confidence overrides — defaults push the bar high
             # for "person" because COCO SSD is prone to false positives on
             # human-shaped wood/shadow patterns at fixed surveillance angles.
