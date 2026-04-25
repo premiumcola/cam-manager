@@ -38,6 +38,28 @@ HEADERS = {"User-Agent": "tam-spy-test-images/2.0 (+https://github.com/premiumco
 
 THUMB_WIDTH = 640
 
+# Reseed map — bumps the per-prefix shuffle when an entry's initial pick
+# was unsuitable (animal too small, blocked, etc.). Add a prefix here to
+# cycle to a different image without changing the source categories.
+# Already-good prefixes stay out of this map and keep their stable seed.
+_RESEED: dict[str, str] = {
+    "Eichhoernchen_rot":    "v2",
+    "Eichhoernchen_dunkel": "v2",
+    "Eichhoernchen_hell":   "v2",
+    "Person_gruppe":        "v2",
+    "Person_strasse":       "v2",
+    "Buntspecht":           "v2",
+    "Eichelhaher":          "v2",
+    "Elster":               "v2",
+    "Haussperling":         "v2",
+    "Kleiber":              "v2",
+    "Mauersegler":          "v2",
+    "Moenchsgrasmucke":     "v2",
+    "Rabenkraehe":          "v2",
+    "Ringeltaube":          "v2",
+    "Star":                 "v2",
+}
+
 
 # ──────────────────────────────────────────────────────────────────────────
 # Test specs — each tuple: (folder, prefix, count, [sources...])
@@ -192,15 +214,27 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         ("search", "red squirrel Sciurus vulgaris"),
     ]),
     ("squirrel", "Eichhoernchen_dunkel", 3, [
-        ("cat", "Black_morph_of_Sciurus_vulgaris"),
-        ("cat", "Melanistic_Sciurus_vulgaris"),
-        ("cat", "Dark_morph_of_Sciurus_vulgaris"),
-        ("search", "dark squirrel Sciurus vulgaris melanistic"),
+        # The narrow "Black_morph_of_Sciurus_vulgaris" / "Melanistic_*"
+        # subcategories don't exist on Commons in 2026 — broader fallbacks
+        # plus targeted searches catch dark-coat specimens reliably.
+        ("search", "melanistic Sciurus vulgaris black"),
+        ("search", "Eurasian red squirrel dark winter coat"),
+        ("cat", "Sciurus_vulgaris_in_Germany"),
+        ("cat", "Sciurus_vulgaris"),
     ]),
     ("squirrel", "Eichhoernchen_hell", 3, [
         ("cat", "Blonde_morph_of_Sciurus_vulgaris"),
         ("cat", "Light_morph_of_Sciurus_vulgaris"),
         ("search", "blonde red squirrel Sciurus vulgaris"),
+        ("search", "Sciurus vulgaris pale coat"),
+        ("cat", "Sciurus_vulgaris_in_Italy"),
+    ]),
+    # Grey squirrel (Sciurus carolinensis) — broadens the test set so the
+    # detector isn't only seeing red European squirrels.
+    ("squirrel", "Eichhoernchen_grau", 3, [
+        ("cat", "Sciurus_carolinensis_in_the_United_Kingdom"),
+        ("cat", "Sciurus_carolinensis"),
+        ("search", "eastern gray squirrel Sciurus carolinensis"),
     ]),
 ]
 
@@ -340,14 +374,26 @@ def run_spec(folder: str, prefix: str, count: int, sources: list[tuple[str, str]
     # Deterministic-but-spread order: hash(prefix) seeds the shuffle so
     # re-runs pick the same images, but different species don't all grab
     # the same "top of category" photo.
-    seed = int.from_bytes(hashlib.md5(prefix.encode()).digest()[:4], "big")
+    # Reseed lets us pull a different slice of the candidate list for a
+    # given prefix without renaming the output files. Used to swap in
+    # better photos for entries that produced poor detections.
+    seed_input = prefix + _RESEED.get(prefix, "")
+    seed = int.from_bytes(hashlib.md5(seed_input.encode()).digest()[:4], "big")
     random.Random(seed).shuffle(all_cands)
+    # Snapshot existing-file hashes per folder so a freshly downloaded
+    # candidate that turns out to be byte-identical to a sibling is skipped
+    # and we move on to the next URL in the shuffled list.
+    existing_hashes: set[str] = set()
+    for f in out_dir.glob("*.jpg"):
+        try:
+            existing_hashes.add(hashlib.md5(f.read_bytes()).hexdigest())
+        except Exception:
+            pass
     taken = 0
     new_count = 0
     skip_count = 0
-    for _title, url in all_cands:
-        if taken >= count:
-            break
+    cand_iter = iter(all_cands)
+    while taken < count:
         idx = taken + 1
         outname = f"{prefix}_{idx}.jpg"
         dest = out_dir / outname
@@ -356,14 +402,34 @@ def run_spec(folder: str, prefix: str, count: int, sources: list[tuple[str, str]
             skip_count += 1
             taken += 1
             continue
-        try:
-            sz = _download(url, dest)
+        # Pull next URL until one downloads to a new content hash.
+        accepted = False
+        for _title, url in cand_iter:
+            try:
+                sz = _download(url, dest)
+            except Exception as e:
+                print(f"  ! {outname} fetch failed: {e}", flush=True)
+                continue
+            try:
+                h = hashlib.md5(dest.read_bytes()).hexdigest()
+            except Exception:
+                h = None
+            if h and h in existing_hashes:
+                print(f"  · {outname} duplicate of existing — retrying", flush=True)
+                dest.unlink(missing_ok=True)
+                time.sleep(0.6)
+                continue
+            if h:
+                existing_hashes.add(h)
             print(f"  ✓ {outname} ({sz // 1024} KB)", flush=True)
             new_count += 1
             taken += 1
+            accepted = True
             time.sleep(0.6)
-        except Exception as e:
-            print(f"  ! {outname} failed: {e}", flush=True)
+            break
+        if not accepted:
+            print(f"  ! {outname} no unique candidate left", flush=True)
+            break
     if taken < count:
         print(f"  (only {taken}/{count} for {prefix})", flush=True)
     return new_count, skip_count

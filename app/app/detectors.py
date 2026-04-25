@@ -302,9 +302,12 @@ def _pretty_bird_label(raw: str | None, mapping: dict[str, str] | None = None) -
     """Return (display_name, latin_binomial) for an iNaturalist label.
 
     The display name is the German common name when the species is in the
-    mapping, otherwise the raw iNat label (which typically already includes
-    Latin + English). latin_binomial is always the clean "Genus species"
-    form when it can be extracted — useful as a stable key for the UI.
+    mapping. For species not in the mapping we deliberately return the
+    generic German "Vogel" rather than the raw iNat string — that string
+    leads with the Latin binomial and would surface as the primary label
+    in the UI ("Garrulus glandarius (Eurasian Jay)" instead of "Vogel ·
+    Garrulus glandarius"). The Latin binomial is preserved separately so
+    the UI can render it as parenthesised secondary text.
     """
     if not raw:
         return raw, None
@@ -313,7 +316,8 @@ def _pretty_bird_label(raw: str | None, mapping: dict[str, str] | None = None) -
     de = m.get(latin) if latin else None
     if de:
         return de, latin
-    return str(raw).strip(), latin
+    # No German mapping for this Latin binomial → generic "Vogel" + Latin.
+    return ("Vogel" if latin else str(raw).strip()), latin
 
 
 class BirdSpeciesClassifier:
