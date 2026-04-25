@@ -715,35 +715,55 @@ class CameraRuntime:
                 zone_resized = cv2.resize(self._zone_image, (w_f, h_f), interpolation=cv2.INTER_NEAREST)
             else:
                 zone_resized = self._zone_image
-        # Group labeled zones by label so the per-detection loop is O(1)
-        # in dictionary lookups.
+        # Build the per-label zone list AND a parallel "global zones"
+        # list. Both carry full polygon dicts (not just points) so we can
+        # extract trigger flags (save_photo/save_video/send_telegram) from
+        # the matching zone and tag them onto the surviving detection.
         labeled: dict[str, list] = {}
+        global_polys: list = []
         for z in cam_zones:
-            if not (isinstance(z, dict) and z.get("labels")):
+            if not isinstance(z, dict):
                 continue
             pts = z.get("points") or []
-            for L in z.get("labels", []):
-                labeled.setdefault(L, []).append(pts)
+            if not isinstance(pts, list) or len(pts) < 3:
+                continue
+            zlabels = z.get("labels") or []
+            if not zlabels:
+                global_polys.append(z)
+            else:
+                for L in zlabels:
+                    labeled.setdefault(L, []).append(z)
         kept: list = []
         for d in detections:
             x1, y1, x2, y2 = d.bbox
             cx = max(0, min(w_f - 1, (x1 + x2) // 2))
             cy = max(0, min(h_f - 1, (y1 + y2) // 2))
             global_applies = zone_resized is not None
-            label_polys = labeled.get(d.label, [])
-            if not global_applies and not label_polys:
+            label_zones = labeled.get(d.label, [])
+            if not global_applies and not label_zones:
                 # No zone targets this label at all → pass through freely.
                 kept.append(d)
                 continue
-            inside = False
-            if global_applies and zone_resized[cy, cx] > 0:
-                inside = True
-            if not inside:
-                for pts in label_polys:
-                    if self._point_in_poly(cx, cy, pts, w_f, h_f):
-                        inside = True
+            matched_zone = None
+            # Prefer a label-scoped zone match (more specific) over global.
+            for z in label_zones:
+                if self._point_in_poly(cx, cy, z.get("points") or [], w_f, h_f):
+                    matched_zone = z
+                    break
+            if matched_zone is None and global_applies and zone_resized[cy, cx] > 0:
+                # Locate which global polygon contains the point so we can
+                # forward its trigger flags. The prebaked image only tells
+                # us "yes, inside SOMETHING" — we need the dict for flags.
+                for z in global_polys:
+                    if self._point_in_poly(cx, cy, z.get("points") or [], w_f, h_f):
+                        matched_zone = z
                         break
-            if inside:
+            if matched_zone is not None:
+                d.zone_flags = {
+                    "save_photo":    bool(matched_zone.get("save_photo",    True)),
+                    "save_video":    bool(matched_zone.get("save_video",    True)),
+                    "send_telegram": bool(matched_zone.get("send_telegram", True)),
+                }
                 kept.append(d)
             else:
                 log.debug("[%s] Detection '%s' (%.0f%%) outside applicable zones at (%d,%d)",
@@ -887,6 +907,27 @@ class CameraRuntime:
             ok, buf = cv2.imencode('.jpg', save_thumb, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
             if ok:
                 thumb_bytes = buf.tobytes()
+        # Aggregate per-zone trigger flags across all surviving detections.
+        # OR-rule: if ANY detection sits in a zone that allows snapshot/
+        # video/telegram, the event keeps that channel on. A detection
+        # without zone_flags (no zones configured, or motion-only event)
+        # contributes True for all three — preserves legacy behaviour.
+        ev_save_photo = False
+        ev_save_video = False
+        ev_send_tg    = False
+        any_with_flags = False
+        for d in detections:
+            f = getattr(d, "zone_flags", None)
+            if f is None:
+                ev_save_photo = ev_save_video = ev_send_tg = True
+            else:
+                any_with_flags = True
+                if f.get("save_photo",    True): ev_save_photo = True
+                if f.get("save_video",    True): ev_save_video = True
+                if f.get("send_telegram", True): ev_send_tg    = True
+        if not any_with_flags and not detections:
+            # Motion-only event: keep legacy defaults.
+            ev_save_photo = ev_save_video = ev_send_tg = True
         return {
             "event_id": event_id,
             "time": ts,
@@ -901,6 +942,10 @@ class CameraRuntime:
             "after_hours": after_hours,
             "notify": notify,
             "thumb_bytes": thumb_bytes,
+            # Per-event recording switches derived from zone trigger flags.
+            "save_photo":    ev_save_photo,
+            "save_video":    ev_save_video,
+            "send_telegram": ev_send_tg,
         }
 
     def _write_clip_ffmpeg(self, frames, fps, out_path) -> bool:
@@ -1192,6 +1237,10 @@ class CameraRuntime:
         # logic slipped through.
         if not self.cfg.get("armed", True):
             notify = False
+        # Zone trigger flags can opt the event out of Telegram even when
+        # the alarm logic said yes (e.g. "garden background, just record").
+        if not meta.get("send_telegram", True):
+            notify = False
         if video_url and notify and self.notifier and self.cfg.get("telegram_enabled", True):
             try:
                 caption = (f"📷 {self.cfg.get('name', self.camera_id)}\n"
@@ -1376,6 +1425,8 @@ class CameraRuntime:
         notify = meta.get("notify", False)
         # Defensive: "Stumm" cameras never send Telegram.
         if not self.cfg.get("armed", True):
+            notify = False
+        if not meta.get("send_telegram", True):
             notify = False
         _send_tg = notify and self.cfg.get("telegram_enabled", True)
         if _send_tg and self.notifier:
@@ -2039,6 +2090,14 @@ class CameraRuntime:
                             if has_person or elapsed >= cooldown:
                                 rec_meta = self._build_event_meta(
                                     now_dt, labels, detections, drawn, effective_bbox)
+                                # Zone trigger flag: if every detection in
+                                # this event sits in a zone with save_video
+                                # turned off, skip recording entirely. Cheap
+                                # short-circuit before ffmpeg launches.
+                                if not rec_meta.get("save_video", True):
+                                    log.debug("[%s] event %s: save_video=False, skipping clip",
+                                              self.camera_id, rec_meta.get("event_id"))
+                                    continue
                                 started = False
                                 if _FFMPEG_AVAILABLE:
                                     started = self._start_ffmpeg_recording(now_dt, rec_meta)
@@ -2112,20 +2171,26 @@ class CameraRuntime:
                         day_dir = (Path(self.global_cfg["storage"]["root"]) / "motion_detection"
                                    / self.camera_id / ts.strftime("%Y-%m-%d"))
                         day_dir.mkdir(parents=True, exist_ok=True)
+                        # Build event meta first so we know whether the
+                        # zone(s) the detections fell into actually want a
+                        # photo saved. save_photo:false zones still log the
+                        # event JSON but skip the JPEG write.
+                        ev_meta = self._build_event_meta(ts, labels, detections, drawn, effective_bbox)
                         snap_path = day_dir / f"{event_id}.jpg"
-                        save_frame = drawn.copy()
-                        if effective_bbox is not None:
-                            mx, my, mw, mh = effective_bbox
-                            cv2.rectangle(save_frame, (mx, my), (mx + mw, my + mh), (0, 220, 0), 2)
-                        h_px, w_px = save_frame.shape[:2]
-                        if w_px > 1280:
-                            scale = 1280 / w_px
-                            save_frame = cv2.resize(save_frame, (1280, int(h_px * scale)), interpolation=cv2.INTER_AREA)
-                        cv2.imwrite(str(snap_path), save_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
                         rel = snap_path.relative_to(Path(self.global_cfg["storage"]["root"]))
                         public_base = (self.global_cfg.get("server", {}).get("public_base_url") or "").rstrip("/")
-                        snapshot_url = f"{public_base}/media/{rel.as_posix()}" if public_base else None
-                        ev_meta = self._build_event_meta(ts, labels, detections, drawn, effective_bbox)
+                        snapshot_url = None
+                        if ev_meta.get("save_photo", True):
+                            save_frame = drawn.copy()
+                            if effective_bbox is not None:
+                                mx, my, mw, mh = effective_bbox
+                                cv2.rectangle(save_frame, (mx, my), (mx + mw, my + mh), (0, 220, 0), 2)
+                            h_px, w_px = save_frame.shape[:2]
+                            if w_px > 1280:
+                                scale = 1280 / w_px
+                                save_frame = cv2.resize(save_frame, (1280, int(h_px * scale)), interpolation=cv2.INTER_AREA)
+                            cv2.imwrite(str(snap_path), save_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
+                            snapshot_url = f"{public_base}/media/{rel.as_posix()}" if public_base else None
                         event = {
                             "event_id": event_id,
                             "camera_id": self.camera_id,
@@ -2142,7 +2207,7 @@ class CameraRuntime:
                             "whitelisted": ev_meta["whitelisted"],
                             "detections": ev_meta["detections"],
                             "snapshot_url": snapshot_url,
-                            "snapshot_relpath": rel.as_posix(),
+                            "snapshot_relpath": rel.as_posix() if snapshot_url else None,
                             "video_url": None,
                             "video_relpath": None,
                         }
@@ -2153,9 +2218,19 @@ class CameraRuntime:
                         # Defensive: "Stumm" cameras never send Telegram.
                         if not self.cfg.get("armed", True):
                             _send_tg = False
+                        if not ev_meta.get("send_telegram", True):
+                            _send_tg = False
                         if _send_tg and self.notifier:
-                            with open(snap_path, "rb") as fh:
-                                thumb = fh.read()
+                            # Only attach the JPEG when one was actually
+                            # written. If save_photo was off, fall back to
+                            # the in-memory thumb_bytes from ev_meta.
+                            thumb = ev_meta.get("thumb_bytes")
+                            if snapshot_url:
+                                try:
+                                    with open(snap_path, "rb") as fh:
+                                        thumb = fh.read()
+                                except Exception:
+                                    pass
                             self.notifier.send_alert_sync(
                                 caption=(f"ℹ️ {', '.join(ev_meta['labels'])}\n"
                                          f"📷 {self.cfg.get('name', self.camera_id)}\n"

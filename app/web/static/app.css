@@ -366,6 +366,17 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .shape-lbl-chip input{display:none}
 .shape-lbl-chip:hover{background:rgba(255,255,255,.07)}
 .shape-lbl-chip.shape-lbl-chip--on{background:rgba(251,191,36,.13);border-color:rgba(251,191,36,.4);color:#fbbf24}
+/* Per-zone trigger panel — Foto / Video / Telegram opt-out chips. Hidden
+   by default; the chevron in the row head toggles visibility. */
+.shape-row-chev{width:24px;height:24px;border:none;border-radius:6px;background:transparent;color:#94a3b8;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,transform .2s}
+.shape-row-chev:hover{background:rgba(255,255,255,.06);color:#e2e8f0}
+.shape-row-chev.shape-row-chev--open{transform:rotate(90deg);color:#e2e8f0}
+.shape-trig-row{display:none;flex-wrap:wrap;gap:6px;padding:6px 0 2px 18px;margin-top:4px;border-top:1px dashed rgba(255,255,255,.06)}
+.shape-trig-row.shape-trig-row--open{display:flex}
+.shape-trig-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:12px;color:#94a3b8;cursor:pointer;user-select:none}
+.shape-trig-chip input{display:none}
+.shape-trig-chip:hover{background:rgba(255,255,255,.07)}
+.shape-trig-chip.shape-trig-chip--on{background:rgba(34,197,94,.13);border-color:rgba(34,197,94,.4);color:#4ade80}
 .shape-row.pulse{animation:shape-pulse 1.4s ease-in-out infinite}
 @keyframes shape-pulse{0%,100%{border-color:rgba(255,255,255,0.06)}50%{border-color:#fff}}
 .shape-row-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}

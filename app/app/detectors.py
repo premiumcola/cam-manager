@@ -83,6 +83,12 @@ class Detection:
     species_score: float | None = None
     identity: str | None = None
     raw_cls_id: int = -1  # unmapped class id as emitted by the model
+    # Trigger flags inherited from the zone this detection passed through.
+    # None when the detection didn't go through any zone (legacy or
+    # zone-less camera) — caller treats that as "all flags True". A dict
+    # like {"save_photo": True, "save_video": False, "send_telegram": True}
+    # means the matching zone explicitly opted in/out for the listed actions.
+    zone_flags: dict | None = None
 
     def to_dict(self):
         x1, y1, x2, y2 = self.bbox

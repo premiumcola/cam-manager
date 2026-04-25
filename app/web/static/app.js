@@ -1953,6 +1953,10 @@ function _polyLabels(p){
   if(!p || typeof p!=='object') return [];
   return Array.isArray(p.labels) ? p.labels.slice() : [];
 }
+// Tracks which row's trigger options panel is currently expanded.
+// Keyed as `${kind}:${idx}`. Auto-expands the row that gets selected via
+// canvas click (see onUp in the editor).
+shapeState.expandedRows = shapeState.expandedRows || new Set();
 function _renderShapeList(){
   const host=byId('shapeList'); if(!host) return;
   const zones=shapeState.zones||[]; const masks=shapeState.masks||[];
@@ -1967,25 +1971,57 @@ function _renderShapeList(){
     const pulseKey=`${kind}:${i}`;
     const polyLabels=new Set(_polyLabels(p));
     const allOn=polyLabels.size===0;
+    const expanded=shapeState.expandedRows.has(pulseKey);
     const checks=`<label class="shape-lbl-chip${allOn?' shape-lbl-chip--on':''}"><input type="checkbox" ${allOn?'checked':''} onclick="event.stopPropagation();_setShapeAllLabels('${kind}',${i},this.checked)"><span>Alle</span></label>`
       +_SHAPE_LABEL_OPTS.map(o=>{
         const on=polyLabels.has(o.k);
         return `<label class="shape-lbl-chip${on?' shape-lbl-chip--on':''}"><input type="checkbox" ${on?'checked':''} onclick="event.stopPropagation();_toggleShapeLabel('${kind}',${i},'${o.k}',this.checked)"><span>${o.l}</span></label>`;
       }).join('');
-    return `<div class="shape-row${shapeState.pulse===pulseKey?' pulse':''}" data-kind="${kind}" data-idx="${i}" onclick="_pulseShape('${kind}',${i})">
+    // Trigger flags are zone-only: masks just exclude motion/detection so
+    // there's nothing to trigger from. The chevron button is suppressed
+    // for masks; the whole trigger panel block stays out of their markup.
+    let triggerHtml='';
+    if(kind==='zone'){
+      const sp=p?.save_photo!==false;
+      const sv=p?.save_video!==false;
+      const st=p?.send_telegram!==false;
+      triggerHtml=`<div class="shape-trig-row${expanded?' shape-trig-row--open':''}">
+        <label class="shape-trig-chip${sp?' shape-trig-chip--on':''}"><input type="checkbox" ${sp?'checked':''} onclick="event.stopPropagation();_toggleShapeOption('${kind}',${i},'save_photo',this.checked)"><span>📸 Foto</span></label>
+        <label class="shape-trig-chip${sv?' shape-trig-chip--on':''}"><input type="checkbox" ${sv?'checked':''} onclick="event.stopPropagation();_toggleShapeOption('${kind}',${i},'save_video',this.checked)"><span>🎥 Video</span></label>
+        <label class="shape-trig-chip${st?' shape-trig-chip--on':''}"><input type="checkbox" ${st?'checked':''} onclick="event.stopPropagation();_toggleShapeOption('${kind}',${i},'send_telegram',this.checked)"><span>📨 Telegram</span></label>
+      </div>`;
+    }
+    const chev = (kind==='zone')
+      ? `<button type="button" class="shape-row-chev${expanded?' shape-row-chev--open':''}" title="Aufnahme-Optionen" onclick="event.stopPropagation();_toggleShapeExpanded('${kind}',${i})"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5,3 11,8 5,13"/></svg></button>`
+      : '';
+    return `<div class="shape-row${shapeState.pulse===pulseKey?' pulse':''}" data-kind="${kind}" data-idx="${i}" id="shapeRow_${kind}_${i}" onclick="_pulseShape('${kind}',${i})">
       <div class="shape-row-head">
         <span class="shape-row-dot shape-row-dot--${kind}"></span>
         <span class="shape-row-label">${esc(label)}</span>
         <span class="shape-row-count">${pts.length} Punkte</span>
+        ${chev}
         <button type="button" class="shape-row-del" title="Löschen" onclick="event.stopPropagation();_deleteShape('${kind}',${i})"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,4 14,4"/><path d="M5 4V2h6v2"/><path d="M3 4l1 10h8l1-10"/></svg></button>
       </div>
       <div class="shape-lbl-row">${checks}</div>
+      ${triggerHtml}
     </div>`;
   };
   host.innerHTML =
       zones.map((p,i)=>row(p,i,'zone')).join('')
     + masks.map((p,i)=>row(p,i,'mask')).join('');
 }
+window._toggleShapeExpanded=function(kind,idx){
+  const key=`${kind}:${idx}`;
+  if(shapeState.expandedRows.has(key)) shapeState.expandedRows.delete(key);
+  else shapeState.expandedRows.add(key);
+  _renderShapeList();
+};
+window._toggleShapeOption=function(kind,idx,key,on){
+  const arr = kind==='zone' ? shapeState.zones : shapeState.masks;
+  const poly = arr[idx]; if(!poly) return;
+  poly[key]=!!on;
+  saveShapesIntoForm(); _renderShapeList();
+};
 window._toggleShapeLabel=function(kind,idx,labelKey,on){
   const arr = kind==='zone' ? shapeState.zones : shapeState.masks;
   const poly = arr[idx]; if(!poly) return;
@@ -3266,6 +3302,33 @@ function _isClosingPoint(pt){
   const dx=first.x-pt.x, dy=first.y-pt.y;
   return dx*dx + dy*dy <= _SHAPE_HIT_PX*_SHAPE_HIT_PX;
 }
+// Ray-casting point-in-polygon test against {x,y} polygon vertices.
+// Used by canvas-click selection to decide which polygon (if any) the
+// click lands inside.
+function _pointInPoly(pt, points){
+  if(!Array.isArray(points) || points.length < 3) return false;
+  let inside = false;
+  for(let i=0, j=points.length-1; i<points.length; j=i++){
+    const xi=points[i].x, yi=points[i].y;
+    const xj=points[j].x, yj=points[j].y;
+    const intersect = ((yi>pt.y) !== (yj>pt.y)) &&
+                      (pt.x < (xj-xi)*(pt.y-yi)/((yj-yi)||1e-9) + xi);
+    if(intersect) inside = !inside;
+  }
+  return inside;
+}
+// Find the topmost completed polygon containing pt. Zones first (drawn
+// on top in the editor), then masks. Returns {kind, idx} or null.
+function _findPolygonAt(pt){
+  const test = (arr, kind) => {
+    for(let i=arr.length-1; i>=0; i--){
+      const pts = _polyPoints(arr[i]);
+      if(_pointInPoly(pt, pts)) return {kind, idx:i};
+    }
+    return null;
+  };
+  return test(shapeState.zones||[], 'zone') || test(shapeState.masks||[], 'mask');
+}
 function _commitInProgressPolygon(){
   if(shapeState.points.length < 3) return false;
   const poly = { points: [...shapeState.points], label: _nextPolyName(shapeState.mode) };
@@ -3353,6 +3416,29 @@ function _commitInProgressPolygon(){
       shapeState.hoverClosing = false;
       canvas.style.cursor = 'crosshair';
       return;
+    }
+    // While not drawing, a click on an existing polygon SELECTS it; a click
+    // in empty canvas DESELECTS (if anything was selected). New points are
+    // only added when nothing was selected and the click missed every
+    // polygon — that preserves the legacy "click empty area to draw" UX.
+    if(shapeState.points.length === 0){
+      const hit = _findPolygonAt(pt);
+      if(hit){
+        const key=`${hit.kind}:${hit.idx}`;
+        shapeState.pulse = key;
+        shapeState.expandedRows.add(key);
+        drawShapes(); _renderShapeList();
+        // Bring the matching list row into view so its trigger panel is
+        // immediately visible.
+        const row = byId(`shapeRow_${hit.kind}_${hit.idx}`);
+        if(row && row.scrollIntoView) row.scrollIntoView({behavior:'smooth', block:'nearest'});
+        return;
+      }
+      if(shapeState.pulse){
+        shapeState.pulse = null;
+        drawShapes(); _renderShapeList();
+        return;
+      }
     }
     shapeState.points.push(pt);
     drawShapes(); _updateShapeDrawingBar();
