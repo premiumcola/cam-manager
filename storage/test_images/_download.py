@@ -44,8 +44,8 @@ THUMB_WIDTH = 640
 # Already-good prefixes stay out of this map and keep their stable seed.
 _RESEED: dict[str, str] = {
     "Eichhoernchen_rot":    "v5",
-    "Eichhoernchen_dunkel": "v9",
-    "Eichhoernchen_hell":   "v8",
+    "Eichhoernchen_dunkel": "v10",
+    "Eichhoernchen_hell":   "v9",
     "Eichhoernchen_grau":   "v5",
     "Eichhoernchen_baum":   "v2",
     "Person_gruppe":        "v2",
@@ -273,30 +273,36 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         # subcategories don't exist on Commons in 2026 — broader fallbacks
         # plus targeted searches catch dark-coat specimens reliably. The
         # search prefix forces close-ups so the animal isn't a tiny
-        # background subject. "Wall pose" / "vertical climbing" filenames
-        # tend to fool the classifier into agama / lizard / hare / mink
-        # predictions, so weight toward unambiguous side-on shots in
-        # "natural habitat" / forest categories first.
-        ("cat", "Sciurus_vulgaris_in_forests"),
-        ("search", "dark red squirrel forest portrait"),
-        ("search", "Sciurus vulgaris brown phase forest"),
-        ("search", "dark Eurasian red squirrel sitting branch"),
+        # background subject. Round 6: the narrow morph pool is mostly
+        # exhausted after 5 rounds of blocklist hits — pivot to the much
+        # larger "feeding / eating" category which routinely surfaces
+        # darker-pelage specimens in clean side-on portraits. The brown
+        # winter-coat phase reads as "dunkel" too, even when not strictly
+        # melanistic.
+        ("cat", "Sciurus_vulgaris_eating"),
+        ("cat", "Sciurus_vulgaris_with_food"),
+        ("cat", "Sciurus_vulgaris_in_winter"),
+        ("search", "Sciurus vulgaris brown winter coat eating side"),
+        ("search", "Eurasian red squirrel dark winter portrait"),
         ("search", "Sciurus vulgaris dark coat eating"),
-        ("search", "melanistic Eurasian red squirrel"),
+        ("cat", "Sciurus_vulgaris_in_forests"),
         ("cat", "Sciurus_vulgaris_in_Germany"),
         ("cat", "Sciurus_vulgaris"),
     ]),
     ("squirrel", "Eichhoernchen_hell", 3, [
-        # Bias toward unambiguous full-body shots so the bbox refiner
-        # actually has something to lock onto. Indoor feeder / window-sill
-        # photos kept fooling the classifier into "refrigerator" hits, so
-        # bias hard toward outdoor branch / forest categories first.
+        # Round 6: Italy / blonde-morph categories drained. Reach for
+        # broader "Sciurus vulgaris in <country>" pools where pale-pelage
+        # individuals appear naturally, plus generic eating/feeding
+        # searches that surface clean ground-level portraits.
         ("cat", "Blonde_morph_of_Sciurus_vulgaris"),
         ("cat", "Light_morph_of_Sciurus_vulgaris"),
-        ("search", "pale red squirrel forest branch outdoor"),
-        ("search", "light coat Sciurus vulgaris branch outdoor"),
-        ("search", "blonde red squirrel Sciurus vulgaris"),
+        ("cat", "Sciurus_vulgaris_in_Spain"),
+        ("cat", "Sciurus_vulgaris_in_Portugal"),
+        ("cat", "Sciurus_vulgaris_in_France"),
+        ("search", "pale Sciurus vulgaris eating side"),
+        ("search", "light coat red squirrel ground portrait"),
         ("cat", "Sciurus_vulgaris_in_Italy"),
+        ("cat", "Sciurus_vulgaris_eating"),
         ("search", "Sciurus vulgaris pale coat"),
     ]),
     # Grey squirrel (Sciurus carolinensis) — broadens the test set so the
@@ -357,6 +363,10 @@ _BLOCKED_HASHES: set[str] = {
     # narrow Commons pool of these sub-categories.
     "77c1dd5a513d0ae74fd6e55141d7a4f1",  # dunkel_1 → hare (sitting upright)
     "bd4be7bfc2ff98e4fae66acc8fde7945",  # hell_3 → refrigerator (third feeder)
+    # Round 6 (after the bird/car detours): trying once more with broader
+    # country-variant categories to escape the narrow morph pool.
+    "bf5ae7638f1f5dd1640722cffa738353",  # dunkel_1 → marimba (still!)
+    "357f22768f395e23b7dd297b8007f567",  # hell_3 → no wildlife result
     # Bird folder — round 1: replacement targets that bird classifier
     # either misidentified (wrong species at top-3) or returned no
     # confident species at all.
