@@ -825,7 +825,7 @@ function renderCameraSettings(){
             </svg>
             Verbinden
           </button>
-          ${canMerge?`<button class="btn-cam-merge" title="In aktive Kamera zusammenführen" onclick="event.stopPropagation();openMergeModal('${esc(c.id)}','${esc(c.name)}')">
+          ${canMerge?`<button class="btn-cam-merge" title="In aktive Kamera zusammenführen" data-merge-action="open" data-merge-id="${esc(c.id)}" data-merge-name="${esc(c.name)}">
             <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 3v3a3 3 0 0 0 3 3h4a3 3 0 0 1 3 3v1"/><polyline points="11,11 13,13 11,15"/>
             </svg>
@@ -857,8 +857,11 @@ function openMergeModal(sourceId,sourceName){
   if(!targets.length){
     list.innerHTML='<div class="item muted" style="padding:12px">Keine aktive Ziel-Kamera verfügbar.</div>';
   } else {
+    // Inline onclick="…('${esc(name)}')" breaks on names containing single
+    // quotes (e.g. "Squirrel Town 'Nut Bar'"). Switched to data-attributes
+    // + a delegated listener on #mergeTargets — safe for any character.
     list.innerHTML=targets.map(c=>`
-      <div class="item merge-target-item" data-tgt="${esc(c.id)}" onclick="_selectMergeTarget('${esc(c.id)}','${esc(c.name)}')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px">
+      <div class="item merge-target-item" data-tgt-id="${esc(c.id)}" data-tgt-name="${esc(c.name)}" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px">
         <span style="font-size:18px">${getCameraIcon(c.name)}</span>
         <div style="flex:1">
           <div style="font-weight:600">${esc(c.name)}</div>
@@ -877,7 +880,7 @@ window.openMergeModal=openMergeModal;
 function _selectMergeTarget(id,name){
   _mergeTarget={id,name};
   document.querySelectorAll('.merge-target-item').forEach(el=>{
-    const sel=el.dataset.tgt===id;
+    const sel=el.dataset.tgtId===id;
     el.classList.toggle('selected',sel);
     const dot=el.querySelector('.merge-target-radio');
     if(dot){
@@ -901,6 +904,25 @@ function closeMergeModal(){
 byId('closeMergeBtn')?.addEventListener('click',closeMergeModal);
 byId('mergeCancelBtn')?.addEventListener('click',closeMergeModal);
 byId('mergeModal')?.addEventListener('click',e=>{ if(e.target===byId('mergeModal')) closeMergeModal(); });
+// Delegated listeners replace inline onclick="…('${esc(name)}')" — those
+// strings break on quotes / backslashes / ampersands in camera names.
+// Buttons declare data-merge-id / data-merge-name; the listener resolves
+// values from dataset at click time, which is byte-safe for any character.
+document.addEventListener('click',(ev)=>{
+  const trigger=ev.target.closest('[data-merge-action="open"]');
+  if(!trigger) return;
+  ev.stopPropagation();
+  const id=trigger.dataset.mergeId;
+  if(!id) return;
+  openMergeModal(id, trigger.dataset.mergeName || id);
+});
+byId('mergeTargets')?.addEventListener('click',(ev)=>{
+  const item=ev.target.closest('.merge-target-item');
+  if(!item) return;
+  const id=item.dataset.tgtId;
+  if(!id) return;
+  _selectMergeTarget(id, item.dataset.tgtName || id);
+});
 byId('mergeConfirmBtn')?.addEventListener('click',async()=>{
   if(!_mergeSource||!_mergeTarget) return;
   const btn=byId('mergeConfirmBtn');
@@ -3904,7 +3926,7 @@ function renderMediaOverview(){
             ${a.timelapse_count?_mocChip('tl',a.timelapse_count,'Timelapse'):''}
           </div>
           <div style="margin-top:8px">
-            <button class="btn-action ghost btn-merge-archived" title="In aktive Kamera zusammenführen" onclick="event.stopPropagation();openMergeModal('${esc(a.id)}','${esc(a.name)}')">
+            <button class="btn-action ghost btn-merge-archived" title="In aktive Kamera zusammenführen" data-merge-action="open" data-merge-id="${esc(a.id)}" data-merge-name="${esc(a.name)}">
               Zusammenführen ↗
             </button>
           </div>
