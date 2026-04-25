@@ -2590,14 +2590,23 @@ async function _loadCoralModels(){
       const stems=byCat[cat.id];
       if(!stems||!Object.keys(stems).length) continue;
       html+=`<div class="mcat"><div class="mcat-head">${esc(cat.title)}</div><div class="mcat-desc">${esc(cat.desc)}</div>`;
-      // Stable stem order: active-first, then alphabetical
+      // Stable stem order, alphabetical.
       const stemKeys=Object.keys(stems).sort();
+      // Coral TPU availability picks which variant is actively in use:
+      // EdgeTPU when present, otherwise CPU. Read from the first camera's
+      // status (already loaded by hydrateSettings).
+      const coralAvail = !!state.cameras?.[0]?.coral_available;
       for(const stem of stemKeys){
         const variants=stems[stem];
         const cpu=variants.find(v=>!v.edgetpu);
         const tpu=variants.find(v=>v.edgetpu);
-        const anyActive=variants.find(v=>v.active_in_category);
-        const labelInfo=(anyActive||variants[0]).labels||{};
+        // The pair is "in use" if either variant matches the configured
+        // model_path of an enabled category. Within an in-use pair, the
+        // hardware-appropriate variant carries the green "wird verwendet"
+        // chip; the other side stays at neutral "verfügbar".
+        const pairInUse = variants.some(v=>v.active_in_category);
+        const usedVariant = pairInUse ? (coralAvail ? (tpu||cpu) : (cpu||tpu)) : null;
+        const labelInfo=(variants[0]||{}).labels||{};
         const labelPill=labelInfo.filename
           ? (labelInfo.exists
               ? `<span class="mpair-labels" title="${esc(labelInfo.path||'')}">Labels: ${esc(labelInfo.filename)}${labelInfo.count?` (${labelInfo.count} Einträge)`:''}</span>`
@@ -2605,11 +2614,17 @@ async function _loadCoralModels(){
           : '';
         const mkVariantHtml=(v,label)=>{
           if(!v) return `<div class="mvar mvar--missing"><span class="mvar-kind">${esc(label)}</span><span class="mvar-empty">nicht vorhanden</span></div>`;
-          const active=v.active_in_category;
-          return `<div class="mvar${active?' mvar--active':''}" data-path="${esc(v.path)}">
+          // "wird verwendet" only on the variant the runtime actually
+          // loads given the current Coral-availability. Everything else
+          // shipped under /app/models/ is just "verfügbar".
+          const inUse = (v === usedVariant);
+          const stateChip = inUse
+            ? '<span class="mvar-chip mvar-chip--use">wird verwendet</span>'
+            : '<span class="mvar-chip mvar-chip--ok">verfügbar</span>';
+          return `<div class="mvar${inUse?' mvar--in-use':''}" data-path="${esc(v.path)}">
             <span class="mvar-kind mvar-kind--${label.toLowerCase()}">${esc(label)}</span>
             <span class="mvar-size">${v.size_mb!=null?v.size_mb+' MB':''}</span>
-            ${active?'<span class="mvar-badge">aktiv</span>':''}
+            ${stateChip}
           </div>`;
         };
         // Title row: model stem + description
@@ -2624,7 +2639,7 @@ async function _loadCoralModels(){
             ${mkVariantHtml(cpu,'CPU')}
             ${mkVariantHtml(tpu,'EDGETPU')}
           </div>
-          <div class="mpair-note">EdgeTPU: ~5 ms auf Coral TPU · CPU: ~130 ms Fallback · Automatische Auswahl</div>
+          <div class="mpair-note">EdgeTPU wird bevorzugt. CPU wird automatisch als Fallback verwendet.</div>
         </div>`;
       }
       html+='</div>';

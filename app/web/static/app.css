@@ -1063,16 +1063,20 @@ select option{background:#1e1e1e;color:var(--text)}
 @media(max-width:600px){.mpair-row{grid-template-columns:1fr}}
 .mvar{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);cursor:pointer;transition:background .15s,border-color .15s;min-height:34px}
 .mvar:hover{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.12)}
-.mvar--active{background:rgba(34,197,94,.09);border-color:rgba(34,197,94,.45);cursor:default}
-.mvar--active:hover{background:rgba(34,197,94,.09)}
+/* "wird verwendet" pair gets a subtle green tint to flag the actually-
+   loaded model. The other side keeps the neutral "verfügbar" look — both
+   are present on disk, only one runs. */
+.mvar--in-use{background:rgba(34,197,94,.09);border-color:rgba(34,197,94,.45);cursor:default}
+.mvar--in-use:hover{background:rgba(34,197,94,.09)}
 .mvar--missing{opacity:.5;cursor:not-allowed;font-style:italic}
 .mvar--missing:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.06)}
 .mvar-kind{font-size:10px;font-weight:800;letter-spacing:.05em;padding:2px 7px;border-radius:4px;flex-shrink:0}
 .mvar-kind--cpu{background:rgba(250,204,21,.14);color:#facc15}
 .mvar-kind--edgetpu{background:rgba(77,204,133,.18);color:#4ade80}
 .mvar-size{font-size:11px;color:var(--muted);font-weight:600;flex:1;text-align:left}
-.mvar-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.08);color:var(--muted);flex-shrink:0}
-.mvar--active .mvar-badge{background:rgba(34,197,94,.22);color:#4ade80}
+.mvar-chip{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;flex-shrink:0;letter-spacing:.02em}
+.mvar-chip--ok{background:rgba(255,255,255,.08);color:var(--muted)}
+.mvar-chip--use{background:rgba(34,197,94,.22);color:#4ade80}
 .mvar-empty{font-size:11px;color:rgba(255,255,255,.35);margin-left:auto}
 .mpair-note{font-size:10px;color:rgba(255,255,255,.4);margin-top:6px;font-style:italic}
 
