@@ -109,6 +109,7 @@ CAMERA_SCHEMA: dict = {
     "recording_schedule_start":   (str,  "08:00"),
     "recording_schedule_end":     (str,  "22:00"),
     "object_filter":       (list,  []),
+    "label_thresholds":    (dict,  {}),
     "zones":               (list,  []),
     "masks":               (list,  []),
     "whitelist_names":     (list,  []),

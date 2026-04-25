@@ -177,13 +177,67 @@ class CoralObjectDetector:
         self.reason = f"pycoral: {coral_error}"
         log.warning("Kein Detektor verfügbar – nur Bewegungserkennung aktiv")
 
-    def detect_frame(self, frame: np.ndarray, min_score: float | None = None) -> list[Detection]:
+    # Per-label minimum bounding-box constraints. Surveillance cameras at
+    # fixed positions almost never see a real person at <15% frame height
+    # or <2% frame area — a small "person" box is overwhelmingly a false
+    # positive (wood grain, shadow, distant silhouette). Keys are COCO
+    # labels; values are (min_height_frac, min_area_frac).
+    _LABEL_MIN_BBOX: dict[str, tuple[float, float]] = {
+        "person": (0.15, 0.02),
+    }
+
+    def detect_frame(
+        self,
+        frame: np.ndarray,
+        min_score: float | None = None,
+        label_thresholds: dict[str, float] | None = None,
+    ) -> list[Detection]:
+        """Run detection.
+
+        `min_score` is the global confidence floor (defaults to cfg).
+        `label_thresholds` is an optional per-label override applied as a
+        post-filter — any detection whose label appears in the dict is
+        kept only if its score >= the dict value. Lets the user crank up
+        the bar for "person" without sacrificing recall on cat/bird.
+        """
         if not self.available:
             return []
         threshold = float(min_score) if (min_score is not None and min_score > 0) else self.min_score
         if self._cpu_mode:
-            return self._detect_cpu(frame, threshold)
-        return self._detect_coral(frame, threshold)
+            dets = self._detect_cpu(frame, threshold)
+        else:
+            dets = self._detect_coral(frame, threshold)
+        return self._apply_label_filters(dets, frame, label_thresholds)
+
+    def _apply_label_filters(
+        self,
+        dets: list[Detection],
+        frame: np.ndarray,
+        label_thresholds: dict[str, float] | None,
+    ) -> list[Detection]:
+        if not dets:
+            return dets
+        h, w = frame.shape[:2]
+        frame_area = float(max(1, h * w))
+        out: list[Detection] = []
+        for d in dets:
+            # Per-label confidence override.
+            if label_thresholds:
+                t = label_thresholds.get(d.label)
+                if t is not None and d.score < float(t):
+                    continue
+            # Per-label size floor (currently only "person").
+            min_h_frac, min_area_frac = self._LABEL_MIN_BBOX.get(d.label, (0.0, 0.0))
+            if min_h_frac > 0.0 or min_area_frac > 0.0:
+                x1, y1, x2, y2 = d.bbox
+                bb_h = max(0, y2 - y1)
+                bb_area = max(0, (x2 - x1) * (y2 - y1))
+                if bb_h < min_h_frac * h:
+                    continue
+                if bb_area < min_area_frac * frame_area:
+                    continue
+            out.append(d)
+        return out
 
     def _detect_coral(self, frame: np.ndarray, threshold: float | None = None) -> list[Detection]:
         """Inference via pycoral + EdgeTPU."""

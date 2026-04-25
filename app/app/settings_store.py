@@ -48,6 +48,10 @@ class SettingsStore:
             "username": cam.get("username", ""),
             "password": cam.get("password", ""),
             "object_filter": cam.get("object_filter", ["person", "cat", "bird"]),
+            # Per-label confidence overrides — defaults push the bar high
+            # for "person" because COCO SSD is prone to false positives on
+            # human-shaped wood/shadow patterns at fixed surveillance angles.
+            "label_thresholds": cam.get("label_thresholds", {"person": 0.72}),
             "timelapse": {
                 "enabled": _tl.get("enabled", False),
                 "fps": _tl.get("fps", 30),

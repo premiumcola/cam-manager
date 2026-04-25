@@ -1720,7 +1720,16 @@ class CameraRuntime:
                 effective_motion = motion_labels if motion_confirmed else []
                 effective_bbox = motion_bbox if motion_confirmed else None
                 cam_min_score = self.cfg.get("detection_min_score") or None
-                detections = self.detector.detect_frame(proc_frame, min_score=cam_min_score)
+                # Per-label confidence overrides (e.g. {"person": 0.72}).
+                # Used to suppress false-positive person detections on
+                # static garden cameras without affecting recall on
+                # cat/bird/etc.
+                label_thresholds = self.cfg.get("label_thresholds") or None
+                detections = self.detector.detect_frame(
+                    proc_frame,
+                    min_score=cam_min_score,
+                    label_thresholds=label_thresholds,
+                )
                 allowed = set(self.cfg.get("object_filter") or [])
                 if allowed:
                     detections = [d for d in detections if d.label in allowed]

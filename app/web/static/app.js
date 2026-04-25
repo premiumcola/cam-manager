@@ -1001,6 +1001,7 @@ function _initCameraFormListeners(){
   // the whole event handler — any future refactor can hide a slider
   // safely just by not rendering the label.
   f['detection_min_score']?.addEventListener('input',()=>{ const v=parseFloat(f['detection_min_score'].value); const el=byId('detectionMinScoreLabel'); if(el) el.textContent=v.toFixed(2); });
+  f['label_threshold_person']?.addEventListener('input',()=>{ const v=parseFloat(f['label_threshold_person'].value); const el=byId('labelThresholdPersonLabel'); if(el) el.textContent=v.toFixed(2); });
   f['frame_interval_ms']?.addEventListener('input',()=>{ const el=byId('frameIntervalLabel'); if(el) el.textContent=f['frame_interval_ms'].value+'ms'; });
   f['snapshot_interval_s']?.addEventListener('input',()=>{ const el=byId('snapshotIntervalLabel'); if(el) el.textContent=f['snapshot_interval_s'].value+'s'; });
   // Motion toggle → grey out the trigger dropdown + show hint
@@ -1151,6 +1152,12 @@ function editCamera(camId){
     const cms=(c.detection_min_score && c.detection_min_score>0) ? c.detection_min_score : globalMs;
     f['detection_min_score'].value=cms;
     const el=byId('detectionMinScoreLabel'); if(el) el.textContent=Number(cms).toFixed(2);
+  }
+  if(f['label_threshold_person']){
+    const lt=(c.label_thresholds||{}).person;
+    const v=(lt!=null && !Number.isNaN(parseFloat(lt))) ? parseFloat(lt) : 0.72;
+    f['label_threshold_person'].value=v;
+    const el=byId('labelThresholdPersonLabel'); if(el) el.textContent=v.toFixed(2);
   }
   // Erkennung & Aufnahme trio
   if(f['motion_enabled']){
@@ -1660,8 +1667,49 @@ byId('saveTgFormatBtn')?.addEventListener('click',async()=>{
 });
 
 function getCanvasCtx(){ return byId('maskCanvas').getContext('2d'); }
-function loadMaskSnapshot(camId){ if(!camId) return; byId('maskSnapshot').src=`/api/camera/${camId}/snapshot.jpg?t=${Date.now()}`; }
-function scaleForCanvas(el,img){ const rect=el.getBoundingClientRect(); const naturalW=img.naturalWidth||1280, naturalH=img.naturalHeight||720; el.width=naturalW; el.height=naturalH; el.style.width=rect.width+'px'; el.style.height='auto'; }
+// If the snapshot fails (camera offline, no recent frame, etc.) we still
+// want a usable drawing surface — set the canvas to a fixed 1280×720 gray
+// placeholder so clicks are mapped to a real coordinate space and the
+// user can draw zones blind.
+function _maskCanvasFallback(){
+  const canvas=byId('maskCanvas');
+  if(!canvas) return;
+  canvas.width=1280; canvas.height=720;
+  canvas.style.width='100%'; canvas.style.height='auto';
+  const ctx=canvas.getContext('2d');
+  ctx.fillStyle='#222222';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#64748b';
+  ctx.font='14px system-ui,sans-serif';
+  ctx.textAlign='center';
+  ctx.fillText('Snapshot nicht verfügbar — Zonen können trotzdem gezeichnet werden.', canvas.width/2, canvas.height/2);
+  ctx.textAlign='left';
+}
+function loadMaskSnapshot(camId){
+  if(!camId) return;
+  const img=byId('maskSnapshot');
+  if(!img) return;
+  // Wire one-shot handlers so a failed load still leaves us with a
+  // usable canvas instead of a 0×0 surface that swallows clicks.
+  img.onload=()=>{ drawShapes(); _logMaskCanvasReady(camId,'snapshot'); };
+  img.onerror=()=>{ _maskCanvasFallback(); drawShapes(); _logMaskCanvasReady(camId,'fallback'); };
+  img.src=`/api/camera/${camId}/snapshot.jpg?t=${Date.now()}`;
+}
+function _logMaskCanvasReady(camId, source){
+  const c=byId('maskCanvas');
+  if(!c) return;
+  console.log('[mask-editor] camera=%s source=%s canvas=%dx%d', camId, source, c.width, c.height);
+}
+function scaleForCanvas(el,img){
+  const rect=el.getBoundingClientRect();
+  // If the snapshot didn't load we keep the fallback dimensions already
+  // assigned by _maskCanvasFallback; otherwise size to natural snapshot.
+  const naturalW=img.naturalWidth||el.width||1280;
+  const naturalH=img.naturalHeight||el.height||720;
+  el.width=naturalW; el.height=naturalH;
+  el.style.width=(rect.width||naturalW)+'px';
+  el.style.height='auto';
+}
 // Polygon shape: {points:[{x,y},...], label:"Zone 1"}. Raw arrays of
 // points (legacy pre-label format) are still accepted — _polyPoints
 // unwraps both shapes transparently.
@@ -1700,9 +1748,15 @@ function drawPoly(ctx,poly,color,fillAlpha,emphasised){
 }
 function drawShapes(){
   const img=byId('maskSnapshot'), canvas=byId('maskCanvas');
-  if(!img||!canvas||!img.src) return;
-  scaleForCanvas(canvas,img);
-  const ctx=getCanvasCtx(); ctx.clearRect(0,0,canvas.width,canvas.height);
+  if(!canvas) return;
+  // Only re-scale to the snapshot when it actually loaded; if the image
+  // is missing or broken we keep the placeholder dims set by the fallback.
+  const snapReady = img && img.src && img.complete && img.naturalWidth>0;
+  if(snapReady) scaleForCanvas(canvas,img);
+  const ctx=getCanvasCtx();
+  if(snapReady){ ctx.clearRect(0,0,canvas.width,canvas.height); }
+  // (when not ready, the gray placeholder already drawn by
+  //  _maskCanvasFallback stays in the background)
   const pulseId=shapeState.pulse;
   (shapeState.zones||[]).forEach((p,i)=>drawPoly(ctx,p,'rgba(75,163,255,1)',0.17,pulseId===`zone:${i}`));
   (shapeState.masks||[]).forEach((p,i)=>drawPoly(ctx,p,'rgba(255,107,107,1)',0.18,pulseId===`mask:${i}`));
@@ -1995,6 +2049,15 @@ byId('cameraForm').onsubmit=async(e)=>{
     recording_schedule_end:f['recording_schedule_end']?.value||'22:00',
     alarm_profile:f['alarm_profile']?.value||'soft',
     detection_min_score:parseFloat(f['detection_min_score']?.value||0),
+    label_thresholds:(()=>{
+      // Per-label thresholds: only persist values that differ from the
+      // global detection_min_score, and never persist NaN. Currently only
+      // wires the person slider; structure is open for future labels.
+      const out={};
+      const p=parseFloat(f['label_threshold_person']?.value);
+      if(!Number.isNaN(p)) out.person=p;
+      return out;
+    })(),
     resolution:f['resolution']?.value||'auto',
     frame_interval_ms:parseInt(f['frame_interval_ms']?.value||350),
     snapshot_interval_s:parseInt(f['snapshot_interval_s']?.value||3),
