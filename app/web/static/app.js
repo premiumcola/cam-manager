@@ -801,6 +801,10 @@ window.toggleCameraEnabled=async function(camId,enabled){
 };
 function renderCameraSettings(){
   byId('cameraSettingsList').innerHTML=state.cameras.map(c=>{
+    // Merge is offered when the camera isn't actively streaming — replacement
+    // hardware always lives behind a different cam_id, so a healthy camera is
+    // never a merge source.
+    const canMerge=c.status!=='active';
     return `
     <div class="cam-item" data-camid="${esc(c.id)}">
       <div class="cam-item-head" style="cursor:pointer" onclick="editCamera('${esc(c.id)}')">
@@ -821,6 +825,12 @@ function renderCameraSettings(){
             </svg>
             Verbinden
           </button>
+          ${canMerge?`<button class="btn-cam-merge" title="In aktive Kamera zusammenführen" onclick="event.stopPropagation();openMergeModal('${esc(c.id)}','${esc(c.name)}')">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 3v3a3 3 0 0 0 3 3h4a3 3 0 0 1 3 3v1"/><polyline points="11,11 13,13 11,15"/>
+            </svg>
+            Zusammenführen
+          </button>`:''}
           <button class="btn-cam-delete" title="Kamera löschen" onclick="event.stopPropagation();_quickDeleteCamera('${esc(c.id)}','${esc(c.name)}')">
             <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <polyline points="2,4 14,4"/><path d="M5 4V2h6v2"/><path d="M3 4l1 10h8l1-10"/>
@@ -833,6 +843,87 @@ function renderCameraSettings(){
       </div>
     </div>`;}).join('');
 }
+
+// ── Camera merge modal ────────────────────────────────────────────────────────
+let _mergeSource=null;
+let _mergeTarget=null;
+function openMergeModal(sourceId,sourceName){
+  _mergeSource={id:sourceId,name:sourceName};
+  _mergeTarget=null;
+  // Active cameras only — merging into an offline replacement makes no sense.
+  const targets=(state.cameras||[]).filter(c=>c.id!==sourceId && c.status==='active');
+  byId('mergeIntro').innerHTML=`Medien von <strong>${esc(sourceName)}</strong> werden in die gewählte Ziel-Kamera verschoben. Der Eintrag <strong>${esc(sourceName)}</strong> wird danach gelöscht.`;
+  const list=byId('mergeTargets');
+  if(!targets.length){
+    list.innerHTML='<div class="item muted" style="padding:12px">Keine aktive Ziel-Kamera verfügbar.</div>';
+  } else {
+    list.innerHTML=targets.map(c=>`
+      <div class="item merge-target-item" data-tgt="${esc(c.id)}" onclick="_selectMergeTarget('${esc(c.id)}','${esc(c.name)}')" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px">
+        <span style="font-size:18px">${getCameraIcon(c.name)}</span>
+        <div style="flex:1">
+          <div style="font-weight:600">${esc(c.name)}</div>
+          <div class="small muted">${esc(c.id)}</div>
+        </div>
+        <span class="merge-target-radio" style="width:16px;height:16px;border-radius:50%;border:2px solid var(--muted);flex-shrink:0"></span>
+      </div>`).join('');
+  }
+  byId('mergeWarning').style.display='none';
+  const btn=byId('mergeConfirmBtn');
+  btn.disabled=true; btn.style.opacity='.5'; btn.textContent='Zusammenführen';
+  byId('mergeModal').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+}
+window.openMergeModal=openMergeModal;
+function _selectMergeTarget(id,name){
+  _mergeTarget={id,name};
+  document.querySelectorAll('.merge-target-item').forEach(el=>{
+    const sel=el.dataset.tgt===id;
+    el.classList.toggle('selected',sel);
+    const dot=el.querySelector('.merge-target-radio');
+    if(dot){
+      dot.style.borderColor=sel?'var(--accent)':'var(--muted)';
+      dot.style.background=sel?'var(--accent)':'transparent';
+    }
+    el.style.background=sel?'rgba(59,130,246,.08)':'';
+  });
+  const w=byId('mergeWarning');
+  w.style.display='block';
+  w.innerHTML=`Die Aktion verschiebt alle Medien von <strong>${esc(_mergeSource.name)}</strong> nach <strong>${esc(name)}</strong> und entfernt anschließend den Eintrag <strong>${esc(_mergeSource.name)}</strong> aus der Konfiguration. Sie kann nicht rückgängig gemacht werden.`;
+  const btn=byId('mergeConfirmBtn');
+  btn.disabled=false; btn.style.opacity='1';
+}
+window._selectMergeTarget=_selectMergeTarget;
+function closeMergeModal(){
+  byId('mergeModal').classList.add('hidden');
+  document.body.style.overflow='';
+  _mergeSource=null; _mergeTarget=null;
+}
+byId('closeMergeBtn')?.addEventListener('click',closeMergeModal);
+byId('mergeCancelBtn')?.addEventListener('click',closeMergeModal);
+byId('mergeModal')?.addEventListener('click',e=>{ if(e.target===byId('mergeModal')) closeMergeModal(); });
+byId('mergeConfirmBtn')?.addEventListener('click',async()=>{
+  if(!_mergeSource||!_mergeTarget) return;
+  const btn=byId('mergeConfirmBtn');
+  // Two-step confirm: first click arms the button, second click fires the call.
+  if(btn.dataset.armed!=='1'){
+    btn.dataset.armed='1';
+    btn.textContent='Wirklich zusammenführen?';
+    btn.style.background='#ef4444';
+    return;
+  }
+  btn.disabled=true; btn.textContent='Wird verschoben …';
+  try{
+    const r=await j(`/api/cameras/${encodeURIComponent(_mergeSource.id)}/merge-into/${encodeURIComponent(_mergeTarget.id)}`,{method:'POST'});
+    const tgtName=_mergeTarget.name;
+    closeMergeModal();
+    showToast(`${r.moved_files||0} Datei(en) nach „${tgtName}“ verschoben (${r.moved_events||0} Events, ${r.moved_timelapses||0} Timelapse).`,'success');
+    await loadAll();
+  }catch(e){
+    btn.disabled=false; btn.dataset.armed='0';
+    btn.textContent='Zusammenführen'; btn.style.background='';
+    showToast('Zusammenführen fehlgeschlagen: '+(e.message||e),'error');
+  }
+});
 window._reconnectCam=function(camId,btn){
   btn.classList.add('spinning');
   setTimeout(()=>btn.classList.remove('spinning'),520);
@@ -3734,6 +3825,12 @@ function renderMediaOverview(){
           <div class="moc-counts">
             ${a.event_count?_mocChip('motion',a.event_count,'Bewegung'):''}
             ${a.timelapse_count?_mocChip('tl',a.timelapse_count,'Timelapse'):''}
+          </div>
+          <div style="margin-top:8px">
+            <button class="btn-action ghost" style="width:100%;font-size:11px;padding:6px 10px" onclick="event.stopPropagation();openMergeModal('${esc(a.id)}','${esc(a.name)}')">
+              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v3a3 3 0 0 0 3 3h4a3 3 0 0 1 3 3v1"/><polyline points="11,11 13,13 11,15"/></svg>
+              In aktive Kamera zusammenführen
+            </button>
           </div>
         </div>
       </div>`;

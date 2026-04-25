@@ -852,6 +852,24 @@
   <!-- Toast container -->
   <div id="toastContainer"></div>
 
+  <!-- Camera merge modal -->
+  <div id="mergeModal" class="modal hidden">
+    <div class="modal-card panel" style="max-width:480px;width:100%">
+      <div class="modal-inner-head">
+        <h3>Kameras zusammenführen</h3>
+        <button id="closeMergeBtn" class="close-btn" type="button">✕</button>
+      </div>
+      <p id="mergeIntro" style="font-size:14px;line-height:1.55;color:var(--text);margin:8px 0 14px"></p>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:6px">Ziel-Kamera</div>
+      <div id="mergeTargets" class="list" style="margin-bottom:14px;max-height:280px;overflow-y:auto"></div>
+      <p id="mergeWarning" class="field-help" style="border-left:3px solid #f59e0b;padding:8px 10px;display:none"></p>
+      <div class="modal-actions">
+        <button id="mergeCancelBtn" style="padding:10px 22px;border-radius:12px;border:1px solid #3a5060;background:var(--surface);color:var(--text);cursor:pointer;font-weight:600;font-size:14px">Abbrechen</button>
+        <button id="mergeConfirmBtn" disabled style="padding:10px 22px;border-radius:12px;border:none;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;margin-left:10px;opacity:.5">Zusammenführen</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Confirm modal -->
   <div id="confirmModal" class="modal hidden">
     <div class="modal-card panel" style="max-width:420px;width:100%">
