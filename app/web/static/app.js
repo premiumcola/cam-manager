@@ -2601,7 +2601,13 @@ function _renderTlModesGrid(cam){
     const enabled=!!prof.enabled;
     const targetS=prof.target_seconds??p.defaultTarget;
     const periodS=prof.period_seconds??p.defaultPeriod;
-    const profFps=parseInt(prof.fps)||camFps;
+    // Snap the loaded fps to a valid dropdown option so the <select>
+    // selection and the description always agree. Legacy configs with
+    // fps=12 (no longer offered) snap to the closest option, e.g. 20.
+    const rawProfFps=parseInt(prof.fps)||camFps;
+    const profFps=_TL_FPS_OPTIONS.includes(rawProfFps)
+      ? rawProfFps
+      : _TL_FPS_OPTIONS.reduce((a,b)=>Math.abs(b-rawProfFps)<Math.abs(a-rawProfFps)?b:a);
     const isCustom=p.key==='custom';
     const minT=p.minTarget||10, maxT=p.maxTarget||900;
     const clampedTarget=Math.max(minT,Math.min(maxT,targetS));
