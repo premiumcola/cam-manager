@@ -43,10 +43,10 @@ THUMB_WIDTH = 640
 # cycle to a different image without changing the source categories.
 # Already-good prefixes stay out of this map and keep their stable seed.
 _RESEED: dict[str, str] = {
-    "Eichhoernchen_rot":    "v4",
-    "Eichhoernchen_dunkel": "v5",
-    "Eichhoernchen_hell":   "v4",
-    "Eichhoernchen_grau":   "v4",
+    "Eichhoernchen_rot":    "v5",
+    "Eichhoernchen_dunkel": "v9",
+    "Eichhoernchen_hell":   "v8",
+    "Eichhoernchen_grau":   "v5",
     "Eichhoernchen_baum":   "v2",
     "Person_gruppe":        "v2",
     "Person_strasse":       "v2",
@@ -236,22 +236,31 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         # subcategories don't exist on Commons in 2026 — broader fallbacks
         # plus targeted searches catch dark-coat specimens reliably. The
         # search prefix forces close-ups so the animal isn't a tiny
-        # background subject.
-        ("search", "Sciurus vulgaris dark close-up sitting"),
+        # background subject. "Wall pose" / "vertical climbing" filenames
+        # tend to fool the classifier into agama / lizard / hare / mink
+        # predictions, so weight toward unambiguous side-on shots in
+        # "natural habitat" / forest categories first.
+        ("cat", "Sciurus_vulgaris_in_forests"),
+        ("search", "dark red squirrel forest portrait"),
+        ("search", "Sciurus vulgaris brown phase forest"),
+        ("search", "dark Eurasian red squirrel sitting branch"),
+        ("search", "Sciurus vulgaris dark coat eating"),
         ("search", "melanistic Eurasian red squirrel"),
-        ("search", "Eurasian red squirrel dark winter coat eating"),
         ("cat", "Sciurus_vulgaris_in_Germany"),
         ("cat", "Sciurus_vulgaris"),
     ]),
     ("squirrel", "Eichhoernchen_hell", 3, [
         # Bias toward unambiguous full-body shots so the bbox refiner
-        # actually has something to lock onto.
-        ("search", "pale red squirrel Sciurus vulgaris sitting"),
+        # actually has something to lock onto. Indoor feeder / window-sill
+        # photos kept fooling the classifier into "refrigerator" hits, so
+        # bias hard toward outdoor branch / forest categories first.
         ("cat", "Blonde_morph_of_Sciurus_vulgaris"),
         ("cat", "Light_morph_of_Sciurus_vulgaris"),
+        ("search", "pale red squirrel forest branch outdoor"),
+        ("search", "light coat Sciurus vulgaris branch outdoor"),
         ("search", "blonde red squirrel Sciurus vulgaris"),
-        ("search", "Sciurus vulgaris pale coat"),
         ("cat", "Sciurus_vulgaris_in_Italy"),
+        ("search", "Sciurus vulgaris pale coat"),
     ]),
     # Grey squirrel (Sciurus carolinensis) — broadens the test set so the
     # detector isn't only seeing red European squirrels. Six photos so the
@@ -259,8 +268,12 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
     # ordered to favour close-ups + eating/sitting poses; albino subcats
     # are filtered globally via SKIP_SUBSTR.
     ("squirrel", "Eichhoernchen_grau", 6, [
+        # Side-on / sitting poses first — frontal jumps and "running on
+        # fence" shots get classified as mink/marmot.
+        ("search", "eastern gray squirrel sitting branch close-up"),
         ("search", "eastern gray squirrel sitting feeder"),
         ("search", "Sciurus carolinensis eating nut"),
+        ("search", "Sciurus carolinensis side profile"),
         ("cat", "Sciurus_carolinensis_eating"),
         ("cat", "Sciurus_carolinensis_in_the_United_Kingdom"),
         ("cat", "Sciurus_carolinensis"),
@@ -275,6 +288,39 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         ("cat", "Sciurus_vulgaris_climbing"),
     ]),
 ]
+
+
+# Globally-rejected image content hashes. When the deterministic shuffle
+# keeps landing on a Commons file that happens to fool the classifier
+# (frontal-jump red squirrels mistaken for hares, wall-pose squirrels
+# mistaken for agamas, etc.), drop the md5 here. The downloader will
+# refuse the bytes and walk on to the next candidate. Rolls forward —
+# only add hashes, never remove, so a future re-run cannot regress to
+# a bad image we already rejected.
+_BLOCKED_HASHES: set[str] = {
+    # Squirrel folder — round 1 (v4/v5 reseeds): wildlife mis-classified.
+    "8f1cc40f482ec0c161541a035ce85575",  # rot_2 → hare
+    "24590504a40bf9c346d910f166cff8f8",  # hell_3 → no wildlife result
+    "1b6ed0c24981592fb8629081b0016248",  # grau_6 → mink
+    "217fb79b6708424ee48250709c8c424f",  # grau_2 → marginal
+    "7cd9bfb10543fa4f89a246b989145b95",  # dunkel_1 → agama
+    # Round 2 (v5/v6 reseeds): blocklist worked but the next-shuffled
+    # candidates were also tough cases.
+    "436d9ff540cd9981be91d14b3e5d2f6e",  # dunkel_1 → mink (climbing pose)
+    "59930eff9570959613333766b64f8bc9",  # grau_2 → megalith (subject too small)
+    "6a05c92e0c5996c360ae17625ca0fabd",  # hell_3 → refrigerator (indoor feeder shot)
+    # Round 3: still tough — dark / pale-coat squirrels are notoriously
+    # under-represented on Commons in flattering poses.
+    "08efb86ad80aa0e111a6b3d44605045e",  # dunkel_1 → hen-of-the-woods (mushroom)
+    "224e914e0575f5885d95927da848402a",  # hell_3 → refrigerator (another feeder)
+    "39ce4ee770472f8f0f87ca0d2da26fe1",  # dunkel_1 → red panda (close but no)
+    "0ececcea27fe23bc7f9485bae40632cc",  # hell_3 → weasel (mustelid pose)
+    # Round 4: dark/pale-coat squirrels keep mapping to mammals of similar
+    # silhouette. Saturating the blocklist forces the downloader off the
+    # narrow Commons pool of these sub-categories.
+    "77c1dd5a513d0ae74fd6e55141d7a4f1",  # dunkel_1 → hare (sitting upright)
+    "bd4be7bfc2ff98e4fae66acc8fde7945",  # hell_3 → refrigerator (third feeder)
+}
 
 
 SKIP_SUBSTR = (
@@ -460,6 +506,11 @@ def run_spec(folder: str, prefix: str, count: int, sources: list[tuple[str, str]
                 h = None
             if h and h in existing_hashes:
                 print(f"  · {outname} duplicate of existing — retrying", flush=True)
+                dest.unlink(missing_ok=True)
+                time.sleep(0.6)
+                continue
+            if h and h in _BLOCKED_HASHES:
+                print(f"  · {outname} on global blocklist (md5 {h[:8]}) — retrying", flush=True)
                 dest.unlink(missing_ok=True)
                 time.sleep(0.6)
                 continue
