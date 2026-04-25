@@ -1965,14 +1965,26 @@ class CameraRuntime:
                                 d.species = species
                                 d.species_latin = species_latin
                                 d.species_score = float(species_score) if species_score is not None else None
-                # Wildlife second-stage: only runs when motion was confirmed
-                # AND COCO produced nothing usable for naming a mammal. This
-                # catches fox / squirrel / hedgehog, which don't exist as
-                # COCO classes. Runs on the full frame — cheap enough.
+                # Wildlife second-stage: catches fox / squirrel / hedgehog —
+                # none of which have a COCO class. Gating logic:
+                #   - Confident COCO bird / dog / person → skip wildlife.
+                #     These animals genuinely look like themselves to COCO,
+                #     no point second-guessing.
+                #   - Confident COCO cat (≥0.92) → skip wildlife. Anything
+                #     below that threshold is a "soft cat" that COCO often
+                #     emits on frontal-sitting squirrels; we keep wildlife
+                #     in the running and let it overrule a soft cat below.
+                hard_skip_labels = ("bird", "dog", "person")
+                soft_cat = next(
+                    (d for d in detections if d.label == "cat" and d.score < 0.92),
+                    None,
+                )
+                hard_cat = any(d.label == "cat" and d.score >= 0.92 for d in detections)
                 if (
                     (motion_confirmed or wildlife_motion_only)
                     and self.wildlife_classifier.available
-                    and not any(d.label in ("bird", "cat", "dog", "person") for d in detections)
+                    and not any(d.label in hard_skip_labels for d in detections)
+                    and not hard_cat
                 ):
                     try:
                         wl_min = self.cfg.get("wildlife_min_score") or None
@@ -2002,6 +2014,17 @@ class CameraRuntime:
                         survivors = self._filter_masked_detections(proc_frame, [wl_det])
                         survivors = self._filter_zoned_detections(proc_frame, survivors)
                         if survivors:
+                            # Cat-vs-squirrel override: COCO often calls a
+                            # frontal squirrel "cat" with moderate
+                            # confidence. If wildlife is sure enough, drop
+                            # the soft-cat detection and let squirrel win.
+                            if cat == "squirrel" and soft_cat is not None and float(wscore or 0) >= 0.45:
+                                log.info(
+                                    "[%s] cat→squirrel override: cat %.2f replaced by wildlife squirrel %.2f",
+                                    self.camera_id, soft_cat.score, float(wscore),
+                                )
+                                detections = [d for d in detections if d is not soft_cat]
+                                labels = [L for L in labels if L != "cat"]
                             detections.append(wl_det)
                             labels.append(cat)
                 if self.cat_registry:

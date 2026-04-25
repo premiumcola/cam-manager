@@ -44,9 +44,9 @@ THUMB_WIDTH = 640
 # Already-good prefixes stay out of this map and keep their stable seed.
 _RESEED: dict[str, str] = {
     "Eichhoernchen_rot":    "v3",
-    "Eichhoernchen_dunkel": "v3",
+    "Eichhoernchen_dunkel": "v4",
     "Eichhoernchen_hell":   "v3",
-    "Eichhoernchen_grau":   "v3",
+    "Eichhoernchen_grau":   "v4",
     "Person_gruppe":        "v2",
     "Person_strasse":       "v2",
     "Buntspecht":           "v2",
@@ -217,9 +217,12 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
     ("squirrel", "Eichhoernchen_dunkel", 3, [
         # The narrow "Black_morph_of_Sciurus_vulgaris" / "Melanistic_*"
         # subcategories don't exist on Commons in 2026 — broader fallbacks
-        # plus targeted searches catch dark-coat specimens reliably.
-        ("search", "melanistic Sciurus vulgaris black"),
-        ("search", "Eurasian red squirrel dark winter coat"),
+        # plus targeted searches catch dark-coat specimens reliably. The
+        # search prefix forces close-ups so the animal isn't a tiny
+        # background subject.
+        ("search", "Sciurus vulgaris dark close-up sitting"),
+        ("search", "melanistic Eurasian red squirrel"),
+        ("search", "Eurasian red squirrel dark winter coat eating"),
         ("cat", "Sciurus_vulgaris_in_Germany"),
         ("cat", "Sciurus_vulgaris"),
     ]),
@@ -232,12 +235,15 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
     ]),
     # Grey squirrel (Sciurus carolinensis) — broadens the test set so the
     # detector isn't only seeing red European squirrels. Six photos so the
-    # classifier sees enough variation in pose/lighting/background.
+    # classifier sees enough variation in pose/lighting/background. Sources
+    # ordered to favour close-ups + eating/sitting poses; albino subcats
+    # are filtered globally via SKIP_SUBSTR.
     ("squirrel", "Eichhoernchen_grau", 6, [
+        ("search", "eastern gray squirrel sitting feeder"),
+        ("search", "Sciurus carolinensis eating nut"),
         ("cat", "Sciurus_carolinensis_eating"),
         ("cat", "Sciurus_carolinensis_in_the_United_Kingdom"),
         ("cat", "Sciurus_carolinensis"),
-        ("search", "eastern gray squirrel Sciurus carolinensis close-up"),
     ]),
     # Squirrels on tree trunks / branches — high-contrast subjects with the
     # animal taking up a large fraction of the frame.
@@ -259,6 +265,12 @@ SKIP_SUBSTR = (
     "feather ", "plumage detail", "chick only", "chicks only",
     "advertisement", "advertising", "brochure", "patent", "blueprint",
     "schematic", "newspaper", "clipping",
+    # Test-image quality filters added when these exact issues turned up
+    # in the squirrel folder: albino specimens look nothing like the
+    # detector's training distribution, and 3D anaglyphs wreck colour
+    # statistics so MobileNet returns confident garbage.
+    "albino", "anaglyph", "stereoscopic", "3d-image", "3d image",
+    "red-cyan", "leucistic",
 )
 
 

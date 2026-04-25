@@ -587,6 +587,44 @@ def _inat_wildlife_category(raw_label: str | None) -> str | None:
     return None
 
 
+# ImageNet labels MobileNetV2 commonly emits on European squirrel crops.
+# These are NOT direct squirrel matches — using them alone would generate
+# false positives on real hares/mongooses. They count as squirrel ONLY
+# when an independent iNat-secondary check returns a Sciuridae genus
+# (see classify_crop cross-validation).
+_SQUIRREL_LIKELY_LABELS: tuple[str, ...] = (
+    "hare", "mongoose", "mink", "weasel",
+    "polecat", "ferret", "marmot",
+    # Bias-from-American-training-set cases — already in
+    # _WILDLIFE_LABEL_RULES as direct hits, but listed here too so the
+    # cross-check can boost a soft 0.45-ish "fox squirrel" with a strong
+    # iNat "Sciurus vulgaris".
+    "fox squirrel", "gray squirrel",
+)
+
+
+def _is_squirrel_likely(label: str | None) -> bool:
+    if not label:
+        return False
+    low = str(label).lower()
+    return any(needle in low for needle in _SQUIRREL_LIKELY_LABELS)
+
+
+# Sciuridae-family Latin genera the iNat secondary may emit on a squirrel
+# crop. Used as the cross-check half of the "squirrel-likely" rule above.
+_SCIURIDAE_GENERA: tuple[str, ...] = (
+    "sciurus", "tamias", "marmota", "tamiasciurus", "callosciurus",
+    "spermophilus", "glaucomys",
+)
+
+
+def _is_sciuridae_inat(label: str | None) -> bool:
+    if not label:
+        return False
+    low = str(label).lower()
+    return any(g in low for g in _SCIURIDAE_GENERA)
+
+
 def discover_wildlife_paths(models_dir: str | Path = "/app/models") -> dict:
     """Look for a wildlife/mammal classifier in `models_dir`.
 
@@ -791,50 +829,142 @@ class WildlifeClassifier:
             self._inat_interpreter = None
 
     def classify_crop(self, crop: np.ndarray, min_score: float | None = None) -> tuple[str | None, str | None, float | None]:
-        """Return (category, imagenet_label, score).
+        """Return (category, raw_label, score).
 
-        category ∈ {"fox", "squirrel", "hedgehog", None}. None means the
-        top-3 didn't match any wildlife rule we track (or score too low).
-        `imagenet_label` is the raw model label for diagnostics.
+        category ∈ {"fox", "squirrel", "hedgehog", None}. None means
+        neither MobileNet nor the iNat secondary classifier matched any
+        wildlife rule we track. `raw_label` is the most informative
+        diagnostic string (top-1 of MobileNet for misses; the matched
+        rule's label for hits).
 
-        When `min_score` > 0, it overrides the global threshold for this
-        single call (per-camera tuning). When the iNat second-stage
-        backend is loaded, both models run; the iNat result wins if it
-        produces a category with a higher score than MobileNet.
+        Pipeline:
+          1. Collect top-3 from MobileNet + (optionally) top-3 from iNat.
+          2. Walk MobileNet top-3 → if any direct rule match, return it.
+          3. Walk iNat top-3 → if any direct rule match, return it.
+          4. Cross-validation: if MobileNet has a "squirrel-likely" label
+             (hare / mongoose / mink / …) AND iNat has a Sciuridae genus,
+             classify as squirrel with avg(score_a, score_b).
+          5. Otherwise: no category, but return the MobileNet top-1 as a
+             diagnostic label so the UI shows what the model "saw".
         """
         if not self.available or crop is None or crop.size == 0:
             return None, None, None
-        # Apply per-camera min_score override by temporarily swapping the
-        # instance value — both private inference paths read self.min_score.
-        # Each WildlifeClassifier instance is camera-scoped (one per camera
-        # process), so this is safe without locking.
+        # Per-camera min_score override — applied for the duration of the
+        # call, restored in finally. Safe without locking because each
+        # WildlifeClassifier instance is camera-scoped.
         saved_thresh = self.min_score
         if min_score is not None and float(min_score) > 0:
             self.min_score = float(min_score)
         try:
-            cat_a, lbl_a, score_a = (
-                self._classify_cpu(crop) if self._cpu_mode else self._classify_coral(crop)
-            )
-            cat_b, lbl_b, score_b = (None, None, None)
-            if self._inat_interpreter is not None:
-                cat_b, lbl_b, score_b = self._classify_inat(crop)
+            top3_a = self._top3_mobilenet(crop)
+            top3_b = self._top3_inat(crop) if self._inat_interpreter is not None else []
         finally:
             self.min_score = saved_thresh
-        # Pick the best between the two backends. iNat wins when it
-        # actually identified a tracked mammal genus AND scored higher
-        # than MobileNet (or MobileNet didn't categorise the crop).
-        if cat_b and score_b is not None:
-            if cat_a is None or score_a is None or score_b > score_a:
-                return cat_b, lbl_b, score_b
-        return cat_a, lbl_a, score_a
+        # Step 2: direct MobileNet rule hit on any of top-3.
+        for lbl, sc in top3_a:
+            cat = _wildlife_category(lbl)
+            if cat:
+                return cat, lbl, sc
+        # Step 3: direct iNat rule hit on any of top-3.
+        for lbl, sc in top3_b:
+            cat = _inat_wildlife_category(lbl)
+            if cat:
+                return cat, lbl, sc
+        # Step 4: cross-validation. MobileNet contains a squirrel-likely
+        # label AND iNat independently confirms with a Sciuridae genus →
+        # classify as squirrel with the averaged confidence. The combined
+        # raw_label keeps both pieces of evidence visible in the UI/logs.
+        likely_a = next(((lbl, sc) for lbl, sc in top3_a if _is_squirrel_likely(lbl)), None)
+        sciuridae_b = next(((lbl, sc) for lbl, sc in top3_b if _is_sciuridae_inat(lbl)), None)
+        if likely_a and sciuridae_b:
+            avg_score = (float(likely_a[1]) + float(sciuridae_b[1])) / 2.0
+            combined = f"{likely_a[0]} + {sciuridae_b[0]}"
+            log.debug("[wildlife] cross-validated squirrel: mobilenet=%s (%.2f) iNat=%s (%.2f) → %.2f",
+                      likely_a[0], likely_a[1], sciuridae_b[0], sciuridae_b[1], avg_score)
+            return "squirrel", combined, avg_score
+        # Step 5: nothing matched — return MobileNet's top-1 for UI diagnostics
+        # provided it cleared half the threshold. Hides totally junk noise.
+        if top3_a:
+            top_lbl, top_sc = top3_a[0]
+            if top_sc >= self.min_score * 0.5:
+                return None, top_lbl, top_sc
+        return None, None, None
 
-    def _classify_inat(self, crop: np.ndarray) -> tuple[str | None, str | None, float | None]:
-        """Run the optional iNaturalist second-stage on the crop. Returns
-        (category, raw_label, score) where category ∈ wildlife rules, or
-        (None, raw_top_label, score) for diagnostics on a non-mammal hit."""
-        if self._inat_interpreter is None:
-            return None, None, None
+    def _top3_mobilenet(self, crop: np.ndarray) -> list[tuple[str, float]]:
+        """Run MobileNet inference and return up to 3 (label, score) tuples
+        sorted by descending score. The collected list always contains the
+        top-3 above min_score * 0.5 — half-threshold so the cross-check in
+        classify_crop has access to weaker evidence (a squirrel-likely
+        label at 0.40 still triggers the cross-check if iNat strongly
+        confirms with Sciurus vulgaris)."""
+        return self._top3_cpu(crop) if self._cpu_mode else self._top3_coral(crop)
+
+    def _top3_coral(self, crop: np.ndarray) -> list[tuple[str, float]]:
         rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        width, height = self.common.input_size(self.interpreter)
+        resized = cv2.resize(rgb, (width, height))
+        self.common.set_input(self.interpreter, resized)
+        self.interpreter.invoke()
+        cls = self.classify.get_classes(
+            self.interpreter, top_k=3,
+            score_threshold=max(0.05, self.min_score * 0.5),
+        )
+        return [(self.labels.get(int(c.id), str(c.id)), float(c.score)) for c in cls]
+
+    def _top3_cpu(self, crop: np.ndarray) -> list[tuple[str, float]]:
+        input_details = self.interpreter.get_input_details()
+        output_details = self.interpreter.get_output_details()
+        in_h = input_details[0]['shape'][1]
+        in_w = input_details[0]['shape'][2]
+        in_dtype = input_details[0]['dtype']
+        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        resized = cv2.resize(rgb, (in_w, in_h))
+        inp = np.expand_dims(resized, axis=0)
+        if in_dtype == np.float32:
+            inp = (inp.astype(np.float32) - 127.5) / 127.5
+        else:
+            inp = inp.astype(in_dtype)
+        self.interpreter.set_tensor(input_details[0]['index'], inp)
+        self.interpreter.invoke()
+        scores = self.interpreter.get_tensor(output_details[0]['index'])[0]
+        # Descending sort of the array values; argsort on negative scores
+        # would wrap on uint8, so sort the array itself and reverse.
+        top_ids = np.argsort(scores)[::-1][:3]
+        out_dtype = output_details[0]['dtype']
+        scale, zero_point = (0.0, 0)
+        if out_dtype in (np.uint8, np.int8):
+            q = output_details[0].get('quantization', (0.0, 0))
+            scale = float(q[0]) if q and q[0] else 0.0
+            zero_point = int(q[1]) if q else 0
+
+        def _to_prob(raw: float) -> float:
+            if out_dtype in (np.uint8, np.int8):
+                return (raw - zero_point) * scale if scale else raw / 255.0
+            return float(raw)
+
+        # Detect 1000/1001 mismatch lazily as before.
+        if self._label_offset == 0 and len(self.labels) == 1000 and scores.shape[0] == 1001:
+            self._label_offset = 1
+
+        floor = max(0.05, self.min_score * 0.5)
+        out: list[tuple[str, float]] = []
+        for i in top_ids:
+            i = int(i)
+            sc = _to_prob(float(scores[i]))
+            if sc < floor:
+                break
+            lbl = self.labels.get(i - self._label_offset, str(i))
+            out.append((lbl, sc))
+        return out
+
+    def _top3_inat(self, crop: np.ndarray) -> list[tuple[str, float]]:
+        """Return up to 3 (label, score) tuples from the iNat second-stage
+        backend. Same shape as _top3_mobilenet so classify_crop can apply
+        rules and the cross-check uniformly."""
+        if self._inat_interpreter is None:
+            return []
+        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        floor = max(0.05, self._inat_min_score * 0.5)
         if self._inat_cpu_mode:
             det = self._inat_interpreter.get_input_details()
             outd = self._inat_interpreter.get_output_details()
@@ -863,106 +993,23 @@ class WildlifeClassifier:
                     return (raw - zp) * scale if scale else raw / 255.0
                 return float(raw)
 
+            out: list[tuple[str, float]] = []
             for i in top_ids:
                 i = int(i)
                 p = _to_prob(float(scores[i]))
-                if p < self._inat_min_score:
+                if p < floor:
                     break
-                label = self._inat_labels.get(i, str(i))
-                cat = _inat_wildlife_category(label)
-                if cat:
-                    return cat, label, p
-            return None, None, None
+                out.append((self._inat_labels.get(i, str(i)), p))
+            return out
         # Coral path
         width, height = self._inat_common.input_size(self._inat_interpreter)
         resized = cv2.resize(rgb, (width, height))
         self._inat_common.set_input(self._inat_interpreter, resized)
         self._inat_interpreter.invoke()
         classes = self._inat_classify.get_classes(
-            self._inat_interpreter, top_k=3, score_threshold=self._inat_min_score,
+            self._inat_interpreter, top_k=3, score_threshold=floor,
         )
-        for c in classes:
-            label = self._inat_labels.get(int(c.id), str(c.id))
-            cat = _inat_wildlife_category(label)
-            if cat:
-                return cat, label, float(c.score)
-        return None, None, None
-
-    def _classify_coral(self, crop: np.ndarray) -> tuple[str | None, str | None, float | None]:
-        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-        width, height = self.common.input_size(self.interpreter)
-        resized = cv2.resize(rgb, (width, height))
-        self.common.set_input(self.interpreter, resized)
-        self.interpreter.invoke()
-        classes = self.classify.get_classes(self.interpreter, top_k=3, score_threshold=self.min_score)
-        for c in classes:
-            raw = self.labels.get(int(c.id), str(c.id))
-            cat = _wildlife_category(raw)
-            if cat:
-                return cat, raw, float(c.score)
-        # No match in top-3 — return the top-1 raw label for diagnostics only
-        if classes:
-            c0 = classes[0]
-            raw0 = self.labels.get(int(c0.id), str(c0.id))
-            return None, raw0, float(c0.score)
-        return None, None, None
-
-    def _classify_cpu(self, crop: np.ndarray) -> tuple[str | None, str | None, float | None]:
-        input_details = self.interpreter.get_input_details()
-        output_details = self.interpreter.get_output_details()
-        in_h = input_details[0]['shape'][1]
-        in_w = input_details[0]['shape'][2]
-        in_dtype = input_details[0]['dtype']
-        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-        resized = cv2.resize(rgb, (in_w, in_h))
-        inp = np.expand_dims(resized, axis=0)
-        if in_dtype == np.float32:
-            # ImageNet MobileNet V2 expects [-1, 1] normalisation
-            inp = (inp.astype(np.float32) - 127.5) / 127.5
-        else:
-            inp = inp.astype(in_dtype)
-        self.interpreter.set_tensor(input_details[0]['index'], inp)
-        self.interpreter.invoke()
-        scores = self.interpreter.get_tensor(output_details[0]['index'])[0]
-        # Top-3 so we can fall through to the second-best if the first is
-        # something like "hare" on a squirrel crop. NOTE: scores is uint8
-        # for quantized models — `np.argsort(-scores)` would wrap around on
-        # unsigned arithmetic and return index 0 first. Descending-sort the
-        # array itself and reverse to get a correct top-K.
-        top_ids = np.argsort(scores)[::-1][:3]
-        out_dtype = output_details[0]['dtype']
-        scale, zero_point = (0.0, 0)
-        if out_dtype in (np.uint8, np.int8):
-            q = output_details[0].get('quantization', (0.0, 0))
-            scale = float(q[0]) if q and q[0] else 0.0
-            zero_point = int(q[1]) if q else 0
-
-        def _to_prob(raw: float) -> float:
-            if out_dtype in (np.uint8, np.int8):
-                return (raw - zero_point) * scale if scale else raw / 255.0
-            return float(raw)
-
-        best_raw_score = _to_prob(float(scores[int(top_ids[0])]))
-        best_id = int(top_ids[0])
-        best_label = self.labels.get(best_id - self._label_offset, str(best_id))
-        # Detect 1000/1001 mismatch once, then keep using the offset
-        if self._label_offset == 0 and len(self.labels) == 1000 and scores.shape[0] == 1001:
-            self._label_offset = 1
-            best_label = self.labels.get(best_id - 1, str(best_id))
-
-        for i in top_ids:
-            i = int(i)
-            raw_score = _to_prob(float(scores[i]))
-            if raw_score < self.min_score:
-                break
-            label = self.labels.get(i - self._label_offset, str(i))
-            cat = _wildlife_category(label)
-            if cat:
-                return cat, label, raw_score
-        # No wildlife match — return the top-1 anyway for UI diagnostics
-        if best_raw_score >= self.min_score * 0.5:
-            return None, best_label, best_raw_score
-        return None, None, None
+        return [(self._inat_labels.get(int(c.id), str(c.id)), float(c.score)) for c in classes]
 
 
 def draw_detections(frame: np.ndarray, detections: list[Detection]) -> np.ndarray:
