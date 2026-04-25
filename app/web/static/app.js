@@ -1815,17 +1815,18 @@ function _renderDiscoveryResults(){
   const visible=hideConfigured?_discoveryItems.filter(x=>!allConfigured.has(x.ip)):_discoveryItems;
   const alreadyCount=_discoveryItems.filter(x=>allConfigured.has(x.ip)).length;
 
-  // Hint shown when nothing or only one candidate was found — covers the
-  // common case where Reolink RTSP/HTTP-API was disabled in firmware.
+  // Hint shown when fewer than two candidates were found — covers the
+  // common case where Reolink HTTP/RTSP/ONVIF was disabled in the camera
+  // network settings.
   const reolinkHint=`<div class="field-help" style="margin-top:10px;padding:8px 10px;border-left:3px solid #38bdf8">
-    <strong>Reolink-Kameras:</strong> RTSP (Port 554) und HTTP-API (Port 8000) müssen in den Firmware-Einstellungen der Kamera aktiviert sein.
+    <strong>Reolink:</strong> HTTP (80), RTSP (554), ONVIF (8000) müssen in den Kamera-Netzwerkeinstellungen aktiviert sein.
   </div>`;
 
   if(!visible.length){
     byId('discoveryResults').innerHTML=`<div class="item">Keine Kamera-Kandidaten${hideConfigured&&alreadyCount?' ('+alreadyCount+' bereits konfiguriert ausgeblendet)':''}</div>${reolinkHint}`;
     return;
   }
-  const showFewHint=_discoveryItems.length<=1;
+  const showFewHint=_discoveryItems.length<2;
   byId('discoveryResults').innerHTML=visible.map(x=>{
     const ports=(x.open_ports||[]).join(', ')||'—';
     const uid=x.ip.replace(/\./g,'_');

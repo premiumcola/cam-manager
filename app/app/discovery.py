@@ -10,14 +10,14 @@ log = logging.getLogger(__name__)
 
 # Phase-1 sweep: only these ports are checked across ALL hosts in parallel.
 # A host that responds on any of these is a camera candidate.
-# RTSP (554/8554), ONVIF (2020), Reolink HTTP API (8000) + legacy port (9000),
-# Dahua SDK (37777), Hikvision SDK (34567).
-# 8000 is a phase-1 indicator because Reolink's HTTP API ACKs faster than RTSP
-# under tight timeouts.
-CAMERA_INDICATOR_PORTS = [554, 8554, 2020, 8000, 9000, 37777, 34567]
+# Reolink-specific: 80 (HTTP UI), 554 (RTSP), 8000 (ONVIF — Reolink uses 8000
+# for ONVIF, not the IANA-default 2020), plus legacy media port 9000.
+# Other vendors: 8554 (alt RTSP), 34567 (Hikvision SDK), 37777 (Dahua SDK).
+# 2020 was removed — no Reolink uses it and it caused false positives.
+CAMERA_INDICATOR_PORTS = [80, 554, 8000, 8554, 9000, 34567, 37777]
 
 # Phase-2 extras: checked only on confirmed camera candidates for better fingerprinting
-EXTRA_PORTS = [80, 443, 8080, 8443]
+EXTRA_PORTS = [443, 8080, 8443]
 
 
 def _tcp_open(ip: str, port: int, timeout: float = 0.8) -> bool:
@@ -45,7 +45,7 @@ def _http_banner(ip: str, port: int, timeout: float = 1.5) -> dict:
             conn.request("GET", "/", headers={"User-Agent": "Mozilla/5.0"})
             r = conn.getresponse()
             headers = dict(r.getheaders())
-            body = r.read(512).decode("utf-8", errors="replace")
+            body = r.read(2048).decode("utf-8", errors="replace")
             bl = body.lower()
             title = ""
             if "<title>" in bl:
@@ -57,6 +57,10 @@ def _http_banner(ip: str, port: int, timeout: float = 1.5) -> dict:
                 "title": title,
                 "www_auth": headers.get("WWW-Authenticate", ""),
                 "status": r.status,
+                # Lowercased body excerpt — used by _guess() to spot vendor
+                # markers (e.g. "reolink") that don't surface in the Server
+                # header or <title>.
+                "body": bl,
             }
         except Exception:
             pass
@@ -81,18 +85,33 @@ def _guess(open_ports: list[int], banners: dict) -> str:
     server = banners.get("server", "").lower()
     title = banners.get("title", "").lower()
     www_auth = banners.get("www_auth", "").lower()
+    body = banners.get("body", "")  # already lowercased in _http_banner
 
     rtsp_open = any(p in open_ports for p in (554, 8554))
 
-    # Check banner content for vendor hints
+    # Check banner content for vendor hints. body is included because Reolink
+    # firmware ships the vendor name as inline JS strings, not in <title>.
     for keyword, vendor in [
         ("reolink", "Reolink"), ("hikvision", "Hikvision"), ("hik", "Hikvision"),
         ("dahua", "Dahua"), ("amcrest", "Amcrest"), ("axis", "Axis"),
         ("hanwha", "Hanwha"), ("uniview", "Uniview"), ("vivotek", "Vivotek"),
         ("foscam", "Foscam"), ("tp-link", "TP-Link"), ("tapo", "TP-Link Tapo"),
     ]:
-        if keyword in server or keyword in title or keyword in www_auth:
+        if keyword in server or keyword in title or keyword in www_auth or keyword in body:
             return vendor
+
+    # Strong Reolink signal even without a banner match: the HTTP-UI port 80
+    # is open AND the Reolink-specific ONVIF port 8000 is open. Hikvision
+    # also uses 8000, but for that the banner check above would already have
+    # fired ("realm=Hikvision" in www_auth, "hikvision" in server, etc).
+    if 80 in open_ports and 8000 in open_ports:
+        return "Reolink"
+
+    # Two Reolink-private ports together with no other vendor match are also
+    # a strong signal — covers the case where HTTP UI is firewalled but RTSP
+    # and the legacy media port are reachable.
+    if 9000 in open_ports and 554 in open_ports:
+        return "Reolink"
 
     if rtsp_open:
         # Hikvision uses 8000 as its SDK port AND has a recognisable HTTP banner;
@@ -115,8 +134,6 @@ def _guess(open_ports: list[int], banners: dict) -> str:
     # Reolink HTTP API on 8000 alone — RTSP may be slow to ACK or disabled.
     if 8000 in open_ports:
         return "Reolink"
-    if 2020 in open_ports:
-        return "ONVIF-Kamera"
 
     if www_auth and "realm" in www_auth:
         return "IP-Kamera (HTTP-Auth)"
