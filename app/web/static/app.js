@@ -1442,13 +1442,14 @@ function hydrateSettings(){
   const coralInp   = byId('coralTpuEnabled');   if(coralInp)    coralInp.checked=coralActive;
   const birdInp    = byId('birdSpeciesEnabled'); if(birdInp)     birdInp.checked=birdActive;
   const wildInp    = byId('wildlifeEnabled');   if(wildInp)     wildInp.checked=wildlifeActive;
-  // Grey out the wildlife row when the model file is missing — still
-  // toggleable (explicit user opt-in), but signalled visually.
+  // Wildlife toggle stays fully interactive even when the model file is
+  // missing — the warning beneath the row tells the user what's wrong;
+  // we never want to gate the checkbox itself.
   const wildRow = byId('wildlifeEnabledRow');
   if(wildRow){
-    const missing = proc.wildlife_model_available===false;
-    wildRow.classList.toggle('toggle-row--disabled', missing);
+    wildRow.classList.remove('toggle-row--disabled');
   }
+  if(wildInp) wildInp.disabled = false;
   const cam0=state.cameras[0];
   const coralAvail=!!cam0?.coral_available;
   const chip=byId('coralStatusChip');
@@ -1471,9 +1472,12 @@ function hydrateSettings(){
     } else if(birdActive && cam0?.bird_species_available===false && cam0?.bird_species_reason){
       lines.push(`⚠️ Vogelarten-Klassifikation: ${esc(cam0.bird_species_reason)}`);
     }
-    if(wildlifeActive && proc.wildlife_model_available===false){
+    // Warn whenever the model is missing, even if the user hasn't enabled
+    // wildlife yet — the missing-file hint is what tells them WHY enabling
+    // does nothing useful right now.
+    if(proc.wildlife_model_available===false){
       const p=proc.wildlife_model_path||'mobilenet_v2_1.0_224_quant.tflite';
-      lines.push(`⚠️ Wildtier-Modell nicht gefunden. Bitte <code>${esc(p.split('/').pop())}</code> in <code>models/</code> ablegen.`);
+      lines.push(`⚠️ Modell nicht gefunden: <code>${esc(p.split('/').pop())}</code> — bitte in <code>models/</code> ablegen.`);
     }
     hint.innerHTML=lines.join('<br>');
   }

@@ -495,6 +495,35 @@ def _wildlife_category(raw_label: str | None) -> str | None:
     return None
 
 
+def discover_wildlife_paths(models_dir: str | Path = "/app/models") -> dict:
+    """Look for a MobileNet wildlife model in `models_dir`. Heuristic: any
+    .tflite whose name contains "mobilenet" but neither "ssd" (object
+    detector) nor "bird" (species classifier). Returns dict with keys
+    model_path / cpu_model_path / labels_path when found, else empty dict.
+    Used as fallback when config.yaml has no `processing.wildlife.*` block —
+    common case after a fresh install where the user just dropped the file
+    into models/."""
+    p = Path(models_dir)
+    if not p.exists():
+        return {}
+    cands = [f for f in p.glob("*.tflite")
+             if "mobilenet" in f.name.lower()
+             and "ssd" not in f.name.lower()
+             and "bird" not in f.name.lower()]
+    if not cands:
+        return {}
+    edge = next((f for f in cands if "edgetpu" in f.name.lower()), None)
+    cpu  = next((f for f in cands if "edgetpu" not in f.name.lower()), None)
+    out = {
+        "model_path":     str(edge or cpu or cands[0]),
+        "cpu_model_path": str(cpu or edge or cands[0]),
+    }
+    lbl = p / "imagenet_labels.txt"
+    if lbl.exists():
+        out["labels_path"] = str(lbl)
+    return out
+
+
 class WildlifeClassifier:
     """ImageNet MobileNetV2 (1000 classes) second-stage classifier used for
     mammals the COCO detector cannot name — fox, squirrel, hedgehog.
@@ -510,11 +539,24 @@ class WildlifeClassifier:
     """
 
     def __init__(self, cfg: dict):
-        self.cfg = cfg or {}
+        self.cfg = dict(cfg or {})
         self.enabled = bool(self.cfg.get("enabled"))
         self.available = False
         self.reason = "disabled"
         self.mode = "none"  # "coral" | "cpu" | "none"
+        # Auto-discovery fallback: when the configured model path is missing
+        # or absent on disk, try to locate a MobileNet ImageNet model in
+        # /app/models. Lets users just drop a model in without editing yaml.
+        configured = self.cfg.get("model_path")
+        if not configured or not Path(configured).exists():
+            disc = discover_wildlife_paths()
+            for k, v in disc.items():
+                self.cfg.setdefault(k, v)
+                # If the configured value pointed at a missing file, replace
+                # it with the discovered one so downstream logic uses the
+                # path that actually exists on disk.
+                if not self.cfg.get(k) or not Path(self.cfg[k]).exists():
+                    self.cfg[k] = v
         self.labels = load_label_map(self.cfg.get("labels_path"))
         self.min_score = float(self.cfg.get("min_score", 0.35))
         self.interpreter = None

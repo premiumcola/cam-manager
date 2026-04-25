@@ -853,6 +853,19 @@ def api_settings_app():
     bird_labels_available = bool(bird_labels_path and Path(bird_labels_path).exists())
     wl_model_available = any(p and Path(p).exists() for p in (wl_model_path, wl_cpu_path))
     wl_labels_available = bool(wl_labels_path and Path(wl_labels_path).exists())
+    # Auto-discover the wildlife model when the configured path is missing
+    # or absent on disk. Same heuristic the WildlifeClassifier itself uses,
+    # so the API response and runtime stay in sync.
+    if not wl_model_available:
+        from .detectors import discover_wildlife_paths
+        disc = discover_wildlife_paths()
+        if disc:
+            wl_model_path = disc.get("model_path") or wl_model_path
+            wl_cpu_path   = disc.get("cpu_model_path") or wl_cpu_path
+            wl_model_available = True
+            if not wl_labels_available and disc.get("labels_path"):
+                wl_labels_path = disc["labels_path"]
+                wl_labels_available = True
     return jsonify({
         "app": settings.data.get("app", {}),
         "server": settings.data.get("server", {}),
@@ -2094,15 +2107,27 @@ def api_coral_test_batch():
     bird_clf = BirdSpeciesClassifier(bird_cfg) if bird_cfg.get("enabled") else None
 
     # Wildlife classifier (fox/squirrel/hedgehog via ImageNet MobileNetV2).
-    # Always built for test-batch — even folders the COCO detector handles
-    # well (bird/cat/car) gain diagnostic value from seeing the wildlife
-    # model's top-1. Folders where COCO has no matching class (fox,
-    # hedgehog, squirrel) rely on it entirely.
-    wl_clf = WildlifeClassifier(wl_cfg) if wl_cfg.get("enabled") else None
-    # Only run wildlife inference for folders where it's meaningful — on
-    # every image for those, as a second-stage classifier. For bird/cat/
-    # person/car we skip it to keep inference fast.
+    # For test-batch we want to mirror the live pipeline AND give honest
+    # diagnostics — so when any of the wildlife folders is being tested,
+    # build the classifier even if `wildlife.enabled` is False in settings.
+    # The user otherwise sees a stream of zeros and can't tell whether the
+    # model is broken or simply switched off.
     _WILDLIFE_FOLDERS = {"fox", "hedgehog", "squirrel"}
+    target_folders = {d.name for d in candidate_dirs if d.is_dir()}
+    needs_wildlife = bool(target_folders & _WILDLIFE_FOLDERS)
+    wildlife_settings_enabled = bool(wl_cfg.get("enabled"))
+    wl_clf = None
+    if wildlife_settings_enabled or needs_wildlife:
+        wl_cfg_eff = dict(wl_cfg)
+        wl_cfg_eff["enabled"] = True
+        wl_clf = WildlifeClassifier(wl_cfg_eff)
+    # Surfaced to the response so the UI can explain a 0-detection result
+    # in a wildlife folder when the user has wildlife disabled in settings.
+    wildlife_disabled_warning = (
+        "Wildlife-Erkennung ist deaktiviert — Eichhörnchen/Fuchs/Igel werden nicht erkannt. "
+        "In Einstellungen aktivieren."
+        if (needs_wildlife and not wildlife_settings_enabled) else None
+    )
 
     results: list = []
     by_label: dict = {}
@@ -2127,15 +2152,18 @@ def api_coral_test_batch():
                     "error": "could not read image",
                 })
                 continue
+            stages_run: list[str] = []
             try:
                 t0 = _time.perf_counter()
                 dets = detector.detect_frame(frame)
                 ms = round((_time.perf_counter() - t0) * 1000, 1)
+                stages_run.append("detector")
             except Exception as e:
                 results.append({
                     "folder": d.name,
                     "filename": img_path.name,
                     "error": str(e),
+                    "stages_run": stages_run,
                 })
                 continue
             # Species classification on each bird crop when the classifier is on
@@ -2160,6 +2188,7 @@ def api_coral_test_batch():
                         dd.species_latin = sp_latin
                         dd.species_score = float(sp_score) if sp_score is not None else None
                         species_counts[sp] = species_counts.get(sp, 0) + 1
+                stages_run.append("bird_classifier")
             # Wildlife (ImageNet) classification — only runs for folders
             # where COCO doesn't have a matching class. Always runs on the
             # FULL frame since the target animals don't produce COCO boxes.
@@ -2177,6 +2206,7 @@ def api_coral_test_batch():
                     }
                     if cat:
                         wildlife_counts[cat] = wildlife_counts.get(cat, 0) + 1
+                stages_run.append("wildlife_classifier")
             # Annotate frame with bounding boxes and encode to base64 (max 480px wide for transport)
             annotated = draw_detections(frame, dets)
             h, w = annotated.shape[:2]
@@ -2190,6 +2220,7 @@ def api_coral_test_batch():
                 "filename": img_path.name,
                 "inference_ms": ms,
                 "image_b64": image_b64,
+                "stages_run": stages_run,
                 "detections": [{
                     "label": dd.label,
                     "score": round(float(dd.score), 3),
@@ -2212,7 +2243,7 @@ def api_coral_test_batch():
             if wildlife_info and wildlife_info.get("label"):
                 with_wildlife += 1
 
-    return jsonify({
+    response = {
         "ok": True,
         "detector_mode": detector.mode,
         "detector_reason": detector.reason,
@@ -2220,6 +2251,7 @@ def api_coral_test_batch():
         "bird_species_reason": bird_clf.reason if bird_clf else "disabled",
         "wildlife_mode": wl_clf.mode if wl_clf else "none",
         "wildlife_reason": wl_clf.reason if wl_clf else "disabled",
+        "wildlife_settings_enabled": wildlife_settings_enabled,
         "model_path": det_cfg.get("model_path"),
         "summary": {
             "total_images": total_images,
@@ -2231,7 +2263,10 @@ def api_coral_test_batch():
             "avg_ms": round(sum(inference_times) / len(inference_times), 1) if inference_times else 0.0,
         },
         "results": results,
-    })
+    }
+    if wildlife_disabled_warning:
+        response["wildlife_disabled_warning"] = wildlife_disabled_warning
+    return jsonify(response)
 
 
 _MODELS_DIR = Path("/app/models")
