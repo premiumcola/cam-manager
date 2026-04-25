@@ -159,7 +159,7 @@ class EventStore:
                 video_count += 1
         colors = {
             "motion": "#36a2ff", "person": "#ff6b6b", "cat": "#9b8cff", "dog": "#7c2d12", "bird": "#62d26f",
-            "fox": "#ff7a1a", "hedgehog": "#a67c52", "marten": "#7c5cff", "car": "#00c2ff", "other": "#64748b"
+            "squirrel": "#7c4a1f", "fox": "#ff7a1a", "hedgehog": "#a67c52", "marten": "#7c5cff", "car": "#00c2ff", "other": "#64748b"
         }
         day_items = []
         for day in sorted(by_day.keys()):

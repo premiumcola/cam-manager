@@ -43,10 +43,11 @@ THUMB_WIDTH = 640
 # cycle to a different image without changing the source categories.
 # Already-good prefixes stay out of this map and keep their stable seed.
 _RESEED: dict[str, str] = {
-    "Eichhoernchen_rot":    "v3",
-    "Eichhoernchen_dunkel": "v4",
-    "Eichhoernchen_hell":   "v3",
+    "Eichhoernchen_rot":    "v4",
+    "Eichhoernchen_dunkel": "v5",
+    "Eichhoernchen_hell":   "v4",
     "Eichhoernchen_grau":   "v4",
+    "Eichhoernchen_baum":   "v2",
     "Person_gruppe":        "v2",
     "Person_strasse":       "v2",
     "Buntspecht":           "v2",
@@ -222,6 +223,9 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
 
     # ── Squirrels: 9 images by colour variant ───────────────────────────
     ("squirrel", "Eichhoernchen_rot", 3, [
+        # Side-on / 3-4 view, sitting or eating — avoid front-on jumps
+        # which the wildlife model often confuses with hare.
+        ("search", "Sciurus vulgaris sitting eating side"),
         ("cat", "Red_morph_of_Sciurus_vulgaris"),
         ("cat", "Sciurus_vulgaris_in_Europe"),
         ("cat", "Sciurus_vulgaris"),
@@ -240,6 +244,9 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         ("cat", "Sciurus_vulgaris"),
     ]),
     ("squirrel", "Eichhoernchen_hell", 3, [
+        # Bias toward unambiguous full-body shots so the bbox refiner
+        # actually has something to lock onto.
+        ("search", "pale red squirrel Sciurus vulgaris sitting"),
         ("cat", "Blonde_morph_of_Sciurus_vulgaris"),
         ("cat", "Light_morph_of_Sciurus_vulgaris"),
         ("search", "blonde red squirrel Sciurus vulgaris"),
@@ -259,8 +266,10 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         ("cat", "Sciurus_carolinensis"),
     ]),
     # Squirrels on tree trunks / branches — high-contrast subjects with the
-    # animal taking up a large fraction of the frame.
+    # animal taking up a large fraction of the frame. Bias toward sitting
+    # poses on a clean trunk; "behind branches" pictures wreck the bbox.
     ("squirrel", "Eichhoernchen_baum", 3, [
+        ("search", "red squirrel sitting on tree trunk close-up"),
         ("search", "Sciurus vulgaris on tree trunk"),
         ("search", "red squirrel climbing tree"),
         ("cat", "Sciurus_vulgaris_climbing"),

@@ -33,8 +33,8 @@ function _resolveConfirm(val){
   if(_confirmResolve){_confirmResolve(val);_confirmResolve=null;}
 }
 // Wire confirm buttons after DOM ready (done at bottom of file)
-const colors={person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',motion:'#cbd5e1',alarm:'#ef4444',unknown:'#4a6477',timelapse:'#a855f7',motion_objects:'#c084fc',coral:'#f472b6',object:'#f472b6',notification:'#5bc8f5',dog:'#7c2d12'};
-const OBJ_LABEL={person:'Person',cat:'Katze',bird:'Vogel',car:'Auto',dog:'Hund',motion:'Bewegung',alarm:'Alarm',timelapse:'Timelapse',motion_objects:'Objekt · Motion',object:'Objekt',notification:'Benachrichtigung'};
+const colors={person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',motion:'#cbd5e1',alarm:'#ef4444',unknown:'#4a6477',timelapse:'#a855f7',motion_objects:'#c084fc',coral:'#f472b6',object:'#f472b6',notification:'#5bc8f5',dog:'#7c2d12',squirrel:'#7c4a1f'};
+const OBJ_LABEL={person:'Person',cat:'Katze',bird:'Vogel',car:'Auto',dog:'Hund',squirrel:'Eichhörnchen',motion:'Bewegung',alarm:'Alarm',timelapse:'Timelapse',motion_objects:'Objekt · Motion',object:'Objekt',notification:'Benachrichtigung'};
 const OBJ_SVG={
   // Person: head circle + body arc — bright yellow silhouette
   person:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="7" r="4.5" fill="#facc15"/><path d="M4 22c0-4.4 3.6-8 8-8s8 3.6 8 8" stroke="#facc15" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>`,
@@ -59,7 +59,10 @@ const OBJ_SVG={
   // rotated ~18° in the upper right — one fused icon replacing Telegram+alarm.
   notification:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21.5 3L2.5 10.8 9.5 13 12 20 21.5 3z" fill="#229ED9" stroke="#229ED9" stroke-width="1" stroke-linejoin="round"/><path d="M9.5 13L21.5 3" stroke="rgba(255,255,255,.45)" stroke-width=".9" stroke-linecap="round"/><g transform="translate(14.5 1.5) rotate(18)"><path d="M5 0.5C3.3 0.5 2.2 2 2.2 3.8C2.2 5.6 3 6.3 3 6.3H7C7 6.3 7.8 5.6 7.8 3.8C7.8 2 6.7 0.5 5 0.5Z" fill="#ef4444"/><rect x="4.4" y="6.3" width="1.2" height="1.1" rx=".35" fill="#ef4444"/><rect x="3.8" y="7.4" width="2.4" height=".75" rx=".35" fill="#ef4444"/><circle cx="5" cy="4" r=".55" fill="#fff"/></g></svg>`,
   // Dog: flat paw print — main pad + four toe beans, dark brown (#7c2d12)
-  dog:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M7 14.5C7 12 9.2 10.5 12 10.5C14.8 10.5 17 12 17 14.5C17 17 14.8 19.5 12 19.5C9.2 19.5 7 17 7 14.5Z" fill="#7c2d12"/><ellipse cx="6.5" cy="8.5" rx="1.7" ry="2.2" fill="#7c2d12"/><ellipse cx="17.5" cy="8.5" rx="1.7" ry="2.2" fill="#7c2d12"/><ellipse cx="9.5" cy="5" rx="1.5" ry="2" fill="#7c2d12"/><ellipse cx="14.5" cy="5" rx="1.5" ry="2" fill="#7c2d12"/></svg>`
+  dog:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M7 14.5C7 12 9.2 10.5 12 10.5C14.8 10.5 17 12 17 14.5C17 17 14.8 19.5 12 19.5C9.2 19.5 7 17 7 14.5Z" fill="#7c2d12"/><ellipse cx="6.5" cy="8.5" rx="1.7" ry="2.2" fill="#7c2d12"/><ellipse cx="17.5" cy="8.5" rx="1.7" ry="2.2" fill="#7c2d12"/><ellipse cx="9.5" cy="5" rx="1.5" ry="2" fill="#7c2d12"/><ellipse cx="14.5" cy="5" rx="1.5" ry="2" fill="#7c2d12"/></svg>`,
+  // Squirrel: sitting silhouette with bushy curled tail and ear tufts —
+  // saddle brown (#7c4a1f). Side-on profile so the tail reads even at 16px.
+  squirrel:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M19 19C19 21 17 22 14 22H8C6 22 5 20.5 5 19C5 16.5 7 15 9 15C11 15 12 16 13 16C14 16 14.5 14 14.5 12.5C14.5 9 11 7 11 5C11 3 12.5 1.5 14.5 2C16 2.4 17 3.8 17 5.5C17 7 16 8 16 9.5C16 11 17 13 18 14.5C19 16 19 17.5 19 19Z" fill="#7c4a1f"/><polygon points="13,2 14.5,0.5 15.5,2.2" fill="#7c4a1f"/><polygon points="15,1.5 16.5,0 17,2" fill="#7c4a1f"/><circle cx="14" cy="4.5" r=".55" fill="#fff"/></svg>`
 };
 function objBubble(label,size=22){
   const raw=OBJ_SVG[label]||OBJ_SVG.alarm;
@@ -73,7 +76,7 @@ function objIconSvg(label,size=18){
   const raw=OBJ_SVG[label]||OBJ_SVG.alarm;
   return raw.replace('width="16" height="16"',`width="${size}" height="${size}"`);
 }
-const TL_LABELS=['person','cat','bird','car','dog','motion','alarm'];
+const TL_LABELS=['person','cat','bird','car','dog','squirrel','motion','alarm'];
 function _renderLbLabels(){
   const el=byId('lightboxLabels');
   if(!el||!_lbItem) return;
@@ -547,11 +550,11 @@ ${isActive?`
 }
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
-const CAT_COLORS={alle:'#8888aa',motion:'#cbd5e1',person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',dog:'#7c2d12',timelapse:'#a855f7'};
+const CAT_COLORS={alle:'#8888aa',motion:'#cbd5e1',person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',dog:'#7c2d12',squirrel:'#7c4a1f',timelapse:'#a855f7'};
 // Order matches the Mediathek filter bar exactly so both filter rows read
 // the same left-to-right (Bewegung first, then per-class). Timelapse stays
 // out of the timeline lanes — only physical detection labels here.
-const TL_LANES=['motion','person','cat','bird','car','dog'];
+const TL_LANES=['motion','person','cat','bird','car','dog','squirrel'];
 const GAP_MS=2*60*1000;
 let _tlActiveLanes=new Set(TL_LANES);
 
@@ -1020,11 +1023,12 @@ function _initCameraFormListeners(){
 // object colour via --cb. _camObjectFilterState is kept in sync with the
 // hidden input so the existing save flow doesn't need to change.
 const _CAM_OBJ_OPTIONS=[
-  {k:'person', label:'Person', cb:'#a855f7'},
-  {k:'cat',    label:'Katze',  cb:'#ec4899'},
-  {k:'bird',   label:'Vogel',  cb:'#06b6d4'},
-  {k:'car',    label:'Auto',   cb:'#f59e0b'},
-  {k:'dog',    label:'Hund',   cb:'#7c2d12'},
+  {k:'person',   label:'Person',       cb:'#a855f7'},
+  {k:'cat',      label:'Katze',        cb:'#ec4899'},
+  {k:'bird',     label:'Vogel',        cb:'#06b6d4'},
+  {k:'car',      label:'Auto',         cb:'#f59e0b'},
+  {k:'dog',      label:'Hund',         cb:'#7c2d12'},
+  {k:'squirrel', label:'Eichhörnchen', cb:'#7c4a1f'},
 ];
 let _camObjectFilterState=[];
 function _renderCamObjectPills(){
@@ -1943,11 +1947,12 @@ function _updateShapeModeButtons(){
 // Labels available for per-polygon scoping. Mirrors KNOWN_OBJECT_LABELS
 // in schema.py — keep in sync if a new class joins the detector.
 const _SHAPE_LABEL_OPTS=[
-  {k:'person', l:'Person'},
-  {k:'cat',    l:'Katze'},
-  {k:'bird',   l:'Vogel'},
-  {k:'car',    l:'Auto'},
-  {k:'dog',    l:'Hund'},
+  {k:'person',   l:'Person'},
+  {k:'cat',      l:'Katze'},
+  {k:'bird',     l:'Vogel'},
+  {k:'car',      l:'Auto'},
+  {k:'dog',      l:'Hund'},
+  {k:'squirrel', l:'Eichhörnchen'},
 ];
 function _polyLabels(p){
   if(!p || typeof p!=='object') return [];
@@ -2401,7 +2406,7 @@ async function _populateCoralTestCameras(){
   sel.innerHTML=html;
   if(current&&[...sel.options].some(o=>o.value===current)) sel.value=current;
 }
-const _CORAL_LABEL_COLORS={person:'#6e6eff',cat:'#a06eff',bird:'#54d662',dog:'#00b0ff',fox:'#ff7a1a',squirrel:'#c8651a',hedgehog:'#a67c52'};
+const _CORAL_LABEL_COLORS={person:'#6e6eff',cat:'#a06eff',bird:'#54d662',dog:'#00b0ff',car:'#f87171',fox:'#ff7a1a',squirrel:'#7c4a1f',hedgehog:'#a67c52'};
 function _coralLabelColor(lbl){return _CORAL_LABEL_COLORS[String(lbl||'').toLowerCase()]||'#ffb400';}
 async function _runCoralTest(){
   const btn=byId('coralTestBtn'); const out=byId('coralTestResult');
@@ -2595,9 +2600,16 @@ function _drawCoralBatchCanvas(canvas, im, item){
     ctx.fillText(txt, x1+4, ly+2);
   }
   // ── Wildlife classifier ────────────────────────────────────────────
-  if(item.wildlife){
+  // Only render the overlay when the classifier successfully mapped to one
+  // of our categories (squirrel/fox/hedgehog). On a "kein Treffer" result
+  // (wl.label == null) we leave the canvas alone — the bottom pill already
+  // tells the user what ImageNet thought of the frame, and a full-frame
+  // amber border would otherwise read like a positive detection.
+  if(item.wildlife && item.wildlife.label){
     const wl = item.wildlife;
-    const amber = '#fbbf24';
+    // Use the squirrel/fox/hedgehog category colour so the box matches
+    // the rest of the UI (and is consistent with COCO bbox colouring).
+    const lblColor = _coralLabelColor(wl.label);
     let x1=0, y1=0, x2=canvas.width, y2=canvas.height, fullFrame=true;
     if(Array.isArray(wl.bbox) && wl.bbox.length===4){
       x1 = wl.bbox[0]*sx; y1 = wl.bbox[1]*sy;
@@ -2606,19 +2618,21 @@ function _drawCoralBatchCanvas(canvas, im, item){
       const w = x2-x1, h = y2-y1;
       fullFrame = (w >= canvas.width*0.95 && h >= canvas.height*0.95);
     }
-    ctx.strokeStyle = amber;
-    ctx.lineWidth = fullFrame ? 3 : 2;
-    ctx.strokeRect(x1+1, y1+1, Math.max(0, x2-x1-2), Math.max(0, y2-y1-2));
-    const lbl = wl.label || 'wildlife?';
-    const txt = wl.score!=null ? `${lbl} ${(wl.score*100|0)}%` : lbl;
+    // Don't outline the entire image — when no localised bbox is available
+    // we just paint the label badge in the top-left.
+    if(!fullFrame){
+      ctx.strokeStyle = lblColor;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x1+1, y1+1, Math.max(0, x2-x1-2), Math.max(0, y2-y1-2));
+    }
+    const txt = wl.score!=null ? `${wl.label} ${(wl.score*100|0)}%` : wl.label;
     const tw = ctx.measureText(txt).width + 8;
     const th = 16;
-    // Top-left corner for full-frame, above-box otherwise.
     const lx = fullFrame ? 4 : x1;
     const ly = fullFrame ? 4 : (y1 - th >= 0 ? y1 - th : y1);
     ctx.fillStyle = 'rgba(0,0,0,.65)';
     ctx.fillRect(lx, ly, tw, th);
-    ctx.fillStyle = amber;
+    ctx.fillStyle = lblColor;
     ctx.fillText(txt, lx+4, ly+2);
   }
 }
@@ -3959,7 +3973,7 @@ function openLightbox(item){
   // Show video player for motion clips, image for snapshots
   const vidSrc=_lbItem.video_relpath?`/media/${_lbItem.video_relpath}`:(_lbItem.video_url||'');
   const imgSrc=_lbItem.snapshot_relpath?`/media/${_lbItem.snapshot_relpath}`:(_lbItem.snapshot_url||'');
-  const hasVideoLabel=(_lbItem.labels||[]).some(l=>['motion','car','person','cat','bird','dog'].includes(l));
+  const hasVideoLabel=(_lbItem.labels||[]).some(l=>['motion','car','person','cat','bird','dog','squirrel'].includes(l));
   const pendingMsg=_lbItem.status==='recording'?'Video wird aufgenommen…':_lbItem.status==='processing'?'Video wird verarbeitet…':null;
   if(pendingMsg){
     _lbShowError(pendingMsg);
@@ -4414,7 +4428,7 @@ function _mocChip(type,count,title){
 // Build the full chip HTML for a stats entry: objects → motion_only → timelapse
 function _buildMocChips(stats){
   const lc=stats.label_counts||{};
-  const order=['person','cat','bird','car','dog'];
+  const order=['person','cat','bird','car','dog','squirrel'];
   const objTotal=order.reduce((n,k)=>n+(lc[k]||0),0);
   const motionOnly=Math.max(0,(stats.event_count||0)-objTotal);
   let html='';
@@ -4516,13 +4530,14 @@ function renderMediaOverview(){
 
   // Category filter bar — full-width row above camera cards
   const _CAT_DEFS=[
-    {label:'motion',    name:'Bewegung',  clr:CAT_COLORS.motion},
-    {label:'person',    name:'Person',    clr:CAT_COLORS.person},
-    {label:'cat',       name:'Katze',     clr:CAT_COLORS.cat},
-    {label:'bird',      name:'Vogel',     clr:CAT_COLORS.bird},
-    {label:'car',       name:'Auto',      clr:CAT_COLORS.car},
-    {label:'dog',       name:'Hund',      clr:CAT_COLORS.dog},
-    {label:'timelapse', name:'Timelapse', clr:CAT_COLORS.timelapse},
+    {label:'motion',    name:'Bewegung',     clr:CAT_COLORS.motion},
+    {label:'person',    name:'Person',       clr:CAT_COLORS.person},
+    {label:'cat',       name:'Katze',        clr:CAT_COLORS.cat},
+    {label:'bird',      name:'Vogel',        clr:CAT_COLORS.bird},
+    {label:'car',       name:'Auto',         clr:CAT_COLORS.car},
+    {label:'dog',       name:'Hund',         clr:CAT_COLORS.dog},
+    {label:'squirrel',  name:'Eichhörnchen', clr:CAT_COLORS.squirrel},
+    {label:'timelapse', name:'Timelapse',    clr:CAT_COLORS.timelapse},
   ];
   const catBtns=_CAT_DEFS.map(({label,name,clr})=>{
     const icon=(label==='timelapse'?objIconSvg('timelapse',18):(OBJ_SVG[label]||'').replace('width="16" height="16"','width="18" height="18"'));

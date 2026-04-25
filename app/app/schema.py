@@ -23,7 +23,7 @@ REQUIRED = object()
 # Object classes the system can filter, label, badge, and chart. Frontend
 # pill lists, server stats sets and event_logic mirror this — keep in sync.
 KNOWN_OBJECT_LABELS: frozenset[str] = frozenset({
-    "person", "cat", "bird", "car", "dog",
+    "person", "cat", "bird", "car", "dog", "squirrel",
 })
 
 

@@ -968,8 +968,8 @@ def api_media_storage_stats():
     active_cams = get_effective_config().get("cameras", [])
     active_ids = {c["id"] for c in active_cams}
 
-    TRACKED_LABELS = {'person', 'cat', 'bird', 'car', 'dog', 'motion'}
-    OBJECT_LABELS = {'person', 'cat', 'bird', 'car', 'dog'}
+    TRACKED_LABELS = {'person', 'cat', 'bird', 'car', 'dog', 'squirrel', 'motion'}
+    OBJECT_LABELS = {'person', 'cat', 'bird', 'car', 'dog', 'squirrel'}
 
     def _cam_stats_dict(cam_id: str, name_hint: str = "") -> dict:
         size_bytes = 0
@@ -2190,24 +2190,63 @@ def api_coral_test_batch():
                         species_counts[sp] = species_counts.get(sp, 0) + 1
                 stages_run.append("bird_classifier")
             # Wildlife (ImageNet) classification — only runs for folders
-            # where COCO doesn't have a matching class. Always runs on the
-            # FULL frame since the target animals don't produce COCO boxes.
+            # where COCO doesn't have a matching class.
             wildlife_info = None
             if wl_clf is not None and wl_clf.available and d.name in _WILDLIFE_FOLDERS:
                 try:
                     cat, raw_lbl, wscore = wl_clf.classify_crop(frame)
                 except Exception:
                     cat, raw_lbl, wscore = None, None, None
+                fh, fw = frame.shape[:2]
+                refined_bbox: tuple[int, int, int, int] | None = None
+                if cat:
+                    # Localise the animal: re-run COCO at threshold 0.25
+                    # and steal the bbox of any animal-shape donor class
+                    # (cat/dog/bear/sheep/cow/teddy bear). Mirrors the live
+                    # pipeline so the test-batch UI shows the same kind of
+                    # detection record the runtime would emit.
+                    _DONORS = ("cat", "dog", "bear", "sheep", "cow", "teddy bear")
+                    try:
+                        low_dets = detector.detect_frame(frame, min_score=0.25) or []
+                    except Exception:
+                        low_dets = []
+                    for ld in low_dets:
+                        if ld.label in _DONORS:
+                            refined_bbox = tuple(ld.bbox)
+                            break
+                    # Confident squirrel → suppress overlapping COCO false-
+                    # positives (cat/teddy bear/bear/dog) so the event isn't
+                    # double-labelled. Same IoU policy as camera_runtime.
+                    if cat == "squirrel" and float(wscore or 0) >= 0.55 and refined_bbox is not None:
+                        from .camera_runtime import _bbox_iou as _iou
+                        _DROP = {"cat", "dog", "bear", "teddy bear"}
+                        dets = [
+                            dd for dd in dets
+                            if not (dd.label in _DROP and _iou(tuple(dd.bbox), refined_bbox) >= 0.3)
+                        ]
+                    # Promote wildlife hit to a first-class Detection-shaped
+                    # entry on the response so the frontend renders it as a
+                    # regular pill / bbox alongside person/cat/bird/car/dog.
+                    from .detectors import Detection as _Det
+                    promoted_bbox = refined_bbox if refined_bbox is not None else (0, 0, int(fw), int(fh))
+                    dets.append(_Det(
+                        label=cat,
+                        score=float(wscore) if wscore is not None else 0.5,
+                        bbox=promoted_bbox,
+                        raw_cls_id=-1,
+                        species=raw_lbl,
+                        species_latin=None,
+                        species_score=float(wscore) if wscore is not None else None,
+                    ))
                 if raw_lbl is not None:
-                    # Wildlife classifier runs on the full frame (no
-                    # localised bbox). Send the frame extents so the
-                    # client can draw a full-frame amber border.
-                    fh, fw = frame.shape[:2]
+                    # Diagnostic info — what ImageNet thought, regardless of
+                    # whether we mapped it to a category. The UI uses this
+                    # for the "kein Treffer XX%" bottom pill on misses.
                     wildlife_info = {
                         "label": cat,
                         "imagenet": raw_lbl,
                         "score": round(float(wscore), 3) if wscore is not None else None,
-                        "bbox": [0, 0, int(fw), int(fh)],
+                        "bbox": list(refined_bbox) if refined_bbox is not None else [0, 0, int(fw), int(fh)],
                     }
                     if cat:
                         wildlife_counts[cat] = wildlife_counts.get(cat, 0) + 1

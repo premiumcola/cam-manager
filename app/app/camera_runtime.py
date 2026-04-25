@@ -68,6 +68,65 @@ log_cam = logging.getLogger(__name__ + ".camera")     # connection/stream logs
 _PROFILES = ("daily", "weekly", "monthly", "custom")
 _PROFILE_PERIOD_DEFAULTS = {"daily": 86400, "weekly": 604800, "monthly": 2592000, "custom": 600}
 
+# COCO classes whose geometry usually localises a small ground mammal even
+# when the label is wrong (squirrels read as "cat" head-on, "bear" furry,
+# "teddy bear" sitting upright, etc.). When wildlife confirms squirrel /
+# fox / hedgehog we re-run COCO at a low threshold and steal the bbox
+# of any of these — purely as a localisation hint, ignoring the label.
+_WILDLIFE_BBOX_DONORS = ("cat", "dog", "bear", "sheep", "cow", "teddy bear")
+
+
+def _bbox_iou(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> float:
+    ax1, ay1, ax2, ay2 = a
+    bx1, by1, bx2, by2 = b
+    ix1 = max(ax1, bx1); iy1 = max(ay1, by1)
+    ix2 = min(ax2, bx2); iy2 = min(ay2, by2)
+    iw = max(0, ix2 - ix1); ih = max(0, iy2 - iy1)
+    inter = iw * ih
+    if inter <= 0:
+        return 0.0
+    aa = max(0, ax2 - ax1) * max(0, ay2 - ay1)
+    bb = max(0, bx2 - bx1) * max(0, by2 - by1)
+    union = aa + bb - inter
+    if union <= 0:
+        return 0.0
+    return inter / union
+
+
+def _refine_wildlife_bbox(detector, frame, motion_bbox, frame_size):
+    """Best-guess bbox for a wildlife hit.
+
+    Re-runs COCO at threshold 0.25 and returns the bbox of any donor-class
+    detection (the first one — they're score-sorted). Falls back to
+    `motion_bbox` (which is `(x, y, w, h)`), then the full frame.
+    """
+    w0, h0 = frame_size
+    try:
+        low = detector.detect_frame(frame, min_score=0.25) or []
+    except Exception:
+        low = []
+    for d in low:
+        if d.label in _WILDLIFE_BBOX_DONORS:
+            return d.bbox
+    if motion_bbox is not None:
+        mx, my, mw, mh = motion_bbox
+        return (int(mx), int(my), int(mx + mw), int(my + mh))
+    return (0, 0, int(w0), int(h0))
+
+
+def _suppress_overlap(dets, ref_bbox, drop_labels, iou_min: float = 0.3):
+    """Drop detections whose label is in `drop_labels` AND whose bbox
+    overlaps `ref_bbox` (IoU >= iou_min). Used to silence COCO's
+    cat/teddy-bear false positives once wildlife confirms a squirrel."""
+    if not dets:
+        return dets
+    out = []
+    for d in dets:
+        if d.label in drop_labels and _bbox_iou(d.bbox, ref_bbox) >= iou_min:
+            continue
+        out.append(d)
+    return out
+
 
 class CameraRuntime:
     def __init__(self, camera_id: str, config_getter, global_cfg: dict, store, notifier, mqtt=None, cat_registry=None, person_registry=None):
@@ -1995,15 +2054,14 @@ class CameraRuntime:
                         cat, raw_lbl, wscore = None, None, None
                     if cat and (not allowed or cat in allowed):
                         h0, w0 = proc_frame.shape[:2]
-                        # Wildlife runs on the full frame; prefer the
-                        # motion_bbox centre if we have one so the mask
-                        # filter can reject motion that happened in the
-                        # masked region. Fallback to frame centre.
-                        if effective_bbox:
-                            mx, my, mw, mh = effective_bbox
-                            bb = (mx, my, mx + mw, my + mh)
-                        else:
-                            bb = (0, 0, w0, h0)
+                        # Localise the animal: re-run COCO at a low threshold
+                        # and pick the bbox of any animal-shaped class
+                        # (cat/dog/bear/sheep/cow). The label is wrong but
+                        # the geometry is right — we only borrow the bbox.
+                        # Falls back to the motion bbox, then the full frame.
+                        bb = _refine_wildlife_bbox(
+                            self.detector, proc_frame, effective_bbox, (w0, h0),
+                        )
                         wl_det = Detection(
                             label=cat,
                             score=float(wscore) if wscore is not None else 0.5,
@@ -2025,6 +2083,23 @@ class CameraRuntime:
                                 )
                                 detections = [d for d in detections if d is not soft_cat]
                                 labels = [L for L in labels if L != "cat"]
+                            # Confident squirrel → suppress overlapping COCO
+                            # false-positives (cat/dog/bear/teddy bear) so
+                            # the event isn't double-labelled. The whole
+                            # project's purpose is squirrel detection — once
+                            # the wildlife model is sure, COCO's misreads on
+                            # the same patch become noise.
+                            if cat == "squirrel" and float(wscore or 0) >= 0.55:
+                                pre = len(detections)
+                                detections = _suppress_overlap(
+                                    detections, bb,
+                                    drop_labels=("cat", "dog", "bear", "teddy bear"),
+                                    iou_min=0.3,
+                                )
+                                if len(detections) != pre:
+                                    labels = [L for L in labels
+                                              if L not in ("cat", "dog", "bear", "teddy bear")
+                                              or any(d.label == L for d in detections)]
                             detections.append(wl_det)
                             labels.append(cat)
                 if self.cat_registry:
