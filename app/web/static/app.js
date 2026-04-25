@@ -2798,6 +2798,12 @@ window.toggleSettingsNav=function(ev){
   if(ev){ ev.preventDefault?.(); ev.stopPropagation?.(); }
   const isOpen=!byId('navSettingsGroup')?.classList.contains('nav--open');
   _setSettingsNavOpen(isOpen);
+  // Single click should do both: open the accordion AND scroll the main
+  // content to the Einstellungen panel. Sub-items still take you to a
+  // specific set-section via navJumpToSetting.
+  const sec=byId('settings');
+  if(sec) sec.scrollIntoView({behavior:'smooth',block:'start'});
+  if(typeof _setActiveNav==='function') _setActiveNav('settings');
   return false;
 };
 window.navJumpToSetting=function(ev,secId){

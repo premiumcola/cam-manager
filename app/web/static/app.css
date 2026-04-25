@@ -3,25 +3,26 @@
 html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@media (max-width:768px){.section,.panel.section,[id]{scroll-margin-top:70px}html{scroll-padding-top:70px}}
 .shell{display:flex;gap:12px;max-width:1900px;margin:0 auto;padding:8px 14px 18px 14px}
 .panel{background:var(--panel);border-radius:24px;box-shadow:0 8px 32px rgba(0,0,0,.35)}
-.sidebar{padding:12px;position:sticky;top:8px;height:max-content;flex-shrink:0;width:260px;transition:width .35s cubic-bezier(0.4,0,0.2,1),padding .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}
+.sidebar{padding:12px 6px;position:sticky;top:8px;height:max-content;flex-shrink:0;width:260px;transition:width .35s cubic-bezier(0.4,0,0.2,1),padding .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}
 .sidebar.collapsed{width:52px;padding:10px 6px}
 .sidebar.collapsed .brand{height:0;margin-bottom:0;overflow:hidden;opacity:0}
-.sidebar.collapsed .nav a{padding:10px 0;justify-content:center;gap:0}
-.sidebar.collapsed .nav-label{opacity:0;width:0;overflow:hidden;pointer-events:none}
+.sidebar.collapsed .nav a,.sidebar.collapsed .nav-settings-toggle{padding:10px 0;justify-content:center;gap:0}
+.sidebar.collapsed .nav-label,.sidebar.collapsed .nav-chev{opacity:0;width:0;overflow:hidden;pointer-events:none}
 .brand{display:flex;gap:10px;align-items:center;margin-bottom:0;transition:height .35s cubic-bezier(0.4,0,0.2,1),margin .35s cubic-bezier(0.4,0,0.2,1),opacity .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}.brand-text{flex:1;min-width:0;transition:opacity .35s cubic-bezier(0.4,0,0.2,1),width .35s cubic-bezier(0.4,0,0.2,1)}
 .logo{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:#14314c;flex-shrink:0}
 .nav{display:grid;gap:2px}
-.nav a,.nav-settings-toggle{padding:10px 12px;border-radius:12px;background:transparent;display:flex;align-items:center;gap:10px;white-space:nowrap;min-height:44px;color:#cbd5e1;transition:background .15s ease,color .15s ease;-webkit-tap-highlight-color:transparent;border:none;width:100%;font:inherit;text-align:left;cursor:pointer}
+.nav a,.nav-settings-toggle{padding:8px 10px;border-radius:12px;background:transparent;display:flex;align-items:center;justify-content:flex-start;gap:10px;white-space:nowrap;min-height:44px;color:#cbd5e1;transition:background .15s ease,color .15s ease;-webkit-tap-highlight-color:transparent;border:none;width:100%;font:inherit;text-align:left;cursor:pointer}
 .nav a:hover,.nav-settings-toggle:hover{background:rgba(255,255,255,.05)}
 .nav a.nav-active{background:rgba(var(--na,143,158,181),.14);color:#fff}
-.nav-icon{flex-shrink:0;width:20px;text-align:center;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
-.nav-icon svg{transition:stroke .15s ease}
+.nav-icon{flex-shrink:0;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center}
+.nav-icon svg{width:20px;height:20px;display:block;transition:stroke .15s ease}
 .nav-label{transition:opacity .35s cubic-bezier(0.4,0,0.2,1),width .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}
-.nav-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);opacity:.55;font-weight:700;padding:14px 12px 4px;user-select:none;pointer-events:none}
+.nav-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);opacity:.55;font-weight:700;padding:14px 10px 4px;user-select:none;pointer-events:none}
 .nav-section-label:first-child{padding-top:4px}
 .sidebar.collapsed .nav-section-label{opacity:0;height:0;padding:0;overflow:hidden}
-.nav-divider{height:1px;background:rgba(255,255,255,.06);margin:5px 4px;border:none}
-.sidebar.collapsed .nav-divider{margin:5px 2px}
+/* Symmetric horizontal margin so the line stays inset from both edges in
+   any sidebar width — collapsed and expanded read the same. */
+.nav-divider{height:1px;background:rgba(255,255,255,.06);margin:5px 8px;border:none}
 .nav-tag{font-style:italic;font-weight:400;font-size:10px;color:var(--muted);opacity:.55;margin-left:4px;letter-spacing:.02em}
 /* Sichtungen: amber-tinted hover and active state, icon + label go full amber. */
 .nav a.nav-achievements-item:hover{background:rgba(251,191,36,.09);color:#fbbf24}
@@ -355,7 +356,27 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 #logs.panel .section-head h3::before{content:"~/ ";color:#00ff41}
 #logs.panel .btn-action{background:#000000;color:#00ff41;border:1px solid #003b00;border-radius:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 #logs.panel .btn-action:hover{background:#000000;border-color:#008f11;color:#00ff41}
-#logs.panel .log-output{background:#000000;padding:8px 4px;border-radius:0}
+#logs.panel .log-output{background:#000000;padding:8px 4px;border-radius:0;scrollbar-width:thin;scrollbar-color:#00aa33 #000000}
+/* Matrix scrollbar — scoped to the log output so the rest of the UI keeps
+   the platform default. Sharp corners, classic green thumb. */
+#logs.panel .log-output::-webkit-scrollbar{width:6px}
+#logs.panel .log-output::-webkit-scrollbar-track{background:#000000}
+#logs.panel .log-output::-webkit-scrollbar-thumb{background:#00aa33;border-radius:0}
+#logs.panel .log-output::-webkit-scrollbar-thumb:hover{background:#00ff41}
+/* Matrix selects — both the level filter and the subsystem filter. Custom
+   green chevron data-uri so the dropdown arrow matches the palette. */
+#logs.panel select,
+#logs.panel .log-level-select{
+  appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  background:#000000;color:#00ff41;border:1px solid #00aa33;border-radius:0;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;
+  padding:4px 28px 4px 10px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2300ff41' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 8px center;
+  cursor:pointer
+}
+#logs.panel select:hover,#logs.panel .log-level-select:hover{border-color:#00ff41}
+#logs.panel select:focus,#logs.panel .log-level-select:focus{outline:none;box-shadow:0 0 0 1px #00ff41;border-color:#00ff41}
 .discovery-creds{display:grid;grid-template-columns:.75fr .75fr 2fr;gap:8px;margin-top:10px}.disc-input{padding:9px 11px;border-radius:12px;background:var(--surface);color:var(--text);border:none;width:100%;font:inherit}.disc-input::placeholder{color:var(--muted)}.disc-input:focus{outline:none;box-shadow:0 0 0 2px var(--accent)}.disc-select{padding:9px 28px 9px 11px;border-radius:12px;background:var(--surface);color:var(--text);border:none;width:100%;font:inherit;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}.disc-select:focus{outline:none;box-shadow:0 0 0 2px var(--accent)}
 .modal-inner-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
 .modal-actions{display:flex;justify-content:flex-end;padding-top:14px;margin-top:14px}
