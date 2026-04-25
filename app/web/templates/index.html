@@ -84,17 +84,19 @@
     <aside class="sidebar panel" id="sidebar">
       <nav class="nav">
         <div class="nav-section-label">Kameras</div>
-        <a href="#dashboard" data-target="dashboard" data-accent="59,130,246" title="Live Feed"><span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="3"/><path d="M16 6l3-3h1v3"/><circle cx="12" cy="13" r="3"/></svg></span><span class="nav-label">Live Feed</span></a>
-        <a href="#cameras" data-target="cameras" data-accent="59,130,246" title="Geräte"><span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7h4l2-2h6l2 2h4v12H3z"/><circle cx="12" cy="13" r="4"/></svg></span><span class="nav-label">Geräte</span></a>
+        <a href="#dashboard" data-target="dashboard" data-accent="59,130,246" title="Live Feed"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="14" rx="3"/><circle cx="12" cy="13" r="3"/></svg></span><span class="nav-label">Live Feed</span></a>
+        <a href="#cameras" data-target="cameras" data-accent="59,130,246" title="Geräte"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span><span class="nav-label">Geräte</span></a>
+        <div class="nav-divider"></div>
 
         <div class="nav-section-label">Medien</div>
-        <a href="#statistik" data-target="statistik" data-accent="34,197,94" title="Statistik &amp; Timeline"><span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,18 8,12 13,16 22,6"/><line x1="2" y1="18" x2="22" y2="18"/></svg></span><span class="nav-label">Statistik</span></a>
-        <a href="#media" data-target="media" data-accent="168,85,247" title="Mediathek"><span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg></span><span class="nav-label">Mediathek</span></a>
-        <a href="#achievements" data-target="achievements" data-accent="251,191,36" title="Sichtungen"><span class="nav-icon">🌿</span><span class="nav-label">Sichtungen</span></a>
+        <a href="#statistik" data-target="statistik" data-accent="34,197,94" title="Statistik &amp; Timeline"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,18 8,12 13,16 22,6"/><line x1="2" y1="18" x2="22" y2="18"/></svg></span><span class="nav-label">Statistik</span></a>
+        <a href="#media" data-target="media" data-accent="168,85,247" title="Mediathek"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><span class="nav-label">Mediathek</span></a>
+        <a href="#achievements" data-target="achievements" data-accent="251,191,36" class="nav-achievements-item" title="Sichtungen"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="16" rx="4.2" ry="3.5"/><ellipse cx="6" cy="10" rx="1.8" ry="2.4"/><ellipse cx="18" cy="10" rx="1.8" ry="2.4"/><ellipse cx="9" cy="6" rx="1.5" ry="2"/><ellipse cx="15" cy="6" rx="1.5" ry="2"/></svg></span><span class="nav-label">Sichtungen</span></a>
+        <div class="nav-divider"></div>
 
         <div class="nav-section-label">System</div>
         <div class="nav-group" id="navSettingsGroup">
-          <a href="#settings" data-target="settings" data-accent="143,158,181" title="Einstellungen" class="nav-settings-toggle" onclick="return toggleSettingsNav(event)" aria-expanded="false" aria-controls="navSettingsSub"><span class="nav-icon">⚙️</span><span class="nav-label">Einstellungen</span><svg class="nav-chev" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg></a>
+          <button type="button" class="nav-settings-toggle" data-target="settings" data-accent="143,158,181" title="Einstellungen" aria-expanded="false" aria-controls="navSettingsSub"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span class="nav-label">Einstellungen</span><svg class="nav-chev" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg></button>
           <div class="nav-sub" id="navSettingsSub" role="group">
             <a href="#set-app" onclick="return navJumpToSetting(event,'set-app')"><span class="nav-sub-bullet"></span><span class="nav-label">App &amp; Server</span></a>
             <a href="#set-timelapse" onclick="return navJumpToSetting(event,'set-timelapse')"><span class="nav-sub-bullet"></span><span class="nav-label">Timelapse</span></a>
@@ -105,7 +107,8 @@
             <a href="#set-mqtt" onclick="return navJumpToSetting(event,'set-mqtt')"><span class="nav-sub-bullet"></span><span class="nav-label">MQTT <em class="nav-tag">bald</em></span></a>
           </div>
         </div>
-        <a href="#logs" data-target="logs" class="nav-logs-item" title="~/logs"><span class="nav-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,17 10,11 4,5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span><span class="nav-label">~/logs</span></a>
+        <div class="nav-divider"></div>
+        <a href="#logs" data-target="logs" class="nav-logs-item" title="~/logs"><span class="nav-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#4ade80" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4,17 10,11 4,5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span><span class="nav-label">~/logs</span></a>
       </nav>
     </aside>
     <main class="main">
@@ -125,104 +128,6 @@
       <section id="dashboard" class="panel section">
         <div class="section-head"><h3>Live Feed</h3></div>
         <div id="cameraCards" class="camera-grid"></div>
-      </section>
-
-      <!-- #timeline redirect anchor — JS scrolls to #statistik for backward compat -->
-      <div id="timeline" style="position:absolute;visibility:hidden;pointer-events:none"></div>
-
-      <section id="statistik" class="panel section">
-        <div class="section-head" style="flex-wrap:wrap;gap:8px">
-          <h3>Statistik</h3>
-          <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap">
-            <div class="tl-range-wrap">
-              <span id="tlRangeLabel" class="tl-range-label">letzte 12h</span>
-              <input type="range" id="tlRangeSlider" min="1" max="720" value="12" step="1" style="width:130px;cursor:pointer" />
-            </div>
-            <button type="button" id="statRefreshBtn" class="btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg> Aktualisieren</button>
-          </div>
-        </div>
-        <!-- 1. Overview  2. Per-camera bars  3. Top detections -->
-        <div id="statContent"><div class="stat-empty" style="padding:32px 0">Abschnitt öffnen, um Daten zu laden …</div></div>
-        <!-- 4. Timeline — rendered by renderTimeline(), not overwritten by _renderStatistik -->
-        <div class="stat-card stat-tl-card">
-          <div class="stat-tl-card-hdr">
-            <span class="stat-card-title">Timeline</span>
-            <div id="tlLegend" class="timeline-legend stat-tl-legend-inline"></div>
-          </div>
-          <div id="timelineContainer" class="tl-container"></div>
-        </div>
-        <!-- 5. Last 24h heatmap — rendered by _renderStatistik into this container -->
-        <div id="statHeatmapBlock"></div>
-      </section>
-
-      <section id="media" class="panel section">
-        <div class="section-head">
-          <h3>Mediathek</h3>
-          <div style="display:flex;gap:8px;margin-left:auto;align-items:center">
-            <button type="button" id="fixThumbsBtn" class="btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="1" y="3" width="10" height="8" rx="1.5"/><path d="M2 9l2.5-2.5 2 1.5 2.5-3L11 9"/><circle cx="13" cy="11" r="2.5"/><path d="M13 9.5v-.8M13 12.5v-.8M11.5 11h-.8M14.5 11h-.8 M12 9.8l-.5-.5M14.5 12.2l-.5-.5 M11.5 12.2l.5-.5M14 9.8l.5-.5"/></svg> Thumbnails neu generieren</button>
-            <button type="button" id="rescanMediaBtn" class="btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><circle cx="8" cy="8" r="3.5" stroke-opacity=".45"/><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/><line x1="8" y1="8" x2="13" y2="5.5" stroke-opacity=".85"/></svg> Neu scannen</button>
-          </div>
-        </div>
-        <div id="mediaStorageBar" class="media-storage-bar"></div>
-        <!-- Level 1: Camera overview cards -->
-        <div id="mediaOverview"></div>
-        <!-- Level 2: Per-camera drill-down (filter bar lives here, hidden until camera selected) -->
-        <div id="mediaDrilldown" style="display:none">
-          <div class="media-drill-head">
-            <button type="button" class="media-drill-back" onclick="closeMediaDrilldown()">← Alle Kameras</button>
-            <div class="media-filter-bar">
-              <button class="media-pill cat-filter-btn" data-type="label" data-val="" style="--cb:#94a3b8">Alle</button>
-              <button class="media-pill cat-filter-btn" data-type="label" data-val="person" data-label-key="person" style="--cb:#facc15">Person</button>
-              <button class="media-pill cat-filter-btn" data-type="label" data-val="cat" data-label-key="cat" style="--cb:#fb923c">Katze</button>
-              <button class="media-pill cat-filter-btn" data-type="label" data-val="bird" data-label-key="bird" style="--cb:#38bdf8">Vogel</button>
-              <button class="media-pill cat-filter-btn" data-type="label" data-val="car" data-label-key="car" style="--cb:#f87171">Auto</button>
-              <button class="media-pill cat-filter-btn" data-type="label" data-val="dog" data-label-key="dog" style="--cb:#7c2d12">Hund</button>
-              <button class="media-pill cat-filter-btn" data-type="label" data-val="motion" data-label-key="motion" style="--cb:#cbd5e1">Bewegung</button>
-              <span class="filter-divider"></span>
-              <button class="media-pill cat-filter-btn" data-type="label" data-val="timelapse" data-label-key="timelapse" style="--cb:#a855f7"><span class="cfb-icon" style="pointer-events:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round"><line x1="6" y1="3" x2="18" y2="3"/><line x1="6" y1="21" x2="18" y2="21"/><polygon points="7,4 17,4 12,12" fill="#a855f7" opacity=".8"/><polygon points="12,12 7,20 17,20" fill="#a855f7" opacity=".5"/></svg></span><span style="pointer-events:none">Timelapse</span></button>
-              <span class="filter-divider"></span>
-              <button class="media-pill" data-type="period" data-val="day">Heute</button>
-              <button class="media-pill" data-type="period" data-val="week">7 Tage</button>
-              <button class="media-pill" data-type="period" data-val="month">Monat</button>
-            </div>
-          </div>
-          <div id="mediaGrid" class="media-grid"></div>
-          <div id="mediaPagination" class="media-pagination"></div>
-        </div>
-
-        <div class="set-section" id="set-media-config" style="margin-top:14px" data-accent="143,158,181">
-          <button type="button" class="set-hd" onclick="toggleSetSection('set-media-config')">
-            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#8b9ab5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span>Mediathek-Einstellungen</span><svg class="set-chevron set-chevron-lg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
-          </button>
-          <div class="set-bd"><div class="set-inner">
-            <form id="mediaSettingsForm" class="form" style="padding-top:8px">
-              <div style="display:grid;gap:10px;margin-bottom:10px">
-                <div>
-                  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-                    <span style="font-size:13px;color:var(--muted)">Aufbewahrung</span>
-                    <span id="ms_retention_days_val" style="font-size:13px;font-weight:700;color:var(--text)">14 Tage</span>
-                  </div>
-                  <input id="ms_retention_days" name="retention_days" type="range" min="1" max="90" step="1" value="14" style="width:100%;accent-color:var(--accent)" oninput="byId('ms_retention_days_val').textContent=this.value+' Tage'" />
-                </div>
-                <label class="toggle-row" style="margin:0;white-space:nowrap;gap:8px">
-                  <span style="font-size:13px">Auto-Cleanup</span>
-                  <label class="switch"><input type="checkbox" id="ms_auto_cleanup" name="auto_cleanup_enabled" /><span class="slider"></span></label>
-                </label>
-              </div>
-              <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-                <button type="button" id="purgeOrphansBtn" class="btn-action ghost">🗑 Verwaiste Events</button>
-                <button type="button" id="cleanupNowBtn" class="btn-action">🧹 Jetzt bereinigen</button>
-                <button type="submit" style="margin-left:auto">Speichern</button>
-              </div>
-            </form>
-          </div></div>
-        </div>
-      </section>
-
-      <section id="achievements" class="panel section">
-        <div class="section-head"><h3>Sichtungen</h3><span class="section-subtitle">Erkannte Gartenwildtiere · Entdeckungstagebuch</span></div>
-        <div id="achievementsProgress" class="ach-progress-bar"></div>
-        <div id="achievementsGrid" class="ach-grid"></div>
       </section>
 
       <section id="cameras" class="panel section">
@@ -466,6 +371,104 @@
         </div>
       </section>
 
+
+      <!-- #timeline redirect anchor — JS scrolls to #statistik for backward compat -->
+      <div id="timeline" style="position:absolute;visibility:hidden;pointer-events:none"></div>
+
+      <section id="statistik" class="panel section">
+        <div class="section-head" style="flex-wrap:wrap;gap:8px">
+          <h3>Statistik</h3>
+          <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap">
+            <div class="tl-range-wrap">
+              <span id="tlRangeLabel" class="tl-range-label">letzte 12h</span>
+              <input type="range" id="tlRangeSlider" min="1" max="720" value="12" step="1" style="width:130px;cursor:pointer" />
+            </div>
+            <button type="button" id="statRefreshBtn" class="btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg> Aktualisieren</button>
+          </div>
+        </div>
+        <!-- 1. Overview  2. Per-camera bars  3. Top detections -->
+        <div id="statContent"><div class="stat-empty" style="padding:32px 0">Abschnitt öffnen, um Daten zu laden …</div></div>
+        <!-- 4. Timeline — rendered by renderTimeline(), not overwritten by _renderStatistik -->
+        <div class="stat-card stat-tl-card">
+          <div class="stat-tl-card-hdr">
+            <span class="stat-card-title">Timeline</span>
+            <div id="tlLegend" class="timeline-legend stat-tl-legend-inline"></div>
+          </div>
+          <div id="timelineContainer" class="tl-container"></div>
+        </div>
+        <!-- 5. Last 24h heatmap — rendered by _renderStatistik into this container -->
+        <div id="statHeatmapBlock"></div>
+      </section>
+
+      <section id="media" class="panel section">
+        <div class="section-head">
+          <h3>Mediathek</h3>
+          <div style="display:flex;gap:8px;margin-left:auto;align-items:center">
+            <button type="button" id="fixThumbsBtn" class="btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="1" y="3" width="10" height="8" rx="1.5"/><path d="M2 9l2.5-2.5 2 1.5 2.5-3L11 9"/><circle cx="13" cy="11" r="2.5"/><path d="M13 9.5v-.8M13 12.5v-.8M11.5 11h-.8M14.5 11h-.8 M12 9.8l-.5-.5M14.5 12.2l-.5-.5 M11.5 12.2l.5-.5M14 9.8l.5-.5"/></svg> Thumbnails neu generieren</button>
+            <button type="button" id="rescanMediaBtn" class="btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><circle cx="8" cy="8" r="3.5" stroke-opacity=".45"/><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/><line x1="8" y1="8" x2="13" y2="5.5" stroke-opacity=".85"/></svg> Neu scannen</button>
+          </div>
+        </div>
+        <div id="mediaStorageBar" class="media-storage-bar"></div>
+        <!-- Level 1: Camera overview cards -->
+        <div id="mediaOverview"></div>
+        <!-- Level 2: Per-camera drill-down (filter bar lives here, hidden until camera selected) -->
+        <div id="mediaDrilldown" style="display:none">
+          <div class="media-drill-head">
+            <button type="button" class="media-drill-back" onclick="closeMediaDrilldown()">← Alle Kameras</button>
+            <div class="media-filter-bar">
+              <button class="media-pill cat-filter-btn" data-type="label" data-val="" style="--cb:#94a3b8">Alle</button>
+              <button class="media-pill cat-filter-btn" data-type="label" data-val="person" data-label-key="person" style="--cb:#facc15">Person</button>
+              <button class="media-pill cat-filter-btn" data-type="label" data-val="cat" data-label-key="cat" style="--cb:#fb923c">Katze</button>
+              <button class="media-pill cat-filter-btn" data-type="label" data-val="bird" data-label-key="bird" style="--cb:#38bdf8">Vogel</button>
+              <button class="media-pill cat-filter-btn" data-type="label" data-val="car" data-label-key="car" style="--cb:#f87171">Auto</button>
+              <button class="media-pill cat-filter-btn" data-type="label" data-val="dog" data-label-key="dog" style="--cb:#7c2d12">Hund</button>
+              <button class="media-pill cat-filter-btn" data-type="label" data-val="motion" data-label-key="motion" style="--cb:#cbd5e1">Bewegung</button>
+              <span class="filter-divider"></span>
+              <button class="media-pill cat-filter-btn" data-type="label" data-val="timelapse" data-label-key="timelapse" style="--cb:#a855f7"><span class="cfb-icon" style="pointer-events:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#a855f7" stroke-width="2" stroke-linecap="round"><line x1="6" y1="3" x2="18" y2="3"/><line x1="6" y1="21" x2="18" y2="21"/><polygon points="7,4 17,4 12,12" fill="#a855f7" opacity=".8"/><polygon points="12,12 7,20 17,20" fill="#a855f7" opacity=".5"/></svg></span><span style="pointer-events:none">Timelapse</span></button>
+              <span class="filter-divider"></span>
+              <button class="media-pill" data-type="period" data-val="day">Heute</button>
+              <button class="media-pill" data-type="period" data-val="week">7 Tage</button>
+              <button class="media-pill" data-type="period" data-val="month">Monat</button>
+            </div>
+          </div>
+          <div id="mediaGrid" class="media-grid"></div>
+          <div id="mediaPagination" class="media-pagination"></div>
+        </div>
+
+        <div class="set-section" id="set-media-config" style="margin-top:14px" data-accent="143,158,181">
+          <button type="button" class="set-hd" onclick="toggleSetSection('set-media-config')">
+            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#8b9ab5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span>Mediathek-Einstellungen</span><svg class="set-chevron set-chevron-lg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+          </button>
+          <div class="set-bd"><div class="set-inner">
+            <form id="mediaSettingsForm" class="form" style="padding-top:8px">
+              <div style="display:grid;gap:10px;margin-bottom:10px">
+                <div>
+                  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+                    <span style="font-size:13px;color:var(--muted)">Aufbewahrung</span>
+                    <span id="ms_retention_days_val" style="font-size:13px;font-weight:700;color:var(--text)">14 Tage</span>
+                  </div>
+                  <input id="ms_retention_days" name="retention_days" type="range" min="1" max="90" step="1" value="14" style="width:100%;accent-color:var(--accent)" oninput="byId('ms_retention_days_val').textContent=this.value+' Tage'" />
+                </div>
+                <label class="toggle-row" style="margin:0;white-space:nowrap;gap:8px">
+                  <span style="font-size:13px">Auto-Cleanup</span>
+                  <label class="switch"><input type="checkbox" id="ms_auto_cleanup" name="auto_cleanup_enabled" /><span class="slider"></span></label>
+                </label>
+              </div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+                <button type="button" id="purgeOrphansBtn" class="btn-action ghost">🗑 Verwaiste Events</button>
+                <button type="button" id="cleanupNowBtn" class="btn-action">🧹 Jetzt bereinigen</button>
+                <button type="submit" style="margin-left:auto">Speichern</button>
+              </div>
+            </form>
+          </div></div>
+        </div>
+      </section>
+
+      <section id="achievements" class="panel section">
+        <div class="section-head"><h3>Sichtungen</h3><span class="section-subtitle">Erkannte Gartenwildtiere · Entdeckungstagebuch</span></div>
+        <div id="achievementsProgress" class="ach-progress-bar"></div>
+        <div id="achievementsGrid" class="ach-grid"></div>
+      </section>
       <section id="settings" class="panel section">
         <div class="section-head"><h3>Einstellungen</h3></div>
 

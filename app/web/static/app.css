@@ -11,23 +11,33 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@me
 .brand{display:flex;gap:10px;align-items:center;margin-bottom:0;transition:height .35s cubic-bezier(0.4,0,0.2,1),margin .35s cubic-bezier(0.4,0,0.2,1),opacity .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}.brand-text{flex:1;min-width:0;transition:opacity .35s cubic-bezier(0.4,0,0.2,1),width .35s cubic-bezier(0.4,0,0.2,1)}
 .logo{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:#14314c;flex-shrink:0}
 .nav{display:grid;gap:2px}
-.nav a{padding:10px 12px;border-radius:12px;background:transparent;display:flex;align-items:center;gap:10px;white-space:nowrap;min-height:44px;color:#cbd5e1;transition:background .15s ease,color .15s ease;-webkit-tap-highlight-color:transparent}
-.nav a:hover{background:rgba(255,255,255,.04)}
+.nav a,.nav-settings-toggle{padding:10px 12px;border-radius:12px;background:transparent;display:flex;align-items:center;gap:10px;white-space:nowrap;min-height:44px;color:#cbd5e1;transition:background .15s ease,color .15s ease;-webkit-tap-highlight-color:transparent;border:none;width:100%;font:inherit;text-align:left;cursor:pointer}
+.nav a:hover,.nav-settings-toggle:hover{background:rgba(255,255,255,.05)}
 .nav a.nav-active{background:rgba(var(--na,143,158,181),.14);color:#fff}
-.nav a.nav-active .nav-icon{color:rgb(var(--na,143,158,181))}
-.nav-icon{flex-shrink:0;width:20px;text-align:center;font-size:15px;color:#94a3b8;display:inline-flex;align-items:center;justify-content:center;transition:color .15s ease}
+.nav-icon{flex-shrink:0;width:20px;text-align:center;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
+.nav-icon svg{transition:stroke .15s ease}
 .nav-label{transition:opacity .35s cubic-bezier(0.4,0,0.2,1),width .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}
 .nav-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);opacity:.55;font-weight:700;padding:14px 12px 4px;user-select:none;pointer-events:none}
 .nav-section-label:first-child{padding-top:4px}
 .sidebar.collapsed .nav-section-label{opacity:0;height:0;padding:0;overflow:hidden}
+.nav-divider{height:1px;background:rgba(255,255,255,.06);margin:5px 4px;border:none}
+.sidebar.collapsed .nav-divider{margin:5px 2px}
 .nav-tag{font-style:italic;font-weight:400;font-size:10px;color:var(--muted);opacity:.55;margin-left:4px;letter-spacing:.02em}
-/* ~/logs item: full Matrix aesthetic — sharp corners, mono, classic green. */
-.nav a.nav-logs-item{margin-top:10px;background:#000000;color:#00ff41;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;border:1px solid #003b00;border-radius:0;letter-spacing:.05em}
-.nav a.nav-logs-item:hover{background:#000000;border-color:#008f11}
-.nav a.nav-logs-item.nav-active{background:#000000;border-color:#00ff41;color:#00ff41}
-.nav a.nav-logs-item .nav-icon{color:#00ff41}
-.nav a.nav-logs-item.nav-active .nav-icon{color:#00ff41}
-.sidebar.collapsed .nav a.nav-logs-item{margin-top:6px}
+/* Sichtungen: amber-tinted hover and active state, icon + label go full amber. */
+.nav a.nav-achievements-item:hover{background:rgba(251,191,36,.09);color:#fbbf24}
+.nav a.nav-achievements-item:hover .nav-icon svg{stroke:#fbbf24}
+.nav a.nav-achievements-item.nav-active{background:rgba(251,191,36,.13);color:#fbbf24}
+.nav a.nav-achievements-item.nav-active .nav-icon svg{stroke:#fbbf24}
+/* ~/logs item: monospace green text, NO permanent box. The full terminal
+   surface lives on the #logs panel — the nav item only previews the look
+   on hover so the sidebar stays visually quiet by default. */
+.nav a.nav-logs-item{background:transparent;color:#4ade80;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;border:none;border-radius:12px;letter-spacing:.05em}
+.nav a.nav-logs-item:hover{background:rgba(0,255,65,.06);color:#4ade80}
+.nav a.nav-logs-item.nav-active{background:rgba(0,255,65,.10);color:#4ade80}
+.nav a.nav-logs-item .nav-icon svg,
+.nav a.nav-logs-item.nav-active .nav-icon svg,
+.nav a.nav-logs-item:hover .nav-icon svg{stroke:#4ade80}
+.sidebar.collapsed .nav a.nav-logs-item{margin-top:0}
 .topbar{display:none;align-items:center;gap:12px;padding:12px 16px;background:var(--panel);position:sticky;top:0;z-index:100}.topbar-title{font-weight:700;font-size:15px}.hamburger-btn{background:var(--surface);border:none;border-radius:10px;color:var(--text);padding:6px 10px;font-size:18px;line-height:1}
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:199}.sidebar-overlay.visible{display:block}
 .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}h1,h2,h3,p{margin:0}.muted{color:var(--muted)}.main{display:grid;gap:14px;flex:1;min-width:0;padding-bottom:60vh}.hero{padding:20px 22px;display:flex;justify-content:space-between;align-items:center}.hero-actions{display:flex;gap:10px}.hero button,.form button{padding:12px 16px;border:0;border-radius:14px;background:var(--accent);color:white;font-weight:700;min-height:40px}.ghost{background:var(--surface)!important;border:none!important}.section{padding:12px}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.section-subtitle{font-size:12px;font-style:italic;color:var(--muted);font-weight:400;margin-left:auto}.toolbar{display:grid;grid-template-columns:240px 220px 160px;gap:12px;margin-bottom:18px}.toolbar select,.toolbar input,.form input,.form select{width:100%;padding:12px 40px 12px 14px;border-radius:14px;background:var(--surface);color:var(--text);border:none;outline:none}.toolbar select:focus,.toolbar input:focus,.form input:focus,.form select:focus{box-shadow:0 0 0 2px var(--accent)}
@@ -536,8 +546,8 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .nav-group{display:contents}
 .nav-settings-toggle .nav-chev{margin-left:auto;transition:transform .25s cubic-bezier(0.4,0,0.2,1);opacity:.5;flex-shrink:0}
 .nav-settings-toggle.open .nav-chev{transform:rotate(90deg);opacity:.85}
-.nav-sub{display:grid;gap:1px;max-height:0;overflow:hidden;transition:max-height .35s cubic-bezier(0.4,0,0.2,1),margin .25s ease;margin:0}
-.nav-sub.open{max-height:600px;margin:2px 0 6px}
+.nav-sub{display:grid;gap:1px;max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(0.4,0,0.2,1),margin .25s ease;margin:0}
+.nav-sub.open{margin:2px 0 6px}
 .nav-sub a{padding:9px 12px 9px 30px;border-radius:10px;display:flex;align-items:center;gap:10px;color:#94a3b8;font-size:13px;min-height:38px;background:transparent;white-space:nowrap}
 .nav-sub a:hover{background:rgba(255,255,255,.04);color:#e2e8f0}
 .nav-sub-bullet{width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.45;flex-shrink:0}

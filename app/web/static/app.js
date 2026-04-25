@@ -2766,18 +2766,31 @@ document.addEventListener('DOMContentLoaded',()=>{
 // Click on the Einstellungen entry only toggles the sub-list — it never scrolls
 // or navigates. Scrolling to a specific settings sub-section is the job of the
 // sub-item links via navJumpToSetting().
-window.toggleSettingsNav=function(ev){
-  if(ev){
-    ev.preventDefault?.();
-    ev.stopPropagation?.();
-  }
-  const toggle=document.querySelector('.nav-settings-toggle');
+// Open/close drives max-height in pixels so we get a smooth transition
+// without committing to a hard-coded ceiling. Sub-list height is measured
+// from the actual scrollHeight at toggle time. Persistence key is the
+// snake_case name asked for in the spec.
+const _NAV_OPEN_KEY='nav_settings_open';
+function _setSettingsNavOpen(isOpen){
+  const group=byId('navSettingsGroup');
+  const toggle=group?.querySelector('.nav-settings-toggle');
   const sub=byId('navSettingsSub');
-  if(!toggle||!sub) return false;
-  const isOpen=toggle.classList.toggle('open');
-  sub.classList.toggle('open',isOpen);
+  if(!group||!toggle||!sub) return;
+  group.classList.toggle('nav--open',isOpen);
+  toggle.classList.toggle('open',isOpen);
   toggle.setAttribute('aria-expanded',isOpen?'true':'false');
-  try{localStorage.setItem('nav.settings.open',isOpen?'1':'0');}catch{}
+  sub.classList.toggle('open',isOpen);
+  if(isOpen){
+    sub.style.maxHeight=sub.scrollHeight+'px';
+  } else {
+    sub.style.maxHeight='0px';
+  }
+  try{localStorage.setItem(_NAV_OPEN_KEY,isOpen?'1':'0');}catch{}
+}
+window.toggleSettingsNav=function(ev){
+  if(ev){ ev.preventDefault?.(); ev.stopPropagation?.(); }
+  const isOpen=!byId('navSettingsGroup')?.classList.contains('nav--open');
+  _setSettingsNavOpen(isOpen);
   return false;
 };
 window.navJumpToSetting=function(ev,secId){
@@ -2792,13 +2805,13 @@ window.navJumpToSetting=function(ev,secId){
   return false;
 };
 document.addEventListener('DOMContentLoaded',()=>{
+  // Click handler — the markup uses a <button>, so a regular addEventListener
+  // is enough (no inline onclick that could navigate as a fallback).
+  byId('navSettingsGroup')?.querySelector('.nav-settings-toggle')
+    ?.addEventListener('click',(ev)=>window.toggleSettingsNav(ev));
   let open=false;
-  try{open=localStorage.getItem('nav.settings.open')==='1';}catch{}
-  if(open){
-    document.querySelector('.nav-settings-toggle')?.classList.add('open');
-    document.querySelector('.nav-settings-toggle')?.setAttribute('aria-expanded','true');
-    byId('navSettingsSub')?.classList.add('open');
-  }
+  try{open=localStorage.getItem(_NAV_OPEN_KEY)==='1';}catch{}
+  _setSettingsNavOpen(open);
 });
 
 // ── Sidebar active-nav state ─────────────────────────────────────────────────
@@ -2807,18 +2820,19 @@ document.addEventListener('DOMContentLoaded',()=>{
 // scroll keeps it honest. Logs/Settings stay sticky once opened — neither
 // has a useful "scrolled past" signal.
 function _setActiveNav(targetId){
-  document.querySelectorAll('.nav a[data-target]').forEach(a=>{
-    const isActive=a.dataset.target===targetId;
-    a.classList.toggle('nav-active',isActive);
-    if(isActive && a.dataset.accent){
-      a.style.setProperty('--na',a.dataset.accent);
+  document.querySelectorAll('.nav [data-target]').forEach(el=>{
+    const isActive=el.dataset.target===targetId;
+    el.classList.toggle('nav-active',isActive);
+    if(isActive && el.dataset.accent){
+      el.style.setProperty('--na',el.dataset.accent);
     }
   });
 }
 window._setActiveNav=_setActiveNav;
 function _initSidebarNav(){
   // Click: set active immediately so the highlight tracks the user's intent
-  // before the scroll animation finishes.
+  // before the scroll animation finishes. Skip the Einstellungen button —
+  // it doesn't represent a navigable section, only the accordion toggle.
   document.querySelectorAll('.nav a[data-target]').forEach(a=>{
     a.addEventListener('click',()=>{
       _setActiveNav(a.dataset.target);
