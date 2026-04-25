@@ -1379,9 +1379,8 @@ async function updateSystemPanel(){
       const shortCommit=commit.length>7?commit.slice(0,7):commit;
       const countPart=(b.count&&b.count!=='—')?`<a href="${url}" target="_blank" class="hero-build-count">Build #${esc(String(b.count))}</a>`:`<span class="hero-build-count hero-build-count--dev">Build · dev</span>`;
       const commitPart=`<code class="hero-build-commit" title="Git commit">${esc(shortCommit)}</code>`;
-      const datePart=b.date&&b.date!=='—'?`<span class="hero-build-date">${esc(b.date)}</span>`:'';
       const restartPart=s.process_start?`<span class="hero-build-date" title="Letzter Neustart: ${esc(s.process_start)}">⟳ ${esc(restartShort)}</span>`:'';
-      heroEl.innerHTML=`${countPart}<span class="hero-build-sep">·</span>${commitPart}${datePart?`<span class="hero-build-sep">·</span>${datePart}`:''}${restartPart?`<span class="hero-build-sep">·</span>${restartPart}`:''}`;
+      heroEl.innerHTML=`${countPart}<span class="hero-build-sep">·</span>${commitPart}${restartPart?`<span class="hero-build-sep">·</span>${restartPart}`:''}`;
     }
     const memUsed=s.mem_used_mb||0;
     const memTotal=s.mem_total_mb||0;
@@ -2527,12 +2526,6 @@ window._tlRefreshDesc=function(camId,profKey){
   if(descEl) descEl.innerHTML=_tlResultDesc(periodEl.value,targetEl.value,fps);
 };
 // toggleTlCamCard replaced by selectTlCam (tab-based camera selector)
-window.openTlNav=function(){
-  const section=byId('set-timelapse');
-  if(section&&!section.classList.contains('open')){section.classList.add('open');loadTlSettings();}
-  byId('settings')?.scrollIntoView({behavior:'smooth',block:'start'});
-  return false;
-};
 window.saveTlCameraProfiles=async function(camId){
   const cam=(state.cameras||[]).find(c=>c.id===camId);
   if(!cam) return;
@@ -2620,6 +2613,38 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('.set-section[data-accent]').forEach(el=>{
     el.style.setProperty('--sa',el.dataset.accent);
   });
+});
+
+// ── Sidebar settings accordion ───────────────────────────────────────────────
+window.toggleSettingsNav=function(ev){
+  ev?.preventDefault?.();
+  const toggle=document.querySelector('.nav-settings-toggle');
+  const sub=byId('navSettingsSub');
+  if(!toggle||!sub) return false;
+  const isOpen=toggle.classList.toggle('open');
+  sub.classList.toggle('open',isOpen);
+  toggle.setAttribute('aria-expanded',isOpen?'true':'false');
+  try{localStorage.setItem('nav.settings.open',isOpen?'1':'0');}catch{}
+  return false;
+};
+window.navJumpToSetting=function(ev,secId){
+  ev?.preventDefault?.();
+  const sec=byId(secId); if(!sec) return false;
+  if(!sec.classList.contains('open')&&typeof window.toggleSetSection==='function'){
+    window.toggleSetSection(secId);
+    if(secId==='set-timelapse'&&typeof loadTlSettings==='function') loadTlSettings();
+  }
+  sec.scrollIntoView({behavior:'smooth',block:'start'});
+  return false;
+};
+document.addEventListener('DOMContentLoaded',()=>{
+  let open=false;
+  try{open=localStorage.getItem('nav.settings.open')==='1';}catch{}
+  if(open){
+    document.querySelector('.nav-settings-toggle')?.classList.add('open');
+    document.querySelector('.nav-settings-toggle')?.setAttribute('aria-expanded','true');
+    byId('navSettingsSub')?.classList.add('open');
+  }
 });
 
 // ── Password field visibility toggle ─────────────────────────────────────────

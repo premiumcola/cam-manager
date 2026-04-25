@@ -506,9 +506,17 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .set-status-badge--cpu{background:rgba(250,204,21,.12);color:#facc15}
 /* Active profile tags in timelapse cam header */
 .tl-prof-tag{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(168,85,247,.25);color:#d8b4fe;flex-shrink:0}
-/* Timelapse nav link purple accent */
-.nav a.nav-tl-link{color:#d8b4fe}
-.nav a.nav-tl-link .nav-icon{color:#a855f7}
+/* ── Sidebar: Settings accordion ────────────────────────────────────────────── */
+.nav-group{display:contents}
+.nav-settings-toggle .nav-chev{margin-left:auto;transition:transform .25s cubic-bezier(0.4,0,0.2,1);opacity:.5;flex-shrink:0}
+.nav-settings-toggle.open .nav-chev{transform:rotate(90deg);opacity:.85}
+.nav-sub{display:grid;gap:2px;max-height:0;overflow:hidden;transition:max-height .35s cubic-bezier(0.4,0,0.2,1),margin .25s ease;margin:0}
+.nav-sub.open{max-height:560px;margin:2px 0 6px}
+.nav-sub a{padding:10px 12px 10px 26px;border-radius:12px;display:flex;align-items:center;gap:10px;color:#94a3b8;font-size:13px;opacity:.78;min-height:44px;background:transparent;white-space:nowrap}
+.nav-sub a:hover{background:#13202d;opacity:1;color:#cbd5e1}
+.nav-sub-bullet{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.55;flex-shrink:0;margin-left:6px}
+.sidebar.collapsed .nav-sub{display:none}
+.sidebar.collapsed .nav-settings-toggle .nav-chev{display:none}
 /* ── Task 2: Media storage bar ──────────────────────────────────────────────── */
 .media-storage-bar{margin-bottom:10px}
 .storage-bar-inner{display:flex;flex-wrap:wrap;gap:8px}
