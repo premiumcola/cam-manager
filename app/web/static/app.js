@@ -33,7 +33,7 @@ function _resolveConfirm(val){
   if(_confirmResolve){_confirmResolve(val);_confirmResolve=null;}
 }
 // Wire confirm buttons after DOM ready (done at bottom of file)
-const colors={person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',motion:'#cbd5e1',alarm:'#ef4444',unknown:'#4a6477',timelapse:'#a855f7',motion_objects:'#c084fc',coral:'#f472b6',object:'#f472b6',notification:'#5bc8f5',dog:'#38bdf8'};
+const colors={person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',motion:'#cbd5e1',alarm:'#ef4444',unknown:'#4a6477',timelapse:'#a855f7',motion_objects:'#c084fc',coral:'#f472b6',object:'#f472b6',notification:'#5bc8f5',dog:'#7c2d12'};
 const OBJ_LABEL={person:'Person',cat:'Katze',bird:'Vogel',car:'Auto',dog:'Hund',motion:'Bewegung',alarm:'Alarm',timelapse:'Timelapse',motion_objects:'Objekt · Motion',object:'Objekt',notification:'Benachrichtigung'};
 const OBJ_SVG={
   // Person: head circle + body arc — bright yellow silhouette
@@ -58,8 +58,8 @@ const OBJ_SVG={
   // Benachrichtigung: Telegram paper-plane (blue) with a small red bell
   // rotated ~18° in the upper right — one fused icon replacing Telegram+alarm.
   notification:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21.5 3L2.5 10.8 9.5 13 12 20 21.5 3z" fill="#229ED9" stroke="#229ED9" stroke-width="1" stroke-linejoin="round"/><path d="M9.5 13L21.5 3" stroke="rgba(255,255,255,.45)" stroke-width=".9" stroke-linecap="round"/><g transform="translate(14.5 1.5) rotate(18)"><path d="M5 0.5C3.3 0.5 2.2 2 2.2 3.8C2.2 5.6 3 6.3 3 6.3H7C7 6.3 7.8 5.6 7.8 3.8C7.8 2 6.7 0.5 5 0.5Z" fill="#ef4444"/><rect x="4.4" y="6.3" width="1.2" height="1.1" rx=".35" fill="#ef4444"/><rect x="3.8" y="7.4" width="2.4" height=".75" rx=".35" fill="#ef4444"/><circle cx="5" cy="4" r=".55" fill="#fff"/></g></svg>`,
-  // Dog: head + snout + eye dots + floppy ear — sky blue (matches bird family)
-  dog:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polygon points="3.5,3 4.5,11 9.5,9" fill="#38bdf8"/><polygon points="20.5,3 19.5,11 14.5,9" fill="#38bdf8"/><ellipse cx="12" cy="13.5" rx="7.5" ry="6.5" fill="#38bdf8"/><ellipse cx="12" cy="17.5" rx="3.5" ry="2" fill="#7dd3fc"/><circle cx="12" cy="17" r=".9" fill="#0b3b5e"/><circle cx="9.5" cy="12" r="1.2" fill="#fff" opacity=".9"/><circle cx="14.5" cy="12" r="1.2" fill="#fff" opacity=".9"/><circle cx="9.5" cy="12" r=".6" fill="#0b3b5e"/><circle cx="14.5" cy="12" r=".6" fill="#0b3b5e"/></svg>`
+  // Dog: flat paw print — main pad + four toe beans, dark brown (#7c2d12)
+  dog:`<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M7 14.5C7 12 9.2 10.5 12 10.5C14.8 10.5 17 12 17 14.5C17 17 14.8 19.5 12 19.5C9.2 19.5 7 17 7 14.5Z" fill="#7c2d12"/><ellipse cx="6.5" cy="8.5" rx="1.7" ry="2.2" fill="#7c2d12"/><ellipse cx="17.5" cy="8.5" rx="1.7" ry="2.2" fill="#7c2d12"/><ellipse cx="9.5" cy="5" rx="1.5" ry="2" fill="#7c2d12"/><ellipse cx="14.5" cy="5" rx="1.5" ry="2" fill="#7c2d12"/></svg>`
 };
 function objBubble(label,size=22){
   const raw=OBJ_SVG[label]||OBJ_SVG.alarm;
@@ -73,7 +73,7 @@ function objIconSvg(label,size=18){
   const raw=OBJ_SVG[label]||OBJ_SVG.alarm;
   return raw.replace('width="16" height="16"',`width="${size}" height="${size}"`);
 }
-const TL_LABELS=['person','cat','bird','car','motion','alarm'];
+const TL_LABELS=['person','cat','bird','car','dog','motion','alarm'];
 function _renderLbLabels(){
   const el=byId('lightboxLabels');
   if(!el||!_lbItem) return;
@@ -547,8 +547,8 @@ ${isActive?`
 }
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
-const CAT_COLORS={alle:'#8888aa',motion:'#cbd5e1',person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',timelapse:'#a855f7'};
-const TL_LANES=['person','cat','bird','car','motion'];
+const CAT_COLORS={alle:'#8888aa',motion:'#cbd5e1',person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',dog:'#7c2d12',timelapse:'#a855f7'};
+const TL_LANES=['person','cat','bird','car','dog','motion'];
 const GAP_MS=2*60*1000;
 let _tlActiveLanes=new Set(TL_LANES);
 
@@ -994,7 +994,7 @@ const _CAM_OBJ_OPTIONS=[
   {k:'cat',    label:'Katze',  cb:'#ec4899'},
   {k:'bird',   label:'Vogel',  cb:'#06b6d4'},
   {k:'car',    label:'Auto',   cb:'#f59e0b'},
-  {k:'dog',    label:'Hund',   cb:'#0ea5e9'},
+  {k:'dog',    label:'Hund',   cb:'#7c2d12'},
 ];
 let _camObjectFilterState=[];
 function _renderCamObjectPills(){
@@ -3335,7 +3335,7 @@ function openLightbox(item){
   // Show video player for motion clips, image for snapshots
   const vidSrc=_lbItem.video_relpath?`/media/${_lbItem.video_relpath}`:(_lbItem.video_url||'');
   const imgSrc=_lbItem.snapshot_relpath?`/media/${_lbItem.snapshot_relpath}`:(_lbItem.snapshot_url||'');
-  const hasVideoLabel=(_lbItem.labels||[]).some(l=>['motion','car','person','cat','bird'].includes(l));
+  const hasVideoLabel=(_lbItem.labels||[]).some(l=>['motion','car','person','cat','bird','dog'].includes(l));
   const pendingMsg=_lbItem.status==='recording'?'Video wird aufgenommen…':_lbItem.status==='processing'?'Video wird verarbeitet…':null;
   if(pendingMsg){
     _lbShowError(pendingMsg);
@@ -3765,7 +3765,7 @@ const _ARCHIVE_ICON=`<svg width="13" height="12" viewBox="0 0 13 12" fill="none"
 // All-media multi-camera grid icon — 4 quads: TL=timelapse(violet), TR=motion(blue), BL=person(blue), BR=object(amber)
 const _MOC_ALL_SVG=`<svg width="140" height="88" viewBox="0 0 80 50" fill="none" aria-hidden="true"><rect x="1" y="1" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="45" y="1" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="1" y="28" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><rect x="45" y="28" width="34" height="21" rx="3.5" fill="#0d1522" stroke="#2a4460" stroke-width="1.3"/><circle cx="6" cy="6" r="2" fill="#2a4460"/><circle cx="50" cy="6" r="2" fill="#2a4460"/><circle cx="6" cy="33" r="2" fill="#2a4460"/><circle cx="50" cy="33" r="2" fill="#2a4460"/><!-- TL: timelapse hourglass (violet) --><line x1="9" y1="7.5" x2="25" y2="7.5" stroke="#c4b5fd" stroke-width="1.2" stroke-linecap="round" opacity=".9"/><polygon points="9,8.5 25,8.5 17,13" fill="#c4b5fd" opacity=".75"/><polygon points="17,13 9,17 25,17" fill="#c4b5fd" opacity=".5"/><line x1="9" y1="17.5" x2="25" y2="17.5" stroke="#c4b5fd" stroke-width="1.2" stroke-linecap="round" opacity=".9"/><!-- TR: running person / motion (blue) --><circle cx="64" cy="7" r="2" fill="#93c5fd" opacity=".8"/><path d="M63.5 9L61 14L59 19" stroke="#93c5fd" stroke-width="1.4" stroke-linecap="round" fill="none" opacity=".75"/><path d="M62 11L59.5 9.5" stroke="#93c5fd" stroke-width="1.2" stroke-linecap="round" opacity=".7"/><path d="M62 11L65 10.5" stroke="#93c5fd" stroke-width="1.2" stroke-linecap="round" opacity=".7"/><path d="M61 14L59 19" stroke="#93c5fd" stroke-width="1.4" stroke-linecap="round" opacity=".75"/><path d="M61 14L64 19" stroke="#93c5fd" stroke-width="1.4" stroke-linecap="round" opacity=".75"/><!-- BL: person detection (sky blue) --><circle cx="18" cy="34" r="2.8" fill="#60a5fa" opacity=".7"/><path d="M12 48C12 42 24 42 24 48" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round" fill="none" opacity=".65"/><!-- BR: object box (amber) --><rect x="57" y="34" width="14" height="10" rx="1.5" fill="#f59e0b" opacity=".55"/><rect x="59.5" y="31.5" width="5" height="3" rx="1" fill="#f59e0b" opacity=".45"/><!-- Center connector --><circle cx="40" cy="25" r="5.5" fill="#1a2a40" stroke="#3a5878" stroke-width="1.2"/><polygon points="38,22.5 44,25 38,27.5" fill="#4a7090"/></svg>`;
 // Count chips for media overview cards
-const _MOC_OBJECT_TYPES={person:1,cat:1,bird:1,car:1};
+const _MOC_OBJECT_TYPES={person:1,cat:1,bird:1,car:1,dog:1};
 function _mocChip(type,count,title){
   // Object-label chips (person/cat/bird/car): CAT_COLORS + objIconSvg
   if(_MOC_OBJECT_TYPES[type]){
@@ -3790,7 +3790,7 @@ function _mocChip(type,count,title){
 // Build the full chip HTML for a stats entry: objects → motion_only → timelapse
 function _buildMocChips(stats){
   const lc=stats.label_counts||{};
-  const order=['person','cat','bird','car'];
+  const order=['person','cat','bird','car','dog'];
   const objTotal=order.reduce((n,k)=>n+(lc[k]||0),0);
   const motionOnly=Math.max(0,(stats.event_count||0)-objTotal);
   let html='';
@@ -3898,6 +3898,7 @@ function renderMediaOverview(){
     {label:'cat',       name:'Katze',     clr:CAT_COLORS.cat},
     {label:'bird',      name:'Vogel',     clr:CAT_COLORS.bird},
     {label:'car',       name:'Auto',      clr:CAT_COLORS.car},
+    {label:'dog',       name:'Hund',      clr:CAT_COLORS.dog},
     {label:'timelapse', name:'Timelapse', clr:CAT_COLORS.timelapse},
   ];
   const catBtns=_CAT_DEFS.map(({label,name,clr})=>{
@@ -4611,7 +4612,7 @@ byId('confirmModal')?.addEventListener('click',e=>{if(e.target===byId('confirmMo
 
 // ── Statistics dashboard ──────────────────────────────────────────────────
 const _STAT_LABEL_ICONS={motion:'👁',person:'🧍',cat:'🐈',bird:'🐦',car:'🚗',dog:'🐕',fox:'🦊',hedgehog:'🦔',squirrel:'🐿️',horse:'🐴'};
-const _STAT_LABEL_COLORS={motion:'#36a2ff',person:'#ff6b6b',cat:'#9b8cff',bird:'#62d26f',car:'#00c2ff',dog:'#ffb020',fox:'#ff7a1a',hedgehog:'#a67c52',squirrel:'#c8651a'};
+const _STAT_LABEL_COLORS={motion:'#36a2ff',person:'#ff6b6b',cat:'#9b8cff',bird:'#62d26f',car:'#00c2ff',dog:'#7c2d12',fox:'#ff7a1a',hedgehog:'#a67c52',squirrel:'#c8651a'};
 let _statLoaded=false;
 
 async function loadStatistik(){

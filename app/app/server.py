@@ -955,8 +955,8 @@ def api_media_storage_stats():
     active_cams = get_effective_config().get("cameras", [])
     active_ids = {c["id"] for c in active_cams}
 
-    TRACKED_LABELS = {'person', 'cat', 'bird', 'car', 'motion'}
-    OBJECT_LABELS = {'person', 'cat', 'bird', 'car'}
+    TRACKED_LABELS = {'person', 'cat', 'bird', 'car', 'dog', 'motion'}
+    OBJECT_LABELS = {'person', 'cat', 'bird', 'car', 'dog'}
 
     def _cam_stats_dict(cam_id: str, name_hint: str = "") -> dict:
         size_bytes = 0

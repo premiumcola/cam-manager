@@ -43,9 +43,9 @@ def choose_alarm_level(profile, labels: list[str], after_hours: bool, whiteliste
         return "alarm", True
     if any(x in labels for x in ["person", "car"]) and profile == "hard":
         return "alarm", True
-    if any(x in labels for x in ["person", "car", "cat", "bird"]) and profile == "medium":
+    if any(x in labels for x in ["person", "car", "cat", "bird", "dog"]) and profile == "medium":
         return "info", True
-    if any(x in labels for x in ["cat", "bird"]) and profile == "info":
+    if any(x in labels for x in ["cat", "bird", "dog"]) and profile == "info":
         return "info", True
     if profile == "soft":
         return "info", True

@@ -158,7 +158,7 @@ class EventStore:
             if e.get("video_url"):
                 video_count += 1
         colors = {
-            "motion": "#36a2ff", "person": "#ff6b6b", "cat": "#9b8cff", "dog": "#ffb020", "bird": "#62d26f",
+            "motion": "#36a2ff", "person": "#ff6b6b", "cat": "#9b8cff", "dog": "#7c2d12", "bird": "#62d26f",
             "fox": "#ff7a1a", "hedgehog": "#a67c52", "marten": "#7c5cff", "car": "#00c2ff", "other": "#64748b"
         }
         day_items = []

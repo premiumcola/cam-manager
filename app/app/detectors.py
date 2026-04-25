@@ -680,7 +680,8 @@ def draw_detections(frame: np.ndarray, detections: list[Detection]) -> np.ndarra
         "bird": (84, 214, 98),
         "cat": (160, 110, 255),
         "person": (110, 110, 255),
-        "dog": (0, 176, 255),
+        # BGR — same dark brown #7c2d12 (RGB 124,45,18) used everywhere else.
+        "dog": (18, 45, 124),
     }
     for det in detections:
         x1, y1, x2, y2 = det.bbox

@@ -20,6 +20,12 @@ from __future__ import annotations
 # with any real default value.
 REQUIRED = object()
 
+# Object classes the system can filter, label, badge, and chart. Frontend
+# pill lists, server stats sets and event_logic mirror this — keep in sync.
+KNOWN_OBJECT_LABELS: frozenset[str] = frozenset({
+    "person", "cat", "bird", "car", "dog",
+})
+
 
 def _coerce(val, target_type, field_name: str):
     # list/dict cannot be safely coerced from scalar values
