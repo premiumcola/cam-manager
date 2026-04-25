@@ -123,7 +123,7 @@
       </section>
 
       <section id="dashboard" class="panel section">
-        <div class="section-head"><h3>Kameraübersicht</h3></div>
+        <div class="section-head"><h3>Live Feed</h3></div>
         <div id="cameraCards" class="camera-grid"></div>
       </section>
 
@@ -226,7 +226,7 @@
       </section>
 
       <section id="cameras" class="panel section">
-        <div class="section-head"><h3>Kameras</h3><button id="discoverBtn" type="button" class="btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/><circle cx="7" cy="7" r="2" opacity=".4"/></svg> Netzwerk-Discovery</button></div>
+        <div class="section-head"><h3>Geräte</h3><button id="discoverBtn" type="button" class="btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/><circle cx="7" cy="7" r="2" opacity=".4"/></svg> Netzwerk-Discovery</button></div>
         <div id="tlStatusBar" class="tl-status-bar"></div>
         <div id="cameraSettingsList" class="list"></div>
         <div id="cameraEditWrapper" class="cam-edit-wrapper">
@@ -472,7 +472,7 @@
         <!-- 1. App & Allgemein -->
         <div class="set-section" id="set-app" data-accent="143,158,181">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-app')">
-            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#8b9ab5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span>App &amp; Allgemein</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#8b9ab5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span>App &amp; Server</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
           </button>
           <div class="set-bd"><div class="set-inner">
             <div style="display:grid;gap:0;padding-top:4px">
@@ -501,30 +501,7 @@
           </div></div>
         </div>
 
-        <!-- 4. Identitäten -->
-        <div class="set-section" id="set-profiles" data-accent="251,191,36">
-          <button type="button" class="set-hd" onclick="toggleSetSection('set-profiles')">
-            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="8" cy="9" r="3" fill="#fbbf24"/><polygon points="5.5,6 4,3 8,5" fill="#fbbf24"/><polygon points="10.5,6 12,3 8,5" fill="#fbbf24"/><path d="M2.5 18c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="17" cy="8" r="2.6" fill="#fbbf24"/><path d="M13 20c0-2.5 1.8-4.5 4-4.5s4 2 4 4.5" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" fill="none"/></svg></span><span>Identitäten</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
-          </button>
-          <div class="set-bd"><div class="set-inner">
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding-top:6px">
-              <div>
-                <div class="muted small" style="margin-bottom:6px;font-weight:600">Katzen</div>
-                <div id="catList"></div>
-              </div>
-              <div>
-                <div class="muted small" style="margin-bottom:6px;font-weight:600">Personen</div>
-                <div id="personList"></div>
-              </div>
-            </div>
-            <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)">
-              <div class="muted small" style="margin-bottom:6px">Telegram / MQTT / Audit</div>
-              <div id="auditPanel" class="audit"></div>
-            </div>
-          </div></div>
-        </div>
-
-        <!-- 4. Telegram (contains own form#telegramForm) -->
+        <!-- 3. Telegram (contains own form#telegramForm) -->
         <div class="set-section" id="set-telegram" data-accent="56,189,248">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-telegram')">
             <span class="set-icon"><svg viewBox="0 0 24 24" fill="#38bdf8" stroke="none" aria-hidden="true"><path d="M21.5 4.3L2.5 11.6c-.6.2-.6 1.1 0 1.3l4.9 1.6 1.9 6.1c.2.6.9.7 1.3.2l2.5-2.9 4.8 3.5c.5.4 1.2.1 1.3-.5l3.2-15.1c.1-.6-.5-1.1-1.1-.9zM10 15l-.2 3.3-1.5-4.7 9.2-7.5L10 15z"/></svg></span><span>Telegram</span><span id="tgStatusBadge" class="set-status-badge set-status-badge--off">aus</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
@@ -706,7 +683,53 @@
           </div></div>
         </div>
 
-        <!-- 6. MQTT -->
+        <!-- 5. Identitäten -->
+        <div class="set-section" id="set-profiles" data-accent="251,191,36">
+          <button type="button" class="set-hd" onclick="toggleSetSection('set-profiles')">
+            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="8" cy="9" r="3" fill="#fbbf24"/><polygon points="5.5,6 4,3 8,5" fill="#fbbf24"/><polygon points="10.5,6 12,3 8,5" fill="#fbbf24"/><path d="M2.5 18c0-3 2.5-5 5.5-5s5.5 2 5.5 5" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="17" cy="8" r="2.6" fill="#fbbf24"/><path d="M13 20c0-2.5 1.8-4.5 4-4.5s4 2 4 4.5" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" fill="none"/></svg></span><span>Identitäten</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+          </button>
+          <div class="set-bd"><div class="set-inner">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding-top:6px">
+              <div>
+                <div class="muted small" style="margin-bottom:6px;font-weight:600">Katzen</div>
+                <div id="catList"></div>
+              </div>
+              <div>
+                <div class="muted small" style="margin-bottom:6px;font-weight:600">Personen</div>
+                <div id="personList"></div>
+              </div>
+            </div>
+            <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06)">
+              <div class="muted small" style="margin-bottom:6px">Telegram / MQTT / Audit</div>
+              <div id="auditPanel" class="audit"></div>
+            </div>
+          </div></div>
+        </div>
+
+        <!-- 6. Import & Export -->
+        <div class="set-section" id="set-importexport" data-accent="143,158,181">
+          <button type="button" class="set-hd" onclick="toggleSetSection('set-importexport')">
+            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#8b9ab5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span>Import &amp; Export</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+          </button>
+          <div class="set-bd"><div class="set-inner">
+            <div style="display:grid;gap:10px;padding-top:4px">
+              <div class="audit-item small muted">GUI bleibt die Hauptquelle. Import/Export dient als Backup, Restore und Massenpflege.</div>
+              <div class="row3">
+                <button id="exportJsonBtn" type="button" class="ie-btn ie-blue">Export JSON</button>
+                <button id="exportYamlBtn" type="button" class="ie-btn ie-green">Export YAML</button>
+                <button id="reloadConfigBtn" type="button" class="ie-btn ie-gray">Config neu laden</button>
+              </div>
+              <textarea id="importBox" rows="10" placeholder="Hier JSON oder YAML einfügen …" style="background:#131e2e;color:#cfe7ff"></textarea>
+              <div class="row3">
+                <button id="importJsonBtn" type="button" class="ie-btn ie-blue">Import JSON</button>
+                <button id="importYamlBtn" type="button" class="ie-btn ie-green">Import YAML</button>
+                <button id="clearImportBtn" type="button" class="ie-btn ie-gray">Feld leeren</button>
+              </div>
+            </div>
+          </div></div>
+        </div>
+
+        <!-- 7. MQTT -->
         <div class="set-section" id="set-mqtt" data-accent="52,211,153">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-mqtt')">
             <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><circle cx="5" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><line x1="6.5" y1="6.5" x2="10.3" y2="10.3"/><line x1="17.5" y1="6.5" x2="13.7" y2="10.3"/><line x1="6.5" y1="17.5" x2="10.3" y2="13.7"/><line x1="17.5" y1="17.5" x2="13.7" y2="13.7"/></svg></span><span>MQTT</span><span id="mqttStatusBadge" class="set-status-badge set-status-badge--off">aus</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
@@ -726,29 +749,6 @@
               </div>
               <div class="field-wrap"><input id="mqtt_base_topic" placeholder="tam-spy" /><span class="field-label">Base Topic</span></div>
               <button type="button" class="settings-save-btn" onclick="saveMqttSettings()">💾 MQTT speichern &amp; neu laden</button>
-            </div>
-          </div></div>
-        </div>
-
-        <!-- 7. Import / Export -->
-        <div class="set-section" id="set-importexport" data-accent="143,158,181">
-          <button type="button" class="set-hd" onclick="toggleSetSection('set-importexport')">
-            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#8b9ab5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7,10 12,15 17,10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span><span>Import / Export</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
-          </button>
-          <div class="set-bd"><div class="set-inner">
-            <div style="display:grid;gap:10px;padding-top:4px">
-              <div class="audit-item small muted">GUI bleibt die Hauptquelle. Import/Export dient als Backup, Restore und Massenpflege.</div>
-              <div class="row3">
-                <button id="exportJsonBtn" type="button" class="ie-btn ie-blue">Export JSON</button>
-                <button id="exportYamlBtn" type="button" class="ie-btn ie-green">Export YAML</button>
-                <button id="reloadConfigBtn" type="button" class="ie-btn ie-gray">Config neu laden</button>
-              </div>
-              <textarea id="importBox" rows="10" placeholder="Hier JSON oder YAML einfügen …" style="background:#131e2e;color:#cfe7ff"></textarea>
-              <div class="row3">
-                <button id="importJsonBtn" type="button" class="ie-btn ie-blue">Import JSON</button>
-                <button id="importYamlBtn" type="button" class="ie-btn ie-green">Import YAML</button>
-                <button id="clearImportBtn" type="button" class="ie-btn ie-gray">Feld leeren</button>
-              </div>
             </div>
           </div></div>
         </div>

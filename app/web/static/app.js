@@ -3877,9 +3877,8 @@ function renderMediaOverview(){
             ${a.timelapse_count?_mocChip('tl',a.timelapse_count,'Timelapse'):''}
           </div>
           <div style="margin-top:8px">
-            <button class="btn-action ghost" style="width:100%;font-size:11px;padding:6px 10px" onclick="event.stopPropagation();openMergeModal('${esc(a.id)}','${esc(a.name)}')">
-              <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v3a3 3 0 0 0 3 3h4a3 3 0 0 1 3 3v1"/><polyline points="11,11 13,13 11,15"/></svg>
-              In aktive Kamera zusammenführen
+            <button class="btn-action ghost btn-merge-archived" title="In aktive Kamera zusammenführen" onclick="event.stopPropagation();openMergeModal('${esc(a.id)}','${esc(a.name)}')">
+              Zusammenführen ↗
             </button>
           </div>
         </div>
