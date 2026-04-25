@@ -6,13 +6,13 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@me
 .sidebar{padding:12px 6px;position:sticky;top:8px;height:max-content;flex-shrink:0;width:260px;transition:width .35s cubic-bezier(0.4,0,0.2,1),padding .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}
 .sidebar.collapsed{width:52px;padding:10px 6px}
 .sidebar.collapsed .brand{height:0;margin-bottom:0;overflow:hidden;opacity:0}
-.sidebar.collapsed .nav a,.sidebar.collapsed .nav-settings-toggle{padding:10px 0;justify-content:center;gap:0}
+.sidebar.collapsed .nav a{padding:10px 0;justify-content:center;gap:0}
 .sidebar.collapsed .nav-label,.sidebar.collapsed .nav-chev{opacity:0;width:0;overflow:hidden;pointer-events:none}
 .brand{display:flex;gap:10px;align-items:center;margin-bottom:0;transition:height .35s cubic-bezier(0.4,0,0.2,1),margin .35s cubic-bezier(0.4,0,0.2,1),opacity .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}.brand-text{flex:1;min-width:0;transition:opacity .35s cubic-bezier(0.4,0,0.2,1),width .35s cubic-bezier(0.4,0,0.2,1)}
 .logo{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:#14314c;flex-shrink:0}
 .nav{display:grid;gap:2px}
-.nav a,.nav-settings-toggle{padding:8px 10px;border-radius:12px;background:transparent;display:flex;align-items:center;justify-content:flex-start;gap:10px;white-space:nowrap;min-height:44px;color:#cbd5e1;transition:background .15s ease,color .15s ease;-webkit-tap-highlight-color:transparent;border:none;width:100%;font:inherit;text-align:left;cursor:pointer}
-.nav a:hover,.nav-settings-toggle:hover{background:rgba(255,255,255,.05)}
+.nav a{padding:8px 10px;border-radius:12px;background:transparent;display:flex;align-items:center;justify-content:flex-start;gap:10px;white-space:nowrap;min-height:44px;color:#cbd5e1;transition:background .15s ease,color .15s ease;-webkit-tap-highlight-color:transparent;border:none;width:100%;font:inherit;text-align:left;cursor:pointer}
+.nav a:hover{background:rgba(255,255,255,.05)}
 .nav a.nav-active{background:rgba(var(--na,143,158,181),.14);color:#fff}
 .nav-icon{flex-shrink:0;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center}
 .nav-icon svg{width:20px;height:20px;display:block;transition:stroke .15s ease}
@@ -565,15 +565,23 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .tl-prof-tag{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700;background:rgba(168,85,247,.25);color:#d8b4fe;flex-shrink:0}
 /* ── Sidebar: Settings accordion ────────────────────────────────────────────── */
 .nav-group{display:contents}
-.nav-settings-toggle .nav-chev{margin-left:auto;transition:transform .25s cubic-bezier(0.4,0,0.2,1);opacity:.5;flex-shrink:0}
-.nav-settings-toggle.open .nav-chev{transform:rotate(90deg);opacity:.85}
-.nav-sub{display:grid;gap:1px;max-height:0;overflow:hidden;transition:max-height .3s cubic-bezier(0.4,0,0.2,1),margin .25s ease;margin:0}
-.nav-sub.open{margin:2px 0 6px}
-.nav-sub a{padding:9px 12px 9px 30px;border-radius:10px;display:flex;align-items:center;gap:10px;color:#94a3b8;font-size:13px;min-height:38px;background:transparent;white-space:nowrap}
+/* Einstellungen row: link (scroll-only, fills the row) + small chevron
+   button (toggles sub-list, no scroll). Hover never reveals the sub-list. */
+.nav-settings-row{display:flex;align-items:center;gap:2px}
+.nav-settings-link{flex:1;min-width:0}
+.nav-settings-chev{flex-shrink:0;width:36px;height:36px;border:none;background:transparent;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:#94a3b8;padding:0;transition:background .15s,color .15s}
+.nav-settings-chev:hover{background:rgba(255,255,255,.05);color:#e2e8f0}
+.nav-settings-chev .nav-chev{transition:transform .25s cubic-bezier(0.4,0,0.2,1)}
+.nav-settings-chev[aria-expanded="true"] .nav-chev{transform:rotate(90deg)}
+/* Sub-list: inline in document flow, never absolute, max-width 100% so it
+   can never push past the sidebar. Indent rendered as padding-left + a
+   thin left border to read as a vertical group line under Einstellungen. */
+.nav-sub{display:grid;gap:1px;max-height:0;overflow:hidden;box-sizing:border-box;max-width:100%;margin:0;padding:0;border-left:1px solid transparent;transition:max-height .3s cubic-bezier(0.4,0,0.2,1),margin .25s ease,padding .25s ease,border-color .25s ease}
+.nav-sub.open{margin:2px 0 6px 14px;padding-left:16px;border-left-color:rgba(100,116,139,.22)}
+.nav-sub a{padding:8px 10px;border-radius:10px;display:flex;align-items:center;gap:10px;color:#94a3b8;font-size:13px;min-height:36px;background:transparent;white-space:nowrap}
 .nav-sub a:hover{background:rgba(255,255,255,.04);color:#e2e8f0}
 .nav-sub-bullet{width:4px;height:4px;border-radius:50%;background:currentColor;opacity:.45;flex-shrink:0}
-.sidebar.collapsed .nav-sub{display:none}
-.sidebar.collapsed .nav-settings-toggle .nav-chev{display:none}
+.sidebar.collapsed .nav-sub,.sidebar.collapsed .nav-settings-chev{display:none}
 /* ── Task 2: Media storage bar ──────────────────────────────────────────────── */
 .media-storage-bar{margin-bottom:10px}
 .storage-bar-inner{display:flex;flex-wrap:wrap;gap:8px}

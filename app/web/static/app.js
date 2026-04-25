@@ -2773,43 +2773,42 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
 });
 
-// ── Sidebar settings accordion ───────────────────────────────────────────────
-// Click on the Einstellungen entry only toggles the sub-list — it never scrolls
-// or navigates. Scrolling to a specific settings sub-section is the job of the
-// sub-item links via navJumpToSetting().
-// Open/close drives max-height in pixels so we get a smooth transition
-// without committing to a hard-coded ceiling. Sub-list height is measured
-// from the actual scrollHeight at toggle time. Persistence key is the
-// snake_case name asked for in the spec.
+// ── Sidebar settings: scroll-link + chevron-toggle (separate handlers) ───────
+// The Einstellungen row is now two elements: an <a> that scrolls only and a
+// small <button> that toggles the sub-list only. Hover never reveals the
+// sub-list — it is shown only when the chevron has been clicked.
 const _NAV_OPEN_KEY='nav_settings_open';
 function _setSettingsNavOpen(isOpen){
   const group=byId('navSettingsGroup');
-  const toggle=group?.querySelector('.nav-settings-toggle');
+  const chev=group?.querySelector('.nav-settings-chev');
   const sub=byId('navSettingsSub');
-  if(!group||!toggle||!sub) return;
+  if(!group||!chev||!sub) return;
   group.classList.toggle('nav--open',isOpen);
-  toggle.classList.toggle('open',isOpen);
-  toggle.setAttribute('aria-expanded',isOpen?'true':'false');
+  chev.setAttribute('aria-expanded',isOpen?'true':'false');
   sub.classList.toggle('open',isOpen);
-  if(isOpen){
-    sub.style.maxHeight=sub.scrollHeight+'px';
-  } else {
-    sub.style.maxHeight='0px';
-  }
+  // Drive max-height in pixels so the transition is smooth without
+  // committing to a hardcoded ceiling. Measured from scrollHeight at
+  // toggle time so adding/removing sub-items keeps animating cleanly.
+  sub.style.maxHeight = isOpen ? (sub.scrollHeight + 'px') : '0px';
   try{localStorage.setItem(_NAV_OPEN_KEY,isOpen?'1':'0');}catch{}
 }
+// Chevron click → toggle sub-list, never scroll.
 window.toggleSettingsNav=function(ev){
   if(ev){ ev.preventDefault?.(); ev.stopPropagation?.(); }
   const isOpen=!byId('navSettingsGroup')?.classList.contains('nav--open');
   _setSettingsNavOpen(isOpen);
-  // Single click should do both: open the accordion AND scroll the main
-  // content to the Einstellungen panel. Sub-items still take you to a
-  // specific set-section via navJumpToSetting.
+  return false;
+};
+// Main link click → scroll to #settings, never toggle the accordion.
+window.navScrollToSettings=function(ev){
+  ev?.preventDefault?.();
   const sec=byId('settings');
   if(sec) sec.scrollIntoView({behavior:'smooth',block:'start'});
   if(typeof _setActiveNav==='function') _setActiveNav('settings');
   return false;
 };
+// Sub-item click → scroll AND open the matching set-section. Accordion
+// stays open (we never close it from sub-item interactions).
 window.navJumpToSetting=function(ev,secId){
   ev?.preventDefault?.();
   const sec=byId(secId); if(!sec) return false;
@@ -2822,10 +2821,6 @@ window.navJumpToSetting=function(ev,secId){
   return false;
 };
 document.addEventListener('DOMContentLoaded',()=>{
-  // Click handler — the markup uses a <button>, so a regular addEventListener
-  // is enough (no inline onclick that could navigate as a fallback).
-  byId('navSettingsGroup')?.querySelector('.nav-settings-toggle')
-    ?.addEventListener('click',(ev)=>window.toggleSettingsNav(ev));
   let open=false;
   try{open=localStorage.getItem(_NAV_OPEN_KEY)==='1';}catch{}
   _setSettingsNavOpen(open);
