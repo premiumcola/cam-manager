@@ -44,8 +44,8 @@ THUMB_WIDTH = 640
 # Already-good prefixes stay out of this map and keep their stable seed.
 _RESEED: dict[str, str] = {
     "Eichhoernchen_rot":    "v5",
-    "Eichhoernchen_dunkel": "v10",
-    "Eichhoernchen_hell":   "v9",
+    "Eichhoernchen_dunkel": "v11",
+    "Eichhoernchen_hell":   "v10",
     "Eichhoernchen_grau":   "v5",
     "Eichhoernchen_baum":   "v2",
     "Person_gruppe":        "v2",
@@ -269,41 +269,36 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         ("search", "red squirrel Sciurus vulgaris"),
     ]),
     ("squirrel", "Eichhoernchen_dunkel", 3, [
-        # The narrow "Black_morph_of_Sciurus_vulgaris" / "Melanistic_*"
-        # subcategories don't exist on Commons in 2026 — broader fallbacks
-        # plus targeted searches catch dark-coat specimens reliably. The
-        # search prefix forces close-ups so the animal isn't a tiny
-        # background subject. Round 6: the narrow morph pool is mostly
-        # exhausted after 5 rounds of blocklist hits — pivot to the much
-        # larger "feeding / eating" category which routinely surfaces
-        # darker-pelage specimens in clean side-on portraits. The brown
-        # winter-coat phase reads as "dunkel" too, even when not strictly
-        # melanistic.
+        # Round 7: user flags previous picks as "Tier schwer sichtbar".
+        # The morph subcategories are exhausted; even the
+        # behaviour/season categories surfaced too-small subjects. Lead
+        # with searches that explicitly demand close-up / portrait /
+        # detail to bias Wikimedia toward the small subset of photos
+        # where a dark-pelage individual fills most of the frame.
+        ("search", "Sciurus vulgaris dark portrait close-up detail"),
+        ("search", "red squirrel brown coat sitting eating close-up"),
+        ("search", "Eurasian red squirrel dark winter face portrait"),
         ("cat", "Sciurus_vulgaris_eating"),
         ("cat", "Sciurus_vulgaris_with_food"),
         ("cat", "Sciurus_vulgaris_in_winter"),
-        ("search", "Sciurus vulgaris brown winter coat eating side"),
-        ("search", "Eurasian red squirrel dark winter portrait"),
-        ("search", "Sciurus vulgaris dark coat eating"),
         ("cat", "Sciurus_vulgaris_in_forests"),
         ("cat", "Sciurus_vulgaris_in_Germany"),
         ("cat", "Sciurus_vulgaris"),
     ]),
     ("squirrel", "Eichhoernchen_hell", 3, [
-        # Round 6: Italy / blonde-morph categories drained. Reach for
-        # broader "Sciurus vulgaris in <country>" pools where pale-pelage
-        # individuals appear naturally, plus generic eating/feeding
-        # searches that surface clean ground-level portraits.
+        # Round 7: previous round's hell_3 still left the animal too
+        # obscured. Lead with portrait/close-up searches and country
+        # variants that have richer pale-pelage pools.
+        ("search", "pale Sciurus vulgaris close-up portrait detail"),
+        ("search", "blonde red squirrel face close-up sitting"),
+        ("search", "light coat Sciurus vulgaris eating portrait"),
         ("cat", "Blonde_morph_of_Sciurus_vulgaris"),
         ("cat", "Light_morph_of_Sciurus_vulgaris"),
         ("cat", "Sciurus_vulgaris_in_Spain"),
         ("cat", "Sciurus_vulgaris_in_Portugal"),
         ("cat", "Sciurus_vulgaris_in_France"),
-        ("search", "pale Sciurus vulgaris eating side"),
-        ("search", "light coat red squirrel ground portrait"),
         ("cat", "Sciurus_vulgaris_in_Italy"),
         ("cat", "Sciurus_vulgaris_eating"),
-        ("search", "Sciurus vulgaris pale coat"),
     ]),
     # Grey squirrel (Sciurus carolinensis) — broadens the test set so the
     # detector isn't only seeing red European squirrels. Six photos so the
@@ -367,6 +362,12 @@ _BLOCKED_HASHES: set[str] = {
     # country-variant categories to escape the narrow morph pool.
     "bf5ae7638f1f5dd1640722cffa738353",  # dunkel_1 → marimba (still!)
     "357f22768f395e23b7dd297b8007f567",  # hell_3 → no wildlife result
+    # Round 7: classifier "passed" these (squirrel 0.22 / 0.60) but the
+    # user flagged them as "Tier schwer sichtbar" — visually too small
+    # or partly hidden. The wildlife model accepted background animals
+    # that don't satisfy the "large in frame" criterion.
+    "da2b36dd2bc181fd59a75d9c7011a854",  # dunkel_1 → squirrel 0.22 (small / unclear)
+    "ae5555da099ef95190699bdae5e4c155",  # hell_3   → squirrel 0.60 but visually obscured
     # Bird folder — round 1: replacement targets that bird classifier
     # either misidentified (wrong species at top-3) or returned no
     # confident species at all.
