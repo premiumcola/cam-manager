@@ -54,10 +54,11 @@ _RESEED: dict[str, str] = {
     "Eichelhaher":          "v3",
     "Elster":               "v2",
     "Haussperling":         "v2",
-    "Kleiber":              "v3",
-    "Mauersegler":          "v3",
-    "Moenchsgrasmucke":     "v3",
-    "Rabenkraehe":          "v2",
+    "Kleiber":              "v5",
+    "Mauersegler":          "v7",
+    "Mehlschwalbe":         "v5",
+    "Moenchsgrasmucke":     "v7",
+    "Rabenkraehe":          "v6",
     "Ringeltaube":          "v2",
     "Star":                 "v2",
     "Stieglitz":            "v2",
@@ -101,22 +102,30 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
     ]),
     ("bird", "Mauersegler",      3, [
         # Apus apus is a notoriously hard test target — the species spends
-        # nearly all its life in flight, so most Wikimedia photos show a
-        # tiny silhouette far in the sky. Favour nest-box / perched photos
-        # first so the bird actually fills enough of the frame for the
-        # iNat classifier to fire.
+        # nearly all its life on the wing, so most Wikimedia photos show
+        # a tiny silhouette far in the sky. Avoid the in-flight category
+        # entirely; favour nest-box / hand-held perched photos first so
+        # the bird actually fills enough of the frame for the iNat
+        # classifier to fire.
         ("cat", "Apus_apus_at_nest"),
-        ("search", "common swift apus apus perched nest box close-up"),
+        ("cat", "Common_Swift_in_hand"),
+        ("cat", "Apus_apus_chicks"),
+        ("search", "common swift apus apus perched portrait close-up"),
+        ("search", "Apus apus held in hand researcher"),
         ("cat", "Apus_apus"),
-        ("cat", "Apus_apus_in_flight"),
     ]),
     ("bird", "Elster",           3, [
         ("cat", "Pica_pica"),
     ]),
     ("bird", "Mehlschwalbe",     3, [
+        # Delichon urbicum is also mostly aerial — bias hard toward the
+        # nest sub-category which has perched / nest-edge poses where the
+        # bird fills the frame.
+        ("cat", "Delichon_urbicum_at_nest"),
         ("cat", "Nests_of_Delichon_urbicum"),
+        ("search", "Delichon urbicum perched nest close-up"),
+        ("search", "common house martin perched portrait"),
         ("cat", "Delichon_urbicum"),
-        ("search", "house martin delichon perched"),
     ]),
     ("bird", "Buchfink",         3, [
         ("cat", "Male_Fringilla_coelebs"),
@@ -130,6 +139,12 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         ("cat", "Chloris_chloris"),
     ]),
     ("bird", "Rabenkraehe",      3, [
+        # Corvus corone (carrion crow) — explicitly NOT Corvus
+        # brachyrhynchos (American crow) which is what most "crow"
+        # search hits return. Stick to the species category and
+        # narrowly-named searches.
+        ("cat", "Corvus_corone_corone"),
+        ("search", "carrion crow Corvus corone perched Europe"),
         ("cat", "Corvus_corone"),
     ]),
     ("bird", "Hausrotschwanz",   3, [
@@ -138,10 +153,13 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         ("search", "black redstart male perched"),
     ]),
     ("bird", "Moenchsgrasmucke", 3, [
-        ("search", "eurasian blackcap sylvia atricapilla male perched"),
+        # Sylvia atricapilla — male has the iconic black cap that the
+        # iNat classifier latches onto. Lead with male-only category and
+        # photo-portrait search to avoid juvenile / fledgling shots.
         ("cat", "Male_Sylvia_atricapilla"),
+        ("search", "Sylvia atricapilla male portrait branch"),
+        ("search", "eurasian blackcap male close-up perched"),
         ("cat", "Sylvia_atricapilla"),
-        ("search", "eurasian blackcap close-up branch"),
     ]),
     ("bird", "Stieglitz",        3, [
         ("search", "european goldfinch carduelis perched close-up"),
@@ -152,9 +170,12 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         ("cat", "Dendrocopos_major"),
     ]),
     ("bird", "Kleiber",          3, [
-        ("search", "eurasian nuthatch sitta europaea on tree close-up"),
+        # Sitta europaea — head-down trunk pose is the iconic ID feature.
+        # Lead with that, fall back to general tree poses.
+        ("search", "Sitta europaea head down trunk close-up"),
+        ("cat", "Sitta_europaea_in_Germany"),
+        ("search", "eurasian nuthatch on tree trunk portrait"),
         ("cat", "Sitta_europaea"),
-        ("search", "eurasian nuthatch perched branch"),
     ]),
     ("bird", "Eichelhaher",      3, [
         ("search", "eurasian jay garrulus glandarius perched branch close-up"),
@@ -320,6 +341,46 @@ _BLOCKED_HASHES: set[str] = {
     # narrow Commons pool of these sub-categories.
     "77c1dd5a513d0ae74fd6e55141d7a4f1",  # dunkel_1 → hare (sitting upright)
     "bd4be7bfc2ff98e4fae66acc8fde7945",  # hell_3 → refrigerator (third feeder)
+    # Bird folder — round 1: replacement targets that bird classifier
+    # either misidentified (wrong species at top-3) or returned no
+    # confident species at all.
+    "74919605bfd98e2dcbdbcefea9aaece5",  # Rabenkraehe_1 → no species
+    "b34212b527c8e37ef4d4fe7b30b2064d",  # Moenchsgrasmucke_2 → no species
+    "00f467fdbd25a4e0238942fd1e2a5a90",  # Mehlschwalbe_1 → no species
+    "880282fa77f8b94253dbf1c988530345",  # Mehlschwalbe_2 → no species
+    "89c228b56812c2e34a993cb8361bd9e4",  # Mauersegler_1 → no species (in flight)
+    "26456e1b1ad8d3942986b79b525d9da1",  # Mauersegler_2 → no species (in flight)
+    "60c25b9a52293af1fc44393f942e2fbd",  # Mauersegler_3 → no species (in flight)
+    "746501dec4b813aa4c8114ce8fd19f2d",  # Kleiber_1 → no species
+    # Bird folder — round 2: classifier still fails. For aerial species
+    # (Mauersegler / Mehlschwalbe) the iNat training distribution skews
+    # toward flying silhouettes; ground-pose photos look unfamiliar.
+    "9679cf32278f5c7349f6ba5d1a039f84",  # Rabenkraehe_1 → bird detected, no species
+    "9eb1cc4fe2f6617593351603d3e5d8fe",  # Moenchsgrasmucke_2 → no species
+    "110a0280c83d7aa6523f3b9589e6d6f5",  # Mehlschwalbe_1 → bird tiny (4%)
+    "82350db9525fd0ba94ded6ad56c5228f",  # Mehlschwalbe_2 → no detection
+    "b4683cf324a245b27de4802d3f7903ea",  # Mauersegler_1 → no detection
+    "a2bcfd314507ef2bb24cef1c28a6cfa8",  # Mauersegler_2 → bird 84% of frame, no species
+    "6d2e1adc5abe97cc6ea817f8c6a49b1c",  # Mauersegler_3 → no detection
+    "7bbfdff01f7a63bf138b1f52bd7e5380",  # Kleiber_1 → no detection
+    # Bird folder — round 3: Kleiber_1 cleared. Mauersegler still aerial,
+    # Mehlschwalbe in-hand poses, Rabenkrähe wrong-species, Mönchs juvenile.
+    "fe553a556c5a40c9c10b9c240baa7f5b",  # Rabenkraehe_1 → no bird detected
+    "b69286b2d9c0f62cec86cf29d21a20b1",  # Moenchsgrasmucke_2 → no bird detected
+    "07bf2e14668fdc8cc688fa5b4bd9bc8e",  # Mehlschwalbe_1 → bird, no species
+    "6a8f11131bfe744c844d97285baecc59",  # Mehlschwalbe_2 → bird, no species
+    "aa387a91525b31146834e77752d23592",  # Mauersegler_1 → wrong species (Rauchschwalbe)
+    "7915f9d8cf2a051cf090d1c8c7508871",  # Mauersegler_2 → no bird detected
+    "1fb77033ec6e8cd279b1aa0eaad78dbf",  # Mauersegler_3 → no bird detected
+    # Round 4: most aerial cases plateaued — iNat training set has few
+    # perched Apus apus / Delichon urbicum so classifier returns empty.
+    "639d8810c3718d014f2444cb42665541",  # Rabenkraehe_1 → no detection
+    "bd19b9ee3ec8e79f2dcbdb23ff0dbc43",  # Moenchsgrasmucke_2 → bird tiny (4%)
+    "30f0eac56d30f4a2fb21d72b0af0afc8",  # Mehlschwalbe_1 → bird, no species
+    "8789b110afe5591d10d6fd4a6fe6d96d",  # Mehlschwalbe_2 → no detection
+    "07bbb6038377f06f8ccca397f2be59a1",  # Mauersegler_1 → no detection
+    "961dd31213c056651c97b5bb1f7f4e2a",  # Mauersegler_2 → bird, no species
+    "8d234acd460b68ca46fa75803498fcb9",  # Mauersegler_3 → bird, no species
 }
 
 
