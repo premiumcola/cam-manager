@@ -1,17 +1,23 @@
 from __future__ import annotations
 import ipaddress
+import logging
 import socket
 import http.client
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
+log = logging.getLogger(__name__)
+
 # Phase-1 sweep: only these ports are checked across ALL hosts in parallel.
 # A host that responds on any of these is a camera candidate.
-# RTSP (554/8554), ONVIF (2020), Reolink API (9000), Dahua SDK (37777), Hikvision SDK (34567)
-CAMERA_INDICATOR_PORTS = [554, 8554, 2020, 9000, 37777, 34567]
+# RTSP (554/8554), ONVIF (2020), Reolink HTTP API (8000) + legacy port (9000),
+# Dahua SDK (37777), Hikvision SDK (34567).
+# 8000 is a phase-1 indicator because Reolink's HTTP API ACKs faster than RTSP
+# under tight timeouts.
+CAMERA_INDICATOR_PORTS = [554, 8554, 2020, 8000, 9000, 37777, 34567]
 
 # Phase-2 extras: checked only on confirmed camera candidates for better fingerprinting
-EXTRA_PORTS = [80, 443, 8000, 8080, 8443]
+EXTRA_PORTS = [80, 443, 8080, 8443]
 
 
 def _tcp_open(ip: str, port: int, timeout: float = 0.8) -> bool:
@@ -89,11 +95,14 @@ def _guess(open_ports: list[int], banners: dict) -> str:
             return vendor
 
     if rtsp_open:
-        if 8000 in open_ports:
+        # Hikvision uses 8000 as its SDK port AND has a recognisable HTTP banner;
+        # only claim Hikvision here when the banner / WWW-Auth confirms it,
+        # otherwise port 8000 likely belongs to a Reolink HTTP API.
+        if 8000 in open_ports and ("hikvision" in server or "hikvision" in www_auth):
             return "Hikvision"
         if 37777 in open_ports:
             return "Dahua / Amcrest"
-        if 9000 in open_ports:
+        if 9000 in open_ports or 8000 in open_ports:
             return "Reolink"
         return "RTSP-Kamera"
 
@@ -103,6 +112,9 @@ def _guess(open_ports: list[int], banners: dict) -> str:
         return "Dahua / Amcrest"
     if 34567 in open_ports:
         return "Hikvision"
+    # Reolink HTTP API on 8000 alone — RTSP may be slow to ACK or disabled.
+    if 8000 in open_ports:
+        return "Reolink"
     if 2020 in open_ports:
         return "ONVIF-Kamera"
 
@@ -146,9 +158,10 @@ def discover_hosts(subnet: str, max_hosts: int = 254) -> tuple[list, int]:
     # ── Phase 1: parallel sweep across all (host, camera_port) combos ──────────
     tasks = [(ip, port) for ip in hosts for port in CAMERA_INDICATOR_PORTS]
 
+    # 1.2s phase-1 timeout: newer Reolink firmware (v3.x+) is slow to ACK on 554.
     def probe_one(args: tuple) -> tuple | None:
         ip, port = args
-        return (ip, port) if _tcp_open(ip, port, timeout=0.8) else None
+        return (ip, port) if _tcp_open(ip, port, timeout=1.2) else None
 
     hits: dict[str, list[int]] = defaultdict(list)
     with ThreadPoolExecutor(max_workers=300) as ex:
@@ -156,6 +169,16 @@ def discover_hosts(subnet: str, max_hosts: int = 254) -> tuple[list, int]:
             if result:
                 ip, port = result
                 hits[ip].append(port)
+
+    # Phase-1 visibility: log every host that answered, even ones _guess() will
+    # later reject. Helps debug "Reolink not found" cases where only one of
+    # 554/8000/9000 is actually reachable.
+    if log.isEnabledFor(logging.DEBUG):
+        if hits:
+            for ip in sorted(hits, key=lambda x: list(map(int, x.split(".")))):
+                log.debug("[discovery] phase1 hit %s ports=%s", ip, sorted(hits[ip]))
+        else:
+            log.debug("[discovery] phase1: no hits across %d hosts", len(hosts))
 
     if not hits:
         return [], len(hosts)

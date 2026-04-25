@@ -215,7 +215,38 @@ function toggleCardHd(camId,btn){
     img.dataset.hdMode='1';
     img.src=`/api/camera/${encodeURIComponent(camId)}/stream_hd.mjpg`;
   }
+  _refreshLivePillForCard(camId);
 }
+
+// Re-paint the expanded LivePill row values for one card based on current HD state.
+// Used by both toggleCardHd() and the 3s polling loop so the pill never shows
+// sub-stream values while HD-Stream is active.
+function _refreshLivePillForCard(camId){
+  const card=byId('cameraCards')?.querySelector(`[data-camid="${CSS.escape(camId)}"]`);
+  if(!card) return;
+  const livePill=card.querySelector('.cv-pill-live-wrap');
+  if(!livePill) return;
+  const c=(state.cameras||[]).find(x=>x.id===camId)||{};
+  const hdOn=_hdCards.has(camId);
+  const modeEl=livePill.querySelector('.cv-stream-mode');
+  if(modeEl){
+    if(hdOn){
+      modeEl.textContent='● HD-Stream';
+      modeEl.className='cv-stream-mode cv-mode-hd';
+    } else {
+      const mode=c.stream_mode||'baseline';
+      modeEl.textContent=mode==='live'?'● Live':'○ Vorschau';
+      modeEl.className='cv-stream-mode '+(mode==='live'?'cv-mode-live':'cv-mode-base');
+    }
+  }
+  const fpsEl=livePill.querySelector('.cv-lp-fps-val');
+  if(fpsEl) fpsEl.textContent=hdOn?'—':((c.preview_fps||0)>0?(c.preview_fps+' fps'):'—');
+  const fpsSubEl=livePill.querySelector('.cv-lp-fps-sub');
+  if(fpsSubEl) fpsSubEl.textContent=hdOn?'Main-Stream aktiv':'Gemessen (Sub-Stream)';
+  const resEl=livePill.querySelector('.cv-lp-res-val');
+  if(resEl) resEl.textContent=hdOn?'Main-Stream':(c.preview_resolution||c.resolution||'—');
+}
+window._refreshLivePillForCard=_refreshLivePillForCard;
 window.toggleCardHd=toggleCardHd;
 
 function startLiveUpdate(){
@@ -255,16 +286,19 @@ function startLiveUpdate(){
             livePill.classList.toggle('cv-live-off',!isActive);
             const hdr=livePill.querySelector('.cv-live-exp-header span');
             if(hdr) hdr.textContent='Livestream '+(isActive?'aktiv':'inaktiv');
-            // Update measured FPS display in pill
-            const fpsEl=livePill.querySelector('.cv-lp-fps-val');
-            if(fpsEl) fpsEl.textContent=(c.preview_fps||0)>0?(c.preview_fps+' fps'):'—';
-            // Update stream mode badge
-            const modeEl=livePill.querySelector('.cv-stream-mode');
-            if(modeEl){
-              const mode=c.stream_mode||'baseline';
-              modeEl.textContent=mode==='live'?'● Live':'○ Vorschau';
-              modeEl.className='cv-stream-mode '+(mode==='live'?'cv-mode-live':'cv-mode-base');
+            // Stash the latest sub-stream values on the cached camera record so
+            // the next HD-off transition has fresh data, but do NOT paint the
+            // pill yet — _refreshLivePillForCard() decides what to render based
+            // on HD state.
+            const cached=(state.cameras||[]).find(x=>x.id===c.id);
+            if(cached){
+              cached.preview_fps=c.preview_fps;
+              cached.stream_mode=c.stream_mode;
+              cached.preview_resolution=c.preview_resolution;
+              cached.resolution=c.resolution;
+              cached.status=c.status;
             }
+            _refreshLivePillForCard(c.id);
           }
         }
       });
@@ -473,9 +507,9 @@ ${isActive?`
               <div class="cv-pdot"></div>
               <span>Livestream aktiv</span>
             </div>
-            <div class="cv-lp-row"><span>Stream-Modus</span><strong class="cv-stream-mode ${streamMode==='live'?'cv-mode-live':'cv-mode-base'}">${streamMode==='live'?'● Live':'○ Vorschau'}</strong></div>
-            <div class="cv-lp-row"><span>Preview-FPS<br><small>Gemessen (Sub-Stream)</small></span><strong class="cv-lp-fps-val">${previewFps!=null?previewFps+' fps':'—'}</strong></div>
-            <div class="cv-lp-row"><span>Auflösung</span><strong>${esc(c.preview_resolution||c.resolution||'—')}</strong></div>
+            <div class="cv-lp-row"><span>Stream-Modus</span><strong class="cv-stream-mode ${hdOn?'cv-mode-hd':(streamMode==='live'?'cv-mode-live':'cv-mode-base')}">${hdOn?'● HD-Stream':(streamMode==='live'?'● Live':'○ Vorschau')}</strong></div>
+            <div class="cv-lp-row"><span>Preview-FPS<br><small class="cv-lp-fps-sub">${hdOn?'Main-Stream aktiv':'Gemessen (Sub-Stream)'}</small></span><strong class="cv-lp-fps-val">${hdOn?'—':(previewFps!=null?previewFps+' fps':'—')}</strong></div>
+            <div class="cv-lp-row"><span>Auflösung</span><strong class="cv-lp-res-val">${hdOn?'Main-Stream':esc(c.preview_resolution||c.resolution||'—')}</strong></div>
             <div class="cv-lp-row"><span>Analyse-Framerate<br><small>Wie oft TAM-spy analysiert</small></span><strong>${fps!=null?fps+' fps':'—'}</strong></div>
           </div>
         </div>
@@ -1690,10 +1724,17 @@ function _renderDiscoveryResults(){
   const visible=hideConfigured?_discoveryItems.filter(x=>!allConfigured.has(x.ip)):_discoveryItems;
   const alreadyCount=_discoveryItems.filter(x=>allConfigured.has(x.ip)).length;
 
+  // Hint shown when nothing or only one candidate was found — covers the
+  // common case where Reolink RTSP/HTTP-API was disabled in firmware.
+  const reolinkHint=`<div class="field-help" style="margin-top:10px;padding:8px 10px;border-left:3px solid #38bdf8">
+    <strong>Reolink-Kameras:</strong> RTSP (Port 554) und HTTP-API (Port 8000) müssen in den Firmware-Einstellungen der Kamera aktiviert sein.
+  </div>`;
+
   if(!visible.length){
-    byId('discoveryResults').innerHTML=`<div class="item">Keine Kamera-Kandidaten${hideConfigured&&alreadyCount?' ('+alreadyCount+' bereits konfiguriert ausgeblendet)':''}</div>`;
+    byId('discoveryResults').innerHTML=`<div class="item">Keine Kamera-Kandidaten${hideConfigured&&alreadyCount?' ('+alreadyCount+' bereits konfiguriert ausgeblendet)':''}</div>${reolinkHint}`;
     return;
   }
+  const showFewHint=_discoveryItems.length<=1;
   byId('discoveryResults').innerHTML=visible.map(x=>{
     const ports=(x.open_ports||[]).join(', ')||'—';
     const uid=x.ip.replace(/\./g,'_');
@@ -1735,6 +1776,9 @@ function _renderDiscoveryResults(){
       </div>`)}
     </div>`;
   }).join('');
+  if(showFewHint){
+    byId('discoveryResults').insertAdjacentHTML('beforeend',reolinkHint);
+  }
 }
 
 byId('discoverBtn')?.addEventListener('click',async()=>{
