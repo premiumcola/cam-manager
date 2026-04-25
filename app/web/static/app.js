@@ -1704,8 +1704,14 @@ function getCanvasCtx(){ return byId('maskCanvas').getContext('2d'); }
 function _maskCanvasFallback(){
   const canvas=byId('maskCanvas');
   if(!canvas) return;
+  // No image loaded → no wrap aspect either. Set the wrap's aspect ratio
+  // inline so the canvas (inset:0) gets a proportional CSS box. Without
+  // this the wrap would collapse to min-height and the placeholder would
+  // be unusable.
   canvas.width=1280; canvas.height=720;
-  canvas.style.width='100%'; canvas.style.height='auto';
+  canvas.style.width=''; canvas.style.height='';
+  const wrap=canvas.parentElement;
+  if(wrap) wrap.style.aspectRatio='1280/720';
   const ctx=canvas.getContext('2d');
   ctx.fillStyle='#222222';
   ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -1721,7 +1727,14 @@ function loadMaskSnapshot(camId){
   if(!img) return;
   // Wire one-shot handlers so a failed load still leaves us with a
   // usable canvas instead of a 0×0 surface that swallows clicks.
-  img.onload=()=>{ drawShapes(); _logMaskCanvasReady(camId,'snapshot'); };
+  img.onload=()=>{
+    // A real snapshot is back — drop any aspect-ratio lock left behind by
+    // a previous fallback render so the wrap follows the image again.
+    const wrap=byId('maskCanvas')?.parentElement;
+    if(wrap) wrap.style.aspectRatio='';
+    drawShapes();
+    _logMaskCanvasReady(camId,'snapshot');
+  };
   img.onerror=()=>{ _maskCanvasFallback(); drawShapes(); _logMaskCanvasReady(camId,'fallback'); };
   img.src=`/api/camera/${camId}/snapshot.jpg?t=${Date.now()}`;
 }
@@ -1731,14 +1744,19 @@ function _logMaskCanvasReady(camId, source){
   console.log('[mask-editor] camera=%s source=%s canvas=%dx%d', camId, source, c.width, c.height);
 }
 function scaleForCanvas(el,img){
-  const rect=el.getBoundingClientRect();
-  // If the snapshot didn't load we keep the fallback dimensions already
-  // assigned by _maskCanvasFallback; otherwise size to natural snapshot.
+  // Internal canvas resolution = source resolution. canvasPoint() rescales
+  // pointer events from CSS pixels (rect.width/height) to canvas pixels
+  // (canvas.width/height) so polygon coordinates stay stable across any
+  // display size. CSS handles the *display* sizing via inset:0 + the wrap's
+  // natural-aspect height — no inline style.width/height needed here.
   const naturalW=img.naturalWidth||el.width||1280;
   const naturalH=img.naturalHeight||el.height||720;
-  el.width=naturalW; el.height=naturalH;
-  el.style.width=(rect.width||naturalW)+'px';
-  el.style.height='auto';
+  el.width=naturalW;
+  el.height=naturalH;
+  // Clear any stale inline styles set by previous fallback or resize logic
+  // — let the CSS rule be authoritative again.
+  el.style.width='';
+  el.style.height='';
 }
 // Polygon shape: {points:[{x,y},...], label:"Zone 1"}. Raw arrays of
 // points (legacy pre-label format) are still accepted — _polyPoints
@@ -1767,14 +1785,22 @@ function drawPoly(ctx,poly,color,fillAlpha,emphasised,kind,idx){
   ctx.lineWidth=emphasised?5:3;
   ctx.fill(); ctx.stroke();
   // Vertex handles — filled circles in the polygon colour with a white
-  // border. The currently-hovered vertex (tracked in shapeState.hoverVertex)
-  // gets a larger radius so the user sees what they're about to grab.
+  // border. The currently-hovered vertex gets a larger radius so the user
+  // sees what they're about to grab. The DRAW position is clamped to keep
+  // the full circle inside the canvas; the underlying coordinate is left
+  // alone, so hit-testing still uses the real point. With the canvas now
+  // matching the image bounds 1:1, the clamp only kicks in for vertices
+  // placed at the very edge — they shift inward by ≤r so the marker stays
+  // fully visible instead of being half-clipped.
   const hov = shapeState.hoverVertex;
   const isHov = (j) => hov && hov.kind===kind && hov.polyIdx===idx && hov.ptIdx===j;
+  const cw = ctx.canvas.width, chh = ctx.canvas.height;
   for(let j=0; j<pts.length; j++){
-    const r = isHov(j) ? 10 : 7;
+    const r = isHov(j) ? 13 : 10;
+    const dx = Math.max(r, Math.min(cw - r, pts[j].x));
+    const dy = Math.max(r, Math.min(chh - r, pts[j].y));
     ctx.beginPath();
-    ctx.arc(pts[j].x, pts[j].y, r, 0, Math.PI*2);
+    ctx.arc(dx, dy, r, 0, Math.PI*2);
     ctx.fillStyle = color;
     ctx.fill();
     ctx.strokeStyle = '#ffffff';
@@ -1829,9 +1855,14 @@ function drawShapes(){
     // polygon. The pulse is driven by Date.now() — drawShapes is called
     // by the rAF loop in _ensureShapePulseRaf while we're in that state.
     const closable = shapeState.points.length >= 3;
+    const cw = canvas.width, chh = canvas.height;
+    const clamp = (v, r, max) => Math.max(r, Math.min(max - r, v));
     shapeState.points.forEach((p,i)=>{
+      const r = 10;
+      const dx = clamp(p.x, r, cw);
+      const dy = clamp(p.y, r, chh);
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 7, 0, Math.PI*2);
+      ctx.arc(dx, dy, r, 0, Math.PI*2);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
       ctx.strokeStyle = '#1f2937';
@@ -1842,10 +1873,12 @@ function drawShapes(){
       const first = shapeState.points[0];
       const t = (Date.now() % 1200) / 1200;            // 0..1 over 1.2s
       const phase = 0.5 - 0.5*Math.cos(t * Math.PI*2); // smooth 0..1..0
-      const ringR = 12 + phase*8;                       // 12..20 px
+      const ringR = 16 + phase*8;                       // 16..24 px (max for clamp)
       const alpha = 0.7 - phase*0.5;                    // 0.7..0.2
+      const cx = clamp(first.x, 24, cw);
+      const cy = clamp(first.y, 24, chh);
       ctx.beginPath();
-      ctx.arc(first.x, first.y, ringR, 0, Math.PI*2);
+      ctx.arc(cx, cy, ringR, 0, Math.PI*2);
       ctx.strokeStyle = `rgba(34,197,94,${alpha.toFixed(2)})`;
       ctx.lineWidth = 3;
       ctx.stroke();
