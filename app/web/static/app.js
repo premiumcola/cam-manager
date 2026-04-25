@@ -2762,8 +2762,14 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 
 // ── Sidebar settings accordion ───────────────────────────────────────────────
+// Click on the Einstellungen entry only toggles the sub-list — it never scrolls
+// or navigates. Scrolling to a specific settings sub-section is the job of the
+// sub-item links via navJumpToSetting().
 window.toggleSettingsNav=function(ev){
-  ev?.preventDefault?.();
+  if(ev){
+    ev.preventDefault?.();
+    ev.stopPropagation?.();
+  }
   const toggle=document.querySelector('.nav-settings-toggle');
   const sub=byId('navSettingsSub');
   if(!toggle||!sub) return false;
@@ -2781,6 +2787,7 @@ window.navJumpToSetting=function(ev,secId){
     if(secId==='set-timelapse'&&typeof loadTlSettings==='function') loadTlSettings();
   }
   sec.scrollIntoView({behavior:'smooth',block:'start'});
+  _setActiveNav('settings');
   return false;
 };
 document.addEventListener('DOMContentLoaded',()=>{
@@ -2792,6 +2799,49 @@ document.addEventListener('DOMContentLoaded',()=>{
     byId('navSettingsSub')?.classList.add('open');
   }
 });
+
+// ── Sidebar active-nav state ─────────────────────────────────────────────────
+// Tracks which top-level section is currently visible and applies the
+// section's accent color via the --na CSS variable. Click sets it eagerly,
+// scroll keeps it honest. Logs/Settings stay sticky once opened — neither
+// has a useful "scrolled past" signal.
+function _setActiveNav(targetId){
+  document.querySelectorAll('.nav a[data-target]').forEach(a=>{
+    const isActive=a.dataset.target===targetId;
+    a.classList.toggle('nav-active',isActive);
+    if(isActive && a.dataset.accent){
+      a.style.setProperty('--na',a.dataset.accent);
+    }
+  });
+}
+window._setActiveNav=_setActiveNav;
+function _initSidebarNav(){
+  // Click: set active immediately so the highlight tracks the user's intent
+  // before the scroll animation finishes.
+  document.querySelectorAll('.nav a[data-target]').forEach(a=>{
+    a.addEventListener('click',()=>{
+      _setActiveNav(a.dataset.target);
+    });
+  });
+  // Scrollspy: pick the section whose top is closest to the viewport top
+  // without going past it. Cheap enough to run on every scroll tick.
+  const sectionIds=['dashboard','statistik','media','achievements','cameras','settings','logs'];
+  let raf=0;
+  const tick=()=>{
+    raf=0;
+    const top=80; // account for sticky header / hero offset
+    let bestId=null, bestY=-Infinity;
+    for(const id of sectionIds){
+      const el=byId(id); if(!el) continue;
+      const r=el.getBoundingClientRect();
+      if(r.top<=top && r.top>bestY){ bestY=r.top; bestId=id; }
+    }
+    if(bestId) _setActiveNav(bestId);
+  };
+  window.addEventListener('scroll',()=>{ if(!raf) raf=requestAnimationFrame(tick); },{passive:true});
+  tick();
+}
+document.addEventListener('DOMContentLoaded',_initSidebarNav);
 
 // ── Password field visibility toggle ─────────────────────────────────────────
 window.togglePwField=function(btn,fieldName){
