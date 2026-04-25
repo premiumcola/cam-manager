@@ -1733,7 +1733,7 @@ function _nextPolyName(kind){
   let n=1; while(used.has(n)) n++;
   return `${base} ${n}`;
 }
-function drawPoly(ctx,poly,color,fillAlpha,emphasised){
+function drawPoly(ctx,poly,color,fillAlpha,emphasised,kind,idx){
   const pts=_polyPoints(poly); if(!pts.length) return;
   ctx.beginPath(); ctx.moveTo(pts[0].x,pts[0].y);
   pts.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));
@@ -1742,6 +1742,21 @@ function drawPoly(ctx,poly,color,fillAlpha,emphasised){
   ctx.strokeStyle=color;
   ctx.lineWidth=emphasised?5:3;
   ctx.fill(); ctx.stroke();
+  // Vertex handles — filled circles in the polygon colour with a white
+  // border. The currently-hovered vertex (tracked in shapeState.hoverVertex)
+  // gets a larger radius so the user sees what they're about to grab.
+  const hov = shapeState.hoverVertex;
+  const isHov = (j) => hov && hov.kind===kind && hov.polyIdx===idx && hov.ptIdx===j;
+  for(let j=0; j<pts.length; j++){
+    const r = isHov(j) ? 10 : 7;
+    ctx.beginPath();
+    ctx.arc(pts[j].x, pts[j].y, r, 0, Math.PI*2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
   if(poly && poly.label){
     const minX=Math.min(...pts.map(p=>p.x)), minY=Math.min(...pts.map(p=>p.y));
     const labelY=Math.max(20, minY);
@@ -1777,15 +1792,63 @@ function drawShapes(){
   // (when not ready, the gray placeholder already drawn by
   //  _maskCanvasFallback stays in the background)
   const pulseId=shapeState.pulse;
-  (shapeState.zones||[]).forEach((p,i)=>drawPoly(ctx,p,'rgba(75,163,255,1)',0.17,pulseId===`zone:${i}`));
-  (shapeState.masks||[]).forEach((p,i)=>drawPoly(ctx,p,'rgba(255,107,107,1)',0.18,pulseId===`mask:${i}`));
+  (shapeState.zones||[]).forEach((p,i)=>drawPoly(ctx,p,'rgba(75,163,255,1)',0.17,pulseId===`zone:${i}`,'zone',i));
+  (shapeState.masks||[]).forEach((p,i)=>drawPoly(ctx,p,'rgba(255,107,107,1)',0.18,pulseId===`mask:${i}`,'mask',i));
   if(shapeState.points.length){
     ctx.beginPath();
     ctx.moveTo(shapeState.points[0].x,shapeState.points[0].y);
     shapeState.points.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));
     ctx.strokeStyle='#ffffff'; ctx.lineWidth=2;
     ctx.setLineDash([7,6]); ctx.stroke(); ctx.setLineDash([]);
-    shapeState.points.forEach(p=>{ ctx.beginPath(); ctx.arc(p.x,p.y,6,0,Math.PI*2); ctx.fillStyle='#fff'; ctx.fill(); });
+    // In-progress vertex handles. The first point gets a pulsing ring
+    // once we have ≥3 points so the user knows clicking it closes the
+    // polygon. The pulse is driven by Date.now() — drawShapes is called
+    // by the rAF loop in _ensureShapePulseRaf while we're in that state.
+    const closable = shapeState.points.length >= 3;
+    shapeState.points.forEach((p,i)=>{
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 7, 0, Math.PI*2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.strokeStyle = '#1f2937';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+    if(closable){
+      const first = shapeState.points[0];
+      const t = (Date.now() % 1200) / 1200;            // 0..1 over 1.2s
+      const phase = 0.5 - 0.5*Math.cos(t * Math.PI*2); // smooth 0..1..0
+      const ringR = 12 + phase*8;                       // 12..20 px
+      const alpha = 0.7 - phase*0.5;                    // 0.7..0.2
+      ctx.beginPath();
+      ctx.arc(first.x, first.y, ringR, 0, Math.PI*2);
+      ctx.strokeStyle = `rgba(34,197,94,${alpha.toFixed(2)})`;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+    _ensureShapePulseRaf(closable);
+  } else {
+    _ensureShapePulseRaf(false);
+  }
+}
+// rAF loop — runs only while a closable in-progress polygon is on screen.
+// Redraws drawShapes() ~30 fps so the closing-point ring pulses smoothly.
+let _shapePulseRaf = null;
+function _ensureShapePulseRaf(active){
+  if(active && !_shapePulseRaf){
+    const tick = () => {
+      // Stop if the editor closed or the in-progress polygon is gone.
+      if(!shapeState.camera || (shapeState.points||[]).length < 3){
+        _shapePulseRaf = null;
+        return;
+      }
+      drawShapes();
+      _shapePulseRaf = requestAnimationFrame(tick);
+    };
+    _shapePulseRaf = requestAnimationFrame(tick);
+  } else if(!active && _shapePulseRaf){
+    cancelAnimationFrame(_shapePulseRaf);
+    _shapePulseRaf = null;
   }
 }
 function canvasPoint(evt){
@@ -3082,18 +3145,136 @@ byId('mediaSettingsForm').onsubmit=async(e)=>{
   await loadAll();
 };
 
-// ── Shape editor wiring (canvas click/touch + toolbar) ────────────────────
+// ── Shape editor wiring (canvas drag + touch + toolbar) ─────────────────
+// Hit-test radius for vertex-grab and close-polygon detection. 12px is
+// generous on mouse, comfortable on touch.
+const _SHAPE_HIT_PX = 12;
+// Find the existing-polygon vertex (if any) within HIT px of point pt.
+// Returns {kind:'zone'|'mask', polyIdx, ptIdx} or null.
+function _hitVertex(pt){
+  const test = (arr, kind) => {
+    for(let i=arr.length-1; i>=0; i--){
+      const pts=_polyPoints(arr[i]);
+      for(let j=0; j<pts.length; j++){
+        const dx=pts[j].x-pt.x, dy=pts[j].y-pt.y;
+        if(dx*dx + dy*dy <= _SHAPE_HIT_PX*_SHAPE_HIT_PX) return {kind, polyIdx:i, ptIdx:j};
+      }
+    }
+    return null;
+  };
+  return test(shapeState.zones||[], 'zone') || test(shapeState.masks||[], 'mask');
+}
+// While drawing: if the cursor is within HIT px of the very first point
+// AND we already have ≥3 points, hovering / clicking should close the
+// polygon instead of adding a new point.
+function _isClosingPoint(pt){
+  if(!shapeState.points || shapeState.points.length < 3) return false;
+  const first = shapeState.points[0];
+  const dx=first.x-pt.x, dy=first.y-pt.y;
+  return dx*dx + dy*dy <= _SHAPE_HIT_PX*_SHAPE_HIT_PX;
+}
+function _commitInProgressPolygon(){
+  if(shapeState.points.length < 3) return false;
+  const poly = { points: [...shapeState.points], label: _nextPolyName(shapeState.mode) };
+  if(shapeState.mode==='zone') shapeState.zones.push(poly);
+  else                         shapeState.masks.push(poly);
+  shapeState.points = [];
+  saveShapesIntoForm(); drawShapes();
+  _updateShapeDrawingBar(); _renderShapeList();
+  showToast(`${poly.label} gespeichert`, 'success');
+  return true;
+}
+
 (function _initShapeEditor(){
   const canvas = byId('maskCanvas');
-  const addPoint = (evt) => {
+  if(!canvas) return;
+
+  let drag = null;          // {kind, polyIdx, ptIdx} while dragging an existing vertex
+  let downPt = null;        // pointer at mousedown — used to distinguish click vs drag
+
+  const onDown = (evt) => {
     if(!shapeState.camera) return;
-    // Don't scroll / select while drawing on touch
     if(evt.cancelable) evt.preventDefault();
-    shapeState.points.push(canvasPoint(evt));
+    const pt = canvasPoint(evt);
+    const hit = _hitVertex(pt);
+    if(hit){
+      drag = hit;
+      downPt = pt;
+      return;
+    }
+    // No vertex grabbed → record the down position so the corresponding
+    // up-event knows whether the user actually clicked or just brushed
+    // the canvas. New points are added on up (with no movement) so a
+    // missed drag-attempt doesn't accidentally drop a stray vertex.
+    downPt = pt;
+    drag = null;
+  };
+
+  const onMove = (evt) => {
+    if(!shapeState.camera) return;
+    const pt = canvasPoint(evt);
+    if(drag){
+      if(evt.cancelable) evt.preventDefault();
+      const arr = drag.kind==='zone' ? shapeState.zones : shapeState.masks;
+      const poly = arr[drag.polyIdx];
+      const pts = _polyPoints(poly);
+      if(!pts || !pts[drag.ptIdx]) return;
+      pts[drag.ptIdx].x = Math.round(pt.x);
+      pts[drag.ptIdx].y = Math.round(pt.y);
+      drawShapes();
+      return;
+    }
+    // Plain hover: track which vertex (if any) is under the cursor so
+    // drawShapes can highlight it and the canvas cursor updates.
+    const hover = _hitVertex(pt);
+    const closing = !hover && _isClosingPoint(pt);
+    const sig = hover ? `${hover.kind}:${hover.polyIdx}:${hover.ptIdx}` : (closing ? 'close' : '');
+    if(sig !== shapeState.hoverSig){
+      shapeState.hoverVertex = hover;
+      shapeState.hoverClosing = closing;
+      shapeState.hoverSig = sig;
+      canvas.style.cursor = (hover ? 'move' : (closing ? 'pointer' : 'crosshair'));
+      drawShapes();
+    }
+  };
+
+  const onUp = (evt) => {
+    if(!shapeState.camera){ drag=null; downPt=null; return; }
+    if(drag){
+      // Persist the drag result and clear state.
+      saveShapesIntoForm();
+      drag = null;
+      downPt = null;
+      return;
+    }
+    if(!downPt) return;
+    const pt = canvasPoint(evt);
+    // Treat as a click only when the pointer didn't move significantly.
+    const dx=pt.x-downPt.x, dy=pt.y-downPt.y;
+    downPt = null;
+    if(dx*dx + dy*dy > 9) return;  // moved more than 3 px → ignore
+    if(evt.cancelable) evt.preventDefault();
+    // Click on the in-progress polygon's first vertex closes it.
+    if(_isClosingPoint(pt)){
+      _commitInProgressPolygon();
+      shapeState.hoverClosing = false;
+      canvas.style.cursor = 'crosshair';
+      return;
+    }
+    shapeState.points.push(pt);
     drawShapes(); _updateShapeDrawingBar();
   };
-  canvas?.addEventListener('click', addPoint);
-  canvas?.addEventListener('touchstart', addPoint, {passive:false});
+
+  // Mouse + touch share the same handlers; touch events expose .touches
+  // / .changedTouches and canvasPoint already reads from both.
+  canvas.addEventListener('mousedown', onDown);
+  canvas.addEventListener('mousemove', onMove);
+  canvas.addEventListener('mouseup',   onUp);
+  canvas.addEventListener('mouseleave',()=>{ drag=null; downPt=null; shapeState.hoverVertex=null; shapeState.hoverClosing=false; shapeState.hoverSig=''; canvas.style.cursor='crosshair'; drawShapes(); });
+  canvas.addEventListener('touchstart',onDown,{passive:false});
+  canvas.addEventListener('touchmove', onMove,{passive:false});
+  canvas.addEventListener('touchend',  onUp,  {passive:false});
+  canvas.addEventListener('touchcancel',()=>{ drag=null; downPt=null; });
 
   byId('refreshMaskSnapshotBtn').onclick = () =>
     loadMaskSnapshot(shapeState.camera || byId('cameraForm').elements['id'].value);
@@ -3108,16 +3289,7 @@ byId('mediaSettingsForm').onsubmit=async(e)=>{
 
   byId('saveShapeBtn').onclick = () => {
     if(shapeState.points.length < 3){ showToast('Mindestens 3 Punkte.','warn'); return; }
-    const poly = {
-      points: [...shapeState.points],
-      label: _nextPolyName(shapeState.mode),
-    };
-    if(shapeState.mode==='zone') shapeState.zones.push(poly);
-    else                         shapeState.masks.push(poly);
-    shapeState.points = [];
-    saveShapesIntoForm(); drawShapes();
-    _updateShapeDrawingBar(); _renderShapeList();
-    showToast(`${poly.label} gespeichert`, 'success');
+    _commitInProgressPolygon();
   };
 
   byId('clearShapesBtn').onclick = async () => {
