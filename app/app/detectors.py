@@ -553,6 +553,34 @@ def _wildlife_category(raw_label: str | None) -> str | None:
     return None
 
 
+# Latin-genus → wildlife category. Substring match (case-insensitive)
+# against the full iNaturalist label string, e.g.
+# "Sciurus vulgaris (Eurasian Red Squirrel)" → "squirrel".
+# Used by WildlifeClassifier when an iNat second-stage model is configured
+# and its labels file contains mammal binomials. The bird-only iNat model
+# shipped by default does NOT contain any of these genera — these rules
+# only fire once a mammal-capable iNat model is dropped into models/ and
+# pointed at via processing.wildlife.inat_*.
+_INAT_WILDLIFE_RULES: tuple[tuple[str, str], ...] = (
+    ("sciurus",   "squirrel"),     # Sciurus vulgaris, S. carolinensis, etc.
+    ("tamias",    "squirrel"),     # chipmunk genus — close enough for our purposes
+    ("vulpes",    "fox"),          # Vulpes vulpes, V. lagopus, V. corsac
+    ("erinaceus", "hedgehog"),     # Erinaceus europaeus
+    ("meles",     "hedgehog"),     # badger genus — optional fallback per spec
+)
+
+
+def _inat_wildlife_category(raw_label: str | None) -> str | None:
+    """Map a full iNaturalist label string to a wildlife category, or None."""
+    if not raw_label:
+        return None
+    low = str(raw_label).lower()
+    for needle, cat in _INAT_WILDLIFE_RULES:
+        if needle in low:
+            return cat
+    return None
+
+
 def discover_wildlife_paths(models_dir: str | Path = "/app/models") -> dict:
     """Look for a MobileNet wildlife model in `models_dir`. Heuristic: any
     .tflite whose name contains "mobilenet" but neither "ssd" (object
@@ -596,7 +624,7 @@ class WildlifeClassifier:
     top-1 doesn't map to any wildlife class we track.
     """
 
-    def __init__(self, cfg: dict):
+    def __init__(self, cfg: dict, inat_cfg: dict | None = None):
         self.cfg = dict(cfg or {})
         self.enabled = bool(self.cfg.get("enabled"))
         self.available = False
@@ -618,6 +646,19 @@ class WildlifeClassifier:
         self.labels = load_label_map(self.cfg.get("labels_path"))
         self.min_score = float(self.cfg.get("min_score", 0.35))
         self.interpreter = None
+        # ── Optional iNaturalist second-stage backend ──────────────────────
+        # When inat_cfg is supplied (typically the bird_species block, since
+        # the user can re-use that path), we load a parallel TFLite
+        # interpreter and run it on the wildlife crop. _classify_inat()
+        # consults _INAT_WILDLIFE_RULES on the iNat label string. Stays None
+        # when no path is configured or loading fails.
+        self._inat_interpreter = None
+        self._inat_labels: dict[int, str] = {}
+        self._inat_common = None
+        self._inat_classify = None
+        self._inat_cpu_mode = False
+        self._inat_min_score = 0.25
+        self._inat_cfg = dict(inat_cfg) if inat_cfg else {}
         self.common = None
         self.classify = None
         self._cpu_mode = False
@@ -652,6 +693,7 @@ class WildlifeClassifier:
             self.mode = "coral"
             self.reason = "ok"
             log.info("Wildlife classifier (Coral) aktiv: %s — %d labels", model_path, len(self.labels))
+            self._load_inat_backend()
             return
         except Exception as e:
             log.warning("Wildlife classifier pycoral unavailable (%s) – CPU-Fallback…", e)
@@ -675,6 +717,7 @@ class WildlifeClassifier:
                 self.mode = "cpu"
                 self.reason = f"cpu_fallback (coral: {coral_error})" if coral_error else "ok"
                 log.info("Wildlife classifier (CPU) aktiv: %s — %d labels", try_path, len(self.labels))
+                self._load_inat_backend()
                 return
             except Exception as e2:
                 log.warning("Wildlife classifier CPU fehlgeschlagen für %s: %s", try_path, e2)
@@ -682,18 +725,141 @@ class WildlifeClassifier:
         self.reason = f"classifier unavailable: {coral_error}" if coral_error else "classifier unavailable"
         log.warning("Wildlife classifier nicht verfügbar")
 
-    def classify_crop(self, crop: np.ndarray) -> tuple[str | None, str | None, float | None]:
+    def _load_inat_backend(self) -> None:
+        """Try to load the iNaturalist tflite second-stage classifier from
+        self._inat_cfg. No-op when the cfg is empty, the model file doesn't
+        exist, or both Coral/CPU loaders fail. Logged outcome so the user
+        sees a single line in the startup banner."""
+        cfg = self._inat_cfg or {}
+        model_path = cfg.get("model_path")
+        if not model_path or not Path(model_path).exists():
+            cpu_alt = cfg.get("cpu_model_path")
+            if not (cpu_alt and Path(cpu_alt).exists()):
+                return
+            model_path = cpu_alt
+        self._inat_min_score = float(cfg.get("min_score", 0.25))
+        self._inat_labels = load_label_map(cfg.get("labels_path"))
+        # Tier 1: pycoral
+        try:
+            from pycoral.utils.edgetpu import make_interpreter  # type: ignore
+            from pycoral.adapters import common, classify  # type: ignore
+            self._inat_common = common
+            self._inat_classify = classify
+            self._inat_interpreter = make_interpreter(model_path, device=cfg.get("device"))
+            self._inat_interpreter.allocate_tensors()
+            log.info("Wildlife · iNat-Backend (Coral) aktiv: %s — %d labels", model_path, len(self._inat_labels))
+            return
+        except Exception:
+            pass
+        # Tier 2: tflite-runtime
+        try:
+            import tflite_runtime.interpreter as tflite  # type: ignore
+            cpu_path = cfg.get("cpu_model_path") or model_path
+            self._inat_interpreter = tflite.Interpreter(model_path=cpu_path)
+            self._inat_interpreter.allocate_tensors()
+            self._inat_cpu_mode = True
+            log.info("Wildlife · iNat-Backend (CPU) aktiv: %s — %d labels", cpu_path, len(self._inat_labels))
+        except Exception as e:
+            log.info("Wildlife · iNat-Backend nicht geladen: %s", e)
+            self._inat_interpreter = None
+
+    def classify_crop(self, crop: np.ndarray, min_score: float | None = None) -> tuple[str | None, str | None, float | None]:
         """Return (category, imagenet_label, score).
 
         category ∈ {"fox", "squirrel", "hedgehog", None}. None means the
-        top-1 didn't match any of the wildlife rules we track (or score too
-        low). `imagenet_label` is the raw ImageNet label for diagnostics.
+        top-3 didn't match any wildlife rule we track (or score too low).
+        `imagenet_label` is the raw model label for diagnostics.
+
+        When `min_score` > 0, it overrides the global threshold for this
+        single call (per-camera tuning). When the iNat second-stage
+        backend is loaded, both models run; the iNat result wins if it
+        produces a category with a higher score than MobileNet.
         """
         if not self.available or crop is None or crop.size == 0:
             return None, None, None
-        if self._cpu_mode:
-            return self._classify_cpu(crop)
-        return self._classify_coral(crop)
+        # Apply per-camera min_score override by temporarily swapping the
+        # instance value — both private inference paths read self.min_score.
+        # Each WildlifeClassifier instance is camera-scoped (one per camera
+        # process), so this is safe without locking.
+        saved_thresh = self.min_score
+        if min_score is not None and float(min_score) > 0:
+            self.min_score = float(min_score)
+        try:
+            cat_a, lbl_a, score_a = (
+                self._classify_cpu(crop) if self._cpu_mode else self._classify_coral(crop)
+            )
+            cat_b, lbl_b, score_b = (None, None, None)
+            if self._inat_interpreter is not None:
+                cat_b, lbl_b, score_b = self._classify_inat(crop)
+        finally:
+            self.min_score = saved_thresh
+        # Pick the best between the two backends. iNat wins when it
+        # actually identified a tracked mammal genus AND scored higher
+        # than MobileNet (or MobileNet didn't categorise the crop).
+        if cat_b and score_b is not None:
+            if cat_a is None or score_a is None or score_b > score_a:
+                return cat_b, lbl_b, score_b
+        return cat_a, lbl_a, score_a
+
+    def _classify_inat(self, crop: np.ndarray) -> tuple[str | None, str | None, float | None]:
+        """Run the optional iNaturalist second-stage on the crop. Returns
+        (category, raw_label, score) where category ∈ wildlife rules, or
+        (None, raw_top_label, score) for diagnostics on a non-mammal hit."""
+        if self._inat_interpreter is None:
+            return None, None, None
+        rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
+        if self._inat_cpu_mode:
+            det = self._inat_interpreter.get_input_details()
+            outd = self._inat_interpreter.get_output_details()
+            in_h = det[0]['shape'][1]
+            in_w = det[0]['shape'][2]
+            in_dtype = det[0]['dtype']
+            resized = cv2.resize(rgb, (in_w, in_h))
+            inp = np.expand_dims(resized, axis=0)
+            if in_dtype == np.float32:
+                inp = (inp.astype(np.float32) - 127.5) / 127.5
+            else:
+                inp = inp.astype(in_dtype)
+            self._inat_interpreter.set_tensor(det[0]['index'], inp)
+            self._inat_interpreter.invoke()
+            scores = self._inat_interpreter.get_tensor(outd[0]['index'])[0]
+            top_ids = np.argsort(scores)[::-1][:3]
+            out_dtype = outd[0]['dtype']
+            scale, zp = (0.0, 0)
+            if out_dtype in (np.uint8, np.int8):
+                q = outd[0].get('quantization', (0.0, 0))
+                scale = float(q[0]) if q and q[0] else 0.0
+                zp = int(q[1]) if q else 0
+
+            def _to_prob(raw: float) -> float:
+                if out_dtype in (np.uint8, np.int8):
+                    return (raw - zp) * scale if scale else raw / 255.0
+                return float(raw)
+
+            for i in top_ids:
+                i = int(i)
+                p = _to_prob(float(scores[i]))
+                if p < self._inat_min_score:
+                    break
+                label = self._inat_labels.get(i, str(i))
+                cat = _inat_wildlife_category(label)
+                if cat:
+                    return cat, label, p
+            return None, None, None
+        # Coral path
+        width, height = self._inat_common.input_size(self._inat_interpreter)
+        resized = cv2.resize(rgb, (width, height))
+        self._inat_common.set_input(self._inat_interpreter, resized)
+        self._inat_interpreter.invoke()
+        classes = self._inat_classify.get_classes(
+            self._inat_interpreter, top_k=3, score_threshold=self._inat_min_score,
+        )
+        for c in classes:
+            label = self._inat_labels.get(int(c.id), str(c.id))
+            cat = _inat_wildlife_category(label)
+            if cat:
+                return cat, label, float(c.score)
+        return None, None, None
 
     def _classify_coral(self, crop: np.ndarray) -> tuple[str | None, str | None, float | None]:
         rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)

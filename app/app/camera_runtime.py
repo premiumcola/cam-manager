@@ -121,7 +121,16 @@ class CameraRuntime:
         # Second-stage wildlife classifier — maps ImageNet top-1 to our
         # fox/squirrel/hedgehog labels so motion on a fox or hedgehog
         # doesn't go unrecognised (COCO has neither class).
-        self.wildlife_classifier = WildlifeClassifier(proc.get("wildlife", {}))
+        # Wildlife classifier gets the bird_species cfg as its iNat second-
+        # stage backend by default — the bird-iNat model on disk is bird-
+        # only (no mammal genera in inat_bird_labels.txt), so the iNat
+        # branch never fires today, but the framework activates as soon as
+        # the user drops a mammal-capable iNat model and points the
+        # processing.bird_species path at it.
+        self.wildlife_classifier = WildlifeClassifier(
+            proc.get("wildlife", {}),
+            inat_cfg=proc.get("bird_species", {}) or None,
+        )
         # Exclusion-mask image cache. Built lazily on first frame and
         # rebuilt whenever the masks config signature changes (_mask_sig).
         # See _ensure_mask_image().
@@ -1915,7 +1924,10 @@ class CameraRuntime:
                     and not any(d.label in ("bird", "cat", "dog", "person") for d in detections)
                 ):
                     try:
-                        cat, raw_lbl, wscore = self.wildlife_classifier.classify_crop(proc_frame)
+                        wl_min = self.cfg.get("wildlife_min_score") or None
+                        cat, raw_lbl, wscore = self.wildlife_classifier.classify_crop(
+                            proc_frame, min_score=wl_min,
+                        )
                     except Exception:
                         cat, raw_lbl, wscore = None, None, None
                     if cat and (not allowed or cat in allowed):

@@ -106,6 +106,9 @@ CAMERA_SCHEMA: dict = {
     # when the regular motion threshold doesn't fire. 0.0 → derived from
     # motion_sensitivity (40% more sensitive, capped at 1.0).
     "wildlife_motion_sensitivity": (float, 0.0),
+    # Per-camera override for the wildlife classifier confidence floor.
+    # 0.0 = use the global processing.wildlife.min_score (default 0.35).
+    "wildlife_min_score": (float, 0.0),
     "motion_enabled":      (bool,  True),
     "detection_trigger":   (str,   "motion_and_objects"),
     "post_motion_tail_s":  (float, 0.0),  # 0 = use global default

@@ -52,6 +52,7 @@ class SettingsStore:
             # at 1.0) so wildlife stays more sensitive than normal motion
             # without forcing the user to set both sliders.
             "wildlife_motion_sensitivity": cam.get("wildlife_motion_sensitivity", 0.0),
+            "wildlife_min_score": cam.get("wildlife_min_score", 0.0),
             # Per-label confidence overrides — defaults push the bar high
             # for "person" because COCO SSD is prone to false positives on
             # human-shaped wood/shadow patterns at fixed surveillance angles.
