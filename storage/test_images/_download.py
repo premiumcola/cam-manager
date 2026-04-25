@@ -43,9 +43,10 @@ THUMB_WIDTH = 640
 # cycle to a different image without changing the source categories.
 # Already-good prefixes stay out of this map and keep their stable seed.
 _RESEED: dict[str, str] = {
-    "Eichhoernchen_rot":    "v2",
-    "Eichhoernchen_dunkel": "v2",
-    "Eichhoernchen_hell":   "v2",
+    "Eichhoernchen_rot":    "v3",
+    "Eichhoernchen_dunkel": "v3",
+    "Eichhoernchen_hell":   "v3",
+    "Eichhoernchen_grau":   "v3",
     "Person_gruppe":        "v2",
     "Person_strasse":       "v2",
     "Buntspecht":           "v2",
@@ -230,11 +231,20 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         ("cat", "Sciurus_vulgaris_in_Italy"),
     ]),
     # Grey squirrel (Sciurus carolinensis) — broadens the test set so the
-    # detector isn't only seeing red European squirrels.
-    ("squirrel", "Eichhoernchen_grau", 3, [
+    # detector isn't only seeing red European squirrels. Six photos so the
+    # classifier sees enough variation in pose/lighting/background.
+    ("squirrel", "Eichhoernchen_grau", 6, [
+        ("cat", "Sciurus_carolinensis_eating"),
         ("cat", "Sciurus_carolinensis_in_the_United_Kingdom"),
         ("cat", "Sciurus_carolinensis"),
-        ("search", "eastern gray squirrel Sciurus carolinensis"),
+        ("search", "eastern gray squirrel Sciurus carolinensis close-up"),
+    ]),
+    # Squirrels on tree trunks / branches — high-contrast subjects with the
+    # animal taking up a large fraction of the frame.
+    ("squirrel", "Eichhoernchen_baum", 3, [
+        ("search", "Sciurus vulgaris on tree trunk"),
+        ("search", "red squirrel climbing tree"),
+        ("cat", "Sciurus_vulgaris_climbing"),
     ]),
 ]
 

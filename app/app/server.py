@@ -2199,27 +2199,38 @@ def api_coral_test_batch():
                 except Exception:
                     cat, raw_lbl, wscore = None, None, None
                 if raw_lbl is not None:
+                    # Wildlife classifier runs on the full frame (no
+                    # localised bbox). Send the frame extents so the
+                    # client can draw a full-frame amber border.
+                    fh, fw = frame.shape[:2]
                     wildlife_info = {
                         "label": cat,
                         "imagenet": raw_lbl,
                         "score": round(float(wscore), 3) if wscore is not None else None,
+                        "bbox": [0, 0, int(fw), int(fh)],
                     }
                     if cat:
                         wildlife_counts[cat] = wildlife_counts.get(cat, 0) + 1
                 stages_run.append("wildlife_classifier")
-            # Annotate frame with bounding boxes and encode to base64 (max 480px wide for transport)
-            annotated = draw_detections(frame, dets)
-            h, w = annotated.shape[:2]
-            if w > 480:
-                scale = 480 / w
-                annotated = cv2.resize(annotated, (480, int(h * scale)))
-            ok, buf = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
+            # Encode the RAW frame for transport — bbox overlays are drawn
+            # client-side onto a <canvas> so the user sees both COCO and
+            # wildlife rectangles with the colour scheme the UI controls.
+            # Original image dimensions are reported so the client can
+            # rescale bbox coords to the canvas surface.
+            orig_h, orig_w = frame.shape[:2]
+            transport = frame
+            if orig_w > 480:
+                scale = 480 / orig_w
+                transport = cv2.resize(frame, (480, int(orig_h * scale)))
+            ok, buf = cv2.imencode('.jpg', transport, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
             image_b64 = ("data:image/jpeg;base64," + _b64.b64encode(buf.tobytes()).decode('ascii')) if ok else None
             results.append({
                 "folder": d.name,
                 "filename": img_path.name,
                 "inference_ms": ms,
                 "image_b64": image_b64,
+                "image_w": int(orig_w),
+                "image_h": int(orig_h),
                 "stages_run": stages_run,
                 "detections": [{
                     "label": dd.label,

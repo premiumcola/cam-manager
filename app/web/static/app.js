@@ -2511,11 +2511,15 @@ function _renderCoralBatchResult(out,r,folder){
       const subTxt=wl.imagenet?` <span class="ct-species-lat">ImageNet: ${esc(_truncMid(wl.imagenet,42))}</span>`:'';
       wildlifePill=`<span class="ct-pill ct-pill--2line" style="border-left-color:${wlc}"><span class="ct-pill-main">🦊 ${mainTxt}<span class="ct-pct">${wlPct}</span></span><span class="ct-species" style="color:${wlc}">${subTxt}</span></span>`;
     }
-    const img=item.image_b64
-      ? `<img src="${item.image_b64}" alt="${esc(item.filename)}" loading="lazy"/>`
+    // Image area: empty <canvas> placeholder. Bboxes are drawn client-
+    // side after the b64 image loads — see the post-render pass below.
+    // data-cb-idx links each canvas back to its result index in `results`
+    // so we can pull bbox coordinates without re-serialising via attrs.
+    const imgArea = item.image_b64
+      ? `<canvas class="cb-canvas" data-cb-idx="${results.indexOf(item)}"></canvas>`
       : '<div class="cb-noimg">Kein Bild</div>';
     return `<div class="cb-card">
-      <div class="cb-imgwrap">${img}<span class="cb-ms">${item.inference_ms||0} ms</span></div>
+      <div class="cb-imgwrap">${imgArea}<span class="cb-ms">${item.inference_ms||0} ms</span></div>
       <div class="cb-fname" title="${esc(item.filename)}">${esc(_truncMid(item.filename,40))}</div>
       <div class="cb-pills">${pills}${wildlifePill}</div>
     </div>`;
@@ -2539,6 +2543,84 @@ function _renderCoralBatchResult(out,r,folder){
       <div class="cb-sum-interp">${esc(interp)}</div>
     </div>
     <div class="cb-grid">${cards}</div>`;
+  // Post-render: hydrate each canvas with its image + bbox overlays.
+  // We can't do this synchronously inside the cards.map loop because the
+  // <canvas> elements only exist once innerHTML is committed.
+  out.querySelectorAll('canvas.cb-canvas').forEach(canvas=>{
+    const idx=parseInt(canvas.dataset.cbIdx);
+    const item=results[idx]; if(!item || !item.image_b64) return;
+    const im=new Image();
+    im.onload=()=>_drawCoralBatchCanvas(canvas, im, item);
+    im.src=item.image_b64;
+  });
+}
+
+// Draw the source image to the canvas, then overlay COCO detection
+// rectangles in green and (where applicable) the wildlife classifier
+// rectangle in amber. Bbox coords come back from the server in the
+// ORIGINAL image's pixel space, so we rescale them to the canvas size
+// (= the resized transport image).
+function _drawCoralBatchCanvas(canvas, im, item){
+  // Match the canvas surface to the loaded image's intrinsic resolution
+  // (= the 480-px-wide transport variant). CSS handles display sizing
+  // via .cb-canvas { width:100%; height:auto }.
+  canvas.width = im.naturalWidth;
+  canvas.height = im.naturalHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(im, 0, 0);
+  const ow = item.image_w || im.naturalWidth;
+  const oh = item.image_h || im.naturalHeight;
+  const sx = canvas.width / ow;
+  const sy = canvas.height / oh;
+  ctx.font = '12px ui-monospace,Menlo,Consolas,monospace';
+  ctx.textBaseline = 'top';
+  // ── COCO detections ───────────────────────────────────────────────
+  const dets = item.detections || [];
+  const cocoColor = '#4ade80';
+  for(const d of dets){
+    const b = d.bbox || [];
+    if(b.length !== 4) continue;
+    const x1=b[0]*sx, y1=b[1]*sy, x2=b[2]*sx, y2=b[3]*sy;
+    ctx.strokeStyle = cocoColor;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x1, y1, x2-x1, y2-y1);
+    // Label tab above the box. Falls inside the frame when box hugs the top edge.
+    const txt = `${d.label} ${(d.score*100|0)}%`;
+    const tw = ctx.measureText(txt).width + 8;
+    const th = 16;
+    const ly = y1 - th >= 0 ? y1 - th : y1;
+    ctx.fillStyle = 'rgba(0,0,0,.65)';
+    ctx.fillRect(x1, ly, tw, th);
+    ctx.fillStyle = cocoColor;
+    ctx.fillText(txt, x1+4, ly+2);
+  }
+  // ── Wildlife classifier ────────────────────────────────────────────
+  if(item.wildlife){
+    const wl = item.wildlife;
+    const amber = '#fbbf24';
+    let x1=0, y1=0, x2=canvas.width, y2=canvas.height, fullFrame=true;
+    if(Array.isArray(wl.bbox) && wl.bbox.length===4){
+      x1 = wl.bbox[0]*sx; y1 = wl.bbox[1]*sy;
+      x2 = wl.bbox[2]*sx; y2 = wl.bbox[3]*sy;
+      // Treat a near-full-frame bbox as the "no localisation" fallback.
+      const w = x2-x1, h = y2-y1;
+      fullFrame = (w >= canvas.width*0.95 && h >= canvas.height*0.95);
+    }
+    ctx.strokeStyle = amber;
+    ctx.lineWidth = fullFrame ? 3 : 2;
+    ctx.strokeRect(x1+1, y1+1, Math.max(0, x2-x1-2), Math.max(0, y2-y1-2));
+    const lbl = wl.label || 'wildlife?';
+    const txt = wl.score!=null ? `${lbl} ${(wl.score*100|0)}%` : lbl;
+    const tw = ctx.measureText(txt).width + 8;
+    const th = 16;
+    // Top-left corner for full-frame, above-box otherwise.
+    const lx = fullFrame ? 4 : x1;
+    const ly = fullFrame ? 4 : (y1 - th >= 0 ? y1 - th : y1);
+    ctx.fillStyle = 'rgba(0,0,0,.65)';
+    ctx.fillRect(lx, ly, tw, th);
+    ctx.fillStyle = amber;
+    ctx.fillText(txt, lx+4, ly+2);
+  }
 }
 byId('coralTestBtn')?.addEventListener('click',_runCoralTest);
 
