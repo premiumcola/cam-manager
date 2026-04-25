@@ -1744,6 +1744,19 @@ function drawPoly(ctx,poly,color,fillAlpha,emphasised){
     ctx.fillStyle='#fff';
     ctx.font='600 13px system-ui,sans-serif';
     ctx.fillText(poly.label, minX+6, labelY-7);
+    // Second badge below: which labels this polygon scopes (or "Alle").
+    // Lets the user see at a glance whether a polygon is restricted.
+    const lbls=_polyLabels(poly);
+    const txt=lbls.length ? lbls.map(L=>{
+      const o=_SHAPE_LABEL_OPTS.find(x=>x.k===L);
+      return o?o.l:L;
+    }).join(', ') : 'Alle Labels';
+    ctx.font='500 11px system-ui,sans-serif';
+    const w=Math.max(60, ctx.measureText(txt).width+12);
+    ctx.fillStyle='rgba(0,0,0,.55)';
+    ctx.fillRect(minX, labelY, w, 18);
+    ctx.fillStyle=lbls.length?'#fbbf24':'rgba(255,255,255,.85)';
+    ctx.fillText(txt, minX+6, labelY+13);
   }
 }
 function drawShapes(){
@@ -1801,6 +1814,19 @@ function _updateShapeModeButtons(){
     b.classList.toggle('active', b.dataset.mode===shapeState.mode);
   });
 }
+// Labels available for per-polygon scoping. Mirrors KNOWN_OBJECT_LABELS
+// in schema.py — keep in sync if a new class joins the detector.
+const _SHAPE_LABEL_OPTS=[
+  {k:'person', l:'Person'},
+  {k:'cat',    l:'Katze'},
+  {k:'bird',   l:'Vogel'},
+  {k:'car',    l:'Auto'},
+  {k:'dog',    l:'Hund'},
+];
+function _polyLabels(p){
+  if(!p || typeof p!=='object') return [];
+  return Array.isArray(p.labels) ? p.labels.slice() : [];
+}
 function _renderShapeList(){
   const host=byId('shapeList'); if(!host) return;
   const zones=shapeState.zones||[]; const masks=shapeState.masks||[];
@@ -1813,17 +1839,43 @@ function _renderShapeList(){
     const pts=_polyPoints(p);
     const label=_polyLabel(p, kind==='zone'?`Zone ${i+1}`:`Maske ${i+1}`);
     const pulseKey=`${kind}:${i}`;
+    const polyLabels=new Set(_polyLabels(p));
+    const allOn=polyLabels.size===0;
+    const checks=`<label class="shape-lbl-chip${allOn?' shape-lbl-chip--on':''}"><input type="checkbox" ${allOn?'checked':''} onclick="event.stopPropagation();_setShapeAllLabels('${kind}',${i},this.checked)"><span>Alle</span></label>`
+      +_SHAPE_LABEL_OPTS.map(o=>{
+        const on=polyLabels.has(o.k);
+        return `<label class="shape-lbl-chip${on?' shape-lbl-chip--on':''}"><input type="checkbox" ${on?'checked':''} onclick="event.stopPropagation();_toggleShapeLabel('${kind}',${i},'${o.k}',this.checked)"><span>${o.l}</span></label>`;
+      }).join('');
     return `<div class="shape-row${shapeState.pulse===pulseKey?' pulse':''}" data-kind="${kind}" data-idx="${i}" onclick="_pulseShape('${kind}',${i})">
-      <span class="shape-row-dot shape-row-dot--${kind}"></span>
-      <span class="shape-row-label">${esc(label)}</span>
-      <span class="shape-row-count">${pts.length} Punkte</span>
-      <button type="button" class="shape-row-del" title="Löschen" onclick="event.stopPropagation();_deleteShape('${kind}',${i})"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,4 14,4"/><path d="M5 4V2h6v2"/><path d="M3 4l1 10h8l1-10"/></svg></button>
+      <div class="shape-row-head">
+        <span class="shape-row-dot shape-row-dot--${kind}"></span>
+        <span class="shape-row-label">${esc(label)}</span>
+        <span class="shape-row-count">${pts.length} Punkte</span>
+        <button type="button" class="shape-row-del" title="Löschen" onclick="event.stopPropagation();_deleteShape('${kind}',${i})"><svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,4 14,4"/><path d="M5 4V2h6v2"/><path d="M3 4l1 10h8l1-10"/></svg></button>
+      </div>
+      <div class="shape-lbl-row">${checks}</div>
     </div>`;
   };
   host.innerHTML =
       zones.map((p,i)=>row(p,i,'zone')).join('')
     + masks.map((p,i)=>row(p,i,'mask')).join('');
 }
+window._toggleShapeLabel=function(kind,idx,labelKey,on){
+  const arr = kind==='zone' ? shapeState.zones : shapeState.masks;
+  const poly = arr[idx]; if(!poly) return;
+  const set=new Set(_polyLabels(poly));
+  if(on) set.add(labelKey); else set.delete(labelKey);
+  poly.labels=[...set];
+  saveShapesIntoForm(); drawShapes(); _renderShapeList();
+};
+window._setShapeAllLabels=function(kind,idx,allOn){
+  const arr = kind==='zone' ? shapeState.zones : shapeState.masks;
+  const poly = arr[idx]; if(!poly) return;
+  // "Alle" checked → empty labels list (= applies to every label, legacy
+  // semantics). Unchecking it leaves the existing labels untouched.
+  if(allOn) poly.labels=[];
+  saveShapesIntoForm(); drawShapes(); _renderShapeList();
+};
 window._pulseShape=function(kind,idx){
   shapeState.pulse = shapeState.pulse===`${kind}:${idx}` ? null : `${kind}:${idx}`;
   drawShapes(); _renderShapeList();

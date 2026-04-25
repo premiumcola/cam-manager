@@ -325,8 +325,17 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .shape-save-btn:hover{background:#16a34a!important}
 .shape-save-btn:disabled{opacity:.4;cursor:not-allowed;background:rgba(255,255,255,.1)!important}
 .shape-list{display:grid;gap:6px;margin-top:12px}
-.shape-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:9px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);cursor:pointer;transition:background .15s,border-color .15s}
+.shape-row{display:flex;flex-direction:column;gap:6px;padding:8px 12px;border-radius:9px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);cursor:pointer;transition:background .15s,border-color .15s}
+.shape-row-head{display:flex;align-items:center;gap:10px}
 .shape-row:hover{background:rgba(255,255,255,0.06)}
+/* Per-polygon label chip row — checkboxes that scope which detections
+   this zone/mask applies to. "Alle" sits first; toggling it clears the
+   labels list (= legacy "applies to everything" semantics). */
+.shape-lbl-row{display:flex;flex-wrap:wrap;gap:4px;padding-left:18px}
+.shape-lbl-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:11px;color:#94a3b8;cursor:pointer;user-select:none}
+.shape-lbl-chip input{display:none}
+.shape-lbl-chip:hover{background:rgba(255,255,255,.07)}
+.shape-lbl-chip.shape-lbl-chip--on{background:rgba(251,191,36,.13);border-color:rgba(251,191,36,.4);color:#fbbf24}
 .shape-row.pulse{animation:shape-pulse 1.4s ease-in-out infinite}
 @keyframes shape-pulse{0%,100%{border-color:rgba(255,255,255,0.06)}50%{border-color:#fff}}
 .shape-row-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
