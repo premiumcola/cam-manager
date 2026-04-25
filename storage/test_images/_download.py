@@ -50,15 +50,16 @@ _RESEED: dict[str, str] = {
     "Person_gruppe":        "v2",
     "Person_strasse":       "v2",
     "Buntspecht":           "v2",
-    "Eichelhaher":          "v2",
+    "Eichelhaher":          "v3",
     "Elster":               "v2",
     "Haussperling":         "v2",
-    "Kleiber":              "v2",
-    "Mauersegler":          "v2",
-    "Moenchsgrasmucke":     "v2",
+    "Kleiber":              "v3",
+    "Mauersegler":          "v3",
+    "Moenchsgrasmucke":     "v3",
     "Rabenkraehe":          "v2",
     "Ringeltaube":          "v2",
     "Star":                 "v2",
+    "Stieglitz":            "v2",
 }
 
 
@@ -98,9 +99,15 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         ("cat", "Columba_palumbus"),
     ]),
     ("bird", "Mauersegler",      3, [
-        ("cat", "Apus_apus_in_flight"),
+        # Apus apus is a notoriously hard test target — the species spends
+        # nearly all its life in flight, so most Wikimedia photos show a
+        # tiny silhouette far in the sky. Favour nest-box / perched photos
+        # first so the bird actually fills enough of the frame for the
+        # iNat classifier to fire.
+        ("cat", "Apus_apus_at_nest"),
+        ("search", "common swift apus apus perched nest box close-up"),
         ("cat", "Apus_apus"),
-        ("search", "common swift apus in flight"),
+        ("cat", "Apus_apus_in_flight"),
     ]),
     ("bird", "Elster",           3, [
         ("cat", "Pica_pica"),
@@ -130,22 +137,28 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         ("search", "black redstart male perched"),
     ]),
     ("bird", "Moenchsgrasmucke", 3, [
+        ("search", "eurasian blackcap sylvia atricapilla male perched"),
         ("cat", "Male_Sylvia_atricapilla"),
         ("cat", "Sylvia_atricapilla"),
-        ("search", "eurasian blackcap male"),
+        ("search", "eurasian blackcap close-up branch"),
     ]),
     ("bird", "Stieglitz",        3, [
+        ("search", "european goldfinch carduelis perched close-up"),
         ("cat", "Carduelis_carduelis"),
+        ("search", "european goldfinch feeding"),
     ]),
     ("bird", "Buntspecht",       3, [
         ("cat", "Dendrocopos_major"),
     ]),
     ("bird", "Kleiber",          3, [
+        ("search", "eurasian nuthatch sitta europaea on tree close-up"),
         ("cat", "Sitta_europaea"),
+        ("search", "eurasian nuthatch perched branch"),
     ]),
     ("bird", "Eichelhaher",      3, [
-        ("cat", "Garrulus_glandarius_in_France"),
+        ("search", "eurasian jay garrulus glandarius perched branch close-up"),
         ("cat", "Garrulus_glandarius_in_Germany"),
+        ("cat", "Garrulus_glandarius_in_France"),
         ("cat", "Garrulus_glandarius"),
     ]),
 

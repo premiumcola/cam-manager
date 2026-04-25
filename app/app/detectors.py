@@ -361,13 +361,11 @@ def _extract_latin(raw: str | None) -> str | None:
 def _pretty_bird_label(raw: str | None, mapping: dict[str, str] | None = None) -> tuple[str | None, str | None]:
     """Return (display_name, latin_binomial) for an iNaturalist label.
 
-    The display name is the German common name when the species is in the
-    mapping. For species not in the mapping we deliberately return the
-    generic German "Vogel" rather than the raw iNat string — that string
-    leads with the Latin binomial and would surface as the primary label
-    in the UI ("Garrulus glandarius (Eurasian Jay)" instead of "Vogel ·
-    Garrulus glandarius"). The Latin binomial is preserved separately so
-    the UI can render it as parenthesised secondary text.
+    Display name is the German common name when the Latin binomial is in
+    the mapping. If no mapping exists we return (None, latin) so the UI
+    keeps the generic COCO "bird" label and does not invent a fake species
+    line. The caller can use a None display name as a signal to fall back
+    to the next top-k candidate.
     """
     if not raw:
         return raw, None
@@ -376,8 +374,8 @@ def _pretty_bird_label(raw: str | None, mapping: dict[str, str] | None = None) -
     de = m.get(latin) if latin else None
     if de:
         return de, latin
-    # No German mapping for this Latin binomial → generic "Vogel" + Latin.
-    return ("Vogel" if latin else str(raw).strip()), latin
+    # No German mapping → suppress fake species line, keep latin for logs.
+    return None, latin
 
 
 class BirdSpeciesClassifier:
@@ -474,13 +472,18 @@ class BirdSpeciesClassifier:
         resized = cv2.resize(rgb, (width, height))
         self.common.set_input(self.interpreter, resized)
         self.interpreter.invoke()
-        classes = self.classify.get_classes(self.interpreter, top_k=1, score_threshold=self.min_score)
+        classes = self.classify.get_classes(self.interpreter, top_k=3, score_threshold=self.min_score)
         if not classes:
-            return None, None
-        c = classes[0]
-        raw = self.labels.get(int(c.id), str(c.id))
-        display, latin = _pretty_bird_label(raw, self.latin_to_de)
-        return display, latin, float(c.score)
+            return None, None, None
+        # Walk top-3 and return the first candidate that has a German mapping.
+        # iNat's #1 is sometimes a North-American species while a European
+        # cousin we know sits at #2/#3 — pick the one we can name.
+        for c in classes:
+            raw = self.labels.get(int(c.id), str(c.id))
+            display, latin = _pretty_bird_label(raw, self.latin_to_de)
+            if display:
+                return display, latin, float(c.score)
+        return None, None, None
 
     def _classify_cpu(self, crop: np.ndarray) -> tuple[str | None, str | None, float | None]:
         input_details = self.interpreter.get_input_details()
@@ -498,24 +501,30 @@ class BirdSpeciesClassifier:
         self.interpreter.set_tensor(input_details[0]['index'], inp)
         self.interpreter.invoke()
         scores = self.interpreter.get_tensor(output_details[0]['index'])[0]
-        best_id = int(np.argmax(scores))
-        raw_score = float(scores[best_id])
-        # Quantized classifiers (uint8/int8) return raw logits in the integer
-        # range — apply the TFLite quantization params to get a 0..1 probability.
+        # Top-3 candidates, descending by score. Walk them and pick the first
+        # one with a German mapping (iNat top-1 is often a North-American
+        # species while a European cousin we know sits at #2/#3).
         out_dtype = output_details[0]['dtype']
-        if out_dtype in (np.uint8, np.int8):
-            scale, zero_point = output_details[0].get('quantization', (0.0, 0))
-            if scale:
-                best_score = (raw_score - zero_point) * float(scale)
-            else:
-                best_score = raw_score / 255.0
-        else:
-            best_score = raw_score
-        if best_score < self.min_score:
-            return None, None, None
-        raw = self.labels.get(best_id, str(best_id))
-        display, latin = _pretty_bird_label(raw, self.latin_to_de)
-        return display, latin, best_score
+        scale, zero_point = output_details[0].get('quantization', (0.0, 0)) if out_dtype in (np.uint8, np.int8) else (None, None)
+
+        def _to_prob(raw_score: float) -> float:
+            if out_dtype in (np.uint8, np.int8):
+                if scale:
+                    return (raw_score - zero_point) * float(scale)
+                return raw_score / 255.0
+            return raw_score
+
+        top_ids = np.argsort(scores)[::-1][:3]
+        for cid in top_ids:
+            cid = int(cid)
+            prob = _to_prob(float(scores[cid]))
+            if prob < self.min_score:
+                continue
+            raw = self.labels.get(cid, str(cid))
+            display, latin = _pretty_bird_label(raw, self.latin_to_de)
+            if display:
+                return display, latin, prob
+        return None, None, None
 
 
 # ──────────────────────────────────────────────────────────────────────────
