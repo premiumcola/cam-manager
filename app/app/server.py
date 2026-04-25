@@ -837,15 +837,21 @@ def api_media_storage_stats():
                     if resolved_name == cam_id:
                         resolved_name = ev.get("camera_name", cam_id)
                     rel = ev.get("snapshot_relpath")
+                    vid_rel = ev.get("video_relpath")
                     labels = ev.get("labels") or []
-                    if rel and (storage_root / rel).exists():
+                    snap_exists = bool(rel and (storage_root / rel).exists())
+                    media_exists = snap_exists or bool(vid_rel and (storage_root / vid_rel).exists())
+                    if snap_exists:
                         if not latest_snap_url:
                             latest_snap_url = f"/media/{rel}"
                         if not latest_object_snap_url and any(l in OBJECT_LABELS for l in labels):
                             latest_object_snap_url = f"/media/{rel}"
-                    for lbl in labels:
-                        if lbl in TRACKED_LABELS:
-                            label_counts[lbl] = label_counts.get(lbl, 0) + 1
+                    # Only count labels whose underlying media still exists — keeps badge
+                    # counts in sync with what the user can actually see in the gallery.
+                    if media_exists:
+                        for lbl in labels:
+                            if lbl in TRACKED_LABELS:
+                                label_counts[lbl] = label_counts.get(lbl, 0) + 1
                 except Exception:
                     continue
         tl_dir = tl_root / cam_id
@@ -1321,8 +1327,16 @@ def api_event_labels(cam_id, event_id):
     if not event:
         return jsonify({"ok": False, "error": "Event nicht gefunden"}), 404
     event["labels"] = labels
+    # Keep top_label in sync with labels so timeline/badges/stats agree.
+    # If the previous top_label was removed, fall back to first remaining label,
+    # or "motion" when the user cleared the list entirely.
+    prev_top = event.get("top_label")
+    if not labels:
+        event["top_label"] = "motion"
+    elif prev_top not in labels:
+        event["top_label"] = labels[0]
     store.update_event(cam_id, event_id, event)
-    return jsonify({"ok": True, "labels": labels})
+    return jsonify({"ok": True, "labels": labels, "top_label": event["top_label"]})
 
 
 @app.post('/api/camera/<cam_id>/review/<event_id>')
@@ -1357,9 +1371,14 @@ def api_timeline():
     tracks = []
     merged = []
     for idx, cid in enumerate(cameras):
-        ev = store.list_events(cid, label=label, start=start, limit=2000)
+        # media_only=True so events whose JPG was deleted/orphaned no longer show
+        # up as stale dots on the timeline.
+        ev = store.list_events(cid, label=label, start=start, limit=2000, media_only=True)
         pts = []
         for e in reversed(ev):
+            snap_rel = e.get("snapshot_relpath")
+            if snap_rel and not (storage_root / snap_rel).exists():
+                continue
             pts.append({
                 "event_id": e["event_id"],
                 "time": e["time"],

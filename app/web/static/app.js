@@ -102,12 +102,23 @@ function _renderLbLabels(){
         const res=await j(`/api/camera/${_lbItem.camera_id}/events/${_lbItem.event_id}/labels`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({labels:newLabels})});
         if(res.ok){
           _lbItem.labels=res.labels;
+          if(res.top_label!==undefined) _lbItem.top_label=res.top_label;
           const idx=(state.media||[]).findIndex(x=>x.event_id===_lbItem.event_id);
-          if(idx>=0) state.media[idx].labels=res.labels;
+          if(idx>=0){
+            state.media[idx].labels=res.labels;
+            if(res.top_label!==undefined) state.media[idx].top_label=res.top_label;
+          }
+          const aIdx=(state._allMedia||[]).findIndex(x=>x.event_id===_lbItem.event_id);
+          if(aIdx>=0){
+            state._allMedia[aIdx].labels=res.labels;
+            if(res.top_label!==undefined) state._allMedia[aIdx].top_label=res.top_label;
+          }
           _renderLbLabels();
           // sync thumbnail in media grid
           const thumbCard=byId('mediaGrid')?.querySelector(`[data-event-id="${CSS.escape(_lbItem.event_id)}"]`);
           if(thumbCard){const bubblesEl=thumbCard.querySelector('.media-label-bubbles');if(bubblesEl) bubblesEl.innerHTML=res.labels.slice(0,3).map(l=>objBubble(l,26)).join('');}
+          // Re-pull timeline + storage stats so badges and dots reflect the retag.
+          refreshTimelineAndStats();
         }
       }catch(e){console.error('label update failed',e);}
     };
@@ -2671,6 +2682,17 @@ async function loadMediaStorageStats(){
   }catch{bar.innerHTML=''; state.mediaStats=[]; state.mediaArchived=[];}
 }
 
+// Targeted refresh after a delete/retag — keeps timeline dots and media-overview
+// badges in sync without paying for a full loadAll().
+async function refreshTimelineAndStats(){
+  const url=`/api/timeline?hours=${state.tlHours||168}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`;
+  try{
+    const [tl]=await Promise.all([j(url),loadMediaStorageStats()]);
+    state.timeline=tl;
+    renderTimeline();
+  }catch(_){ /* non-critical: leave previous render in place */ }
+}
+
 byId('cleanupNowBtn').onclick=async()=>{
   if(!await showConfirm('Jetzt bereinigen? Alle Dateien älter als die konfigurierte Aufbewahrungszeit werden gelöscht.')) return;
   const rdEl=byId('ms_retention_days');
@@ -3393,7 +3415,7 @@ byId('lightboxDelete').onclick=async()=>{
     _lbIndex=Math.min(_lbIndex,(state.media||[]).length-1);
     if(_lbIndex<0) closeLightbox();
     else openLightbox(state.media[_lbIndex]);
-    await loadMediaStorageStats();
+    await refreshTimelineAndStats();
   }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
 };
 
@@ -3940,6 +3962,7 @@ window.deleteMediaCard=async(btn)=>{
       _decrementMediaOverviewCount(camId);
       renderMediaGrid();
       renderMediaPagination();
+      refreshTimelineAndStats();
     },250);
   }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
 };
