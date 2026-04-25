@@ -62,6 +62,7 @@ _RESEED: dict[str, str] = {
     "Ringeltaube":          "v2",
     "Star":                 "v2",
     "Stieglitz":            "v2",
+    "Car_mixed":            "v5",
 }
 
 
@@ -184,13 +185,28 @@ SPECS: list[tuple[str, str, int, list[tuple[str, str]]]] = [
         ("cat", "Garrulus_glandarius"),
     ]),
 
-    # ── Car folder: 6 mixed-scene photos (multi-object tests) ───────────
-    ("car", "Car_mixed", 6, [
-        ("search", "street scene pedestrians cars Germany"),
-        ("search", "European street cars people"),
-        ("cat", "Street_scenes_in_Germany"),
-        ("cat", "Cars_in_cities"),
+    # ── Car folder: 14 surveillance / yard-camera scenes ────────────────
+    # Use case: a courtyard / driveway / parking-lot view from a fixed
+    # camera. The animal-detector tests need everyday vehicles taking up
+    # 10-25% of the frame, NOT catalog-style sports cars / race cars,
+    # and NOT empty driveways without vehicles. Lead with searches that
+    # explicitly mention parked cars + cars-by-type categories — those
+    # have nearly 100% car-content rate. Generic streetscape categories
+    # last so they only fill if better sources run dry.
+    ("car", "Car_mixed", 14, [
+        ("search", "parked sedan driveway daylight"),
+        ("search", "parked SUV residential street"),
+        ("search", "minivan parked driveway"),
+        ("search", "hatchback parked apartment street"),
+        ("cat", "Parked_cars_in_Germany"),
+        ("cat", "Parked_cars"),
+        ("cat", "Sedans"),
+        ("cat", "Hatchbacks"),
+        ("cat", "Sport_utility_vehicles"),
+        ("cat", "Minivans"),
+        ("search", "small parking lot apartment block"),
         ("cat", "Parking_lots_in_Germany"),
+        ("cat", "Cars_in_residential_areas"),
     ]),
 
     # ── Cats: 5 additional outdoor photos ───────────────────────────────
@@ -381,10 +397,56 @@ _BLOCKED_HASHES: set[str] = {
     "07bbb6038377f06f8ccca397f2be59a1",  # Mauersegler_1 → no detection
     "961dd31213c056651c97b5bb1f7f4e2a",  # Mauersegler_2 → bird, no species
     "8d234acd460b68ca46fa75803498fcb9",  # Mauersegler_3 → bird, no species
+    # Car folder — surveillance/yard use case. Existing pool was all
+    # race cars and street scenes without cars. Block these and force
+    # the downloader off the catalog/showroom pool.
+    "a7e08ea3090e4aaef94f2c9542a202a0",  # Car_mixed_1
+    "19550ebf36b20b7674320dd6e3f7801d",  # Car_mixed_2 (race car)
+    "e18ae02101208004f15d37b99ffb8a6d",  # Car_mixed_3
+    "cfd0eeb3d3af7d42c4bfe21084ebc14b",  # Car_mixed_4
+    "8efe433a3d823a5272d46e74df19b2d3",  # Car_mixed_5
+    "bb814aaf6fc4b061a51e7bcb04fa3707",  # Car_mixed_6 (race car)
+    # Car folder — round 2: empty-driveway / no-car-visible photos.
+    # Categories like "Driveways" return many shots WITHOUT vehicles —
+    # the user wants test images that actually contain cars to detect.
+    "132322acb9bcf9b29674de1e2f255140",  # Car_mixed_1  → no car detected
+    "b3aa107f6430eeaeda9a13388dce89d9",  # Car_mixed_3  → no car detected
+    "14017ae3a92db6ff47f8b241b76c0c15",  # Car_mixed_4  → no car detected
+    "1951f8ed7afba16f1e92e5de9a2fd434",  # Car_mixed_5  → no car detected
+    "816cd27249cce8215056544a3bfceb23",  # Car_mixed_6  → only bench
+    "b0d2a5e95a425cb5b87ea19182c86198",  # Car_mixed_7  → only person
+    "f6aa22eaf38edb47d163ec3719853951",  # Car_mixed_8  → no car detected
+    "b0ad901a50740b34f867261d6d32ad93",  # Car_mixed_9  → no car detected
+    "ab9abf7b2330b3cba7358e17c7f8157c",  # Car_mixed_10 → no car detected
+    "880dfcae82697babbefe3f4741323158",  # Car_mixed_12 → no car detected
+    "72a819decfb826f0302b8e8f907b0fee",  # Car_mixed_14 → no car detected
+    # Car folder — round 3: with car-explicit searches the rate jumped
+    # to 8/14 but six slots still drew empty/non-car content.
+    "d85638e9a7328045df00cae038562956",  # Car_mixed_1  → no detections
+    "9b6318165eb35fd248d32bcbe82b4275",  # Car_mixed_4  → only persons
+    "404c48abc81ded41860e2cff876332d4",  # Car_mixed_5  → no detections
+    "2df7dad921381ab0f34aaa7b37b31d46",  # Car_mixed_7  → no detections
+    "cc72bc1d970425f31bad04ea4f8e19e8",  # Car_mixed_8  → no detections
+    "359f9e69619a00724a7a9d0db1a4a4f2",  # Car_mixed_14 → no detections
+    # Round 4: down to three stragglers — usually empty parking lots,
+    # car interiors, or cars partially cropped to plates / wheels.
+    "9bfb9138e1a69fd0c554aaccb7f5cdfd",  # Car_mixed_5  → no detections
+    "52a0a832030733c98de01cc51210ff66",  # Car_mixed_8  → no detections
+    "2d59faaa0ac9eba931635a12c44723c4",  # Car_mixed_14 → no detections
 }
 
 
 SKIP_SUBSTR = (
+    # Car/surveillance filters: keep race cars, show cars, classic cars,
+    # and dealership/catalog photography out of the test set. The yard-
+    # camera use case wants normal everyday vehicles.
+    "race car", "racing", "racetrack", "race track", "rallye", "rally car",
+    "formula 1", "formula one", "f1 ", "grand prix", "le mans", "indycar",
+    "drag racing", "drift", "motorsport", "stock car", "nascar",
+    "concept car", "supercar", "hypercar", "show car", "auto show",
+    "auto salon", "dealership", "showroom", "press kit", "press photo",
+    "vintage car", "classic car", "oldtimer", "custom car", "tuning",
+    "lowrider", "modified ", "kit car",
     "distribution map", "range map", "rangemap", "iucn", "_map", " map",
     "map.jpg", "map.jpeg", "map.png", "diagram", "phylogeny", "taxonomy",
     "locator", "skeleton", "skull", " egg ", "_egg", "-egg",
