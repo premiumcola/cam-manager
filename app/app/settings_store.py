@@ -28,6 +28,44 @@ class SettingsStore:
         self._runtime_lock = threading.RLock()
         self.load()
 
+    # Global weather defaults. Same idempotent additive-merge pattern as
+    # _TELEGRAM_PUSH_DEFAULTS — every key the WeatherService expects is
+    # backfilled on each load() so a fresh install and an upgraded install
+    # behave identically.
+    _WEATHER_DEFAULTS: dict = {
+        "enabled":       True,
+        "poll_interval": 300,
+        "events": {
+            # lightning_potential is in J/kg from Open-Meteo's icon_d2 model.
+            "thunder":    {"enabled": True,  "threshold": 1000.0, "cooldown_min": 30},
+            "heavy_rain": {"enabled": True,  "threshold": 5.0, "hysteresis": 1.0, "cooldown_min": 30},
+            "snow":       {"enabled": True,  "threshold": 0.5,  "cooldown_min": 60},
+            "fog":        {"enabled": True,  "vis_max_m": 1000, "contrast_max": 0.25, "cooldown_min": 90},
+            # Sunset: triggers once per day in the dusk window.
+            "sunset":     {"enabled": True,  "alt_min": -2, "alt_max": 5,
+                           "min_duration_min": 12, "cooldown_min": 720},
+        },
+        "clip": {
+            "pre_roll_s":  5,
+            "post_roll_s": 5,
+            "fps":         15,
+            "width":       1280,
+        },
+        "api": {
+            "base_url": "https://api.open-meteo.com/v1/forecast",
+            "model":    "icon_d2",
+            "timezone": "Europe/Berlin",
+        },
+    }
+
+    # Server.location fallback — Nuremberg (project HQ). Only applied when
+    # the user hasn't entered coordinates; never overwrites existing values.
+    _SERVER_LOCATION_DEFAULTS: dict = {
+        "lat": 49.4521,
+        "lon": 11.0767,
+        "elevation": None,
+    }
+
     # Default Telegram push schema. Kept as a class constant so a single
     # source of truth feeds both _build_defaults (fresh installs) and
     # _ensure_telegram_push_defaults (additive backfill on existing data).
@@ -108,6 +146,10 @@ class SettingsStore:
             "armed": cam.get("armed", True),
             "telegram_enabled": cam.get("telegram_enabled", True),
             "mqtt_enabled": cam.get("mqtt_enabled", True),
+            # Wetter-Sichtungen: opt-in per camera. The substream prebuffer +
+            # API polling only spin up for cameras with weather.enabled=True;
+            # everyone else stays at zero RAM/CPU cost.
+            "weather": (cam.get("weather") or {"enabled": False}),
             # Unified per-camera schedule (replaces the old recording-schedule
             # top-level fields and the alerting-only schedule). Default off
             # = 24/7 in every dimension. See _migrate_schedules for the
@@ -198,6 +240,8 @@ class SettingsStore:
         self._ensure_timelapse_settings()
         self._ensure_timelapse_profiles()
         self._ensure_telegram_push_defaults()
+        self._ensure_server_location_defaults()
+        self._ensure_weather_defaults()
         self._ensure_runtime_defaults()
         self._repair_snapshot_urls()
         self.data.setdefault("ui", {}).setdefault("wizard_completed", bool(self.data.get("cameras")))
@@ -274,6 +318,31 @@ class SettingsStore:
             night["lat"] = srv_loc.get("lat")
         if night.get("lon") is None and srv_loc.get("lon") is not None:
             night["lon"] = srv_loc.get("lon")
+
+    def _ensure_server_location_defaults(self):
+        srv = self.data.setdefault("server", {})
+        loc = srv.setdefault("location", {})
+        if not isinstance(loc, dict):
+            loc = {}
+            srv["location"] = loc
+        for k, v in self._SERVER_LOCATION_DEFAULTS.items():
+            loc.setdefault(k, v)
+
+    def _ensure_weather_defaults(self):
+        """Additively backfill the global weather block + per-camera flag."""
+        w = self.data.setdefault("weather", {})
+        if not isinstance(w, dict):
+            w = {}
+            self.data["weather"] = w
+        self._deep_merge_defaults(w, self._WEATHER_DEFAULTS)
+        # Make sure every camera carries the opt-in flag in the new shape;
+        # existing cameras with handcrafted weather dicts are left alone.
+        for cam in self.data.get("cameras", []):
+            cw = cam.setdefault("weather", {"enabled": False})
+            if not isinstance(cw, dict):
+                cam["weather"] = {"enabled": False}
+                continue
+            cw.setdefault("enabled", False)
 
     def _ensure_runtime_defaults(self):
         rt = self.data.setdefault("runtime", {})
@@ -539,7 +608,7 @@ class SettingsStore:
         loaded = yaml.safe_load(text) if format == "yaml" else json.loads(text)
         if not isinstance(loaded, dict):
             raise ValueError("Import muss ein Objekt enthalten")
-        allowed = {"app", "server", "telegram", "mqtt", "cameras", "ui", "review", "telegram_actions", "timelapse_settings"}
+        allowed = {"app", "server", "telegram", "mqtt", "cameras", "ui", "review", "telegram_actions", "timelapse_settings", "weather"}
         for key, value in loaded.items():
             if key in allowed:
                 self.data[key] = value

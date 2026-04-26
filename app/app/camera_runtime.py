@@ -128,6 +128,83 @@ def _suppress_overlap(dets, ref_bbox, drop_labels, iou_min: float = 0.3):
     return out
 
 
+class WeatherPrebuffer:
+    """Per-camera rolling buffer of JPEG-encoded sub-stream frames.
+
+    Used by WeatherService to splice a pre-roll onto a freshly captured
+    post-roll when an event triggers, so the resulting clip starts a few
+    seconds BEFORE the API noticed the lightning bolt.
+
+    The buffer holds (timestamp, jpeg_bytes) tuples. JPEG is chosen over
+    raw BGR for memory: a 1280×720 BGR frame is ≈ 2.7 MB, the JPEG
+    equivalent at quality 75 is typically 60–120 KB. 10 s @ 15 fps =
+    150 frames → ≈ 12 MB instead of 414 MB per camera.
+
+    Encoding runs inline in the preview loop (push()). At 15 fps and
+    1280×720 the per-frame cost is well under the 66 ms frame budget.
+    """
+
+    def __init__(self, pre_roll_s: int, fps: int, jpeg_quality: int = 78):
+        # maxlen sized for the configured pre-roll only — post-roll is
+        # collected into a separate transient buffer per recording session.
+        self._maxlen = max(1, int(pre_roll_s) * max(1, int(fps)))
+        self._fps = max(1, int(fps))
+        self._quality = int(jpeg_quality)
+        self._lock = threading.Lock()
+        self._ring: deque = deque(maxlen=self._maxlen)
+        # Active post-roll captures (one per recording session). Each is a
+        # dict {frames: list, deadline: float, fps: int}. push() writes to
+        # all of them in parallel until the deadline passes.
+        self._postroll_sessions: list[dict] = []
+
+    def push(self, bgr_frame) -> None:
+        """Encode one BGR frame to JPEG and append to the ring buffer.
+        Also fans out to any in-progress post-roll sessions."""
+        try:
+            ok, buf = cv2.imencode('.jpg', bgr_frame, [int(cv2.IMWRITE_JPEG_QUALITY), self._quality])
+            if not ok:
+                return
+            jpg = buf.tobytes()
+        except Exception:
+            return
+        ts = time.time()
+        with self._lock:
+            self._ring.append((ts, jpg))
+            if self._postroll_sessions:
+                expired = []
+                for s in self._postroll_sessions:
+                    if ts <= s["deadline"]:
+                        s["frames"].append((ts, jpg))
+                    else:
+                        expired.append(s)
+                for s in expired:
+                    self._postroll_sessions.remove(s)
+
+    def snapshot(self) -> list[tuple[float, bytes]]:
+        """Frozen copy of the current pre-roll, oldest frame first."""
+        with self._lock:
+            return list(self._ring)
+
+    def start_postroll(self, seconds: float) -> dict:
+        """Begin collecting post-roll frames. Returns a session handle the
+        caller passes to collect_postroll() once the duration has elapsed."""
+        deadline = time.time() + max(0.1, float(seconds))
+        session = {"frames": [], "deadline": deadline, "fps": self._fps}
+        with self._lock:
+            self._postroll_sessions.append(session)
+        return session
+
+    def collect_postroll(self, session: dict) -> list[tuple[float, bytes]]:
+        """Detach a post-roll session from the buffer and return its frames.
+        Safe to call before or after the deadline."""
+        with self._lock:
+            try:
+                self._postroll_sessions.remove(session)
+            except ValueError:
+                pass
+        return list(session.get("frames", []))
+
+
 class CameraRuntime:
     def __init__(self, camera_id: str, config_getter, global_cfg: dict, store, notifier, mqtt=None, cat_registry=None, person_registry=None):
         self.camera_id = camera_id
@@ -226,6 +303,11 @@ class CameraRuntime:
         self._preview_fps_frames: int = 0        # frame counter for FPS window
         self._preview_fps_window_start: float = time.time()
         self._preview_resolution: str = ""      # "WxH" of last received preview frame
+        # ── Wetter-Sichtungen prebuffer ───────────────────────────────────────
+        # WeatherPrebuffer is created lazily by the WeatherService when a cam
+        # opts in (cameras[i].weather.enabled=True). Until then it stays None
+        # and _preview_loop's hook is a single attribute lookup ≈ free.
+        self.weather_prebuffer: WeatherPrebuffer | None = None
         # ── Viewer tracking (MJPEG stream connections) ────────────────────────
         self._live_viewers: int = 0
         self._viewers_lock = threading.Lock()
@@ -434,6 +516,11 @@ class CameraRuntime:
                         self._preview_resolution = f"{w}×{h}"
                         with self.lock:
                             self._preview_frame = frame
+                        # Wetter-Sichtungen prebuffer hook — only spends CPU
+                        # on JPEG encoding when a WeatherService has actually
+                        # attached a buffer to this camera.
+                        if self.weather_prebuffer is not None:
+                            self.weather_prebuffer.push(frame)
                         # Measure sub-stream FPS over a rolling 5s window
                         self._preview_fps_frames += 1
                         elapsed = time.time() - self._preview_fps_window_start

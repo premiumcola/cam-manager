@@ -42,6 +42,7 @@ from .config_loader import load_config
 from .storage import EventStore
 from .camera_runtime import CameraRuntime
 from .telegram_bot import TelegramService
+from .weather_service import WeatherService
 from .cat_identity import IdentityRegistry
 from .timelapse import TimelapseBuilder
 from .discovery import discover_hosts
@@ -160,6 +161,7 @@ person_registry = IdentityRegistry(storage_root / "person_registry.json", thresh
 timelapse_builder = TimelapseBuilder(storage_root)
 mqtt_service = None
 telegram_service = None
+weather_service = None
 runtimes: dict[str, CameraRuntime] = {}
 _runtime_cfgs: dict[str, dict] = {}  # cam_id → deep copy of camera cfg at runtime start
 
@@ -193,6 +195,19 @@ def rebuild_services():
         telegram_service.start()
     else:
         telegram_service.reload(cfg.get("telegram", {}))
+    # WeatherService: same lifecycle pattern. Builds once per process; on
+    # subsequent rebuild_services calls (settings change) it reloads in place.
+    global weather_service
+    if weather_service is None:
+        weather_service = WeatherService(
+            cfg.get("weather", {}),
+            runtimes=runtimes,
+            settings_store=settings,
+            server_cfg=cfg.get("server", {}),
+        )
+        weather_service.start()
+    else:
+        weather_service.reload(cfg.get("weather", {}), server_cfg=cfg.get("server", {}))
     # Existing camera runtimes hold their own references to the previous
     # telegram_service / mqtt_service (assigned in __init__). After a pure
     # services reload (e.g. Telegram or MQTT credential change without a
@@ -2536,6 +2551,82 @@ def api_coral_models_select():
     except Exception as e:
         logging.getLogger(__name__).warning("Coral model switch: rebuild_runtimes failed: %s", e)
     return jsonify({"ok": True, "path": str(target)})
+
+
+# ── Wetter-Sichtungen (Phase 1: read-only API) ───────────────────────────────
+
+@app.get('/api/weather/sightings')
+def api_weather_sightings():
+    if weather_service is None:
+        return jsonify({"items": [], "counts": {}, "total": 0, "page": 0, "page_size": 50})
+    try:
+        page = int(request.args.get('page', 0))
+    except (TypeError, ValueError):
+        page = 0
+    return jsonify(weather_service.list_sightings(
+        cam_id=request.args.get('cam_id') or None,
+        event_type=request.args.get('event_type') or None,
+        since_iso=request.args.get('from') or None,
+        until_iso=request.args.get('to') or None,
+        page=page,
+    ))
+
+
+@app.get('/api/weather/sightings/<sighting_id>')
+def api_weather_sighting_get(sighting_id: str):
+    if weather_service is None:
+        return jsonify({"error": "weather service not available"}), 503
+    m = weather_service.get_sighting(sighting_id)
+    if not m:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(m)
+
+
+@app.get('/api/weather/sightings/<sighting_id>/clip')
+def api_weather_sighting_clip(sighting_id: str):
+    if weather_service is None:
+        return Response(status=503)
+    m = weather_service.get_sighting(sighting_id)
+    if not m:
+        return Response(status=404)
+    rel = m.get("clip_path", "")
+    full = storage_root / rel
+    if not full.exists() or not str(full.resolve()).startswith(str(storage_root.resolve())):
+        return Response(status=404)
+    return send_from_directory(full.parent, full.name, mimetype='video/mp4')
+
+
+@app.get('/api/weather/sightings/<sighting_id>/thumb')
+def api_weather_sighting_thumb(sighting_id: str):
+    if weather_service is None:
+        return Response(status=503)
+    m = weather_service.get_sighting(sighting_id)
+    if not m:
+        return Response(status=404)
+    rel = m.get("thumb_path", "")
+    full = storage_root / rel
+    if not full.exists() or not str(full.resolve()).startswith(str(storage_root.resolve())):
+        return Response(status=404)
+    return send_from_directory(full.parent, full.name, mimetype='image/jpeg')
+
+
+@app.delete('/api/weather/sightings/<sighting_id>')
+def api_weather_sighting_delete(sighting_id: str):
+    if weather_service is None:
+        return jsonify({"error": "weather service not available"}), 503
+    if weather_service.delete_sighting(sighting_id):
+        return jsonify({"ok": True})
+    return jsonify({"error": "not found"}), 404
+
+
+@app.get('/api/weather/status')
+def api_weather_status():
+    if weather_service is None:
+        return jsonify({
+            "enabled": False, "last_poll_at": None, "last_api_ok": None,
+            "current_state": {}, "location": {"lat": None, "lon": None},
+        })
+    return jsonify(weather_service.status())
 
 
 @app.get('/api/system')
