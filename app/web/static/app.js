@@ -1,5 +1,5 @@
 
-const state={config:null,cameras:[],timeline:null,media:[],_allMedia:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false,mediaSelectMode:false,mediaSelected:new Set(),weather:{items:[],counts:{},total:0,filter:null}};
+const state={config:null,cameras:[],timeline:null,media:[],_allMedia:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false,mediaSelectMode:false,mediaSelected:new Set(),weather:{items:[],counts:{},total:0,filter:null,recaps:[]}};
 let _hmTip=null; // fixed-position heatmap tooltip, bypasses overflow-x:auto clipping
 const STAT_MEDIA_DRILLDOWN=true;
 
@@ -6377,3 +6377,193 @@ async function _refreshWeatherStatus(){
   clearTimeout(_wsStatusTimer);
   _wsStatusTimer = setTimeout(_refreshWeatherStatus, 15000);
 }
+
+
+// ── Wetter-Sichtungen Phase 3: Recaps + push UI + hash anchor ───────────────
+
+async function loadWeatherRecaps(){
+  try{
+    const r = await fetch('/api/weather/recaps');
+    const d = await r.json();
+    state.weather.recaps = d.items || [];
+    _renderWeatherRecaps();
+  }catch(e){ /* silent */ }
+}
+
+function _renderWeatherRecaps(){
+  const row = byId('weatherRecapsRow');
+  const strip = byId('weatherRecapsStrip');
+  if (!row || !strip) return;
+  const items = state.weather.recaps || [];
+  if (!items.length) { row.hidden = true; strip.innerHTML = ''; return; }
+  row.hidden = false;
+  strip.innerHTML = items.map((m, idx) => {
+    const dur = parseInt(m.duration_s || 0, 10);
+    const mm = Math.floor(dur / 60), ss = dur % 60;
+    const durLbl = `${mm}:${ss.toString().padStart(2, '0')} min`;
+    return `
+      <div class="ws-recap-card" data-idx="${idx}" data-id="${esc(m.id)}">
+        <div class="ws-recap-card-period">${esc(m.period_label || m.id)}</div>
+        <div class="ws-recap-card-meta">${m.n_clips || 0} Clips · ${esc(durLbl)}</div>
+        <span class="ws-recap-card-play">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        </span>
+      </div>`;
+  }).join('');
+  strip.querySelectorAll('.ws-recap-card').forEach(card => {
+    card.addEventListener('click', () => openWeatherRecapLightbox(parseInt(card.dataset.idx, 10)));
+  });
+}
+
+function openWeatherRecapLightbox(idx){
+  // Reuse the wsLightbox shell built by Phase 2 — swap the video src and
+  // metadata, no separate DOM. The Prev/Next nav stays disabled because
+  // recaps don't form an ordered series across the year.
+  const items = state.weather.recaps || [];
+  if (idx < 0 || idx >= items.length) return;
+  const m = items[idx];
+  // Lazily build the modal if it doesn't exist yet (mirrors openWeatherLightbox).
+  let modal = byId('wsLightbox');
+  if (!modal) {
+    // Trigger Phase-2 lightbox creation once via a no-op open that closes
+    // immediately — it builds the shell, which we then reuse here.
+    if ((state.weather.items || []).length) {
+      openWeatherLightbox(0);
+      closeWeatherLightbox();
+      modal = byId('wsLightbox');
+    }
+    if (!modal) {
+      // Cold start with no sightings yet — build a minimal shell inline.
+      modal = document.createElement('div');
+      modal.id = 'wsLightbox';
+      modal.className = 'ws-lb';
+      modal.innerHTML = `
+        <div class="ws-lb-backdrop" data-action="close"></div>
+        <div class="ws-lb-shell">
+          <button class="ws-lb-close" data-action="close" aria-label="Schließen">✕</button>
+          <div class="ws-lb-video-wrap"><video id="wsLbVideo" controls playsinline autoplay muted loop preload="metadata"></video></div>
+          <div class="ws-lb-meta" id="wsLbMeta"></div>
+          <div class="ws-lb-actions"></div>
+        </div>`;
+      document.body.appendChild(modal);
+      modal.addEventListener('click', (e) => {
+        if (e.target.closest('[data-action="close"]')) closeWeatherLightbox();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (modal.classList.contains('open') && e.key === 'Escape') closeWeatherLightbox();
+      });
+    }
+  }
+  const video = byId('wsLbVideo');
+  video.src = `/api/weather/recaps/${encodeURIComponent(m.id)}/clip`;
+  video.load(); video.play().catch(() => {});
+  byId('wsLbMeta').innerHTML = `
+    <div class="ws-lb-headline">
+      <span class="ws-lb-type-badge" style="background:#7faec933;border:1px solid #7faec966;color:#7faec9">🎞 ${esc(m.period_label || m.id)}</span>
+      <span class="ws-lb-date">${esc(m.built_at || '')}</span>
+    </div>
+    <div class="ws-lb-cam">${m.n_clips || 0} Sichtungen · Zeitraum ${esc(m.period_start || '')} → ${esc(m.period_end || '')}</div>
+  `;
+  // Hide nav arrows (recaps don't form a navigable series here).
+  const prev = modal.querySelector('.ws-lb-prev');
+  const next = modal.querySelector('.ws-lb-next');
+  if (prev) prev.style.display = 'none';
+  if (next) next.style.display = 'none';
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+// ── Push Weather settings (extends the Telegram "Was senden" tab) ───────────
+
+const _PUSH_WEATHER_ORDER = ['thunder', 'heavy_rain', 'snow', 'fog', 'sunset'];
+
+function _renderPushWeatherEvents(weatherCfg){
+  const wrap = byId('pushWeatherEventsList'); if (!wrap) return;
+  const events = (weatherCfg && weatherCfg.events) || {};
+  wrap.innerHTML = _PUSH_WEATHER_ORDER.map(t => {
+    const meta = (typeof WEATHER_TYPES === 'object' && WEATHER_TYPES[t]) || { de: t, color: '#94a3b8', icon: '' };
+    const on = events[t] !== undefined ? !!events[t] : false;
+    return `
+      <div class="push-label-row" data-weather-evt="${esc(t)}">
+        <span class="push-label-chip" style="background:${meta.color}22;border:1px solid ${meta.color}55;color:${meta.color}">${meta.icon} ${esc(meta.de)}</span>
+        <label class="switch push-label-toggle"><input type="checkbox" ${on ? 'checked' : ''} data-weather-event-toggle/><span class="slider"></span></label>
+        <span></span>
+        <span></span>
+      </div>`;
+  }).join('');
+}
+
+function _hydratePushWeather(){
+  const w = ((state.config?.telegram?.push) || {}).weather || {};
+  const en = byId('push_weather_enabled'); if (en) en.checked = !!w.enabled;
+  const recap = byId('push_weather_recap'); if (recap) recap.checked = w.recap_push !== false;
+  const sl = byId('push_weather_min_score');
+  const lbl = byId('push_weather_min_score_pct');
+  const v = w.min_score != null ? Number(w.min_score) : 0.4;
+  if (sl) sl.value = v;
+  if (lbl) lbl.textContent = Math.round(v * 100) + '%';
+  _renderPushWeatherEvents(w);
+}
+
+function _bindPushWeatherHandlers(){
+  byId('push_weather_enabled')?.addEventListener('change', e =>
+    savePushCfg({ weather: { enabled: e.target.checked } }));
+  byId('push_weather_recap')?.addEventListener('change', e =>
+    savePushCfg({ weather: { recap_push: e.target.checked } }));
+  byId('push_weather_min_score')?.addEventListener('input', e => {
+    const v = parseFloat(e.target.value) || 0;
+    const lbl = byId('push_weather_min_score_pct');
+    if (lbl) lbl.textContent = Math.round(v * 100) + '%';
+    _debouncedPushSave({ weather: { min_score: v } });
+  });
+  byId('pushWeatherEventsList')?.addEventListener('change', e => {
+    const row = e.target.closest('.push-label-row[data-weather-evt]'); if (!row) return;
+    if (!e.target.matches('[data-weather-event-toggle]')) return;
+    const evt = row.dataset.weatherEvt;
+    savePushCfg({ weather: { events: { [evt]: !!e.target.checked } } });
+  });
+}
+
+// ── Hash anchor handler — open lightbox for #weather/<id> on page load ──────
+
+function _handleWeatherHashAnchor(){
+  const h = window.location.hash || '';
+  if (h === '#weather') {
+    // Just scroll the section into view
+    const block = byId('weatherSightingsBlock');
+    if (block) block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+  if (!h.startsWith('#weather/')) return;
+  const id = decodeURIComponent(h.slice('#weather/'.length));
+  const items = state.weather.items || [];
+  const idx = items.findIndex(s => s.id === id);
+  const block = byId('weatherSightingsBlock');
+  if (block) block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (idx >= 0 && typeof openWeatherLightbox === 'function') {
+    setTimeout(() => openWeatherLightbox(idx), 350);
+  }
+}
+
+// Wire the Phase 3 additions: extend renderer, init, and event hooks.
+const _origRenderWeatherSightings = renderWeatherSightings;
+renderWeatherSightings = function(){
+  _origRenderWeatherSightings();
+  _renderWeatherRecaps();
+};
+const _origLoadWeatherSightings = loadWeatherSightings;
+loadWeatherSightings = async function(filter){
+  await _origLoadWeatherSightings(filter);
+  await loadWeatherRecaps();
+};
+const _origHydratePushUI = hydratePushUI;
+hydratePushUI = function(){
+  _origHydratePushUI();
+  _hydratePushWeather();
+  _bindPushWeatherHandlers();
+};
+window.addEventListener('hashchange', _handleWeatherHashAnchor);
+// Fire once after the initial loadAll() completes.
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(_handleWeatherHashAnchor, 1200);
+});

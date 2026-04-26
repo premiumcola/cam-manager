@@ -496,6 +496,10 @@
             </span>
             <span class="ws-subtitle" id="weatherSightingsSubtitle"></span>
           </div>
+          <div class="ws-recaps-row" id="weatherRecapsRow" hidden>
+            <div class="ws-recaps-title">Recaps</div>
+            <div class="ws-recaps-strip" id="weatherRecapsStrip"></div>
+          </div>
           <div class="ws-filter-bar" id="weatherFilterBar"></div>
           <div class="ws-grid" id="weatherSightingsGrid"></div>
           <div class="ws-empty" id="weatherSightingsEmpty" hidden>
@@ -663,6 +667,27 @@
                     <span class="toggle-row-sublabel">Kamera offline, Speicher knapp, Coral verloren</span>
                   </span>
                   <label class="switch"><input type="checkbox" id="push_system_enabled" /><span class="slider"></span></label>
+                </label>
+
+                <div class="cam-sep"></div>
+                <div class="cam-field-label">Wetter-Sichtungen</div>
+                <label class="toggle-row" style="margin:0">
+                  <span class="toggle-row-label">Wetter-Pushes aktiv
+                    <span class="toggle-row-sublabel">Master-Schalter — pro Ereignistyp unten feinjustieren</span>
+                  </span>
+                  <label class="switch"><input type="checkbox" id="push_weather_enabled" /><span class="slider"></span></label>
+                </label>
+                <div id="pushWeatherEventsList" class="push-labels-list"></div>
+                <div class="push-label-row" style="grid-template-columns:auto 1fr auto">
+                  <span class="push-label-chip" style="background:#7faec922;border:1px solid #7faec955;color:#7faec9">Mindest-Score</span>
+                  <input type="range" class="push-label-slider" id="push_weather_min_score" min="0" max="1" step="0.05" value="0.4"/>
+                  <span class="push-label-pct" id="push_weather_min_score_pct">40%</span>
+                </div>
+                <label class="toggle-row" style="margin:0">
+                  <span class="toggle-row-label">Recap-Push (Quartal / Jahr)
+                    <span class="toggle-row-sublabel">Ein Push nach jedem fertig gerenderten Highlight-Reel</span>
+                  </span>
+                  <label class="switch"><input type="checkbox" id="push_weather_recap" /><span class="slider"></span></label>
                 </label>
               </div>
             </div>

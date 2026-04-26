@@ -98,7 +98,8 @@ class WeatherService:
     threads so a long ffmpeg call never starves the polling cadence.
     """
 
-    def __init__(self, cfg: dict, runtimes: dict, settings_store, server_cfg: dict):
+    def __init__(self, cfg: dict, runtimes: dict, settings_store, server_cfg: dict,
+                 telegram_getter=None):
         self.cfg = cfg or {}
         # NEVER do `runtimes or {}` here: an empty dict is falsy, so that
         # idiom returns a fresh `{}` instead of the live reference. We need
@@ -107,6 +108,10 @@ class WeatherService:
         self.runtimes = runtimes if runtimes is not None else {}
         self.settings_store = settings_store
         self.server_cfg = server_cfg or {}
+        # Lambda returning the current TelegramService — passed as a getter
+        # so the WeatherService doesn't pin a stale reference across a
+        # telegram reload (Phase-1 reload swaps the service in place).
+        self.telegram_getter = telegram_getter
         self._scheduler = None
         self._stopped = False
         self._cooldown = _CooldownTracker()
@@ -172,6 +177,10 @@ class WeatherService:
             )
         except Exception:
             pass
+        # Recap jobs (quarterly + yearly) — calculated for current and next
+        # year so the scheduler always knows the upcoming firings even when
+        # the service was started after this year's Q1 has already happened.
+        self._register_recap_jobs()
         cams_in = [self._cam_name(cid) for cid in self._enabled_cam_ids()]
         log.info("[Weather] Service started · interval=%ss · cameras=%s", interval, cams_in)
 
@@ -598,6 +607,8 @@ class WeatherService:
         log.info("[Weather] Clip written: %s · %s · %.1fs · sev=%.2f",
                  self._cam_name(cam_id), EVENT_LABEL_DE.get(evt, evt),
                  manifest["duration_s"], severity)
+        # Phase 3: per-event Telegram push.
+        self._maybe_push_telegram(manifest, mp4_path)
 
     @staticmethod
     def _encode_clip(frames: list[tuple[float, bytes]], out_path: Path, fps: int) -> bool:
@@ -738,6 +749,357 @@ class WeatherService:
     def status(self) -> dict:
         with self._lock:
             return dict(self._status)
+
+    # ── Telegram push (Phase 3) ─────────────────────────────────────────────
+
+    def _maybe_push_telegram(self, manifest: dict, mp4_path: Path):
+        """After a successful clip write, push the video to Telegram if the
+        per-event toggle is on and severity meets the min-score gate."""
+        try:
+            tg = self.telegram_getter() if callable(self.telegram_getter) else None
+            if tg is None or not getattr(tg, "enabled", False):
+                return
+            push_cfg = (getattr(tg, "push_cfg", {}) or {})
+            wcfg = push_cfg.get("weather") or {}
+            if not wcfg.get("enabled", True):
+                return
+            evt = manifest.get("event_type")
+            if not (wcfg.get("events") or {}).get(evt, False):
+                log.debug("[Weather] tg push skip: %s disabled in push.weather.events", evt)
+                return
+            min_score = float(wcfg.get("min_score", 0.4) or 0.0)
+            score = float(manifest.get("score") or manifest.get("severity") or 0.0)
+            if score < min_score:
+                log.info("[Weather] tg push skip: %s score=%.2f < min=%.2f",
+                         evt, score, min_score)
+                return
+            cam_name = manifest.get("cam_name") or manifest.get("cam_id", "?")
+            cap = (f"<b>{EVENT_LABEL_DE.get(evt, evt)} · {cam_name}</b>\n"
+                   f"{self._api_summary_line(manifest.get('api_snapshot') or {})}")
+            buttons = [[
+                ("🖼 In der Mediathek öffnen",
+                 self._dashboard_url(f"#weather/{manifest.get('id', '')}")),
+            ]]
+            # Quiet hours respect — mirrors push.silent semantics from Phase 1.
+            silent = bool(_is_quiet_now((push_cfg.get("quiet_hours") or {})))
+            tg.send(cap, video=str(mp4_path), buttons=buttons, silent=silent)
+            log.info("[Weather] Push gesendet: %s (%s, sev=%.2f)",
+                     evt, cam_name, score)
+        except Exception as e:
+            log.warning("[Weather] tg push failed: %s", e)
+
+    @staticmethod
+    def _api_summary_line(snap: dict) -> str:
+        parts = []
+        for key, label, unit, fmt in [
+            ("precipitation",       "Niederschlag",     "mm/h", "%g"),
+            ("snowfall",            "Schnee",           "cm/h", "%g"),
+            ("lightning_potential", "Blitz-Pot.",       "J/kg", "%g"),
+            ("visibility",          "Sicht",            "m",    "%g"),
+            ("wind_gusts_10m",      "Wind",             "km/h", "%g"),
+            ("cloud_cover",         "Wolken",           "%",    "%g"),
+        ]:
+            v = snap.get(key)
+            if v is None:
+                continue
+            try:
+                parts.append(f"{fmt % float(v)} {unit} {label}")
+            except Exception:
+                pass
+        return " · ".join(parts[:3]) if parts else "—"
+
+    def _dashboard_url(self, suffix: str = "") -> str:
+        base = (self.server_cfg.get("public_base_url") or "").rstrip("/")
+        if not base:
+            base = "https://example.invalid"
+        return f"{base}/{suffix}"
+
+    # ── Recaps (Phase 3) ────────────────────────────────────────────────────
+
+    def _recaps_dir(self) -> Path:
+        return self._sightings_dir() / "recaps"
+
+    @staticmethod
+    def _last_sunday_of(year: int, month: int) -> date:
+        """Last Sunday on or before the last day of <month>."""
+        # Find the last day of the month by stepping into the next month
+        # and back one day. No relativedelta dependency needed.
+        if month == 12:
+            d = date(year + 1, 1, 1) - timedelta(days=1)
+        else:
+            d = date(year, month + 1, 1) - timedelta(days=1)
+        while d.weekday() != 6:  # 0=Mon, 6=Sun
+            d -= timedelta(days=1)
+        return d
+
+    def _recap_definitions(self, year: int) -> list[dict]:
+        """All recap firings for a given year. Each defines: period_id,
+        period_label, run_at (datetime), period_start (date), period_end (date)."""
+        out = []
+        # Quarterly (Q1–Q3): last Sunday of Mar/Jun/Sep at 16:00.
+        for q, end_month in [(1, 3), (2, 6), (3, 9)]:
+            run_d = self._last_sunday_of(year, end_month)
+            out.append({
+                "period_id":    f"q{q}_{year}",
+                "period_label": f"Q{q} {year}",
+                "run_at":       datetime(run_d.year, run_d.month, run_d.day, 16, 0),
+                "period_start": date(year, (q - 1) * 3 + 1, 1),
+                "period_end":   date(year, end_month, 28) + timedelta(days=4),  # last day of month, sloppy
+            })
+        # Q4 + Jahres-Recap: 02. Januar des FOLGEJAHRES um 16:00.
+        # Both fire on the same day; period_id distinguishes them so the
+        # idempotent re-registration treats them as separate jobs.
+        run_q4 = datetime(year + 1, 1, 2, 16, 0)
+        out.append({
+            "period_id":    f"q4_{year}",
+            "period_label": f"Q4 {year}",
+            "run_at":       run_q4,
+            "period_start": date(year, 10, 1),
+            "period_end":   date(year, 12, 31),
+        })
+        out.append({
+            "period_id":    f"year_{year}",
+            "period_label": f"Jahres-Rückblick {year}",
+            "run_at":       run_q4 + timedelta(minutes=10),  # 16:10 same day
+            "period_start": date(year, 1, 1),
+            "period_end":   date(year, 12, 31),
+        })
+        # Trim period_end to actual last day of month for quarterly periods.
+        for r in out:
+            if r["period_id"].startswith("q") and not r["period_id"].startswith("q4"):
+                # Re-derive precisely: last day of period_end month
+                pe = r["period_end"]
+                if pe.month == 12:
+                    r["period_end"] = date(pe.year + 1, 1, 1) - timedelta(days=1)
+                else:
+                    r["period_end"] = date(pe.year, pe.month + 1, 1) - timedelta(days=1)
+        return out
+
+    def _register_recap_jobs(self):
+        if not self._scheduler:
+            return
+        from apscheduler.triggers.date import DateTrigger
+        now = datetime.now()
+        registered = []
+        for year in (now.year, now.year + 1):
+            for r in self._recap_definitions(year):
+                if r["run_at"] <= now:
+                    continue  # past — don't re-fire
+                # Idempotent skip if a recap manifest already exists for this period.
+                if (self._recaps_dir() / f"{r['period_id']}.json").exists():
+                    continue
+                self._scheduler.add_job(
+                    self._run_recap_safe,
+                    DateTrigger(run_date=r["run_at"]),
+                    id=f"weather_recap_{r['period_id']}",
+                    replace_existing=True,
+                    args=[r],
+                )
+                registered.append(f"{r['period_label']} → {r['run_at'].strftime('%Y-%m-%d %H:%M')}")
+        if registered:
+            log.info("[Weather] Recap jobs scheduled: %s", "; ".join(registered))
+        else:
+            log.info("[Weather] Recap jobs: keine zukünftigen Termine ausstehend")
+
+    def _run_recap_safe(self, r: dict):
+        """Wrapper that runs the build in a daemon thread so the scheduler
+        thread isn't blocked by a long ffmpeg run."""
+        threading.Thread(
+            target=self._build_recap, args=[r],
+            daemon=True, name=f"weather-recap-{r['period_id']}",
+        ).start()
+
+    def _build_recap(self, r: dict):
+        try:
+            cands = self._collect_recap_candidates(r["period_start"], r["period_end"])
+            if len(cands) < 3:
+                log.info("[Weather] Recap %s skipped — only %d candidates (need 3)",
+                         r["period_label"], len(cands))
+                return
+            picks = self._pick_recap_clips(cands)
+            if len(picks) < 3:
+                log.info("[Weather] Recap %s: only %d picks survived", r["period_label"], len(picks))
+                return
+            self._recaps_dir().mkdir(parents=True, exist_ok=True)
+            mp4_path = self._recaps_dir() / f"{r['period_id']}.mp4"
+            duration = self._concat_clips([self._sightings_dir().parent / p["clip_path"] for p in picks], mp4_path)
+            if not duration:
+                log.warning("[Weather] Recap %s: ffmpeg concat failed", r["period_label"])
+                return
+            manifest = {
+                "id":            r["period_id"],
+                "period_label":  r["period_label"],
+                "period_start":  r["period_start"].isoformat(),
+                "period_end":    r["period_end"].isoformat(),
+                "built_at":      datetime.now().isoformat(timespec="seconds"),
+                "clip_path":     f"weather/recaps/{mp4_path.name}",
+                "n_clips":       len(picks),
+                "duration_s":    int(duration),
+                "included_sightings": [p.get("id") for p in picks],
+            }
+            (self._recaps_dir() / f"{r['period_id']}.json").write_text(
+                json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+            log.info("[Weather] Recap built: %s · %d Clips · %ds",
+                     r["period_label"], len(picks), int(duration))
+            self._maybe_push_recap(manifest, mp4_path)
+        except Exception as e:
+            log.warning("[Weather] Recap %s build failed: %s", r.get("period_label"), e)
+
+    def _collect_recap_candidates(self, start_d: date, end_d: date) -> list[dict]:
+        root = self._sightings_dir()
+        out = []
+        if not root.exists():
+            return out
+        for cam_dir in root.iterdir():
+            if not cam_dir.is_dir() or cam_dir.name == "recaps":
+                continue
+            for evt_dir in cam_dir.iterdir():
+                if not evt_dir.is_dir():
+                    continue
+                for jf in evt_dir.glob("*.json"):
+                    try:
+                        m = json.loads(jf.read_text(encoding="utf-8"))
+                    except Exception:
+                        continue
+                    started = _safe_dt(m.get("started_at", ""))
+                    if not started:
+                        continue
+                    if started.date() < start_d or started.date() > end_d:
+                        continue
+                    if float(m.get("score") or 0.0) < 0.4:
+                        continue
+                    out.append(m)
+        return out
+
+    @staticmethod
+    def _pick_recap_clips(cands: list[dict], per_type_max: int = 3, total_cap: int = 12) -> list[dict]:
+        # Group by event_type, take top `per_type_max` by score per group.
+        by_type: dict[str, list[dict]] = {}
+        for m in cands:
+            by_type.setdefault(m.get("event_type", "?"), []).append(m)
+        picked = []
+        for evt, items in by_type.items():
+            items.sort(key=lambda m: float(m.get("score") or 0.0), reverse=True)
+            picked.extend(items[:per_type_max])
+        # Chronological order so the reel walks the season.
+        picked.sort(key=lambda m: m.get("started_at", ""))
+        return picked[:total_cap]
+
+    @staticmethod
+    def _concat_clips(input_paths: list[Path], out_path: Path) -> int:
+        """Concat input mp4s into a single reel. Re-encodes to a uniform 1280×720
+        H.264 so mixed source resolutions / fps don't trip up the demuxer.
+        Returns the total duration in seconds (int) on success, 0 on failure."""
+        if not shutil.which("ffmpeg"):
+            log.warning("[Weather] ffmpeg unavailable — cannot build recap")
+            return 0
+        valid = [p for p in input_paths if p.exists() and p.stat().st_size > 1024]
+        if len(valid) < 2:
+            return 0
+        # Build a concat-demuxer file list.
+        list_file = out_path.with_suffix(".txt")
+        list_file.write_text(
+            "\n".join(f"file '{str(p).replace(chr(39), chr(92) + chr(39))}'" for p in valid),
+            encoding="utf-8",
+        )
+        cmd = [
+            "ffmpeg", "-y",
+            "-f", "concat", "-safe", "0",
+            "-i", str(list_file),
+            "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,fps=15,format=yuv420p",
+            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
+            "-an", "-movflags", "+faststart",
+            str(out_path),
+        ]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, timeout=300)
+            list_file.unlink(missing_ok=True)
+            if proc.returncode != 0:
+                log.warning("[Weather] ffmpeg concat rc=%s stderr=%s",
+                            proc.returncode, (proc.stderr or b"").decode("utf-8", "replace")[-300:])
+                return 0
+            # Probe duration via opencv as a cheap fallback (no ffprobe dep).
+            try:
+                import cv2
+                cap = cv2.VideoCapture(str(out_path))
+                fc  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                fps = float(cap.get(cv2.CAP_PROP_FPS)) or 15.0
+                cap.release()
+                return int(fc / fps) if fc > 0 and fps > 0 else 0
+            except Exception:
+                return 0
+        except subprocess.TimeoutExpired:
+            log.warning("[Weather] ffmpeg concat timeout — killed")
+            return 0
+        except Exception as e:
+            log.warning("[Weather] ffmpeg concat error: %s", e)
+            return 0
+
+    def _maybe_push_recap(self, manifest: dict, mp4_path: Path):
+        try:
+            tg = self.telegram_getter() if callable(self.telegram_getter) else None
+            if tg is None or not getattr(tg, "enabled", False):
+                return
+            push_cfg = (getattr(tg, "push_cfg", {}) or {})
+            wcfg = push_cfg.get("weather") or {}
+            if not wcfg.get("recap_push", True):
+                return
+            n = manifest.get("n_clips", 0)
+            dur = int(manifest.get("duration_s", 0) or 0)
+            mm, ss = divmod(dur, 60)
+            cap = (f"<b>{manifest.get('period_label', '?')} · Wetter-Highlights</b>\n"
+                   f"{n} Sichtungen · {mm}:{ss:02d} min")
+            buttons = [[("🌐 Alle Sichtungen", self._dashboard_url("#weather"))]]
+            tg.send(cap, video=str(mp4_path), buttons=buttons, silent=False)
+            log.info("[Weather] Recap-Push gesendet: %s", manifest.get("period_label"))
+        except Exception as e:
+            log.warning("[Weather] recap push failed: %s", e)
+
+    # ── Recap read helpers (used by API) ────────────────────────────────────
+
+    def list_recaps(self) -> list[dict]:
+        root = self._recaps_dir()
+        if not root.exists():
+            return []
+        items: list[dict] = []
+        for jf in root.glob("*.json"):
+            try:
+                items.append(json.loads(jf.read_text(encoding="utf-8")))
+            except Exception:
+                continue
+        items.sort(key=lambda m: m.get("period_end", m.get("built_at", "")), reverse=True)
+        return items
+
+    def get_recap(self, recap_id: str) -> dict | None:
+        path = self._recaps_dir() / f"{recap_id}.json"
+        if not path.exists():
+            return None
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+
+
+def _is_quiet_now(quiet_hours: dict) -> bool:
+    """Lightweight clone of telegram_helpers.is_quiet_now to keep this module
+    free of a cross-import. Empty config → never quiet."""
+    if not quiet_hours:
+        return False
+    def _p(s):
+        try:
+            h, m = (s or "").split(":", 1)
+            return int(h) * 60 + int(m)
+        except Exception:
+            return 0
+    s_min = _p(quiet_hours.get("start"))
+    e_min = _p(quiet_hours.get("end"))
+    if s_min == e_min:
+        return False
+    now = datetime.now()
+    cur = now.hour * 60 + now.minute
+    if s_min < e_min:
+        return s_min <= cur < e_min
+    return cur >= s_min or cur < e_min
 
 
 def _safe_subset(d: dict, keys: list[str]) -> dict:

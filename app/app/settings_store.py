@@ -96,6 +96,21 @@ class SettingsStore:
         "highlight":    {"enabled": True, "time": "19:00"},
         "system":       {"enabled": True},
         "timelapse":    {"enabled": True},
+        # Wetter-Sichtungen Push (Phase 3). Per-event toggles control whether
+        # a successful weather clip triggers a Telegram send. min_score gates
+        # everything — sightings below the bar are skipped regardless.
+        "weather": {
+            "enabled": True,
+            "min_score": 0.4,
+            "events": {
+                "thunder":    True,
+                "heavy_rain": True,
+                "snow":       True,
+                "fog":        False,   # default off — pretty rare to be interesting
+                "sunset":     True,
+            },
+            "recap_push": True,        # ein Push pro fertigem Quartals-/Jahres-Recap
+        },
     }
 
     _TL_DEFAULT_PROFILES = {

@@ -204,6 +204,10 @@ def rebuild_services():
             runtimes=runtimes,
             settings_store=settings,
             server_cfg=cfg.get("server", {}),
+            # Pass a getter (NOT the instance) so reload() always sees the
+            # current TelegramService — Phase 1 reload swaps the underlying
+            # service in place, but other code may grab a fresh global ref.
+            telegram_getter=lambda: telegram_service,
         )
         weather_service.start()
     else:
@@ -2631,6 +2635,26 @@ def api_weather_sighting_delete(sighting_id: str):
     if weather_service.delete_sighting(sighting_id):
         return jsonify({"ok": True})
     return jsonify({"error": "not found"}), 404
+
+
+@app.get('/api/weather/recaps')
+def api_weather_recaps():
+    if weather_service is None:
+        return jsonify({"items": []})
+    return jsonify({"items": weather_service.list_recaps()})
+
+
+@app.get('/api/weather/recaps/<recap_id>/clip')
+def api_weather_recap_clip(recap_id: str):
+    if weather_service is None:
+        return Response(status=503)
+    m = weather_service.get_recap(recap_id)
+    if not m:
+        return Response(status=404)
+    full = storage_root / m.get("clip_path", "")
+    if not full.exists() or not str(full.resolve()).startswith(str(storage_root.resolve())):
+        return Response(status=404)
+    return send_from_directory(full.parent, full.name, mimetype='video/mp4')
 
 
 @app.get('/api/weather/status')
