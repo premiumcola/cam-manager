@@ -865,6 +865,13 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 /* Rarity is now plain text, coloured inline by the renderer. */
 .medal-rarity{font-size:10px;font-weight:500;letter-spacing:.02em;line-height:1.3;white-space:nowrap;margin-top:1px}
 .medal-footline{display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap;min-height:14px}
+/* Squirrel XL tiles — flagship animal of the project, pinned to front */
+.ach-card--xl{grid-column:span 2}
+.ach-card--xl .medal-wrap{width:132px;height:132px}
+.ach-card--xl .medal-name-base{font-size:13px;font-weight:700}
+.ach-card--xl .medal-variant{font-size:11px;font-style:italic;color:rgba(255,255,255,.45);margin-top:2px;line-height:1.2}
+.ach-card.locked.ach-card--xl .medal-name-base{color:rgba(255,255,255,.4)}
+.ach-card.locked.ach-card--xl .medal-variant{color:rgba(255,255,255,.25)}
 
 /* Active card — the medal that "opened" the drilldown. Subtle outline
    so the eye can trace which species the grid below belongs to. */

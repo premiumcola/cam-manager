@@ -128,6 +128,10 @@ function _renderLbLabels(){
   });
 }
 function getCameraIcon(name){const n=(name||'').toLowerCase();if(/werkstatt|garage|keller|labor/.test(n))return'🔧';if(/eingang|tor|tür|door/.test(n))return'🚪';if(/garten|garden|außen|outdoor/.test(n))return'🌿';if(/eichhörnchen|squirrel|tier|animal|natur/.test(n))return'🐿️';if(/vogel|bird|futter|feeder/.test(n))return'🐦';if(/parkplatz|auto|car/.test(n))return'🚗';if(/pool|wasser|water/.test(n))return'💧';return'📷';}
+// Camera-icon → thematic colour. Used by the stats donut (and any future
+// chart) so the slice colour matches the icon next to the camera name.
+const _CAM_ICON_COLORS={'🔧':'#9aa5b3','🐿️':'#b48b6a','🐦':'#7faec9','🌿':'#8aa97a','🚪':'#a37b53','🚗':'#c47878','💧':'#6fa3bd','📷':'#a8a8a8'};
+function getCameraColor(name){return _CAM_ICON_COLORS[getCameraIcon(name)]||'#a8a8a8';}
 const shapeState={mode:'zone',points:[],camera:null,zones:[],masks:[]};
 const byId=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
@@ -4992,9 +4996,9 @@ const MAMMAL_SVGS={
 'feldhase':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><ellipse cx="34" cy="17" rx="6" ry="21" fill="#9e8060"/><ellipse cx="34" cy="17" rx="3.5" ry="18" fill="#e8e0d0"/><ellipse cx="47" cy="14" rx="6" ry="23" fill="#9e8060"/><ellipse cx="47" cy="14" rx="3.5" ry="20" fill="#e8e0d0"/><ellipse cx="38" cy="59" rx="20" ry="14" fill="#9e8060"/><ellipse cx="38" cy="64" rx="13" ry="9" fill="#e8e0d0"/><circle cx="50" cy="44" r="14" fill="#9e8060"/><circle cx="56" cy="39" r="3.5" fill="#111"/><circle cx="55" cy="38" r="1.2" fill="#fff"/><ellipse cx="58" cy="47" rx="6" ry="4" fill="#b09070"/><circle cx="61" cy="46" r="1.8" fill="#333"/><ellipse cx="20" cy="65" rx="8" ry="5" fill="#9e8060"/><ellipse cx="56" cy="70" rx="10" ry="4" fill="#9e8060"/></svg>`,
 'reh':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><path d="M 36 20 Q 30 12 26 14 Q 22 16 24 20" stroke="#8b6040" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M 36 20 Q 34 10 39 9" stroke="#8b6040" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M 44 20 Q 50 12 54 14 Q 58 16 56 20" stroke="#8b6040" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M 44 20 Q 46 10 41 9" stroke="#8b6040" stroke-width="2.5" fill="none" stroke-linecap="round"/><rect x="36" y="24" width="12" height="22" rx="6" fill="#c8a870"/><circle cx="42" cy="23" r="12" fill="#c8a870"/><ellipse cx="48" cy="26" rx="7" ry="5" fill="#e8d8b0"/><ellipse cx="30" cy="19" rx="4" ry="8" fill="#c8a870" transform="rotate(-15 30 19)"/><circle cx="37" cy="20" r="3" fill="#111"/><circle cx="36" cy="19" r="1" fill="#fff"/><ellipse cx="40" cy="61" rx="24" ry="15" fill="#c8a870"/><ellipse cx="18" cy="58" rx="6" ry="7" fill="#f0e8d0"/><rect x="28" y="72" width="5" height="8" rx="2.5" fill="#a08050"/><rect x="36" y="72" width="5" height="8" rx="2.5" fill="#a08050"/><rect x="46" y="72" width="5" height="8" rx="2.5" fill="#a08050"/></svg>`,
 'fuchs':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><polygon points="22,36 28,16 34,36" fill="#d4521a"/><polygon points="24,34 28,20 32,34" fill="#f0c0a0"/><polygon points="46,36 52,16 58,36" fill="#d4521a"/><polygon points="48,34 52,20 56,34" fill="#f0c0a0"/><ellipse cx="40" cy="46" rx="18" ry="16" fill="#d4521a"/><path d="M 32 50 Q 40 47 48 50 Q 52 55 50 60 Q 44 65 36 63 Q 30 59 32 53Z" fill="#e8e0d0"/><circle cx="32" cy="40" r="3.5" fill="#111"/><circle cx="31" cy="39" r="1.2" fill="#fff"/><circle cx="48" cy="40" r="3.5" fill="#111"/><circle cx="47" cy="39" r="1.2" fill="#fff"/><ellipse cx="40" cy="55" rx="4" ry="3" fill="#333"/><ellipse cx="40" cy="70" rx="20" ry="11" fill="#d4521a"/><ellipse cx="40" cy="69" rx="12" ry="7" fill="#e8e0d0"/><rect x="26" y="73" width="6" height="7" rx="3" fill="#2a1a0a"/><rect x="48" y="73" width="6" height="7" rx="3" fill="#2a1a0a"/></svg>`,
-'eichhoernchen_orange':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><path d="M 52 70 Q 72 58 70 34 Q 68 18 54 20 Q 40 22 44 40 Q 48 56 52 70Z" fill="#c04010"/><path d="M 52 70 Q 66 56 64 36 Q 62 24 54 26 Q 46 28 48 42 Q 50 58 52 70Z" fill="#b84416"/><ellipse cx="36" cy="60" rx="15" ry="11" fill="#b84416"/><circle cx="38" cy="42" r="14" fill="#b84416"/><circle cx="28" cy="29" r="7" fill="#b84416"/><circle cx="28" cy="29" r="4" fill="#cc5520"/><circle cx="44" cy="27" r="7" fill="#b84416"/><circle cx="44" cy="27" r="4" fill="#cc5520"/><circle cx="44" cy="39" r="3.5" fill="#111"/><circle cx="43" cy="38" r="1.2" fill="#fff"/><ellipse cx="48" cy="45" rx="5" ry="3.5" fill="#aa5515"/><circle cx="50" cy="44" r="1.5" fill="#333"/><ellipse cx="28" cy="68" rx="4" ry="7" fill="#7a2808"/><ellipse cx="38" cy="69" rx="4" ry="6" fill="#7a2808"/></svg>`,
-'eichhoernchen_schwarz':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><path d="M 52 70 Q 72 58 70 34 Q 68 18 54 20 Q 40 22 44 40 Q 48 56 52 70Z" fill="#2a2a4a"/><path d="M 52 70 Q 66 56 64 36 Q 62 24 54 26 Q 46 28 48 42 Q 50 58 52 70Z" fill="#1a1a2e"/><ellipse cx="36" cy="60" rx="15" ry="11" fill="#1a1a2e"/><circle cx="38" cy="42" r="14" fill="#1a1a2e"/><circle cx="28" cy="29" r="7" fill="#1a1a2e"/><circle cx="28" cy="29" r="4" fill="#3a3a5e"/><circle cx="44" cy="27" r="7" fill="#1a1a2e"/><circle cx="44" cy="27" r="4" fill="#3a3a5e"/><circle cx="44" cy="39" r="3.5" fill="#ddd"/><circle cx="43" cy="38" r="1.2" fill="#fff"/><ellipse cx="48" cy="45" rx="5" ry="3.5" fill="#2a2a4a"/><circle cx="50" cy="44" r="1.5" fill="#555"/><ellipse cx="28" cy="68" rx="4" ry="7" fill="#111"/><ellipse cx="38" cy="69" rx="4" ry="6" fill="#111"/></svg>`,
-'eichhoernchen_hell':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><path d="M 52 70 Q 72 58 70 34 Q 68 18 54 20 Q 40 22 44 40 Q 48 56 52 70Z" fill="#c4a878"/><path d="M 52 70 Q 66 56 64 36 Q 62 24 54 26 Q 46 28 48 42 Q 50 58 52 70Z" fill="#b49460"/><ellipse cx="36" cy="60" rx="15" ry="11" fill="#d4bea0"/><circle cx="38" cy="42" r="14" fill="#d4bea0"/><circle cx="28" cy="29" r="7" fill="#d4bea0"/><circle cx="28" cy="29" r="4" fill="#e0cca8"/><circle cx="44" cy="27" r="7" fill="#d4bea0"/><circle cx="44" cy="27" r="4" fill="#e0cca8"/><circle cx="44" cy="39" r="3.5" fill="#111"/><circle cx="43" cy="38" r="1.2" fill="#fff"/><ellipse cx="48" cy="45" rx="5" ry="3.5" fill="#c4b088"/><circle cx="50" cy="44" r="1.5" fill="#333"/><ellipse cx="28" cy="68" rx="4" ry="7" fill="#a08458"/><ellipse cx="38" cy="69" rx="4" ry="6" fill="#a08458"/></svg>`
+'eichhoernchen_orange':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><path d="M 50 72 Q 74 60 72 32 Q 70 14 54 16 Q 38 18 42 38 Q 46 58 50 72Z" fill="#a8350c"/><path d="M 51 70 Q 68 58 66 34 Q 64 22 54 24 Q 44 26 46 40 Q 48 56 51 70Z" fill="#c64a18"/><path d="M 53 66 Q 62 56 61 38 Q 60 30 55 32 Q 50 34 51 42 Q 52 54 53 66Z" fill="#e06228"/><ellipse cx="34" cy="62" rx="17" ry="12" fill="#a8350c"/><ellipse cx="34" cy="63" rx="13" ry="9" fill="#c64a18"/><ellipse cx="36" cy="68" rx="9" ry="5" fill="#f0c89a"/><circle cx="38" cy="42" r="15" fill="#a8350c"/><circle cx="38" cy="44" r="13" fill="#c64a18"/><path d="M 28 39 Q 38 50 50 41 Q 48 50 38 53 Q 30 50 28 39Z" fill="#f0c89a"/><path d="M 22 26 Q 26 16 32 22 Q 32 28 28 31Z" fill="#a8350c"/><path d="M 24 25 Q 27 19 30 24 Q 30 27 28 29Z" fill="#e0805a"/><path d="M 50 24 Q 46 16 42 22 Q 42 28 46 31Z" fill="#a8350c"/><path d="M 48 24 Q 45 19 43 24 Q 43 27 45 29Z" fill="#e0805a"/><circle cx="44" cy="38" r="3.6" fill="#1a0a05"/><circle cx="44" cy="38" r="2.6" fill="#2a1208"/><circle cx="42.7" cy="36.7" r="1.3" fill="#fff"/><ellipse cx="49" cy="46" rx="5.5" ry="4" fill="#9a3008"/><ellipse cx="50.5" cy="45" rx="3" ry="2.2" fill="#c64a18"/><circle cx="51" cy="44.5" r="1.6" fill="#1a0a05"/><path d="M 47 50 Q 49 51 51 50" stroke="#1a0a05" stroke-width="1.1" stroke-linecap="round" fill="none"/><ellipse cx="26" cy="68" rx="4.5" ry="6" fill="#5a1804"/><ellipse cx="36" cy="69" rx="4" ry="5" fill="#5a1804"/><ellipse cx="26" cy="68" rx="2.2" ry="3" fill="#7a2808"/><ellipse cx="36" cy="69" rx="2" ry="2.5" fill="#7a2808"/></svg>`,
+'eichhoernchen_schwarz':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><path d="M 50 72 Q 74 60 72 32 Q 70 14 54 16 Q 38 18 42 38 Q 46 58 50 72Z" fill="#0e0f1a"/><path d="M 51 70 Q 68 58 66 34 Q 64 22 54 24 Q 44 26 46 40 Q 48 56 51 70Z" fill="#1c1d33"/><path d="M 53 66 Q 62 56 61 38 Q 60 30 55 32 Q 50 34 51 42 Q 52 54 53 66Z" fill="#2a2c4a"/><ellipse cx="34" cy="62" rx="17" ry="12" fill="#0e0f1a"/><ellipse cx="34" cy="63" rx="13" ry="9" fill="#1c1d33"/><ellipse cx="36" cy="68" rx="9" ry="5" fill="#7a7e95"/><circle cx="38" cy="42" r="15" fill="#0e0f1a"/><circle cx="38" cy="44" r="13" fill="#1c1d33"/><path d="M 28 39 Q 38 50 50 41 Q 48 50 38 53 Q 30 50 28 39Z" fill="#7a7e95"/><path d="M 22 26 Q 26 16 32 22 Q 32 28 28 31Z" fill="#0e0f1a"/><path d="M 24 25 Q 27 19 30 24 Q 30 27 28 29Z" fill="#3a3c5a"/><path d="M 50 24 Q 46 16 42 22 Q 42 28 46 31Z" fill="#0e0f1a"/><path d="M 48 24 Q 45 19 43 24 Q 43 27 45 29Z" fill="#3a3c5a"/><circle cx="44" cy="38" r="3.6" fill="#e8eaf2"/><circle cx="44" cy="38" r="2.6" fill="#c0c4d4"/><circle cx="42.7" cy="36.7" r="1.3" fill="#fff"/><ellipse cx="49" cy="46" rx="5.5" ry="4" fill="#0a0b14"/><ellipse cx="50.5" cy="45" rx="3" ry="2.2" fill="#252742"/><circle cx="51" cy="44.5" r="1.6" fill="#7a7e95"/><path d="M 47 50 Q 49 51 51 50" stroke="#9aa0b8" stroke-width="1.1" stroke-linecap="round" fill="none"/><ellipse cx="26" cy="68" rx="4.5" ry="6" fill="#050610"/><ellipse cx="36" cy="69" rx="4" ry="5" fill="#050610"/><ellipse cx="26" cy="68" rx="2.2" ry="3" fill="#1a1b2c"/><ellipse cx="36" cy="69" rx="2" ry="2.5" fill="#1a1b2c"/></svg>`,
+'eichhoernchen_hell':`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><path d="M 50 72 Q 74 60 72 32 Q 70 14 54 16 Q 38 18 42 38 Q 46 58 50 72Z" fill="#a89570"/><path d="M 51 70 Q 68 58 66 34 Q 64 22 54 24 Q 44 26 46 40 Q 48 56 51 70Z" fill="#c8b288"/><path d="M 53 66 Q 62 56 61 38 Q 60 30 55 32 Q 50 34 51 42 Q 52 54 53 66Z" fill="#e6d2a8"/><ellipse cx="34" cy="62" rx="17" ry="12" fill="#a89570"/><ellipse cx="34" cy="63" rx="13" ry="9" fill="#c8b288"/><ellipse cx="36" cy="68" rx="9" ry="5" fill="#f5ead0"/><circle cx="38" cy="42" r="15" fill="#a89570"/><circle cx="38" cy="44" r="13" fill="#c8b288"/><path d="M 28 39 Q 38 50 50 41 Q 48 50 38 53 Q 30 50 28 39Z" fill="#f5ead0"/><path d="M 22 26 Q 26 16 32 22 Q 32 28 28 31Z" fill="#a89570"/><path d="M 24 25 Q 27 19 30 24 Q 30 27 28 29Z" fill="#d8c098"/><path d="M 50 24 Q 46 16 42 22 Q 42 28 46 31Z" fill="#a89570"/><path d="M 48 24 Q 45 19 43 24 Q 43 27 45 29Z" fill="#d8c098"/><circle cx="44" cy="38" r="3.6" fill="#2a1f10"/><circle cx="44" cy="38" r="2.6" fill="#3a2a18"/><circle cx="42.7" cy="36.7" r="1.3" fill="#fff"/><ellipse cx="49" cy="46" rx="5.5" ry="4" fill="#9a8458"/><ellipse cx="50.5" cy="45" rx="3" ry="2.2" fill="#c8b288"/><circle cx="51" cy="44.5" r="1.6" fill="#3a2a18"/><path d="M 47 50 Q 49 51 51 50" stroke="#3a2a18" stroke-width="1.1" stroke-linecap="round" fill="none"/><ellipse cx="26" cy="68" rx="4.5" ry="6" fill="#806a48"/><ellipse cx="36" cy="69" rx="4" ry="5" fill="#806a48"/><ellipse cx="26" cy="68" rx="2.2" ry="3" fill="#a08458"/><ellipse cx="36" cy="69" rx="2" ry="2.5" fill="#a08458"/></svg>`
 };
 
 // ── Sichtungen drilldown (inline accordion) ──────────────────────────────────
@@ -5148,10 +5152,11 @@ const ACH_DEFS=[
   {id:'buntspecht',       name:'Buntspecht',       icon:'🐦', cat:'birds', freq:'gelegentlich',  rank:18},
   {id:'kleiber',          name:'Kleiber',          icon:'🐦', cat:'birds', freq:'selten',        rank:19},
   {id:'eichelhaher',      name:'Eichelhäher',      icon:'🐦', cat:'birds', freq:'selten',        rank:20},
-  // Säugetiere
-  {id:'eichhoernchen_orange',  name:'Eichhörnchen (rot)',     icon:'🐿️', cat:'mammals', freq:'haeufig',      rank:1},
-  {id:'eichhoernchen_schwarz', name:'Eichhörnchen (schwarz)', icon:'🐿️', cat:'mammals', freq:'selten',       rank:2},
-  {id:'eichhoernchen_hell',    name:'Eichhörnchen (hell)',    icon:'🐿️', cat:'mammals', freq:'selten',       rank:3},
+  // Säugetiere — Eichhörnchen sind das Aushängeschild des Projekts, daher
+  // pinnen wir sie über die Vögel hinweg an den Anfang.
+  {id:'eichhoernchen_orange',  name:'Eichhörnchen (rot)',     icon:'🐿️', cat:'mammals', freq:'haeufig',      rank:1, pin:-3},
+  {id:'eichhoernchen_schwarz', name:'Eichhörnchen (schwarz)', icon:'🐿️', cat:'mammals', freq:'selten',       rank:2, pin:-2},
+  {id:'eichhoernchen_hell',    name:'Eichhörnchen (hell)',    icon:'🐿️', cat:'mammals', freq:'selten',       rank:3, pin:-1},
   {id:'igel',         name:'Igel',          icon:'🦔', cat:'mammals', freq:'gelegentlich', rank:4},
   {id:'feldhase',     name:'Feldhase',      icon:'🐇', cat:'mammals', freq:'selten',       rank:5},
   {id:'reh',          name:'Reh',           icon:'🦌', cat:'mammals', freq:'selten',       rank:6},
@@ -5175,7 +5180,7 @@ function _achTier(count){
   return 'bronze';
 }
 
-function _medalSVG(achId, tier, birdSvg, isUnlocked){
+function _medalSVG(achId, tier, birdSvg, isUnlocked, size=88){
   const uid=achId.replace(/[^a-z0-9]/g,'');
   // Locked medals are deliberately drab: two flat neutral greys, no
   // highlight arc. The silhouette is rendered faintly so the shape is
@@ -5187,7 +5192,7 @@ function _medalSVG(achId, tier, birdSvg, isUnlocked){
       silhouette=birdSvg.replace('<svg ',
         '<svg x="10" y="10" width="80" height="80" style="filter:grayscale(1) brightness(0.18) opacity(0.45)" ');
     }
-    return `<svg viewBox="0 0 100 100" width="88" height="88" xmlns="http://www.w3.org/2000/svg">
+    return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
       <circle cx="50" cy="50" r="47" fill="rgba(255,255,255,0.06)"/>
       <circle cx="50" cy="50" r="36" fill="rgba(255,255,255,0.03)"/>
       <circle cx="50" cy="50" r="36" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>
@@ -5201,7 +5206,7 @@ function _medalSVG(achId, tier, birdSvg, isUnlocked){
   const [fc,fe]=faceC[tier];
   const hl=hlC[tier];
   const bird = birdSvg ? birdSvg.replace('<svg ',`<svg x="10" y="10" width="80" height="80" `) : '';
-  return `<svg viewBox="0 0 100 100" width="88" height="88" xmlns="http://www.w3.org/2000/svg">
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <radialGradient id="rg${uid}" cx="50%" cy="40%" r="55%">
         <stop offset="0%" stop-color="${rc}"/>
@@ -5256,8 +5261,10 @@ function renderAchievements(){
     const isUnlocked=!!info;
     const count=isUnlocked?(info.count||1):0;
     const tier=_achTier(count);
+    const isSquirrelXL=a.cat==='mammals'&&a.id.startsWith('eichhoernchen_');
+    const medalSize=isSquirrelXL?132:88;
     const iconSvg=a.cat==='birds'?(BIRD_SVGS[a.id]||null):(MAMMAL_SVGS[a.id]||null);
-    const medalHtml=_medalSVG(a.id,tier,iconSvg,isUnlocked);
+    const medalHtml=_medalSVG(a.id,tier,iconSvg,isUnlocked,medalSize);
     const emojiOverlay=!iconSvg
       ?`<span class="medal-emoji${isUnlocked?'':' medal-emoji-locked'}">${isUnlocked?a.icon:'🔒'}</span>`
       :'';
@@ -5265,21 +5272,29 @@ function renderAchievements(){
     const badge=isUnlocked
       ?`<span class="medal-count-badge ${tier}">${count}×</span>`
       :`<div class="medal-lock-overlay"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.8)" stroke-width="2.2" stroke-linecap="round"><rect x="3" y="11" width="18" height="11" rx="3"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>`;
-    // Bottom row: count + plain muted-colour rarity text.
+    // Bottom row: count + plain muted-colour rarity text. Squirrel XL tiles
+    // replace the rarity slot with a dedicated variant subline (rendered
+    // inside the name block) and omit rarity entirely.
     const countColors={bronze:'#d4894a',silver:'#90a8be',gold:'#d4a820'};
-    const rarityTxt=_rarityText(a.freq, isUnlocked);
     const countSpan=isUnlocked
       ?`<span class="medal-count" style="color:${countColors[tier]||'#d4a820'}">${count}× gesehen</span>`
       :'';
-    const footline=`<div class="medal-footline">${countSpan}${rarityTxt}</div>`;
-    // Split "Eichhörnchen (rot)" → base name + muted variant suffix
+    const footline=isSquirrelXL
+      ?`<div class="medal-footline">${countSpan}</div>`
+      :`<div class="medal-footline">${countSpan}${_rarityText(a.freq, isUnlocked)}</div>`;
+    // Split "Eichhörnchen (rot)" → base name + variant suffix. On squirrel
+    // XL tiles the suffix sits on its own line (.medal-variant). Other
+    // tiles keep the inline-italic muted suffix.
     const nameParts=a.name.match(/^(.+?)\s*(\(.+\))?$/);
     const baseName=nameParts?.[1]||a.name;
     const variantSuffix=nameParts?.[2]||'';
-    const nameHtml=`${esc(baseName)}${variantSuffix?`<span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);font-style:italic;margin-left:3px">${esc(variantSuffix)}</span>`:''}`;
+    const nameHtml=isSquirrelXL
+      ?`<div class="medal-name-base">${esc(baseName)}</div>${variantSuffix?`<div class="medal-variant">${esc(variantSuffix)}</div>`:''}`
+      :`${esc(baseName)}${variantSuffix?`<span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);font-style:italic;margin-left:3px">${esc(variantSuffix)}</span>`:''}`;
     const clickable=isUnlocked?`onclick="toggleAchDrilldown('${esc(a.id)}','${esc(a.name)}')" style="cursor:pointer"`:'';
     const activeCls = (isUnlocked && _achOpenId === a.id) ? ' ach-card--active' : '';
-    return `<div class="ach-card ${tier}${activeCls}" ${clickable}>
+    const xlCls=isSquirrelXL?' ach-card--xl':'';
+    return `<div class="ach-card ${tier}${activeCls}${xlCls}" ${clickable}>
       <div class="medal-wrap">
         ${medalHtml}
         ${emojiOverlay}
@@ -5290,9 +5305,12 @@ function renderAchievements(){
     </div>`;
   };
 
-  // Single flat grid: birds first (by rank, 1 = most common), then
-  // mammals (by rank). No sub-headings, no category dividers.
+  // Pinned items (negative pin rank) come first regardless of category, so
+  // the Eichhörnchen variants sit at the very front. Then birds (by rank),
+  // then the remaining mammals (by rank).
   const sorted = [...ACH_DEFS].sort((a,b)=>{
+    const pa=a.pin??0, pb=b.pin??0;
+    if(pa!==pb) return pa-pb;
     const catOrder = (a.cat==='birds'?0:1) - (b.cat==='birds'?0:1);
     if(catOrder) return catOrder;
     return (a.rank||99) - (b.rank||99);
@@ -5406,8 +5424,8 @@ function _renderStatistik(monthData,dayData){
   const periodPills=[['Heute',todayCount],['Diese Woche',weekCount],['Dieser Monat',monthCount]]
     .map(([label,count])=>`<div class="stat-period-pill"><div class="stat-period-num">${count}</div><div class="stat-period-label">${label}</div></div>`).join('');
 
-  // Warm-neutral palette (no blue) — cycles if cameras > palette length.
-  const DONUT_PALETTE=['#d4a574','#94a3b8','#a3b18a','#b48b8b','#8c7491','#c9a978'];
+  // Slice + swatch colour comes from the camera icon (getCameraColor) so the
+  // chart matches the icon next to each legend label.
   const camsWithEvents=cameras.map(c=>({c,cnt:camCounts[c.id]||0})).filter(x=>x.cnt>0);
   const camTotal=camsWithEvents.reduce((s,x)=>s+x.cnt,0);
   let camBars;
@@ -5416,16 +5434,16 @@ function _renderStatistik(monthData,dayData){
   } else {
     const R=60, C=2*Math.PI*R;
     let offset=0;
-    const slices=camsWithEvents.map((x,i)=>{
+    const slices=camsWithEvents.map(x=>{
       const frac=x.cnt/camTotal;
       const len=frac*C;
       const dash=`${len.toFixed(2)} ${(C-len).toFixed(2)}`;
-      const seg=`<circle cx="80" cy="80" r="${R}" fill="none" stroke="${DONUT_PALETTE[i%DONUT_PALETTE.length]}" stroke-width="22" stroke-dasharray="${dash}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 80 80)"/>`;
+      const seg=`<circle cx="80" cy="80" r="${R}" fill="none" stroke="${getCameraColor(x.c.name||x.c.id)}" stroke-width="22" stroke-dasharray="${dash}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 80 80)"/>`;
       offset+=len;
       return seg;
     }).join('');
-    const legend=camsWithEvents.map((x,i)=>{
-      const color=DONUT_PALETTE[i%DONUT_PALETTE.length];
+    const legend=camsWithEvents.map(x=>{
+      const color=getCameraColor(x.c.name||x.c.id);
       const pct=Math.round(x.cnt/camTotal*100);
       const rowCls=STAT_MEDIA_DRILLDOWN?'stat-donut-row stat-drillable':'stat-donut-row';
       const rowClick=STAT_MEDIA_DRILLDOWN?`onclick="_statOpenMedia('${esc(x.c.id)}','')"`:'' ;
