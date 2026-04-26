@@ -5294,7 +5294,6 @@ function _renderStatistik(monthData,dayData){
   const camCounts={};
   (monthData.tracks||[]).forEach(t=>{ camCounts[t.camera_id]=(t.points||[]).length; });
   const cameras=state.cameras||[];
-  const maxCam=Math.max(1,...cameras.map(c=>camCounts[c.id]||0));
 
   const labelCounts={};
   allMonth.forEach(e=>(e.labels||[]).forEach(l=>{ labelCounts[l]=(labelCounts[l]||0)+1; }));
@@ -5324,37 +5323,69 @@ function _renderStatistik(monthData,dayData){
   const periodPills=[['Heute',todayCount],['Diese Woche',weekCount],['Dieser Monat',monthCount]]
     .map(([label,count])=>`<div class="stat-period-pill"><div class="stat-period-num">${count}</div><div class="stat-period-label">${label}</div></div>`).join('');
 
-  const camBars=cameras.length
-    ?cameras.map(c=>{
-      const cnt=camCounts[c.id]||0;
-      const pct=Math.round(cnt/maxCam*100);
-      const rowCls=STAT_MEDIA_DRILLDOWN?'stat-cam-bar-row stat-drillable':'stat-cam-bar-row';
-      const rowClick=STAT_MEDIA_DRILLDOWN?`onclick="_statOpenMedia('${esc(c.id)}','')"`:'' ;
+  // Warm-neutral palette (no blue) — cycles if cameras > palette length.
+  const DONUT_PALETTE=['#d4a574','#94a3b8','#a3b18a','#b48b8b','#8c7491','#c9a978'];
+  const camsWithEvents=cameras.map(c=>({c,cnt:camCounts[c.id]||0})).filter(x=>x.cnt>0);
+  const camTotal=camsWithEvents.reduce((s,x)=>s+x.cnt,0);
+  let camBars;
+  if(!camsWithEvents.length){
+    camBars='<div class="stat-empty">Keine Ereignisse</div>';
+  } else {
+    const R=60, C=2*Math.PI*R;
+    let offset=0;
+    const slices=camsWithEvents.map((x,i)=>{
+      const frac=x.cnt/camTotal;
+      const len=frac*C;
+      const dash=`${len.toFixed(2)} ${(C-len).toFixed(2)}`;
+      const seg=`<circle cx="80" cy="80" r="${R}" fill="none" stroke="${DONUT_PALETTE[i%DONUT_PALETTE.length]}" stroke-width="22" stroke-dasharray="${dash}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 80 80)"/>`;
+      offset+=len;
+      return seg;
+    }).join('');
+    const legend=camsWithEvents.map((x,i)=>{
+      const color=DONUT_PALETTE[i%DONUT_PALETTE.length];
+      const pct=Math.round(x.cnt/camTotal*100);
+      const rowCls=STAT_MEDIA_DRILLDOWN?'stat-donut-row stat-drillable':'stat-donut-row';
+      const rowClick=STAT_MEDIA_DRILLDOWN?`onclick="_statOpenMedia('${esc(x.c.id)}','')"`:'' ;
+      const nm=x.c.name||x.c.id;
       return `<div class="${rowCls}" ${rowClick}>
-        <div class="stat-cam-bar-name" title="${esc(c.name||c.id)}">${getCameraIcon(c.name||c.id)}&nbsp;${esc(c.name||c.id)}</div>
-        <div class="stat-cam-bar-track"><div class="stat-cam-bar-fill" style="width:${pct}%"></div></div>
-        <div class="stat-cam-bar-count">${cnt}</div>
-      </div>`;}).join('')
-    :'<div class="stat-empty">Keine Kameras</div>';
+        <span class="stat-donut-sw" style="background:${color}"></span>
+        <span class="stat-donut-icon">${getCameraIcon(nm)}</span>
+        <span class="stat-donut-name" title="${esc(nm)}">${esc(nm)}</span>
+        <span class="stat-donut-cnt">${x.cnt}</span>
+        <span class="stat-donut-pct">${pct}%</span>
+      </div>`;
+    }).join('');
+    camBars=`<div class="stat-donut-wrap">
+      <div class="stat-donut-chart">
+        <svg viewBox="0 0 160 160" width="160" height="160" aria-hidden="true">
+          <circle cx="80" cy="80" r="${R}" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="22"/>
+          ${slices}
+        </svg>
+        <div class="stat-donut-center">
+          <div class="stat-donut-total">${camTotal}</div>
+          <div class="stat-donut-sub">EVENTS</div>
+        </div>
+      </div>
+      <div class="stat-donut-legend">${legend}</div>
+    </div>`;
+  }
 
-  const topLabels=top3.length
-    ?top3.map(([label,cnt])=>{
+  const topN=top3.slice(0,4);
+  const topLabels=topN.length
+    ?topN.map(([label,cnt])=>{
       const pct=Math.round(cnt/totalLabels*100);
-      // Pull colour + icon from the central tables so this list always
-      // matches the rest of the UI. Wildlife species not in OBJ_SVG fall
-      // back to the legacy emoji so they still render.
-      const color=colors[label]||_STAT_LABEL_COLORS[label]||'var(--accent)';
+      const color=CAT_COLORS[label]||colors[label]||_STAT_LABEL_COLORS[label]||'#cbd5e1';
       const icon=OBJ_SVG[label]?objIconSvg(label,18):(_STAT_LABEL_ICONS[label]||'🔍');
       const name=OBJ_LABEL[label]||label;
-      const lblCls=STAT_MEDIA_DRILLDOWN?'stat-label-row stat-drillable':'stat-label-row';
+      const lblCls=STAT_MEDIA_DRILLDOWN?'stat-tile-row stat-drillable':'stat-tile-row';
       const lblClick=STAT_MEDIA_DRILLDOWN?`onclick="_statOpenMedia('','${esc(label)}')"`:'' ;
       return `<div class="${lblCls}" ${lblClick}>
-        <div class="stat-label-icon">${icon}</div>
-        <div class="stat-label-info">
-          <div class="stat-label-name">${esc(name)}</div>
-          <div class="stat-label-bar-wrap"><div class="stat-label-bar" style="width:${pct}%;background:${color}"></div></div>
+        <div class="stat-tile-chip" style="background:${color}24"><span class="stat-tile-icon">${icon}</span></div>
+        <div class="stat-tile-info">
+          <div class="stat-tile-name">${esc(name)}</div>
+          <div class="stat-tile-cnt">${cnt} Events</div>
         </div>
-        <div class="stat-label-meta">${cnt}&thinsp;·&thinsp;${pct}%</div>
+        <div class="stat-tile-pct" style="color:${color}">${pct}%</div>
       </div>`;}).join('')
     :'<div class="stat-empty">Keine Erkennungen</div>';
 
