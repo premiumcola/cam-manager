@@ -606,7 +606,13 @@ def api_cameras():
         s["telegram_enabled"] = cam.get("telegram_enabled", True)
         s["mqtt_enabled"] = cam.get("mqtt_enabled", True)
         s["whitelist_names"] = cam.get("whitelist_names", [])
-        s["schedule"] = cam.get("schedule", {"enabled": False, "start": "22:00", "end": "06:00"})
+        # Unified per-camera schedule. Migration in SettingsStore guarantees
+        # the new shape; the legacy recording_schedule_* fields no longer
+        # exist in the persisted config.
+        s["schedule"] = cam.get("schedule") or {
+            "enabled": False, "from": "21:00", "to": "06:00",
+            "actions": {"record": True, "telegram": True, "hard": True},
+        }
         s["bottom_crop_px"] = cam.get("bottom_crop_px", 0)
         s["motion_sensitivity"] = cam.get("motion_sensitivity", 0.5)
         s["detection_min_score"] = float(cam.get("detection_min_score") or 0.0)
@@ -614,9 +620,6 @@ def api_cameras():
         s["detection_trigger"] = cam.get("detection_trigger", "motion_and_objects")
         s["post_motion_tail_s"] = float(cam.get("post_motion_tail_s") or 0.0)
         s["alarm_profile"] = cam.get("alarm_profile") or ""
-        s["recording_schedule_enabled"] = bool(cam.get("recording_schedule_enabled", False))
-        s["recording_schedule_start"] = cam.get("recording_schedule_start", "08:00")
-        s["recording_schedule_end"] = cam.get("recording_schedule_end", "22:00")
         s["zones"] = cam.get("zones", [])
         s["masks"] = cam.get("masks", [])
         s["resolution"] = cam.get("resolution", "auto")

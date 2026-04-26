@@ -12,7 +12,7 @@ from pathlib import Path
 import requests
 import numpy as np
 from .detectors import CoralObjectDetector, BirdSpeciesClassifier, WildlifeClassifier, Detection, draw_detections
-from .event_logic import is_in_schedule, choose_alarm_level
+from .event_logic import is_in_schedule, choose_alarm_level, schedule_action_active
 
 # Does this container have an ffmpeg binary? If so, motion recording uses the
 # fast stream-copy path (direct RTSP → mp4, no CPU re-encode). Otherwise we
@@ -941,13 +941,18 @@ class CameraRuntime:
         cat_match = next((d.identity for d in detections if d.label == "cat" and d.identity), None)
         person_match = next((d.identity for d in detections if d.label == "person" and d.identity), None)
         bird_species = next((d.species for d in detections if d.label == "bird" and d.species), None)
-        after_hours = is_in_schedule(self.cfg.get("schedule") or {})
+        sched = self.cfg.get("schedule") or {}
+        # "Hart-Modus" — when active, person → alarm regardless of profile.
+        # When the schedule is disabled this is treated as 24/7 active so a
+        # user with no schedule still gets the historic person→alarm
+        # promotion via choose_alarm_level's profile rules.
+        hard_active = schedule_action_active(sched, "hard")
         whitelisted = bool(person_match and (person_match in (self.cfg.get("whitelist_names") or [])))
         if self.person_registry and person_match:
             p = self.person_registry.get_profile(person_match) or {}
             whitelisted = whitelisted or bool(p.get("whitelisted"))
         profile = (self.cfg.get("alarm_profile") or "").strip() or "soft"
-        level, notify = choose_alarm_level(profile, list(sorted(set(labels))), after_hours, whitelisted)
+        level, notify = choose_alarm_level(profile, list(sorted(set(labels))), hard_active, whitelisted)
         # "Stumm" kill-switch: armed=false suppresses all Telegram alerts
         # but keeps the event recording and archive path intact.
         if not self.cfg.get("armed", True):
@@ -998,7 +1003,10 @@ class CameraRuntime:
             "person_name": person_match,
             "whitelisted": whitelisted,
             "alarm_level": level,
-            "after_hours": after_hours,
+            # `after_hours` historically meant "alerting schedule active"; we
+            # keep the key for read-side compatibility (event JSONs already on
+            # disk) but its value is now the schedule's hard-mode gate.
+            "after_hours": hard_active,
             "notify": notify,
             "thumb_bytes": thumb_bytes,
             # Per-event recording switches derived from zone trigger flags.
@@ -2161,18 +2169,13 @@ class CameraRuntime:
                 else:
                     has_motion = bool(labels)
 
-                # Per-camera recording schedule: outside the window we still
-                # detect, but we never start a new event. In-progress recordings
-                # finalize normally (the gate only fires when has_motion AND
-                # we're not already recording).
-                if (has_motion and not self._recording
-                        and self.cfg.get("recording_schedule_enabled")):
-                    in_window = is_in_schedule({
-                        "enabled": True,
-                        "start": self.cfg.get("recording_schedule_start", "08:00"),
-                        "end":   self.cfg.get("recording_schedule_end",   "22:00"),
-                    })
-                    if not in_window:
+                # Per-camera unified schedule — record action gate. Outside
+                # the configured window (or when actions.record is off) we
+                # still detect, but never start a new on-disk event.
+                # In-progress recordings finalize normally (gate only fires
+                # when has_motion AND we're not already recording).
+                if has_motion and not self._recording:
+                    if not schedule_action_active(self.cfg.get("schedule") or {}, "record"):
                         time.sleep(interval)
                         continue
 

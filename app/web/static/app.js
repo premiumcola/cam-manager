@@ -1196,7 +1196,18 @@ function editCamera(camId){
   const apSel=byId('camAlarmProfileSelect');
   if(apSel){ apSel.value=(c.alarm_profile||'soft'); _updateAlarmProfileHint(); }
   if(f['enabled']) f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed;
-  f['schedule_start'].value=(c.schedule&&c.schedule.start)||''; f['schedule_end'].value=(c.schedule&&c.schedule.end)||''; f['schedule_enabled'].checked=!!(c.schedule&&c.schedule.enabled);
+  // Unified per-camera schedule — {enabled, from, to, actions:{record,telegram,hard}}.
+  // Defaults below apply only when a freshly-created camera has no schedule
+  // dict yet; the migration in SettingsStore guarantees the field exists for
+  // any camera persisted via the backend.
+  const _sch=c.schedule||{};
+  const _act=_sch.actions||{};
+  if(f['schedule_enabled']) f['schedule_enabled'].checked=!!_sch.enabled;
+  if(f['schedule_from']) f['schedule_from'].value=_sch.from||'21:00';
+  if(f['schedule_to']) f['schedule_to'].value=_sch.to||'06:00';
+  if(f['schedule_action_record'])   f['schedule_action_record'].checked   = _act.record   !== false;
+  if(f['schedule_action_telegram']) f['schedule_action_telegram'].checked = _act.telegram !== false;
+  if(f['schedule_action_hard'])     f['schedule_action_hard'].checked     = _act.hard     !== false;
   if(f['telegram_enabled']) f['telegram_enabled'].checked=(c.telegram_enabled!==false);
   if(f['mqtt_enabled']) f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
   if(f['bottom_crop_px']) f['bottom_crop_px'].value=c.bottom_crop_px||0;
@@ -1236,9 +1247,6 @@ function editCamera(camId){
     const presets=['0','3','5','8','10','15'];
     f['post_motion_tail_s'].value=presets.includes(String(tail))?String(tail):'0';
   }
-  if(f['recording_schedule_enabled']) f['recording_schedule_enabled'].checked=!!c.recording_schedule_enabled;
-  if(f['recording_schedule_start']) f['recording_schedule_start'].value=c.recording_schedule_start||'08:00';
-  if(f['recording_schedule_end']) f['recording_schedule_end'].value=c.recording_schedule_end||'22:00';
   if(f['resolution']) f['resolution'].value=c.resolution||'auto';
   // frame_interval_ms / snapshot_interval_s are hidden inputs since the
   // Qualität tab was removed; their visible labels (#frameIntervalLabel /
@@ -2327,16 +2335,22 @@ byId('cameraForm').onsubmit=async(e)=>{
     mqtt_enabled:f['mqtt_enabled']?f['mqtt_enabled'].checked:(existingCam?.mqtt_enabled??true),
     whitelist_names:_whitelistState.filter(Boolean),
     timelapse:existingCam?.timelapse||{enabled:false,fps:25,period:'day',daily_target_seconds:60,weekly_target_seconds:180,telegram_send:false},
-    schedule:{enabled:f['schedule_enabled'].checked,start:f['schedule_start'].value||'22:00',end:f['schedule_end'].value||'06:00'},
+    schedule:{
+      enabled:!!f['schedule_enabled']?.checked,
+      from:f['schedule_from']?.value||'21:00',
+      to:f['schedule_to']?.value||'06:00',
+      actions:{
+        record:   f['schedule_action_record']   ? !!f['schedule_action_record'].checked   : true,
+        telegram: f['schedule_action_telegram'] ? !!f['schedule_action_telegram'].checked : true,
+        hard:     f['schedule_action_hard']     ? !!f['schedule_action_hard'].checked     : true,
+      },
+    },
     bottom_crop_px:parseInt(f['bottom_crop_px']?.value||0),
     motion_sensitivity:parseFloat(f['motion_sensitivity']?.value||0.5),
     wildlife_motion_sensitivity:parseFloat(f['wildlife_motion_sensitivity']?.value||0),
     motion_enabled:f['motion_enabled']?f['motion_enabled'].checked:true,
     detection_trigger:f['detection_trigger']?.value||'motion_and_objects',
     post_motion_tail_s:parseFloat(f['post_motion_tail_s']?.value||0),
-    recording_schedule_enabled:!!f['recording_schedule_enabled']?.checked,
-    recording_schedule_start:f['recording_schedule_start']?.value||'08:00',
-    recording_schedule_end:f['recording_schedule_end']?.value||'22:00',
     alarm_profile:f['alarm_profile']?.value||'soft',
     detection_min_score:parseFloat(f['detection_min_score']?.value||0),
     label_thresholds:(()=>{

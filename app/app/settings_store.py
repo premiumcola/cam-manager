@@ -108,7 +108,11 @@ class SettingsStore:
             "armed": cam.get("armed", True),
             "telegram_enabled": cam.get("telegram_enabled", True),
             "mqtt_enabled": cam.get("mqtt_enabled", True),
-            "schedule": cam.get("schedule", {"enabled": False, "start": "22:00", "end": "06:00"}),
+            # Unified per-camera schedule (replaces the old recording-schedule
+            # top-level fields and the alerting-only schedule). Default off
+            # = 24/7 in every dimension. See _migrate_schedules for the
+            # one-time merge of the legacy fields.
+            "schedule": cam.get("schedule", self._default_schedule()),
             "whitelist_names": cam.get("whitelist_names", []),
             "resolution": cam.get("resolution", "auto"),
             "frame_interval_ms": cam.get("frame_interval_ms", 350),
@@ -122,9 +126,16 @@ class SettingsStore:
             "detection_trigger": cam.get("detection_trigger", "motion_and_objects"),
             "post_motion_tail_s": float(cam.get("post_motion_tail_s") or 0.0),
             "alarm_profile": (cam.get("alarm_profile") or "").strip(),
-            "recording_schedule_enabled": bool(cam.get("recording_schedule_enabled", False)),
-            "recording_schedule_start": cam.get("recording_schedule_start", "08:00"),
-            "recording_schedule_end": cam.get("recording_schedule_end", "22:00"),
+        }
+
+    @staticmethod
+    def _default_schedule() -> dict:
+        # enabled=False → all three actions effectively 24/7.
+        return {
+            "enabled": False,
+            "from": "21:00",
+            "to":   "06:00",
+            "actions": {"record": True, "telegram": True, "hard": True},
         }
 
     def _build_defaults(self, base_config: dict) -> dict:
@@ -183,6 +194,7 @@ class SettingsStore:
             except Exception:
                 pass
         self._ensure_camera_defaults()
+        self._migrate_schedules()
         self._ensure_timelapse_settings()
         self._ensure_timelapse_profiles()
         self._ensure_telegram_push_defaults()
@@ -343,6 +355,101 @@ class SettingsStore:
                 defaults = self._default_camera(c)
                 for key, val in defaults.items():
                     by_id[c["id"]].setdefault(key, val)
+
+    @staticmethod
+    def _window_minutes(start: str, end: str) -> int:
+        """Length of an HH:MM window in minutes, supports midnight wrap.
+        Empty/equal start+end → 1440 (always)."""
+        def _p(s):
+            try:
+                h, m = (s or "").split(":", 1)
+                return int(h) * 60 + int(m)
+            except Exception:
+                return 0
+        s_min, e_min = _p(start), _p(end)
+        if s_min == e_min:
+            return 1440
+        if e_min > s_min:
+            return e_min - s_min
+        return 1440 - s_min + e_min  # wraps midnight
+
+    def _migrate_schedules(self):
+        """One-time migration: collapse legacy recording_schedule_* and the
+        old alerting-only schedule {enabled,start,end} into one unified
+        schedule {enabled, from, to, actions:{record,telegram,hard}}.
+
+        Idempotent — a camera whose schedule already carries the 'actions'
+        key is left untouched. Logs one INFO line per camera that actually
+        gets migrated, then strips the legacy top-level fields."""
+        migrated = 0
+        for cam in self.data.get("cameras", []):
+            sch = cam.get("schedule")
+            if isinstance(sch, dict) and "actions" in sch:
+                # Already in the new shape; just make sure all sub-keys exist.
+                sch.setdefault("from", sch.get("start", "21:00"))
+                sch.setdefault("to",   sch.get("end",   "06:00"))
+                acts = sch.setdefault("actions", {})
+                acts.setdefault("record", True)
+                acts.setdefault("telegram", True)
+                acts.setdefault("hard", True)
+                continue
+
+            rec_enabled = bool(cam.get("recording_schedule_enabled"))
+            rec_start = cam.get("recording_schedule_start", "08:00")
+            rec_end   = cam.get("recording_schedule_end",   "22:00")
+            ale_dict = sch if isinstance(sch, dict) else {}
+            ale_enabled = bool(ale_dict.get("enabled"))
+            ale_start = ale_dict.get("start", "22:00")
+            ale_end   = ale_dict.get("end",   "06:00")
+
+            if not rec_enabled and not ale_enabled:
+                new_sched = {
+                    "enabled": False, "from": "21:00", "to": "06:00",
+                    "actions": {"record": True, "telegram": True, "hard": True},
+                }
+                src = "both-off"
+            elif rec_enabled and not ale_enabled:
+                new_sched = {
+                    "enabled": True, "from": rec_start, "to": rec_end,
+                    "actions": {"record": True, "telegram": True, "hard": False},
+                }
+                src = "recording-only"
+            elif not rec_enabled and ale_enabled:
+                new_sched = {
+                    "enabled": True, "from": ale_start, "to": ale_end,
+                    "actions": {"record": True, "telegram": True, "hard": True},
+                }
+                src = "alerting-only"
+            else:
+                # Both active — keep the larger window.
+                rec_dur = self._window_minutes(rec_start, rec_end)
+                ale_dur = self._window_minutes(ale_start, ale_end)
+                if rec_dur >= ale_dur:
+                    f, t = rec_start, rec_end
+                else:
+                    f, t = ale_start, ale_end
+                new_sched = {
+                    "enabled": True, "from": f, "to": t,
+                    "actions": {"record": True, "telegram": True, "hard": True},
+                }
+                src = f"both-on (rec={rec_dur}m ale={ale_dur}m → wider)"
+
+            cam["schedule"] = new_sched
+            cam.pop("recording_schedule_enabled", None)
+            cam.pop("recording_schedule_start", None)
+            cam.pop("recording_schedule_end", None)
+            log.info(
+                "Schedule-Migration: %s → %s (%s → enabled=%s %s-%s actions=%s)",
+                cam.get("id", "?"), src,
+                "rec=%s/%s/%s ale=%s/%s/%s" % (
+                    rec_enabled, rec_start, rec_end,
+                    ale_enabled, ale_start, ale_end,
+                ),
+                new_sched["enabled"], new_sched["from"], new_sched["to"], new_sched["actions"],
+            )
+            migrated += 1
+        if migrated:
+            self.save()
 
     def get_camera(self, cam_id: str) -> dict | None:
         return next((c for c in self.data.get("cameras", []) if c.get("id") == cam_id), None)

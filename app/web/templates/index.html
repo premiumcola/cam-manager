@@ -297,20 +297,6 @@
               </div>
               <div class="field-help">Wie lange nach letzter Bewegung weiter aufnehmen.</div>
 
-              <div class="cam-sep"></div>
-              <div class="cam-field-label">Aufnahme-Zeitplan</div>
-              <label class="toggle-row" style="margin-top:4px">
-                <span class="toggle-row-label">Zeitplan aktiv
-                  <span class="toggle-row-sublabel">Außerhalb: Erkennung läuft, aber keine Aufnahme &amp; kein Telegram</span>
-                </span>
-                <label class="switch"><input type="checkbox" name="recording_schedule_enabled" /><span class="slider"></span></label>
-              </label>
-              <div class="row" style="grid-template-columns:1fr 1fr;margin-top:4px">
-                <div class="field-wrap"><input name="recording_schedule_start" placeholder="08:00" /><span class="field-label">Von</span></div>
-                <div class="field-wrap"><input name="recording_schedule_end" placeholder="22:00" /><span class="field-label">Bis</span></div>
-              </div>
-              <div class="field-help" style="margin-top:6px">Außerhalb des Zeitfensters: Kamera läuft weiter, aber es werden keine Events gespeichert und kein Telegram gesendet.</div>
-
               <!-- Hidden: field still saved, controlled by global setting. -->
               <input type="hidden" name="motion_enabled" value="true" />
               <!-- Legacy fields kept hidden so save payload shape stays stable. -->
@@ -343,12 +329,21 @@
               <div class="cam-sep"></div>
 
               <div class="cam-field-label">Zeitplan</div>
-              <label class="toggle-row" style="margin-top:4px"><span class="toggle-row-label">Zeitplan aktiv</span><label class="switch"><input type="checkbox" name="schedule_enabled" /><span class="slider"></span></label></label>
+              <label class="toggle-row" style="margin-top:4px">
+                <span class="toggle-row-label">Zeitplan aktiv
+                  <span class="toggle-row-sublabel">Wenn aus: alle drei Wirkungen unten gelten ganztags (24/7).</span>
+                </span>
+                <label class="switch"><input type="checkbox" name="schedule_enabled" /><span class="slider"></span></label>
+              </label>
               <div class="row" style="grid-template-columns:1fr 1fr;margin-top:4px">
-                <div class="field-wrap"><input name="schedule_start" placeholder="22:00" /><span class="field-label">Von</span></div>
-                <div class="field-wrap"><input name="schedule_end" placeholder="06:00" /><span class="field-label">Bis</span></div>
+                <div class="field-wrap"><input type="time" name="schedule_from" placeholder="21:00" /><span class="field-label">Von</span></div>
+                <div class="field-wrap"><input type="time" name="schedule_to" placeholder="06:00" /><span class="field-label">Bis</span></div>
               </div>
-              <div class="field-help" style="margin-top:6px">Innerhalb dieses Zeitfensters gilt: Person-Erkennung löst bei Profil Hart/Mittel immer Alarm aus — unabhängig von sonstigen Einstellungen. Aufnahmen laufen durchgehend.</div>
+              <div class="cam-field-label" style="margin-top:10px">Innerhalb des Fensters</div>
+              <label class="toggle-row" style="margin-top:4px"><span class="toggle-row-label">Aufnehmen &amp; archivieren<span class="toggle-row-sublabel">Events werden auf Disk geschrieben</span></span><label class="switch"><input type="checkbox" name="schedule_action_record" checked /><span class="slider"></span></label></label>
+              <label class="toggle-row" style="margin-top:6px"><span class="toggle-row-label">Telegram-Push<span class="toggle-row-sublabel">Detection-Alerts werden gesendet</span></span><label class="switch"><input type="checkbox" name="schedule_action_telegram" checked /><span class="slider"></span></label></label>
+              <label class="toggle-row" style="margin-top:6px"><span class="toggle-row-label">Hart-Modus<span class="toggle-row-sublabel">Person → Alarm, unabhängig vom Profil</span></span><label class="switch"><input type="checkbox" name="schedule_action_hard" checked /><span class="slider"></span></label></label>
+              <div class="field-help" style="margin-top:6px">Außerhalb: Kamera läuft im gewählten Alarmprofil, aber kein Archiv, kein Push.</div>
             </div>
 
             <!-- Panel: Zonen -->

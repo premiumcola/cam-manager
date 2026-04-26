@@ -496,6 +496,14 @@ class TelegramService:
             return
 
         cam_cfg = self._camera_cfg(camera_id) or {}
+        # Per-camera schedule gate (telegram action). Outside the configured
+        # window, or when actions.telegram is off, suppress the push. Daily
+        # reports / highlights / watchdog are system-level and are not
+        # gated by this — they go through their own jobs.
+        from .event_logic import schedule_action_active as _sched_act
+        if not _sched_act(cam_cfg.get("schedule") or {}, "telegram"):
+            log.warning("[Telegram] skip: schedule blocks telegram (cam=%s)", camera_id)
+            return
         cam_name = cam_cfg.get("name") or camera_id
         is_armed = bool(cam_cfg.get("armed", True))
         is_night_now = self._is_night_for_camera(camera_id)
