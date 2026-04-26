@@ -555,82 +555,112 @@
             </div>
 
             <div id="tg-panel-wann" class="set-tab-content" hidden>
-              <p class="field-help" style="margin-top:8px">Filterung erfolgt jetzt pro Kamera (Alarmprofil + Zeitplan in der Kamera-Konfiguration).</p>
+              <div class="tg-push-section" style="padding-top:8px;display:grid;gap:14px">
+                <label class="toggle-row" style="margin:0">
+                  <span class="toggle-row-label">Push-Nachrichten aktiv
+                    <span class="toggle-row-sublabel">Master-Schalter — aus heißt: keine Detection-Pushes, keine Reports.</span>
+                  </span>
+                  <label class="switch"><input type="checkbox" id="push_enabled" /><span class="slider"></span></label>
+                </label>
+
+                <div class="tg-push-block">
+                  <div class="cam-field-label">Tagesreport</div>
+                  <label class="toggle-row" style="margin-top:4px">
+                    <span class="toggle-row-label">Tagesreport senden
+                      <span class="toggle-row-sublabel">Zusammenfassung der Erkennungen pro Kamera</span>
+                    </span>
+                    <label class="switch"><input type="checkbox" id="push_daily_enabled" /><span class="slider"></span></label>
+                  </label>
+                  <div class="row" style="grid-template-columns:1fr;margin-top:6px">
+                    <div class="field-wrap"><input type="time" id="push_daily_time" /><span class="field-label">Uhrzeit</span></div>
+                  </div>
+                </div>
+
+                <div class="tg-push-block">
+                  <div class="cam-field-label">Highlight des Tages</div>
+                  <label class="toggle-row" style="margin-top:4px">
+                    <span class="toggle-row-label">Highlight senden
+                      <span class="toggle-row-sublabel">Bestes Wildtier- / Person-Foto der letzten 24 h</span>
+                    </span>
+                    <label class="switch"><input type="checkbox" id="push_highlight_enabled" /><span class="slider"></span></label>
+                  </label>
+                  <div class="row" style="grid-template-columns:1fr;margin-top:6px">
+                    <div class="field-wrap"><input type="time" id="push_highlight_time" /><span class="field-label">Uhrzeit</span></div>
+                  </div>
+                </div>
+
+                <div class="tg-push-block">
+                  <div class="cam-field-label">Quiet Hours</div>
+                  <label class="toggle-row" style="margin-top:4px">
+                    <span class="toggle-row-label">Aktiv
+                      <span class="toggle-row-sublabel">In Quiet Hours kommen Pushes ohne Ton an, Nacht-Alarm bleibt laut.</span>
+                    </span>
+                    <label class="switch"><input type="checkbox" id="push_quiet_enabled" /><span class="slider"></span></label>
+                  </label>
+                  <div class="row" style="grid-template-columns:1fr 1fr;margin-top:6px">
+                    <div class="field-wrap"><input type="time" id="push_quiet_start" /><span class="field-label">Von</span></div>
+                    <div class="field-wrap"><input type="time" id="push_quiet_end" /><span class="field-label">Bis</span></div>
+                  </div>
+                </div>
+
+                <div class="tg-push-block">
+                  <div class="cam-field-label">Nacht-Alarm</div>
+                  <label class="toggle-row" style="margin-top:4px">
+                    <span class="toggle-row-label">Aktiv
+                      <span class="toggle-row-sublabel">Außerhalb Quiet Hours mit Ton durchbrechen</span>
+                    </span>
+                    <label class="switch"><input type="checkbox" id="push_night_enabled" /><span class="slider"></span></label>
+                  </label>
+                  <label class="toggle-row" style="margin-top:6px">
+                    <span class="toggle-row-label">Nur wenn Kamera scharf</span>
+                    <label class="switch"><input type="checkbox" id="push_night_armed" /><span class="slider"></span></label>
+                  </label>
+                  <div class="tg-radio-row" style="margin-top:8px;display:flex;gap:14px;flex-wrap:wrap">
+                    <label class="tg-radio"><input type="radio" name="push_night_mode" value="sun" /><span>🌅 Auf Sonnenstand basierend</span></label>
+                    <label class="tg-radio"><input type="radio" name="push_night_mode" value="time" /><span>🕘 Feste Uhrzeit</span></label>
+                  </div>
+                  <div id="push_night_sun_info" class="field-help" style="margin-top:6px"></div>
+                  <div id="push_night_time_row" class="row" style="grid-template-columns:1fr 1fr;margin-top:6px;display:none">
+                    <div class="field-wrap"><input type="time" id="push_night_start" /><span class="field-label">Beginn</span></div>
+                    <div class="field-wrap"><input type="time" id="push_night_end" /><span class="field-label">Ende</span></div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div id="tg-panel-was" class="set-tab-content" hidden>
-              <div style="padding-top:8px;display:grid;gap:12px">
-                <div class="field-help">Wähle das Format für Alarm-Nachrichten.</div>
-                <div class="tg-format-opts">
-                  <label class="tg-fmt-opt"><input type="radio" name="tg_format" value="text" /><span>📝 Nur Text</span></label>
-                  <label class="tg-fmt-opt"><input type="radio" name="tg_format" value="photo" checked /><span>🖼 Text + Foto</span></label>
-                  <label class="tg-fmt-opt"><input type="radio" name="tg_format" value="video" /><span>🎬 Text + Foto + Video</span></label>
-                </div>
-                <div id="tgFormatPreview" class="tg-preview"></div>
-                <div style="display:flex;justify-content:flex-end">
-                  <button type="button" id="saveTgFormatBtn" class="btn btn-save"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h8L13.5 5v8.5h-11z"/><polyline points="5,2.5 5,6.5 10,6.5 10,2.5"/><polyline points="4.5,13.5 4.5,9 11.5,9 11.5,13.5"/></svg>Format speichern</button>
-                </div>
+              <div style="padding-top:8px;display:grid;gap:10px">
+                <div class="field-help" style="margin:0 0 4px">Pro Label: Push an/aus + Mindestkonfidenz. Schwelle nur einstellen wenn Push an ist.</div>
+                <div id="pushLabelsList" class="push-labels-list"></div>
+                <div class="cam-sep"></div>
+                <label class="toggle-row" style="margin:0">
+                  <span class="toggle-row-label">Tageszeitraffer als Video pushen
+                    <span class="toggle-row-sublabel">Nach jedem fertigen Encode</span>
+                  </span>
+                  <label class="switch"><input type="checkbox" id="push_timelapse_enabled" /><span class="slider"></span></label>
+                </label>
+                <label class="toggle-row" style="margin:0">
+                  <span class="toggle-row-label">System-Alerts
+                    <span class="toggle-row-sublabel">Kamera offline, Speicher knapp, Coral verloren</span>
+                  </span>
+                  <label class="switch"><input type="checkbox" id="push_system_enabled" /><span class="slider"></span></label>
+                </label>
               </div>
             </div>
 
             <div id="tg-panel-tree" class="set-tab-content" hidden>
-              <div class="tg-flow" style="padding-top:10px">
-                <div class="tg-flow-node tgn-start">⚡ Bewegung erkannt</div>
-                <div class="tg-flow-conn">↓</div>
-                <div class="tg-flow-step">
-                  <div class="tg-flow-main">
-                    <div class="tg-flow-node tgn-decision">📷 Kamera aktiv?</div>
-                    <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
-                  </div>
-                  <div class="tg-flow-yes-label">↓ Ja</div>
-                </div>
-                <div class="tg-flow-step">
-                  <div class="tg-flow-main">
-                    <div class="tg-flow-node tgn-decision">📨 Telegram für Kamera aktiv?</div>
-                    <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
-                  </div>
-                  <div class="tg-flow-yes-label">↓ Ja</div>
-                </div>
-                <div class="tg-flow-step">
-                  <div class="tg-flow-main">
-                    <div class="tg-flow-node tgn-decision">⏰ Im konfigurierten Zeitfenster?</div>
-                    <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
-                  </div>
-                  <div class="tg-flow-yes-label">↓ Ja</div>
-                </div>
-                <div class="tg-flow-step">
-                  <div class="tg-flow-main">
-                    <div class="tg-flow-node tgn-decision">🔍 Objekt-Typ in erlaubter Liste?</div>
-                    <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
-                  </div>
-                  <div class="tg-flow-yes-label">↓ Ja</div>
-                </div>
-                <div class="tg-flow-step">
-                  <div class="tg-flow-main">
-                    <div class="tg-flow-node tgn-decision">⏱ Cooldown abgelaufen?</div>
-                    <div class="tg-flow-no-branch"><span class="tg-no-label">Nein →</span><div class="tg-flow-node tgn-stop">⊘ Stop</div></div>
-                  </div>
-                  <div class="tg-flow-yes-label">↓ Ja</div>
-                </div>
-                <div class="tg-flow-node tgn-action">✓ Nachricht senden</div>
-                <div class="tg-flow-conn">↓</div>
-                <div class="tg-flow-outputs">
-                  <div class="tg-flow-out">📝 Text</div>
-                  <div class="tg-flow-out tgo-opt">🖼 Foto?</div>
-                  <div class="tg-flow-out tgo-opt">🎬 Video?</div>
-                </div>
+              <div style="padding:8px 0;display:grid;gap:8px" id="pushDepsList">
+                <!-- populated by hydratePushDeps() -->
               </div>
+              <div class="field-help" style="margin-top:6px">Status alle 30 s aktualisiert.</div>
             </div>
 
             <div id="tg-panel-presets" class="set-tab-content" hidden>
-              <div class="field-help" style="margin-top:8px">Diese Bot-Befehle sind per Telegram-Menü abrufbar.</div>
-              <div class="tg-grid" style="margin-top:10px">
-                <div class="tg-card">📷 Live-Bild</div>
-                <div class="tg-card">🎥 Live 5s Clip</div>
-                <div class="tg-card">⏱ Letzte 24h Zeitraffer</div>
-                <div class="tg-card">🕘 Last detections</div>
-                <div class="tg-card">📊 Statistiken</div>
-                <div class="tg-card">🛡 Scharf / Unscharf</div>
+              <div class="field-help" style="margin-top:8px">Schreibt einen vollständigen Push-Block. Aktuelle Werte werden überschrieben.</div>
+              <div class="tg-presets" style="margin-top:10px;display:grid;gap:10px">
+                <button type="button" class="btn-action push-preset-btn" data-preset="quiet">😌 <b>Ruhig</b> · Person/Auto bei .90, Quiet 22-08, kein Highlight</button>
+                <button type="button" class="btn-action push-preset-btn" data-preset="standard">⚖️ <b>Standard</b> · Schema-Defaults</button>
+                <button type="button" class="btn-action push-preset-btn" data-preset="all">📣 <b>Alles</b> · Alle Labels Push bei .70, keine Quiet Hours</button>
               </div>
             </div>
 

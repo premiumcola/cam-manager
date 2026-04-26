@@ -480,8 +480,20 @@ class SettingsStore:
         if section_schema:
             payload = validate_and_coerce(payload, section_schema)
         current = self.data.setdefault(section, {})
-        current.update(payload)
+        # Deep-merge so partial UI saves to nested config (e.g. telegram.push.
+        # labels.person.threshold) don't wipe sibling keys. A shallow .update
+        # would replace the whole `push` dict, losing every other field the
+        # client didn't echo back.
+        self._deep_merge_into(current, payload)
         self.save()
+
+    @staticmethod
+    def _deep_merge_into(target: dict, src: dict):
+        for key, val in (src or {}).items():
+            if isinstance(val, dict) and isinstance(target.get(key), dict):
+                SettingsStore._deep_merge_into(target[key], val)
+            else:
+                target[key] = val
 
     def log_action(self, action: dict):
         actions = self.data.setdefault("telegram_actions", [])

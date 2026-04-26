@@ -2377,6 +2377,49 @@ class CameraRuntime:
                 time.sleep(sleep_t)
             time.sleep(interval)
 
+    def record_adhoc_clip(self, seconds: int) -> str | None:
+        """Capture a `seconds`-long mp4 from the live RTSP stream.
+
+        Used by the Telegram menu's "Clip 5/15/30 s". Stream-copies the
+        camera's H.264 directly into mp4 — no transcode, fast, ~1× wallclock.
+        Returns the absolute path on success, None on failure.
+        """
+        if seconds <= 0 or seconds > 60:
+            return None
+        rtsp = self.cfg.get("rtsp_url")
+        if not rtsp:
+            return None
+        if not _FFMPEG_AVAILABLE:
+            log.warning("[%s] adhoc clip: ffmpeg unavailable", self.camera_id)
+            return None
+        out_dir = Path(self.global_cfg["storage"]["root"]) / "adhoc_clips" / self.camera_id
+        out_dir.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+        out_path = out_dir / f"adhoc-{ts}-{seconds}s.mp4"
+        cmd = [
+            "ffmpeg", "-y",
+            "-rtsp_transport", "tcp",
+            "-i", rtsp,
+            "-t", str(int(seconds)),
+            "-c", "copy",
+            "-movflags", "+faststart",
+            str(out_path),
+        ]
+        try:
+            # Generous timeout: allow seconds + 5s startup + 5s flush.
+            proc = _subprocess.run(cmd, capture_output=True, timeout=int(seconds) + 10)
+            if proc.returncode != 0 or not out_path.exists() or out_path.stat().st_size < 1024:
+                log.warning("[%s] adhoc clip ffmpeg rc=%s stderr=%s",
+                            self.camera_id, proc.returncode,
+                            proc.stderr.decode("utf-8", "replace")[-300:])
+                return None
+            log.info("[%s] adhoc clip recorded: %s (%d bytes)",
+                     self.camera_id, out_path.name, out_path.stat().st_size)
+            return str(out_path)
+        except Exception as e:
+            log.warning("[%s] adhoc clip failed: %s", self.camera_id, e)
+            return None
+
     def snapshot_jpeg(self, quality=88):
         """Thread-safe snapshot encoder. Reads only from shared frame buffers.
         Priority: sub-stream clean frame → annotated main-stream frame → raw main-stream frame.

@@ -767,55 +767,281 @@ class TelegramService:
                     continue
         return total / (1024 ** 3)
 
-    # ── Menu helpers (legacy commands) ────────────────────────────────────
-    def _camera_menu(self, action: str):
-        rows = []; row = []
-        for idx, (cam_id, rt) in enumerate(self.runtimes.items(), start=1):
-            row.append(InlineKeyboardButton(rt.status().get("name", cam_id), callback_data=f"{action}:{cam_id}"))
-            if idx % 2 == 0:
-                rows.append(row); row = []
-        if row:
-            rows.append(row)
-        rows.append([InlineKeyboardButton("⬅️ Hauptmenü", callback_data="menu:root")])
-        return InlineKeyboardMarkup(rows)
+    # ── Menu helpers — view builders ──────────────────────────────────────
+    @staticmethod
+    def _back_btn(target: str = "menu:root") -> InlineKeyboardButton:
+        return InlineKeyboardButton("« Zurück", callback_data=target)
 
-    def _main_menu(self):
-        return InlineKeyboardMarkup([
-            [InlineKeyboardButton("📷 Live-Bild", callback_data="menu:snapshot"),
-             InlineKeyboardButton("🎥 Live 5s Clip", callback_data="menu:clip")],
-            [InlineKeyboardButton("⏱ Letzte 24h Zeitraffer", callback_data="menu:timelapse"),
-             InlineKeyboardButton("🕘 Letzte Erkennungen", callback_data="menu:detections")],
-            [InlineKeyboardButton("📊 Statistiken", callback_data="menu:stats"),
-             InlineKeyboardButton("🛡 Scharf / Unscharf", callback_data="menu:arm")],
-            [InlineKeyboardButton("🖥 Dashboard", url=self._dashboard_url() or "https://example.invalid")],
+    def _root_view(self) -> tuple[str, InlineKeyboardMarkup]:
+        text = "🌳 <b>Garden Monitor</b>\nWähle eine Aktion:"
+        markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📷 Live-Bild", callback_data="menu:livebild"),
+             InlineKeyboardButton("🎬 Clip 5/15/30 s", callback_data="menu:clip")],
+            [InlineKeyboardButton("⏱ Zeitraffer", callback_data="menu:zeitraffer"),
+             InlineKeyboardButton("📋 Letzte Erkennungen", callback_data="menu:erkennungen")],
+            [InlineKeyboardButton("📊 Statistik", callback_data="menu:stats"),
+             InlineKeyboardButton("🛠 Kamera-Status", callback_data="menu:status")],
         ])
+        return text, markup
 
-    def _summary_text(self, days: int):
-        summary = self.store.aggregate_summary(days=days) if self.store else {"days": days, "total_events": 0}
-        head = f"📊 Statistik {'heute' if days == 1 else f'letzte {days} Tage'}\n"
-        head += f"Gesamt-Events: {summary.get('total_events', 0)}\n"
+    def _cam_status_icon(self, st: dict) -> str:
+        s = st.get("status", "")
+        if s == "active":
+            return "🟢"
+        if s == "starting":
+            return "🟡"
+        return "🔴"
+
+    def _cam_picker(self, action: str) -> tuple[str, InlineKeyboardMarkup]:
+        """One button per camera; clicking emits cam:<id>:<action>."""
+        rows = []
+        for cam_id, rt in self.runtimes.items():
+            try:
+                st = rt.status()
+            except Exception:
+                st = {}
+            name = st.get("name", cam_id)
+            icon = self._cam_status_icon(st)
+            rows.append([InlineKeyboardButton(f"{icon} {name}", callback_data=f"cam:{cam_id}:{action}")])
+        if not rows:
+            rows.append([InlineKeyboardButton("(keine Kameras)", callback_data="noop")])
+        rows.append([self._back_btn()])
+        return f"Kamera wählen — {action}", InlineKeyboardMarkup(rows)
+
+    def _clip_dur_picker(self, cam_id: str) -> tuple[str, InlineKeyboardMarkup]:
+        rt = self.runtimes.get(cam_id)
+        name = rt.status().get("name", cam_id) if rt else cam_id
+        rows = [
+            [InlineKeyboardButton("5 s",  callback_data=f"cam:{cam_id}:clip:5"),
+             InlineKeyboardButton("15 s", callback_data=f"cam:{cam_id}:clip:15"),
+             InlineKeyboardButton("30 s", callback_data=f"cam:{cam_id}:clip:30")],
+            [self._back_btn("menu:clip")],
+        ]
+        return f"🎬 Clip-Dauer für <b>{name}</b>", InlineKeyboardMarkup(rows)
+
+    def _list_recent_timelapses(self, limit: int = 5) -> list[dict]:
+        """Newest mp4s under storage/timelapse/<cam>/, sorted by mtime desc."""
+        root = self._storage_root() / "timelapse"
+        if not root.exists():
+            return []
+        items = []
+        for cam_dir in root.iterdir():
+            if not cam_dir.is_dir():
+                continue
+            for mp4 in cam_dir.glob("*.mp4"):
+                try:
+                    st = mp4.stat()
+                except Exception:
+                    continue
+                meta = {}
+                meta_path = mp4.with_suffix(".json")
+                if meta_path.exists():
+                    try:
+                        import json as _j
+                        meta = _j.loads(meta_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        pass
+                items.append({
+                    "cam_id":   cam_dir.name,
+                    "filename": mp4.name,
+                    "relpath":  f"timelapse/{cam_dir.name}/{mp4.name}",
+                    "size_mb":  round(st.st_size / 1024 / 1024, 1),
+                    "mtime":    st.st_mtime,
+                    "profile":  meta.get("profile", ""),
+                    "target_s": int(meta.get("target_s", 0) or 0),
+                })
+        items.sort(key=lambda x: x["mtime"], reverse=True)
+        return items[:limit]
+
+    def _zeitraffer_view(self) -> tuple[str, InlineKeyboardMarkup]:
+        items = self._list_recent_timelapses(limit=5)
+        if not items:
+            return "⏱ <b>Keine Zeitraffer vorhanden.</b>", InlineKeyboardMarkup([[self._back_btn()]])
+        cam_name_map = {c["id"]: c.get("name", c["id"]) for c in self._cfg().get("cameras", [])}
+        profile_de = {"daily": "Tag", "weekly": "Woche", "monthly": "Monat", "custom": "Custom"}
+        lines = ["⏱ <b>Verfügbare Zeitraffer</b>", ""]
+        rows = []
+        for it in items:
+            cam = cam_name_map.get(it["cam_id"], it["cam_id"])
+            prof = profile_de.get(it["profile"], it["profile"] or "Tag")
+            date_label = datetime.fromtimestamp(it["mtime"]).strftime("%d.%m.")
+            lines.append(f"• <b>{cam}</b> · {prof} · {date_label}  ({it['target_s']}s, {it['size_mb']} MB)")
+            rows.append([InlineKeyboardButton(
+                f"📥 {cam} · {date_label}",
+                callback_data=f"tl:send:{it['cam_id']}/{it['filename']}"[:64],
+            )])
+        rows.append([self._back_btn()])
+        return "\n".join(lines), InlineKeyboardMarkup(rows)
+
+    def _erkennungen_view(self, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
+        page_size = 10
+        cutoff_dt = datetime.now() - timedelta(hours=24)
+        cutoff_iso = cutoff_dt.isoformat(timespec="seconds")
+        all_events: list[dict] = []
+        for cam in self._cfg().get("cameras", []):
+            cam_id = cam.get("id")
+            if not cam_id or not self.store:
+                continue
+            evs = self.store.list_events(cam_id, start=cutoff_iso, limit=50)
+            for e in evs:
+                e["_cam_name"] = cam.get("name", cam_id)
+                all_events.append(e)
+        all_events.sort(key=lambda e: e.get("time", ""), reverse=True)
+        slice_ = all_events[page * page_size:(page + 1) * page_size]
+        if not slice_:
+            return ("📋 <b>Keine Erkennungen in den letzten 24 h.</b>",
+                    InlineKeyboardMarkup([[self._back_btn()]]))
+        feedback = self.settings_store.runtime_get("event_feedback") if self.settings_store else {}
+        feedback = feedback or {}
+        lines = [f"📋 <b>Letzte Erkennungen</b>  (Seite {page + 1})", ""]
+        rows = []
+        for ev in slice_:
+            eid = ev.get("event_id", "")
+            labels = ev.get("labels") or []
+            primary = most_specific_label(labels)
+            time_hm = ev.get("time", "")[11:16]
+            score = max(
+                (float(d.get("score", 0)) for d in (ev.get("detections") or [])
+                 if d.get("label") == primary),
+                default=0.0,
+            )
+            score_pct = int(round(score * 100))
+            verdict = (feedback.get(eid) or {}).get("verdict")
+            badge = " ✅" if verdict == "ok" else " ❌" if verdict == "no" else ""
+            lines.append(f"<code>{time_hm}</code> · {ev['_cam_name']} · "
+                         f"<b>{LABEL_DE.get(primary, primary)}</b> · {score_pct}%{badge}")
+            if not verdict:
+                # Index for the ev:<eid>:* router (stores cam + label so the
+                # callback can resolve the event without re-walking the disk).
+                if self.settings_store and eid:
+                    self.settings_store.runtime_alert_index_set(eid, {
+                        "cam":   ev.get("camera_id") or "",
+                        "label": primary,
+                        "ts":    time.time(),
+                    })
+                rows.append([
+                    InlineKeyboardButton(f"✅ {time_hm}", callback_data=f"ev:{eid}:ok"[:64]),
+                    InlineKeyboardButton(f"❌ {time_hm}", callback_data=f"ev:{eid}:no"[:64]),
+                ])
+        nav_row = []
+        has_more = len(all_events) > (page + 1) * page_size
+        if has_more:
+            nav_row.append(InlineKeyboardButton("➕ Mehr (10)", callback_data=f"menu:erkennungen:p:{page + 1}"))
+        nav_row.append(self._back_btn())
+        rows.append(nav_row)
+        return "\n".join(lines), InlineKeyboardMarkup(rows)
+
+    def _stats_view(self, days: int) -> tuple[str, InlineKeyboardMarkup]:
+        period = "Heute" if days == 1 else ("Diese Woche" if days == 7 else "Diesen Monat")
+        summary = self.store.aggregate_summary(days=days) if self.store else {"total_events": 0}
+        total = summary.get("total_events", 0)
+        # Bucket counts from top_objects (label, count) tuples
+        per_label = dict(summary.get("top_objects", []) or [])
+        WILD = {"squirrel", "fox", "hedgehog", "bird", "cat", "dog"}
+        wild_count = sum(per_label.get(l, 0) for l in WILD)
+        # "Falsch" = events the user marked wrong via Telegram callbacks.
+        feedback = (self.settings_store.runtime_get("event_feedback") if self.settings_store else {}) or {}
+        cutoff_ts = (datetime.now() - timedelta(days=days)).timestamp()
+        wrong = 0
+        for v in feedback.values():
+            try:
+                if v.get("verdict") == "no" and float(v.get("ts", 0)) >= cutoff_ts:
+                    wrong += 1
+            except Exception:
+                pass
+        lines = [
+            f"📊 <b>Statistik · {period}</b>",
+            "",
+            f"Events gesamt: <b>{total}</b>",
+            f"Person: <b>{per_label.get('person', 0)}</b> · "
+            f"Wildtier: <b>{wild_count}</b> · "
+            f"Falsch: <b>{wrong}</b>",
+        ]
         if summary.get("per_camera"):
-            head += "\nKameras:\n" + "\n".join(f"• {cam}: {cnt}" for cam, cnt in summary["per_camera"].items())
-        if summary.get("top_objects"):
-            head += "\n\nTop Objekte:\n" + "\n".join(f"• {lab}: {cnt}" for lab, cnt in summary["top_objects"][:5])
-        return head
+            lines.append("")
+            for cam, cnt in summary["per_camera"].items():
+                lines.append(f"• {cam}: {cnt}")
+        rows = [
+            [InlineKeyboardButton("📅 Heute" if days != 1 else "—", callback_data="menu:stats" if days != 1 else "noop"),
+             InlineKeyboardButton("📅 Diese Woche" if days != 7 else "—", callback_data="menu:stats:week" if days != 7 else "noop"),
+             InlineKeyboardButton("📅 Diesen Monat" if days != 30 else "—", callback_data="menu:stats:month" if days != 30 else "noop")],
+        ]
+        base = self._dashboard_url().rstrip("/") if self._dashboard_url() else ""
+        if base:
+            rows.append([InlineKeyboardButton("🌐 Im Web ↗", url=f"{base}/#statistik")])
+        rows.append([self._back_btn()])
+        return "\n".join(lines), InlineKeyboardMarkup(rows)
+
+    def _status_view(self) -> tuple[str, InlineKeyboardMarkup]:
+        lines = ["🛠 <b>Kamera-Status</b>", ""]
+        rows = []
+        cam_cfgs = {c["id"]: c for c in self._cfg().get("cameras", [])}
+        for cam_id, rt in self.runtimes.items():
+            try:
+                st = rt.status()
+            except Exception:
+                st = {}
+            icon = self._cam_status_icon(st)
+            name = st.get("name", cam_id)
+            armed = bool((cam_cfgs.get(cam_id) or {}).get("armed", st.get("armed", True)))
+            arm_label = "scharf" if armed else "stumm"
+            extra = ""
+            if st.get("status") not in ("active", "starting"):
+                fa = st.get("frame_age_s")
+                if isinstance(fa, (int, float)) and fa > 0:
+                    extra = f" · offline {int(fa // 60)} min"
+                else:
+                    extra = " · offline"
+            lines.append(f"{icon} <b>{name}</b> · {arm_label}{extra}")
+            rows.append([
+                InlineKeyboardButton(("🔇 Stumm" if armed else "🛡 Scharf") + f" {name[:10]}", callback_data=f"cam:{cam_id}:arm"),
+                InlineKeyboardButton(f"🔄 Reconnect", callback_data=f"cam:{cam_id}:reconnect"),
+            ])
+        rows.append([self._back_btn()])
+        return "\n".join(lines), InlineKeyboardMarkup(rows)
+
+    def _logs_view(self) -> tuple[str, InlineKeyboardMarkup]:
+        # Last 10 WARNING/ERROR lines from the in-memory log buffer in server.py.
+        try:
+            from . import server as _srv
+            recs = [r for r in _srv.log_buffer.get(0)
+                    if r.get("level") in ("WARNING", "ERROR")][-10:]
+        except Exception:
+            recs = []
+        if not recs:
+            body = "Keine Warnungen / Fehler in der jüngeren Historie."
+        else:
+            lines = []
+            for r in recs:
+                msg = (r.get("msg") or "").replace("<", "&lt;").replace(">", "&gt;")
+                lines.append(f"<code>{r.get('ts','')}</code> [{r.get('level','')}] {msg[:140]}")
+            body = "\n".join(lines)
+        return f"📋 <b>Letzte Warnungen / Fehler</b>\n\n{body}", InlineKeyboardMarkup([[self._back_btn()]])
+
+    async def _render_view(self, q, view: tuple[str, InlineKeyboardMarkup]):
+        text, markup = view
+        try:
+            await q.edit_message_text(text, reply_markup=markup, parse_mode="HTML")
+        except Exception as e:
+            log.debug("[Telegram] edit failed (%s); sending new message", e)
+            await q.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
 
     async def cmd_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         self.log_action("menu_open")
-        await update.message.reply_text("Garden Monitor Menü", reply_markup=self._main_menu())
+        text, markup = self._root_view()
+        await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
 
     async def cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        lines = ["🟢 Garden Monitor Status"]
-        for cam_id, rt in self.runtimes.items():
-            s = rt.status()
-            lines.append(f"• {s['name']}: {s['status']} · heute {s['today_events']} · {'armed' if s.get('armed') else 'disarmed'}")
-        await update.message.reply_text("\n".join(lines), reply_markup=self._main_menu())
+        text, markup = self._status_view()
+        await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
 
     async def cmd_today(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await update.message.reply_text(self._summary_text(days=1), reply_markup=self._main_menu())
+        text, markup = self._stats_view(days=1)
+        await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
 
     async def cmd_week(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        await update.message.reply_text(self._summary_text(days=7), reply_markup=self._main_menu())
+        text, markup = self._stats_view(days=7)
+        await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
 
     # ── Callback router ───────────────────────────────────────────────────
     async def on_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -824,25 +1050,26 @@ class TelegramService:
         if data == "noop":
             await q.answer()
             return
-        # New push-system prefixes
+        # Push-system prefixes (Phase 1)
         if data.startswith("ev:"):
             await self._handle_event_cb(q, data)
             return
         if data.startswith("hi:") or data.startswith("share:"):
             await self._handle_highlight_cb(q, data)
             return
-        if data.startswith("tl:save:"):
-            await self._handle_timelapse_cb(q, data)
+        # Timelapse: tl:send:<rel>  or  tl:save:<rel>
+        if data.startswith("tl:"):
+            await self._handle_timelapse_cb(q, data, context)
             return
+        # Camera actions: cam:<id>:<verb>[:arg]
         if data.startswith("cam:"):
-            await self._handle_camera_cb(q, data)
+            await self._handle_camera_cb(q, data, context)
             return
-        # Phase 2 stub for menu actions that don't exist yet
-        if data in ("menu:stats:today", "menu:zeitraffer:today", "menu:logs"):
-            await q.answer("Menü-Funktion folgt in Update.")
+        # Multi-level menu navigation
+        if data.startswith("menu:"):
+            await self._handle_menu_cb(q, data)
             return
-        # Fallthrough: legacy menu/snapshot/clip/etc handlers
-        await self._handle_legacy_cb(update, context)
+        await q.answer()
 
     async def _set_badge(self, q, label: str):
         """Replace the entire reply markup with a single grey badge button."""
@@ -920,112 +1147,216 @@ class TelegramService:
         await q.answer("Unbekannte Aktion")
 
     async def _handle_highlight_cb(self, q, data: str):
-        kind = data.split(":", 1)[0]
-        if kind == "hi":
-            await q.answer("Hochauflösung folgt in Update.")
-        elif kind == "share":
-            await q.answer("Teilen folgt in Update.")
-        else:
+        # hi:<eid>     → original-resolution snapshot (uncompressed sendDocument)
+        # share:<eid>  → forward-friendly photo + plain caption (no buttons)
+        parts = data.split(":", 1)
+        kind = parts[0]
+        eid = parts[1] if len(parts) > 1 else ""
+        ss = self.settings_store
+        if not eid or not ss:
             await q.answer()
+            return
+        idx = ss.runtime_get_subkey("alert_index", eid) or {}
+        cam_id = idx.get("cam") or ""
+        snap_path = None
+        if cam_id and self.store:
+            ev = self.store.get_event(cam_id, eid) if hasattr(self.store, "get_event") else None
+            rel = (ev or {}).get("snapshot_relpath")
+            if rel:
+                p = self._storage_root() / rel
+                if p.exists():
+                    snap_path = p
+        if not snap_path:
+            await q.answer("Original nicht mehr vorhanden.")
+            return
+        await q.answer("Wird gesendet…")
+        try:
+            with open(snap_path, "rb") as f:
+                if kind == "hi":
+                    # sendDocument keeps full resolution (sendPhoto would
+                    # downscale to 1280 long-edge).
+                    await q.message.reply_document(document=f, filename=snap_path.name,
+                                                   caption=f"🖼 {snap_path.name}")
+                else:
+                    await q.message.reply_photo(photo=f, caption=f"📤 {snap_path.name}")
+        except Exception as e:
+            log.warning("[Telegram] highlight send failed: %s", e)
 
-    async def _handle_timelapse_cb(self, q, data: str):
-        await q.answer("Speichern folgt in Update.")
+    async def _handle_timelapse_cb(self, q, data: str, context):
+        # tl:send:<cam>/<filename>  → reply with the mp4
+        # tl:save:<rel>             → ack (Telegram retains it in chat history)
+        rest = data[3:]  # strip "tl:"
+        if rest.startswith("send:"):
+            rel = rest[5:]
+            full = self._storage_root() / "timelapse" / rel
+            if not full.exists():
+                await q.answer("Datei nicht mehr vorhanden")
+                return
+            await q.answer("Wird gesendet…")
+            try:
+                with open(full, "rb") as f:
+                    await context.bot.send_video(
+                        chat_id=q.message.chat_id, video=f,
+                        caption=f"⏱ {rel}",
+                    )
+            except Exception as e:
+                log.warning("[Telegram] tl send failed: %s", e)
+                await q.message.reply_text(f"Senden fehlgeschlagen: {e}")
+            return
+        if rest.startswith("save:"):
+            await q.answer("Bereits im Chat-Verlauf gespeichert.")
+            return
+        await q.answer()
 
-    async def _handle_camera_cb(self, q, data: str):
-        # cam:<cid>:reconnect
+    async def _handle_camera_cb(self, q, data: str, context):
+        # cam:<cid>:<verb>[:<arg>]
         parts = data.split(":")
         if len(parts) < 3:
             await q.answer()
             return
-        cam_id = parts[1]
-        verb = parts[2]
+        cam_id, verb = parts[1], parts[2]
         rt = self.runtimes.get(cam_id)
-        if verb == "reconnect" and rt and hasattr(rt, "stop") and hasattr(rt, "start"):
+        if not rt:
+            await q.answer("Kamera nicht verfügbar.")
+            return
+        cam_name = rt.status().get("name", cam_id)
+        if verb == "livebild":
+            await self._cam_send_snapshot(q, context, cam_id, rt, cam_name)
+            return
+        if verb == "clip":
+            if len(parts) >= 4:
+                # cam:<id>:clip:<sec>
+                try:
+                    sec = int(parts[3])
+                except ValueError:
+                    sec = 5
+                await self._cam_send_clip(q, context, cam_id, rt, cam_name, sec)
+                return
+            # cam:<id>:clip → show duration picker
+            await self._render_view(q, self._clip_dur_picker(cam_id))
+            return
+        if verb == "arm":
+            await self._cam_toggle_armed(q, cam_id, cam_name)
+            return
+        if verb == "reconnect":
             try:
                 rt.stop(); time.sleep(0.5); rt.start()
-                await q.answer("🔄 Neuverbindung gestartet")
+                await q.answer(f"🔄 {cam_name}: Neuverbindung gestartet")
             except Exception as e:
                 log.warning("[Telegram] reconnect failed: %s", e)
                 await q.answer("Reconnect fehlgeschlagen")
             return
         await q.answer()
 
-    # ── Legacy callbacks (unchanged behaviour) ────────────────────────────
-    async def _handle_legacy_cb(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        q = update.callback_query
-        await q.answer()
-        data = q.data or ""
+    async def _cam_send_snapshot(self, q, context, cam_id, rt, cam_name):
+        await q.answer("Snapshot wird geholt…")
+        jpeg = rt.snapshot_jpeg() if hasattr(rt, "snapshot_jpeg") else None
+        if not jpeg:
+            await q.message.reply_text(f"Kein Live-Bild für {cam_name} verfügbar.")
+            return
+        bio = BytesIO(jpeg); bio.name = f"{cam_id}.jpg"
+        markup = InlineKeyboardMarkup([[
+            InlineKeyboardButton("🔄 Neu", callback_data=f"cam:{cam_id}:livebild"),
+            InlineKeyboardButton("🎬 5 s Clip", callback_data=f"cam:{cam_id}:clip:5"),
+        ]])
+        try:
+            await context.bot.send_photo(
+                chat_id=q.message.chat_id, photo=bio,
+                caption=f"📷 <b>{cam_name}</b>",
+                parse_mode="HTML", reply_markup=markup,
+            )
+        except Exception as e:
+            log.warning("[Telegram] snapshot send failed: %s", e)
+
+    async def _cam_send_clip(self, q, context, cam_id, rt, cam_name, sec):
+        await q.answer(f"Clip {sec}s wird aufgenommen…")
+        # The blocking ffmpeg subprocess runs in a worker thread via run_in_executor
+        # so it doesn't pin the asyncio loop while the recording is in progress.
+        loop = asyncio.get_running_loop()
+        try:
+            path = await loop.run_in_executor(None, rt.record_adhoc_clip, sec)
+        except Exception as e:
+            log.warning("[Telegram] adhoc clip exception: %s", e)
+            path = None
+        if not path:
+            await q.message.reply_text(
+                f"Clip-Aufnahme für {cam_name} fehlgeschlagen "
+                f"(ffmpeg/RTSP-Problem). Snapshot stattdessen verfügbar.")
+            return
+        try:
+            with open(path, "rb") as f:
+                await context.bot.send_video(
+                    chat_id=q.message.chat_id, video=f,
+                    caption=f"🎬 <b>{cam_name}</b> · {sec}s",
+                    parse_mode="HTML",
+                )
+        except Exception as e:
+            log.warning("[Telegram] clip send failed: %s", e)
+            await q.message.reply_text(f"Senden fehlgeschlagen: {e}")
+
+    async def _cam_toggle_armed(self, q, cam_id, cam_name):
+        if not self.settings_store:
+            await q.answer()
+            return
+        current = self.settings_store.get_camera(cam_id)
+        if not current:
+            await q.answer("Kamera nicht in Settings.")
+            return
+        new_armed = not bool(current.get("armed", True))
+        current["armed"] = new_armed
+        self.settings_store.upsert_camera(current)
+        # Refresh the status view in place so the user sees the change.
+        await self._render_view(q, self._status_view())
+        await q.answer(f"🛡 {cam_name}: {'scharf' if new_armed else 'stumm'}")
+
+    async def _handle_menu_cb(self, q, data: str):
+        """Routes every menu:* callback. View functions return (text, markup);
+        we render in the same bubble via edit_message_text."""
+        self.log_action("menu_" + data.split(":", 1)[1])
         if data == "menu:root":
-            self.log_action("menu_root")
-            await q.edit_message_text("Garden Monitor Menü", reply_markup=self._main_menu())
-            return
-        if data.startswith("menu:"):
-            action = data.split(":", 1)[1]
-            self.log_action(f"menu_{action}")
-            if action in {"snapshot", "clip", "timelapse", "detections", "arm"}:
-                await q.edit_message_text(f"Kamera wählen · {action}", reply_markup=self._camera_menu(action))
+            await self._render_view(q, self._root_view()); await q.answer(); return
+        if data == "menu:livebild":
+            await self._render_view(q, self._cam_picker("livebild")); await q.answer(); return
+        if data == "menu:clip":
+            await self._render_view(q, self._cam_picker("clip")); await q.answer(); return
+        if data == "menu:zeitraffer":
+            await self._render_view(q, self._zeitraffer_view()); await q.answer(); return
+        if data == "menu:zeitraffer:today":
+            # Pick the newest of today's timelapses across cameras.
+            today_pref = datetime.now().strftime("%Y-%m-%d")
+            tls = [t for t in self._list_recent_timelapses(limit=20)
+                   if datetime.fromtimestamp(t["mtime"]).strftime("%Y-%m-%d") == today_pref]
+            if not tls:
+                await q.answer("Heute kein Zeitraffer vorhanden.")
                 return
-            if action == "stats":
-                await q.edit_message_text(self._summary_text(days=1), reply_markup=self._main_menu())
-                return
-        if ":" not in data:
+            top = tls[0]
+            full = self._storage_root() / "timelapse" / top["cam_id"] / top["filename"]
+            try:
+                with open(full, "rb") as f:
+                    await q.message.reply_video(video=f, caption=f"⏱ {top['cam_id']} · heute")
+            except Exception as e:
+                log.warning("[Telegram] today timelapse send failed: %s", e)
+            await q.answer()
             return
-        action, cam_id = data.split(":", 1)
-        rt = self.runtimes.get(cam_id)
-        if not rt:
-            await q.edit_message_text("Kamera nicht verfügbar.", reply_markup=self._main_menu())
-            return
-        self.log_action(action, cam_id)
-        if action == "snapshot":
-            jpeg = rt.snapshot_jpeg()
-            if not jpeg:
-                await q.edit_message_text("Kein Live-Bild verfügbar.", reply_markup=self._main_menu())
-                return
-            bio = BytesIO(jpeg); bio.name = f"{cam_id}.jpg"
-            await context.bot.send_photo(chat_id=q.message.chat_id, photo=bio,
-                                         caption=f"📷 {rt.status().get('name', cam_id)}")
-            return
-        if action == "clip":
-            url = f"{self._dashboard_url().rstrip('/')}/api/camera/{cam_id}/stream.mjpg" if self._dashboard_url() else ""
-            await q.edit_message_text(
-                f"🎥 5s Live-Clip Placeholder\n{rt.status().get('name', cam_id)}\n{url}",
-                reply_markup=self._main_menu())
-            return
-        if action == "timelapse":
-            day = datetime.now().strftime("%Y-%m-%d")
-            path = self.timelapse_builder.build_for_day(
-                cam_id, day,
-                fps=int(((self._cfg().get('cameras') or [{}])[0].get('timelapse') or {}).get('fps', 25)),
-                force=False) if self.timelapse_builder else None
-            if not path:
-                await q.edit_message_text(f"Kein Zeitraffer für {cam_id} verfügbar.", reply_markup=self._main_menu())
-                return
-            rel = str(path).split("/app/storage/")[-1]
-            base = self._dashboard_url().rstrip("/")
-            await q.edit_message_text(
-                f"⏱ Letzte 24h Zeitraffer\n{rt.status().get('name', cam_id)}\n{base}/media/{rel}",
-                reply_markup=self._main_menu())
-            return
-        if action == "detections":
-            ev = self.store.list_events(cam_id, limit=5)
-            text = [f"🕘 Letzte Erkennungen · {rt.status().get('name', cam_id)}"]
-            for e in ev:
-                text.append(f"• {e.get('time','')} · {', '.join(e.get('labels', []))} · {e.get('alarm_level', 'info')}")
-            await q.edit_message_text("\n".join(text), reply_markup=self._main_menu())
-            return
-        if action == "arm":
-            cam = next((c for c in self._cfg().get("cameras", []) if c.get("id") == cam_id), None)
-            if cam:
-                cam["armed"] = not bool(cam.get("armed", True))
-            if self.settings_store:
-                current = self.settings_store.get_camera(cam_id)
-                if current:
-                    current["armed"] = not bool(current.get("armed", True))
-                    self.settings_store.upsert_camera(current)
-            await q.edit_message_text(
-                f"🛡 {rt.status().get('name', cam_id)} ist jetzt "
-                f"{'armed' if (self.settings_store.get_camera(cam_id) or {}).get('armed', True) else 'disarmed'}.",
-                reply_markup=self._main_menu())
+        if data == "menu:erkennungen":
+            await self._render_view(q, self._erkennungen_view(0)); await q.answer(); return
+        if data.startswith("menu:erkennungen:p:"):
+            try:
+                page = int(data.split(":")[-1])
+            except ValueError:
+                page = 0
+            await self._render_view(q, self._erkennungen_view(page)); await q.answer(); return
+        if data == "menu:stats" or data == "menu:stats:today":
+            await self._render_view(q, self._stats_view(days=1)); await q.answer(); return
+        if data == "menu:stats:week":
+            await self._render_view(q, self._stats_view(days=7)); await q.answer(); return
+        if data == "menu:stats:month":
+            await self._render_view(q, self._stats_view(days=30)); await q.answer(); return
+        if data == "menu:status":
+            await self._render_view(q, self._status_view()); await q.answer(); return
+        if data == "menu:logs":
+            await self._render_view(q, self._logs_view()); await q.answer(); return
+        await q.answer()
 
 
 def _parse_hhmm(s: str | None) -> tuple[int, int]:
