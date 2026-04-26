@@ -4,6 +4,7 @@ from pathlib import Path
 from copy import deepcopy
 import json
 import logging
+import threading
 import yaml
 
 from .schema import (
@@ -21,7 +22,43 @@ class SettingsStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.base_config = deepcopy(base_config)
         self.data = self._build_defaults(base_config)
+        # Guards every mutation of data["runtime"]. Runtime data is touched
+        # from Telegram callback threads, scheduler jobs and the camera
+        # threads, so any read-modify-write needs the lock.
+        self._runtime_lock = threading.RLock()
         self.load()
+
+    # Default Telegram push schema. Kept as a class constant so a single
+    # source of truth feeds both _build_defaults (fresh installs) and
+    # _ensure_telegram_push_defaults (additive backfill on existing data).
+    _TELEGRAM_PUSH_DEFAULTS: dict = {
+        "enabled": True,
+        "rate_limit_seconds": 30,
+        "quiet_hours": {"start": "22:00", "end": "07:00"},
+        "night_alert": {
+            "enabled":    True,
+            "armed_only": True,
+            "use_sun":    True,
+            "lat":        None,
+            "lon":        None,
+            # Fallback window when use_sun is off or lat/lon missing.
+            "start": "22:00",
+            "end":   "07:00",
+        },
+        "labels": {
+            "person":   {"push": True,  "threshold": 0.85},
+            "cat":      {"push": False, "threshold": 0.80},
+            "dog":      {"push": True,  "threshold": 0.80},
+            "bird":     {"push": False, "threshold": 0.90},
+            "car":      {"push": True,  "threshold": 0.85},
+            "squirrel": {"push": True,  "threshold": 0.80},
+            "motion":   {"push": False, "threshold": 0.0},
+        },
+        "daily_report": {"enabled": True, "time": "22:00"},
+        "highlight":    {"enabled": True, "time": "19:00"},
+        "system":       {"enabled": True},
+        "timelapse":    {"enabled": True},
+    }
 
     _TL_DEFAULT_PROFILES = {
         "daily":   {"enabled": False, "target_seconds": 60,  "period_seconds": 86400},
@@ -107,6 +144,7 @@ class SettingsStore:
                 "enabled": base_config.get("telegram", {}).get("enabled", False),
                 "token": base_config.get("telegram", {}).get("token", ""),
                 "chat_id": str(base_config.get("telegram", {}).get("chat_id", "")),
+                "push": deepcopy(self._TELEGRAM_PUSH_DEFAULTS),
             },
             "mqtt": {
                 "enabled": base_config.get("mqtt", {}).get("enabled", False),
@@ -123,6 +161,17 @@ class SettingsStore:
             "timelapse_settings": {
                 "global_enabled": base_config.get("timelapse_settings", {}).get("global_enabled", False),
             },
+            # Ephemeral runtime data (callback verdicts, suppress windows,
+            # offline state). Persisted so a service reload doesn't lose
+            # active mute timers or in-flight system_state.
+            "runtime": {
+                "event_feedback":       {},
+                "suppress":             {},
+                "system_state":         {},
+                "alert_index":          {},
+                "last_storage_warn_ts": 0,
+                "last_coral_state":     "",
+            },
         }
 
     def load(self):
@@ -136,11 +185,13 @@ class SettingsStore:
         self._ensure_camera_defaults()
         self._ensure_timelapse_settings()
         self._ensure_timelapse_profiles()
+        self._ensure_telegram_push_defaults()
+        self._ensure_runtime_defaults()
         self._repair_snapshot_urls()
         self.data.setdefault("ui", {}).setdefault("wizard_completed", bool(self.data.get("cameras")))
-        # Only write defaults when no file existed yet; never truncate an existing settings file.
-        if not file_existed:
-            self.save()
+        # Persist additive defaults (push schema, runtime section) so the
+        # UI in Phase 2 finds every key present.
+        self.save()
 
     def _repair_snapshot_urls(self):
         """Repair cameras whose snapshot_url was corrupted with a dashboard display URL.
@@ -175,6 +226,98 @@ class SettingsStore:
 
     def _ensure_timelapse_settings(self):
         self.data.setdefault("timelapse_settings", {"global_enabled": False})
+
+    def _deep_merge_defaults(self, target: dict, defaults: dict):
+        """Recursively fill missing keys in `target` from `defaults`.
+
+        Existing user values are NEVER overwritten — only absent keys (and
+        nested absent keys inside dicts) are added. Values whose existing
+        type is not dict are left as-is even when the default is a dict;
+        this protects against stomping on hand-edited overrides.
+        """
+        if not isinstance(target, dict):
+            return
+        for key, default_val in defaults.items():
+            if isinstance(default_val, dict):
+                sub = target.setdefault(key, {})
+                if isinstance(sub, dict):
+                    self._deep_merge_defaults(sub, default_val)
+            else:
+                target.setdefault(key, default_val)
+
+    def _ensure_telegram_push_defaults(self):
+        """Additively backfill telegram.push so every key the UI expects exists."""
+        tg = self.data.setdefault("telegram", {})
+        push = tg.setdefault("push", {})
+        if not isinstance(push, dict):
+            push = {}
+            tg["push"] = push
+        self._deep_merge_defaults(push, self._TELEGRAM_PUSH_DEFAULTS)
+        # Backfill night-alert lat/lon from server.location when present —
+        # avoids forcing the user to re-enter coordinates already known to
+        # the system.
+        night = push.get("night_alert") or {}
+        srv_loc = (self.data.get("server", {}) or {}).get("location") or {}
+        if night.get("lat") is None and srv_loc.get("lat") is not None:
+            night["lat"] = srv_loc.get("lat")
+        if night.get("lon") is None and srv_loc.get("lon") is not None:
+            night["lon"] = srv_loc.get("lon")
+
+    def _ensure_runtime_defaults(self):
+        rt = self.data.setdefault("runtime", {})
+        if not isinstance(rt, dict):
+            rt = {}
+            self.data["runtime"] = rt
+        rt.setdefault("event_feedback", {})
+        rt.setdefault("suppress", {})
+        rt.setdefault("system_state", {})
+        rt.setdefault("alert_index", {})
+        rt.setdefault("last_storage_warn_ts", 0)
+        rt.setdefault("last_coral_state", "")
+
+    # ── Runtime helpers (thread-safe) ────────────────────────────────────────
+    # All callers go through these so the JSON file isn't corrupted by
+    # concurrent writes from the camera, scheduler and callback threads.
+
+    def runtime_get(self, key: str, default=None):
+        with self._runtime_lock:
+            return deepcopy(self.data.setdefault("runtime", {}).get(key, default))
+
+    def runtime_set(self, key: str, value):
+        with self._runtime_lock:
+            self.data.setdefault("runtime", {})[key] = value
+            self.save()
+
+    def runtime_set_subkey(self, key: str, subkey: str, value):
+        """Set runtime[key][subkey] = value. Creates the dict if absent."""
+        with self._runtime_lock:
+            sec = self.data.setdefault("runtime", {}).setdefault(key, {})
+            if not isinstance(sec, dict):
+                sec = {}
+                self.data["runtime"][key] = sec
+            sec[subkey] = value
+            self.save()
+
+    def runtime_get_subkey(self, key: str, subkey: str, default=None):
+        with self._runtime_lock:
+            sec = self.data.setdefault("runtime", {}).get(key) or {}
+            if not isinstance(sec, dict):
+                return default
+            return deepcopy(sec.get(subkey, default))
+
+    def runtime_alert_index_set(self, eid: str, payload: dict, cap: int = 200):
+        """LRU-bounded write to runtime.alert_index. Cap protects against
+        unbounded growth — at cap, the oldest insertion is evicted."""
+        with self._runtime_lock:
+            idx = self.data.setdefault("runtime", {}).setdefault("alert_index", {})
+            if not isinstance(idx, dict):
+                idx = {}
+                self.data["runtime"]["alert_index"] = idx
+            idx[eid] = payload
+            while len(idx) > cap:
+                # Python 3.7+ dicts preserve insertion order
+                idx.pop(next(iter(idx)))
+            self.save()
 
     def _ensure_timelapse_profiles(self):
         """Additively add missing timelapse profile keys to existing cameras."""

@@ -1480,46 +1480,43 @@ class CameraRuntime:
                 except Exception:
                     pass
 
-        # Telegram
+        # Telegram — gate the event through the same camera-level switches
+        # the old code respected (armed, zone send_telegram, telegram_enabled,
+        # notify-from-alarm-profile), then hand the event to the push system
+        # which makes the final decision (label-config, threshold, suppress,
+        # rate-limit, quiet/night).
         notify = meta.get("notify", False)
-        # Defensive: "Stumm" cameras never send Telegram.
         if not self.cfg.get("armed", True):
             notify = False
         if not meta.get("send_telegram", True):
             notify = False
-        _send_tg = notify and self.cfg.get("telegram_enabled", True)
-        if _send_tg and self.notifier:
-            labels = meta["labels"]
-            cat_match = meta.get("cat_name")
-            person_match = meta.get("person_name")
-            whitelisted = meta.get("whitelisted", False)
-            level = meta.get("alarm_level")
-            time_str = start_time.isoformat(timespec="seconds")
-            if bird_species:
-                top_score = next((d.get("score") for d in meta["detections"]
-                                  if d.get("label") == "bird"), None)
-                score_pct = f"{top_score * 100:.0f}" if top_score else "?"
-                caption = (f"🐦 Vogel erkannt: {bird_species}\n"
-                           f"📷 Kamera: {self.cfg.get('name', self.camera_id)}\n"
-                           f"⏰ {time_str}\n📊 Sicherheit: {score_pct}%")
-            else:
-                details = []
-                if cat_match:
-                    details.append(f"🐈 {cat_match}")
-                if person_match:
-                    details.append(f"🧍 {person_match}{' (Whitelist)' if whitelisted else ''}")
-                caption = (f"{'🚨' if level == 'alarm' else 'ℹ️'} {', '.join(sorted(set(labels)))}\n"
-                           f"📷 {self.cfg.get('name', self.camera_id)}\n"
-                           f"📍 {self.cfg.get('location', '')}\n🕒 {time_str}")
-                if details:
-                    caption += "\n" + " · ".join(details)
-            self.notifier.send_alert_sync(
-                caption=caption,
-                jpeg_bytes=meta.get("thumb_bytes"),
-                snapshot_url=video_url,
-                dashboard_url=public_base,
-                camera_id=self.camera_id,
-            )
+        if notify and self.cfg.get("telegram_enabled", True) and self.notifier:
+            try:
+                snap_path = (Path(self.global_cfg["storage"]["root"]) / thumb_rel) if thumb_rel else None
+                if hasattr(self.notifier, "send_event_alert"):
+                    self.notifier.send_event_alert(
+                        meta=meta,
+                        camera_id=self.camera_id,
+                        snapshot_path=snap_path,
+                    )
+                else:
+                    # Older notifier: fall back to legacy caption builder so
+                    # local dev environments without the push system still
+                    # produce alerts.
+                    labels = meta["labels"]
+                    level = meta.get("alarm_level")
+                    caption = (f"{'🚨' if level == 'alarm' else 'ℹ️'} "
+                               f"{', '.join(sorted(set(labels)))} · "
+                               f"{self.cfg.get('name', self.camera_id)}")
+                    self.notifier.send_alert_sync(
+                        caption=caption,
+                        jpeg_bytes=meta.get("thumb_bytes"),
+                        snapshot_url=video_url,
+                        dashboard_url=public_base,
+                        camera_id=self.camera_id,
+                    )
+            except Exception as e:
+                log.warning("[%s] telegram event push failed: %s", self.camera_id, e)
 
     def _try_unlock_achievement(self, species_name: str, species_label: str) -> bool:
         """Unlock achievement for a bird/animal species. Returns True if newly unlocked."""
@@ -1702,6 +1699,26 @@ class CameraRuntime:
                 log_tl.info("[%s][timelapse] event registered: %s", self.camera_id, tl_event["event_id"])
             except Exception as e:
                 log_tl.warning("[%s][timelapse] EventStore register failed: %s", self.camera_id, e)
+            # Push the finished video to Telegram. Gated by push.timelapse.enabled
+            # inside the notifier, so a global toggle disables this without
+            # touching the camera config.
+            try:
+                if self.notifier and hasattr(self.notifier, "send_timelapse_alert"):
+                    profile_de = {
+                        "daily":   "Tag",
+                        "weekly":  "Woche",
+                        "monthly": "Monat",
+                        "custom":  "Custom",
+                    }.get(profile_name, profile_name)
+                    self.notifier.send_timelapse_alert(
+                        video_path=out_path,
+                        cam_name=self.cfg.get("name", self.camera_id),
+                        profile_de=profile_de,
+                        duration_s=int(target_s),
+                        rel_path=video_rel,
+                    )
+            except Exception as e:
+                log_tl.warning("[%s][timelapse] push failed: %s", self.camera_id, e)
         else:
             log_tl.warning("[%s][timelapse] encode failed for window %s/%s", self.camera_id, profile_name, window_key)
 

@@ -176,8 +176,23 @@ def rebuild_services():
     global cfg, mqtt_service, telegram_service
     cfg = get_effective_config()
     mqtt_service = MQTTService(cfg.get("mqtt", {}))
-    telegram_service = TelegramService(cfg.get("telegram", {}), store=store, runtimes=runtimes, global_cfg=lambda: settings.export_effective_config(base_cfg), timelapse_builder=timelapse_builder, settings_store=settings)
-    telegram_service.start_polling()
+    # Telegram: build once per process, then `reload()` on every settings
+    # change. Recreating the service would spawn a second polling thread
+    # against the same bot token — Telegram returns Conflict and both
+    # pollers spin in a retry loop. reload() swaps config + scheduler in
+    # place and leaves polling alone.
+    if telegram_service is None:
+        telegram_service = TelegramService(
+            cfg.get("telegram", {}),
+            store=store,
+            runtimes=runtimes,
+            global_cfg=lambda: settings.export_effective_config(base_cfg),
+            timelapse_builder=timelapse_builder,
+            settings_store=settings,
+        )
+        telegram_service.start()
+    else:
+        telegram_service.reload(cfg.get("telegram", {}))
     # Existing camera runtimes hold their own references to the previous
     # telegram_service / mqtt_service (assigned in __init__). After a pure
     # services reload (e.g. Telegram or MQTT credential change without a
@@ -1610,7 +1625,6 @@ def api_telegram_actions():
 
 @app.post('/api/telegram/test')
 def api_telegram_test():
-    import asyncio as _asyncio
     tg_cfg = settings.export_effective_config(base_cfg).get("telegram", {})
     logging.getLogger(__name__).info("[Telegram] Test: enabled=%s token_set=%s chat_id=%s",
         tg_cfg.get("enabled"), bool(tg_cfg.get("token")), tg_cfg.get("chat_id"))
@@ -1623,7 +1637,12 @@ def api_telegram_test():
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     msg = f"TAM-spy Test ✓ Verbindung funktioniert! {ts}"
     try:
-        _asyncio.run(telegram_service.send_alert(caption=msg))
+        # Route through the persistent send-loop instead of asyncio.run(),
+        # which would create+tear-down a new loop on every call and trip
+        # "loop is closed" after rapid retries.
+        fut = telegram_service.send(msg, parse_mode=None)
+        if fut is not None:
+            fut.result(timeout=15)
         return jsonify({"ok": True, "message": msg})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500

@@ -143,6 +143,11 @@ SECTION_SCHEMAS: dict = {
         "enabled": bool,
         "token":   str,
         "chat_id": str,
+        # `format` is a legacy field still persisted in some installs.
+        # `push` is the dict-shaped sub-config managed by the push system —
+        # it carries its own nested defaults so we accept it as-is.
+        "format":  str,
+        "push":    dict,
     },
     "mqtt": {
         "enabled":    bool,
