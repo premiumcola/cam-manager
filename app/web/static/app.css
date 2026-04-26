@@ -658,12 +658,15 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 
 /* ── Task 3: Password field with eye toggle ─────────────────────────────────── */
 /* Unified password / URL eye toggle. .pw-eye and .url-eye share geometry +
-   colours via the comma selector below; only their click handlers differ. */
+   colours via the comma selector below; only their click handlers differ.
+   Inner glyph is an SVG (set by JS or inline in HTML) — never an emoji,
+   so size and centring are pixel-stable across fonts/platforms. */
 .pw-wrap,.url-wrap{position:relative}
-.pw-wrap input,.url-wrap input{padding-right:40px!important}
-.pw-eye,.url-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:none;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:16px;line-height:1;padding:0;transition:background .15s,color .15s;-webkit-tap-highlight-color:transparent;z-index:2}
-.pw-eye:hover,.url-eye:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.pw-wrap input,.url-wrap input{padding-right:46px!important}
+.pw-eye,.url-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:none;border-radius:8px;background:rgba(255,255,255,.04);color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;transition:background .15s,color .15s;-webkit-tap-highlight-color:transparent;z-index:2}
+.pw-eye:hover,.url-eye:hover{background:rgba(255,255,255,.10);color:var(--text)}
 .pw-eye.revealed,.url-eye.revealed{color:var(--text)}
+.pw-eye svg,.url-eye svg{display:block;width:18px;height:18px;flex-shrink:0}
 /* URL-field eye toggle — masks the password portion of an rtsp://… or
    http://user:pass@… URL while keeping the real value stored in
    data-real. Clicking reveals; clicking again re-masks. */
@@ -782,9 +785,8 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
    normal text weight 700 with a 2px bottom border in the accent colour
    sitting on top of the shared divider line. Icons inside tabs inherit
    colour from the button so they tint automatically. */
-.cam-tab-bar{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;border-bottom:1px solid rgba(255,255,255,.06);padding:0;margin-bottom:14px;-webkit-overflow-scrolling:touch}
-.cam-tab-bar::-webkit-scrollbar{height:3px}
-.cam-tab-bar::-webkit-scrollbar-thumb{background:rgba(255,255,255,.08);border-radius:3px}
+.cam-tab-bar{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;border-bottom:1px solid rgba(255,255,255,.06);padding:0;margin-bottom:14px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.cam-tab-bar::-webkit-scrollbar{display:none;width:0;height:0}
 .cam-tab-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 14px;min-width:80px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:color .15s,background .15s,border-color .15s;margin-bottom:-1px;flex-shrink:0}
 .cam-tab-btn:hover{background:rgba(255,255,255,.03);color:var(--text)}
 /* Active tab: pure white underline + white text. Neutral, no group

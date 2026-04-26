@@ -178,6 +178,15 @@ def rebuild_services():
     mqtt_service = MQTTService(cfg.get("mqtt", {}))
     telegram_service = TelegramService(cfg.get("telegram", {}), store=store, runtimes=runtimes, global_cfg=lambda: settings.export_effective_config(base_cfg), timelapse_builder=timelapse_builder, settings_store=settings)
     telegram_service.start_polling()
+    # Existing camera runtimes hold their own references to the previous
+    # telegram_service / mqtt_service (assigned in __init__). After a pure
+    # services reload (e.g. Telegram or MQTT credential change without a
+    # camera-config change), rebuild_runtimes() won't restart any camera —
+    # so we have to push the fresh services into every live runtime here,
+    # otherwise alerts keep going through the stale (often disabled) object.
+    for rt in runtimes.values():
+        rt.notifier = telegram_service
+        rt.mqtt = mqtt_service
 
 
 def _compute_camera_diff(
@@ -891,9 +900,15 @@ def api_settings_app_save():
     payload = request.get_json(force=True) or {}
     needs_rebuild = False
     try:
-        for sec in ("app", "server", "telegram", "ui", "storage"):
+        for sec in ("app", "server", "ui", "storage"):
             if sec in payload:
                 settings.update_section(sec, payload.get(sec) or {})
+        if "telegram" in payload:
+            # Telegram credentials change → rebuild_runtimes() picks up the
+            # new bot token / chat id so the next test (and any subsequent
+            # alert from a camera) uses the fresh service.
+            settings.update_section("telegram", payload.get("telegram") or {})
+            needs_rebuild = True
         if "mqtt" in payload:
             settings.update_section("mqtt", payload.get("mqtt") or {})
             needs_rebuild = True

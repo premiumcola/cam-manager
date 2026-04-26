@@ -782,11 +782,11 @@ window._toggleUrlMask=function(btn){
   const wrap=btn.closest('.url-wrap'); const input=wrap?.querySelector('input[data-mask-url="1"]');
   if(!input) return;
   const nowRevealed=input.dataset.masked==='1';
-  if(nowRevealed){_revealUrl(input); btn.classList.add('revealed'); btn.textContent='🙈';}
+  if(nowRevealed){_revealUrl(input); _setEyeState(btn,true);}
   else {
     // User just edited the revealed value — stash new real before re-masking
     input.dataset.real=input.value;
-    _applyUrlMask(input); btn.classList.remove('revealed'); btn.textContent='👁';
+    _applyUrlMask(input); _setEyeState(btn,false);
   }
 };
 function _unmaskUrlsForSubmit(form){
@@ -3387,23 +3387,27 @@ function _initSidebarNav(){
 document.addEventListener('DOMContentLoaded',_initSidebarNav);
 
 // ── Password field visibility toggle ─────────────────────────────────────────
+// Eye glyphs — single source of truth, used by .pw-eye AND .url-eye buttons
+// across the app. SVG (not emoji) so size + centring stay pixel-stable.
+const EYE_SVG=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const EYE_OFF_SVG=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.66 18.66 0 0 1 4.16-4.93"/><path d="M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a18.66 18.66 0 0 1-1.66 2.66"/><path d="M14.12 14.12a3 3 0 0 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+function _setEyeState(btn,revealed){
+  if(!btn) return;
+  btn.innerHTML=revealed?EYE_OFF_SVG:EYE_SVG;
+  btn.classList.toggle('revealed',revealed);
+  btn.setAttribute('aria-label',revealed?'Passwort verbergen':'Passwort anzeigen');
+}
 window.togglePwField=function(btn,fieldName){
   const f=btn.closest('form');
   const input=f?.elements[fieldName]; if(!input) return;
   input.type=input.type==='password'?'text':'password';
-  const revealed=input.type==='text';
-  btn.textContent=revealed?'🙈':'👁';
-  btn.classList.toggle('revealed',revealed);
+  _setEyeState(btn,input.type==='text');
 };
 window.togglePwFieldById=function(id){
   const input=byId(id); if(!input) return;
   input.type=input.type==='password'?'text':'password';
-  const revealed=input.type==='text';
   const btn=input.parentElement?.querySelector('.pw-eye');
-  if(btn){
-    btn.textContent=revealed?'🙈':'👁';
-    btn.classList.toggle('revealed',revealed);
-  }
+  _setEyeState(btn,input.type==='text');
 };
 
 // ── Media storage stats ───────────────────────────────────────────────────────
