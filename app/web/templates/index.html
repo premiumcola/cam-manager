@@ -167,7 +167,11 @@
                   <div class="field-wrap"><input name="rtsp_ip" placeholder="192.168.X.X" /><span class="field-label">Kamera-IP</span></div>
                   <div class="cam-userpass">
                     <div class="field-wrap"><input name="rtsp_user" placeholder="admin" /><span class="field-label">Benutzer</span></div>
-                    <div class="field-wrap"><input name="rtsp_pass" type="password" placeholder="Passwort" /><span class="field-label">Passwort</span></div>
+                    <div class="field-wrap pw-wrap">
+                      <input name="rtsp_pass" type="password" placeholder="Passwort" autocomplete="off" />
+                      <button type="button" class="pw-eye" onclick="togglePwField(this,'rtsp_pass')" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen">👁</button>
+                      <span class="field-label">Passwort</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -540,9 +544,9 @@
                   <span class="field-label">Chat ID</span>
                 </div>
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-                  <button type="submit" class="btn btn-save" style="flex:1;min-width:160px"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h8L13.5 5v8.5h-11z"/><polyline points="5,2.5 5,6.5 10,6.5 10,2.5"/><polyline points="4.5,13.5 4.5,9 11.5,9 11.5,13.5"/></svg>Verbindung speichern</button>
                   <button type="button" id="telegramTestBtn" class="btn-action">📨 Testnachricht</button>
                   <span id="telegramTestResult" class="small" style="display:none"></span>
+                  <button type="submit" class="btn btn-save" style="margin-left:auto"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h8L13.5 5v8.5h-11z"/><polyline points="5,2.5 5,6.5 10,6.5 10,2.5"/><polyline points="4.5,13.5 4.5,9 11.5,9 11.5,13.5"/></svg>Verbindung speichern</button>
                 </div>
               </form>
             </div>
@@ -560,7 +564,9 @@
                   <label class="tg-fmt-opt"><input type="radio" name="tg_format" value="video" /><span>🎬 Text + Foto + Video</span></label>
                 </div>
                 <div id="tgFormatPreview" class="tg-preview"></div>
-                <button type="button" id="saveTgFormatBtn" class="btn btn-save"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h8L13.5 5v8.5h-11z"/><polyline points="5,2.5 5,6.5 10,6.5 10,2.5"/><polyline points="4.5,13.5 4.5,9 11.5,9 11.5,13.5"/></svg>Format speichern</button>
+                <div style="display:flex;justify-content:flex-end">
+                  <button type="button" id="saveTgFormatBtn" class="btn btn-save"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h8L13.5 5v8.5h-11z"/><polyline points="5,2.5 5,6.5 10,6.5 10,2.5"/><polyline points="4.5,13.5 4.5,9 11.5,9 11.5,13.5"/></svg>Format speichern</button>
+                </div>
               </div>
             </div>
 
@@ -757,7 +763,9 @@
                 </div>
               </div>
               <div class="field-wrap"><input id="mqtt_base_topic" placeholder="tam-spy" /><span class="field-label">Base Topic</span></div>
-              <button type="button" class="btn btn-save" onclick="saveMqttSettings()"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h8L13.5 5v8.5h-11z"/><polyline points="5,2.5 5,6.5 10,6.5 10,2.5"/><polyline points="4.5,13.5 4.5,9 11.5,9 11.5,13.5"/></svg>MQTT speichern &amp; neu laden</button>
+              <div style="display:flex;justify-content:flex-end">
+                <button type="button" class="btn btn-save" onclick="saveMqttSettings()"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h8L13.5 5v8.5h-11z"/><polyline points="5,2.5 5,6.5 10,6.5 10,2.5"/><polyline points="4.5,13.5 4.5,9 11.5,9 11.5,13.5"/></svg>MQTT speichern &amp; neu laden</button>
+              </div>
             </div>
           </div></div>
         </div>

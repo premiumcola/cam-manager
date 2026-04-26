@@ -657,17 +657,16 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .storage-cam-size{color:var(--accent);font-weight:700}
 
 /* ── Task 3: Password field with eye toggle ─────────────────────────────────── */
-.pw-wrap{position:relative}
-.pw-wrap input{padding-right:40px!important}
-.pw-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:15px;color:var(--muted);padding:4px;line-height:1;z-index:2;margin-top:-8px}
-.pw-eye:hover{color:var(--text)}
+/* Unified password / URL eye toggle. .pw-eye and .url-eye share geometry +
+   colours via the comma selector below; only their click handlers differ. */
+.pw-wrap,.url-wrap{position:relative}
+.pw-wrap input,.url-wrap input{padding-right:40px!important}
+.pw-eye,.url-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:32px;height:32px;border:none;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:16px;line-height:1;padding:0;transition:background .15s,color .15s;-webkit-tap-highlight-color:transparent;z-index:2}
+.pw-eye:hover,.url-eye:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.pw-eye.revealed,.url-eye.revealed{color:var(--text)}
 /* URL-field eye toggle — masks the password portion of an rtsp://… or
    http://user:pass@… URL while keeping the real value stored in
    data-real. Clicking reveals; clicking again re-masks. */
-.url-wrap{position:relative}
-.url-eye{position:absolute;top:50%;right:8px;transform:translateY(-50%);width:26px;height:26px;border:none;border-radius:8px;background:transparent;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;font-size:14px;line-height:1;transition:background .15s,color .15s;-webkit-tap-highlight-color:transparent}
-.url-eye:hover{background:rgba(255,255,255,.06);color:var(--text)}
-.url-eye.revealed{color:#60a5fa}
 
 /* ── Settings accordion ────────────────────────────────────────────────── */
 /* Closed = neutral gray, no border. Open = tinted border + background +
@@ -680,6 +679,7 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
    surface. Titles stay white — explicitly NOT covered by these rules. */
 .set-section .toggle-row-sublabel,
 .set-section .field-help,
+.set-section .field-label,
 .set-section .cpt-node-sub,
 .set-section .cpt-node-list{color:rgb(var(--acc) / 0.65)}
 /* App + Media-config panels use a true neutral warm-grey for subtitles
@@ -687,10 +687,12 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
    #9ba1a8 used for the app-info-row labels). */
 #set-app .toggle-row-sublabel,
 #set-app .field-help,
+#set-app .field-label,
 #set-app .cpt-node-sub,
 #set-app .cpt-node-list,
 #set-media-config .toggle-row-sublabel,
-#set-media-config .field-help{color:#9ba1a8}
+#set-media-config .field-help,
+#set-media-config .field-label{color:#9ba1a8}
 .set-section.open{border-color:rgba(var(--sa),0.2);background:rgba(var(--sa),0.04)}
 .set-hd-row{display:flex;align-items:center;border-radius:inherit;overflow:hidden}
 .set-hd{width:100%;display:flex;align-items:center;gap:10px;padding:13px 16px;background:none;border:none;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;text-align:left}

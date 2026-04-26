@@ -3388,11 +3388,19 @@ window.togglePwField=function(btn,fieldName){
   const f=btn.closest('form');
   const input=f?.elements[fieldName]; if(!input) return;
   input.type=input.type==='password'?'text':'password';
-  btn.textContent=input.type==='password'?'👁':'🙈';
+  const revealed=input.type==='text';
+  btn.textContent=revealed?'🙈':'👁';
+  btn.classList.toggle('revealed',revealed);
 };
 window.togglePwFieldById=function(id){
   const input=byId(id); if(!input) return;
   input.type=input.type==='password'?'text':'password';
+  const revealed=input.type==='text';
+  const btn=input.parentElement?.querySelector('.pw-eye');
+  if(btn){
+    btn.textContent=revealed?'🙈':'👁';
+    btn.classList.toggle('revealed',revealed);
+  }
 };
 
 // ── Media storage stats ───────────────────────────────────────────────────────
