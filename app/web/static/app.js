@@ -357,14 +357,79 @@ function calcItemsPerPage(){
   const cols=_lastKnownCols||Math.max(1,Math.floor((containerW+GAP)/(MIN_CARD+GAP)));
   return _MEDIA_ROWS*cols;
 }
-function updateAvailableLabelPills(){
-  const available=new Set((state._allMedia||[]).flatMap(item=>item.labels||[]));
-  document.querySelectorAll('.media-pill[data-type="label"]').forEach(p=>{
-    const val=p.dataset.val;
-    if(!val) return;  // "Alle" (empty val) always visible
-    p.style.display=available.has(val)?'':'none';
+// Filter labels rendered in the Mediathek pill bar. Sort happens at render
+// time (by count desc); this list seeds the canonical set + tie-break order.
+const MEDIA_FILTER_LABELS=['motion','person','cat','bird','car','dog','squirrel','timelapse'];
+
+function _aggregateMediaCounts(){
+  const counts={};
+  MEDIA_FILTER_LABELS.forEach(l=>counts[l]=0);
+  const stats=(state.mediaStats||[]).filter(s=>{
+    if(!state.mediaCamera) return true;
+    return (s.camera_id||s.id||s.name)===state.mediaCamera;
   });
-  return available;
+  stats.forEach(s=>{
+    const lc=s.label_counts||{};
+    Object.entries(lc).forEach(([k,v])=>{
+      if(Object.prototype.hasOwnProperty.call(counts,k)) counts[k]+=v||0;
+    });
+    counts.timelapse+=s.timelapse_count||0;
+  });
+  return counts;
+}
+
+function _seedTopMediaLabel(){
+  const counts=_aggregateMediaCounts();
+  let top=null,topCnt=0;
+  for(const l of MEDIA_FILTER_LABELS){
+    if(counts[l]>topCnt){ top=l; topCnt=counts[l]; }
+  }
+  if(top){ state.mediaLabels=new Set([top]); return true; }
+  return false;
+}
+
+function _pruneEmptyMediaFilters(){
+  const counts=_aggregateMediaCounts();
+  const before=state.mediaLabels.size;
+  for(const l of [...state.mediaLabels]){
+    if(!counts[l]) state.mediaLabels.delete(l);
+  }
+  return before>0 && state.mediaLabels.size===0;
+}
+
+function renderMediaFilterPills(){
+  const bar=byId('mediaFilterBar'); if(!bar) return;
+  const counts=_aggregateMediaCounts();
+  const nonTl=MEDIA_FILTER_LABELS.filter(l=>l!=='timelapse');
+  nonTl.sort((a,b)=>{
+    const d=counts[b]-counts[a];
+    if(d) return d;
+    return MEDIA_FILTER_LABELS.indexOf(a)-MEDIA_FILTER_LABELS.indexOf(b);
+  });
+  const ordered=[...nonTl,'__divider','timelapse'];
+  bar.innerHTML=ordered.map(l=>{
+    if(l==='__divider') return '<span class="filter-divider"></span>';
+    const cnt=counts[l]||0;
+    const empty=cnt===0;
+    const active=state.mediaLabels.has(l);
+    const cls=`media-pill cat-filter-btn${active?' active':''}${empty?' media-pill--empty':''}`;
+    const cb=CAT_COLORS[l]||'#94a3b8';
+    const cntChip=cnt>0?`<span class="mp-count" style="pointer-events:none">${cnt}</span>`:'';
+    return `<button type="button" class="${cls}" data-type="label" data-val="${l}" style="--cb:${cb}"${empty?' tabindex="-1" aria-disabled="true"':''}><span class="cfb-icon" style="pointer-events:none">${objIconSvg(l,18)}</span><span style="pointer-events:none">${OBJ_LABEL[l]||l}</span>${cntChip}</button>`;
+  }).join('');
+  bar.querySelectorAll('.media-pill').forEach(p=>{
+    if(p.classList.contains('media-pill--empty')) return;
+    p.addEventListener('click',()=>{
+      const val=p.dataset.val;
+      if(state.mediaLabels.has(val)) state.mediaLabels.delete(val);
+      else state.mediaLabels.add(val);
+      state.mediaPage=0;
+      renderMediaFilterPills();
+      if(byId('mediaDrilldown')?.style.display!=='none'){
+        loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();});
+      }
+    });
+  });
 }
 let _cachedPageSize=0;
 async function loadMedia(){
@@ -3343,6 +3408,10 @@ async function refreshTimelineAndStats(){
     state.timeline=tl;
     renderTimeline();
   }catch(_){ /* non-critical: leave previous render in place */ }
+  if(byId('mediaDrilldown')?.style.display!=='none'){
+    if(_pruneEmptyMediaFilters()) _seedTopMediaLabel();
+    renderMediaFilterPills();
+  }
 }
 
 byId('cleanupNowBtn').onclick=async()=>{
@@ -4543,7 +4612,8 @@ window.openCategoryDrilldown=async function(label){
   state.mediaLabels=new Set(label?[label]:[]);
   state.mediaPage=0;
   if(state.mediaSelectMode) _exitMediaSelectMode();
-  syncMediaPills();
+  if(state.mediaLabels.size===0) _seedTopMediaLabel();
+  renderMediaFilterPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
   _updateMediaSelectToggle();
@@ -4605,8 +4675,6 @@ function renderMediaGrid(){
     const item=items.find(x=>x.event_id===id);
     if(item) openLightbox(item);
   };
-  // Refresh label-pill visibility against current data
-  updateAvailableLabelPills();
   // Poll for pending recording/processing items until every visible card is ready
   _ensureProcessingPoll();
   // Cache-bust any card whose item has a snapshot_relpath but whose <img> is
@@ -4662,7 +4730,8 @@ async function openAllMediaDrilldown(){
   const grid=byId('mediaGrid');
   if(grid) grid.innerHTML='<div style="padding:32px;text-align:center;color:var(--muted)">Lade Medien…</div>';
   const pag=byId('mediaPagination'); if(pag) pag.innerHTML='';
-  syncMediaPills();
+  _seedTopMediaLabel();
+  renderMediaFilterPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
   _setActiveMocCard('__all__');
@@ -4681,7 +4750,8 @@ async function openMediaDrilldown(camId){
   const grid=byId('mediaGrid');
   if(grid) grid.innerHTML='<div style="padding:32px;text-align:center;color:var(--muted)">Lade Medien…</div>';
   const pag=byId('mediaPagination'); if(pag) pag.innerHTML='';
-  syncMediaPills();
+  _seedTopMediaLabel();
+  renderMediaFilterPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
   _setActiveMocCard(camId);
@@ -4761,40 +4831,8 @@ window.bulkDeleteSelectedMedia=async function(){
     showToast(failed?`${r.deleted} gelöscht, ${failed} fehlgeschlagen`:`${r.deleted} gelöscht`,failed?'error':'success');
   }catch(e){showToast('Bulk-Löschen fehlgeschlagen: '+e.message,'error');}
 };
-function syncMediaPills(){
-  const labels=state.mediaLabels;
-  document.querySelectorAll('.media-pill[data-type="label"]').forEach(p=>{
-    const val=p.dataset.val;
-    if(val==='') p.classList.toggle('active',labels.size===0);
-    else p.classList.toggle('active',labels.has(val));
-  });
-}
-(function initMediaPills(){
-  document.querySelectorAll('.media-pill[data-label-key]').forEach(p=>{
-    const key=p.dataset.labelKey;
-    if(key&&OBJ_SVG[key]){
-      p.innerHTML=`<span class="cfb-icon" style="pointer-events:none">${objIconSvg(key,18)}</span><span style="pointer-events:none">${OBJ_LABEL[key]||key}</span>`;
-    }
-  });
-  document.querySelectorAll('.media-pill[data-type="label"]').forEach(p=>{
-    p.addEventListener('click',()=>{
-      const val=p.dataset.val;
-      if(val===''){
-        state.mediaLabels=new Set();
-      } else if(state.mediaLabels.has(val)){
-        state.mediaLabels.delete(val);
-      } else {
-        state.mediaLabels.add(val);
-      }
-      state.mediaPage=0;
-      syncMediaPills();
-      if(byId('mediaDrilldown')?.style.display!=='none'){
-        loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();});
-      }
-    });
-  });
-  syncMediaPills();
-})();
+// Legacy alias — pills are now rendered dynamically via renderMediaFilterPills.
+function syncMediaPills(){ renderMediaFilterPills(); }
 // ── Media grid resize observer ───────────────────────────────────────────────
 (function(){
   const grid=byId('mediaGrid');
