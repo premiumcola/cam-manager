@@ -2045,9 +2045,39 @@ async function finishWizard(){
 
 byId('reloadConfigBtn').onclick=()=>loadAll();
 
+// Slider feedback is decoupled from the network: input events update
+// state.tlHours, the label, and re-render the timeline against whatever
+// data is already cached in state.timeline (instant). The actual fetch
+// is debounced and cancellable so a fast drag spawns at most one
+// in-flight request, and stale responses can never overwrite a newer
+// selection (token check at resolution time).
+let _tlFetchTimer=null;
+let _tlFetchAbort=null;
+let _tlFetchToken=0;
+function _tlFetchTimeline(hours){
+  if(_tlFetchAbort){try{_tlFetchAbort.abort();}catch{}}
+  const ctrl=new AbortController();
+  _tlFetchAbort=ctrl;
+  const myToken=++_tlFetchToken;
+  const url=`/api/timeline?hours=${hours}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`;
+  j(url,{signal:ctrl.signal}).then(data=>{
+    if(myToken!==_tlFetchToken) return;
+    if(state.tlHours!==hours) return;
+    state.timeline=data;
+    renderTimeline();
+  }).catch(()=>{/* abort or error: keep current data */});
+}
 byId('tlRangeSlider').addEventListener('input',e=>{
   state.tlHours=parseInt(e.target.value);
-  j(`/api/timeline?hours=${state.tlHours}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`).then(data=>{state.timeline=data;renderTimeline();});
+  renderTimeline();
+  clearTimeout(_tlFetchTimer);
+  const hours=state.tlHours;
+  _tlFetchTimer=setTimeout(()=>_tlFetchTimeline(hours),250);
+});
+byId('tlRangeSlider').addEventListener('change',e=>{
+  state.tlHours=parseInt(e.target.value);
+  clearTimeout(_tlFetchTimer);
+  _tlFetchTimeline(state.tlHours);
 });
 // alias so discovery modal code still works
 const RTSP_PATHS=RTSP_PATH_OPTS;
