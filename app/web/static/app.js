@@ -5294,17 +5294,25 @@ function _renderStatistik(monthData,dayData){
   const totalLabels=Object.values(labelCounts).reduce((a,b)=>a+b,0)||1;
   const top3=Object.entries(labelCounts).sort((a,b)=>b[1]-a[1]).slice(0,3);
 
+  // Rolling 24h buckets indexed by hoursAgo (0 = current hour, 23 = ~24h ago).
+  // Rendering reverses this so the rightmost cell is hoursAgo=0 — the user
+  // reads the strip right-to-left from "now".
   const hmData={};
   cameras.forEach(c=>{ hmData[c.id]=new Array(24).fill(0); });
+  const nowMs=Date.now();
   (dayData.tracks||[]).forEach(t=>{
     if(!hmData[t.camera_id]) hmData[t.camera_id]=new Array(24).fill(0);
     (t.points||[]).forEach(e=>{
-      const h=new Date(e.time).getHours();
-      if(h>=0&&h<24) hmData[t.camera_id][h]++;
+      const tt=new Date(e.time).getTime();
+      if(!tt) return;
+      const hoursAgo=Math.floor((nowMs-tt)/3600000);
+      if(hoursAgo>=0&&hoursAgo<24) hmData[t.camera_id][hoursAgo]++;
     });
   });
   const hmMax=Math.max(1,...cameras.flatMap(c=>hmData[c.id]||[]));
   const hmHasData=cameras.some(c=>(hmData[c.id]||[]).some(v=>v>0));
+  // Column 0 (leftmost) = hoursAgo=23, column 23 (rightmost) = hoursAgo=0.
+  const hmColLabels=Array.from({length:24},(_,col)=>new Date(nowMs-(23-col)*3600000).getHours());
 
   const periodPills=[['Heute',todayCount],['Diese Woche',weekCount],['Dieser Monat',monthCount]]
     .map(([label,count])=>`<div class="stat-period-pill"><div class="stat-period-num">${count}</div><div class="stat-period-label">${label}</div></div>`).join('');
@@ -5347,21 +5355,25 @@ function _renderStatistik(monthData,dayData){
     ?`<div class="stat-heatmap-wrap"><div class="stat-hm-grid">
         <div class="stat-hm-header">
           <div class="stat-hm-cam-col"></div>
-          <div class="stat-hm-hours">${Array.from({length:24},(_,h)=>`<div class="stat-hm-hlabel">${h}</div>`).join('')}</div>
+          <div class="stat-hm-hours">${hmColLabels.map(h=>`<div class="stat-hm-hlabel">${h}</div>`).join('')}</div>
         </div>
         ${cameras.map(c=>{
           const hours=hmData[c.id]||new Array(24).fill(0);
           const hmCamCls=STAT_MEDIA_DRILLDOWN?'stat-hm-cam stat-drillable':'stat-hm-cam';
           const hmCamClick=STAT_MEDIA_DRILLDOWN?`onclick="_statOpenMedia('${esc(c.id)}','')"`:'' ;
+          const cells=hmColLabels.map((labelHour,col)=>{
+            const hoursAgo=23-col;
+            const cnt=hours[hoursAgo]||0;
+            const alpha=cnt===0?0.12:Math.max(0.25,0.15+cnt/hmMax*0.8);
+            const bg=cnt===0?'rgba(41,48,74,0.5)':`rgba(59,130,246,${alpha.toFixed(2)})`;
+            const prevHour=new Date(nowMs-(hoursAgo+1)*3600000).getHours();
+            const h0=String(prevHour).padStart(2,'0');
+            const h1=String(labelHour).padStart(2,'0');
+            return `<div class="stat-hm-cell" style="background:${bg}" data-tip="${h0}:00–${h1}:00 · ${cnt} Events"></div>`;
+          }).join('');
           return `<div class="stat-hm-row">
             <div class="${hmCamCls}" title="${esc(c.name||c.id)}" ${hmCamClick}>${getCameraIcon(c.name||c.id)}&nbsp;${esc(c.name||c.id)}</div>
-            <div class="stat-hm-cells">${hours.map((cnt,h)=>{
-              const alpha=cnt===0?0.12:Math.max(0.25,0.15+cnt/hmMax*0.8);
-              const bg=cnt===0?'rgba(41,48,74,0.5)':`rgba(59,130,246,${alpha.toFixed(2)})`;
-              const h0=String(h).padStart(2,'0');
-              const h1=String(h+1).padStart(2,'0');
-              return `<div class="stat-hm-cell" style="background:${bg}" data-tip="${h0}:00–${h1}:00 · ${cnt} Events"></div>`;
-            }).join('')}</div>
+            <div class="stat-hm-cells">${cells}</div>
           </div>`;}).join('')}
       </div></div>`
     :'<div class="stat-empty">Keine Ereignisse in den letzten 24h</div>';
