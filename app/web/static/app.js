@@ -635,7 +635,7 @@ function renderTimeline(){
     html+=`<div class="tl-cam-block${ti>0?' tl-cam-block--notfirst':''}">`;
     const sbCls=STAT_MEDIA_DRILLDOWN?'tl-cam-sidebox stat-drillable':'tl-cam-sidebox';
     const sbClick=STAT_MEDIA_DRILLDOWN?`onclick="_statOpenMedia('${esc(tr.camera_id)}','')"`:'' ;
-    html+=`<div class="${sbCls}" ${sbClick}><span class="tl-cam-icon">${camIcon}</span><span class="tl-cam-name">${esc(camName)}</span></div>`;
+    html+=`<div class="${sbCls}" ${sbClick}><div class="tl-cam-icon">${camIcon}</div><div class="tl-cam-name">${esc(camName)}</div></div>`;
     html+=`<div class="tl-lanes-wrap">`;
     for(let k=1;k<5;k++) html+=`<div class="tl-vgrid" style="left:calc(var(--tl-label-w) + (100% - var(--tl-label-w))*${k}/5)"></div>`;
     lanes.forEach(({label,groups})=>{
