@@ -373,6 +373,14 @@ class WeatherService:
                 log.info("[Weather] %s on %s · severity=%.2f · clip building",
                          EVENT_LABEL_DE.get(evt_type, evt_type), self._cam_name(cam_id), severity)
 
+        # Wetter-Ereignis-Timelapse — separate trigger pipeline that walks
+        # the full minutely_15 forecast (not just the latest slot) and uses
+        # its own per-cam cross-trigger cooldown + daily cap.
+        try:
+            self._check_event_tl_triggers(payload)
+        except Exception as e:
+            log.warning("[Weather-TL] trigger eval failed: %s", e)
+
         with self._lock:
             self._status["last_poll_at"] = datetime.now().isoformat(timespec="seconds")
             self._status["last_api_ok"] = True
@@ -710,10 +718,12 @@ class WeatherService:
                     continue
                 # Pre-filter by directory name when the requested event_type
                 # has a 1:1 dir mapping. Sun-Timelapse subtypes share one
-                # dir ("sun_timelapse") so we always recurse and filter
-                # post-translation.
+                # dir ("sun_timelapse") and event_timelapse triggers share
+                # the "event_timelapse" dir, so we always recurse those and
+                # filter post-translation.
                 _is_sun_request = event_type in ("sun_timelapse_rise", "sun_timelapse_set", "sun_timelapse")
-                if event_type and not _is_sun_request and evt_dir.name != event_type:
+                _is_evt_tl_request = event_type in ("thunder_rising", "front_passing", "storm_front", "event_timelapse")
+                if event_type and not _is_sun_request and not _is_evt_tl_request and evt_dir.name != event_type:
                     continue
                 for jf in evt_dir.glob("*.json"):
                     try:
@@ -738,8 +748,18 @@ class WeatherService:
                         elif sp == "sunset":
                             et = "sun_timelapse_set"
                         m["event_type"] = et
+                    elif et == "event_timelapse":
+                        # Trigger field carries the WEATHER_TYPES key
+                        # (thunder_rising / front_passing / storm_front);
+                        # surface that as the display type.
+                        trig = (m.get("trigger") or "").lower()
+                        if trig in ("thunder_rising", "front_passing", "storm_front"):
+                            et = trig
+                        m["event_type"] = et
                     if event_type and et != event_type and not (
                         event_type == "sun_timelapse" and et.startswith("sun_timelapse")
+                    ) and not (
+                        event_type == "event_timelapse" and et in ("thunder_rising", "front_passing", "storm_front")
                     ):
                         continue
                     counts[et] = counts.get(et, 0) + 1
@@ -761,12 +781,17 @@ class WeatherService:
             return None
         # Mirror list_sightings: collapse the on-disk generic type onto the
         # phase-specific display value the frontend WEATHER_TYPES map uses.
-        if m.get("event_type") == "sun_timelapse":
+        et = m.get("event_type")
+        if et == "sun_timelapse":
             sp = (m.get("sun_phase") or "").lower()
             if sp == "sunrise":
                 m["event_type"] = "sun_timelapse_rise"
             elif sp == "sunset":
                 m["event_type"] = "sun_timelapse_set"
+        elif et == "event_timelapse":
+            trig = (m.get("trigger") or "").lower()
+            if trig in ("thunder_rising", "front_passing", "storm_front"):
+                m["event_type"] = trig
         return m
 
     def delete_sighting(self, sighting_id: str) -> bool:
@@ -797,6 +822,10 @@ class WeatherService:
         if evt in ("sun_timelapse_rise", "sun_timelapse_set",
                    "sun_timelapse_sunrise", "sun_timelapse_sunset"):
             evt = "sun_timelapse"
+        # Event-Timelapse: id encodes the trigger kind (thunder_rising /
+        # front_passing / storm_front) but all live in event_timelapse/.
+        elif evt in ("thunder_rising", "front_passing", "storm_front"):
+            evt = "event_timelapse"
         return self._sightings_dir() / cam_id / evt / f"{ts}.json"
 
     def status(self) -> dict:
@@ -1024,17 +1053,32 @@ class WeatherService:
                     out.append(m)
         return out
 
-    @staticmethod
-    def _pick_recap_clips(cands: list[dict], per_type_max: int = 3, total_cap: int = 12) -> list[dict]:
+    # Event-timelapse triggers — keep in sync with the WEATHER_TYPES keys
+    # the frontend defines for these. Used to bump the per-type recap cap.
+    _EVENT_TL_TRIGGERS: tuple[str, ...] = ("thunder_rising", "front_passing", "storm_front")
+
+    @classmethod
+    def _pick_recap_clips(cls, cands: list[dict], per_type_max: int = 3,
+                          total_cap: int = 12) -> list[dict]:
         # Group by event_type, take top `per_type_max` by score per group.
+        # Event-Timelapse triggers get a higher cap because they're longer,
+        # rarer and more curated than the 10-s clips — a dramatic quarter
+        # with several storm fronts deserves to be represented properly.
+        EVT_TL_CAP = 5
         by_type: dict[str, list[dict]] = {}
         for m in cands:
-            by_type.setdefault(m.get("event_type", "?"), []).append(m)
+            et = m.get("event_type", "?")
+            # Manifest may carry the on-disk generic "event_timelapse" type
+            # (when read straight from disk by the recap collector). Map
+            # back to the trigger so per-type bucketing matches the UI.
+            if et == "event_timelapse":
+                et = (m.get("trigger") or et)
+            by_type.setdefault(et, []).append(m)
         picked = []
         for evt, items in by_type.items():
             items.sort(key=lambda m: float(m.get("score") or 0.0), reverse=True)
-            picked.extend(items[:per_type_max])
-        # Chronological order so the reel walks the season.
+            cap = EVT_TL_CAP if evt in cls._EVENT_TL_TRIGGERS else per_type_max
+            picked.extend(items[:cap])
         picked.sort(key=lambda m: m.get("started_at", ""))
         return picked[:total_cap]
 
@@ -1400,6 +1444,329 @@ class WeatherService:
             return self._latest_slice(r.json())
         except Exception:
             return {}
+
+    # ── Wetter-Ereignis-Timelapse ───────────────────────────────────────────
+
+    # 4 h cross-trigger cooldown per camera, plus a per-day cap of 2.
+    # Both keep the system from carpet-bombing the user with 60-min
+    # timelapses during an active weather day.
+    _EVENT_TL_COOLDOWN_S: int = 4 * 3600
+    _EVENT_TL_DAILY_CAP: int = 2
+
+    def _event_tl_state(self) -> dict:
+        # Lazy attr — keeps __init__ unchanged.
+        if not hasattr(self, "_event_tl_state_dict"):
+            self._event_tl_state_dict = {
+                "last_trigger_ts": {},   # cam_id -> unix ts (any-trigger 4h cooldown)
+                "daily_count":     {},   # (cam_id, "YYYY-MM-DD") -> int
+            }
+        return self._event_tl_state_dict
+
+    def _event_tl_cooldown_active(self, cam_id: str) -> tuple[bool, int]:
+        """Return (in_cooldown, minutes_remaining)."""
+        st = self._event_tl_state()
+        last = st["last_trigger_ts"].get(cam_id, 0.0)
+        elapsed = time.time() - last
+        if elapsed < self._EVENT_TL_COOLDOWN_S:
+            return True, int((self._EVENT_TL_COOLDOWN_S - elapsed) // 60) + 1
+        return False, 0
+
+    def _event_tl_daily_cap_hit(self, cam_id: str) -> bool:
+        st = self._event_tl_state()
+        key = (cam_id, date.today().isoformat())
+        return st["daily_count"].get(key, 0) >= self._EVENT_TL_DAILY_CAP
+
+    def _event_tl_record_trigger(self, cam_id: str):
+        st = self._event_tl_state()
+        st["last_trigger_ts"][cam_id] = time.time()
+        key = (cam_id, date.today().isoformat())
+        st["daily_count"][key] = st["daily_count"].get(key, 0) + 1
+
+    @staticmethod
+    def _slices_window(payload: dict, past_min: int = 60, future_min: int = 180) -> list[dict]:
+        """Return all 15-min slices within [-past_min, +future_min] of now,
+        each as a dict {time, ...measurements}. Times beyond the API's
+        returned array are simply absent — caller must handle empty lists."""
+        m = (payload or {}).get("minutely_15") or {}
+        times = m.get("time") or []
+        if not times:
+            return []
+        keys = [k for k in m if k != "time"]
+        now = datetime.now()
+        out = []
+        for i, t_iso in enumerate(times):
+            t = _safe_dt(t_iso)
+            if not t:
+                continue
+            delta_min = (t - now).total_seconds() / 60.0
+            if delta_min < -past_min or delta_min > future_min:
+                continue
+            slot = {"time": t_iso, "_dt": t}
+            for k in keys:
+                arr = m.get(k) or []
+                slot[k] = arr[i] if i < len(arr) else None
+            out.append(slot)
+        return out
+
+    def _check_event_tl_triggers(self, payload: dict):
+        """Evaluate the 3 event-tl triggers per opted-in camera. Anyone that
+        fires arms the cross-trigger cooldown (so the OTHER triggers also
+        get blocked for 4 h) and increments the daily counter."""
+        slices = self._slices_window(payload, past_min=60, future_min=180)
+        if not slices:
+            return
+        for cam in self._cfg_cameras():
+            cam_id = cam.get("id")
+            cw = cam.get("weather") or {}
+            evt_cfg = cw.get("event_timelapse") or {}
+            if not cw.get("enabled") or not evt_cfg.get("enabled"):
+                continue
+            in_cd, mins = self._event_tl_cooldown_active(cam_id)
+            if in_cd:
+                # Don't spam the log every 5-min poll — only log when a
+                # detector would HAVE fired. Keep it simple by checking
+                # detectors first, then emitting one cooldown line if any.
+                fired = self._evaluate_event_tl_detectors(slices, evt_cfg)
+                if fired:
+                    log.info("[Weather-TL] Cooldown active (%dh %02dmin remaining) — %s skipped on %s",
+                             mins // 60, mins % 60, fired[0], self._cam_name(cam_id))
+                continue
+            if self._event_tl_daily_cap_hit(cam_id):
+                fired = self._evaluate_event_tl_detectors(slices, evt_cfg)
+                if fired:
+                    log.info("[Weather-TL] Daily limit reached (%d/day), skipping %s on %s",
+                             self._EVENT_TL_DAILY_CAP, fired[0], self._cam_name(cam_id))
+                continue
+            triggers = self._evaluate_event_tl_detectors(slices, evt_cfg)
+            if not triggers:
+                continue
+            # Fire the FIRST matching trigger — once per cam per cycle.
+            trig_kind, score, fc_snapshot = triggers[0]
+            self._event_tl_record_trigger(cam_id)
+            window_min = int(evt_cfg.get("window_min", 60) or 60)
+            interval_s = max(1, int(evt_cfg.get("interval_s", 6) or 6))
+            fps        = max(1, int(evt_cfg.get("fps", 24) or 24))
+            log.info("[Weather-TL] %s on %s · score=%.2f · capture starting (%d min, %ds-Intervall, %d fps)",
+                     trig_kind, self._cam_name(cam_id), score, window_min, interval_s, fps)
+            threading.Thread(
+                target=self._run_event_tl_capture,
+                args=(cam_id, trig_kind, score, slices[0] if slices else {}, fc_snapshot,
+                      window_min, interval_s, fps),
+                daemon=True,
+                name=f"weather-evt-tl-{cam_id}-{trig_kind}",
+            ).start()
+
+    def _evaluate_event_tl_detectors(self, slices: list[dict], evt_cfg: dict) -> list[tuple[str, float, dict]]:
+        """Run all 3 detectors that are enabled for this camera. Returns a
+        list of (trigger_kind, score, forecast_snapshot) tuples for any
+        that fired. Caller picks one — typically the first."""
+        triggers_cfg = evt_cfg.get("triggers") or {}
+        results: list[tuple[str, float, dict]] = []
+        if triggers_cfg.get("thunder_rising", True):
+            r = self._detect_thunder_rising(slices)
+            if r:
+                results.append(("thunder_rising", *r))
+        if triggers_cfg.get("front_passing", True):
+            r = self._detect_front_passing(slices)
+            if r:
+                results.append(("front_passing", *r))
+        if triggers_cfg.get("storm_front", True):
+            r = self._detect_storm_front(slices)
+            if r:
+                results.append(("storm_front", *r))
+        return results
+
+    @staticmethod
+    def _slice_at_or_after(slices: list[dict], minutes_from_now: int) -> dict | None:
+        for s in slices:
+            dt = s.get("_dt")
+            if dt and (dt - datetime.now()).total_seconds() / 60.0 >= minutes_from_now:
+                return s
+        return None
+
+    def _detect_thunder_rising(self, slices: list[dict]) -> tuple[float, dict] | None:
+        """Lightning-potential climbs from <500 to >1500 within the next
+        60–90 min → trigger NOW. Score = peak_LP / 3000 (capped 0..1)."""
+        now_slice = self._slice_at_or_after(slices, 0) or (slices[0] if slices else {})
+        lp_now = now_slice.get("lightning_potential")
+        # Look for the peak in the next 90 min.
+        peak = 0.0
+        peak_slot: dict | None = None
+        for s in slices:
+            t = s.get("_dt")
+            if not t:
+                continue
+            delta = (t - datetime.now()).total_seconds() / 60.0
+            if delta < 0 or delta > 90:
+                continue
+            v = s.get("lightning_potential")
+            if v is None:
+                continue
+            if float(v) > peak:
+                peak = float(v); peak_slot = s
+        if peak_slot is None:
+            return None
+        if (lp_now is None or float(lp_now) < 500.0) and peak >= 1500.0:
+            score = min(1.0, peak / 3000.0)
+            return score, _safe_subset(peak_slot, [
+                "time", "lightning_potential", "cloud_cover", "wind_gusts_10m",
+                "precipitation",
+            ])
+        return None
+
+    def _detect_front_passing(self, slices: list[dict]) -> tuple[float, dict] | None:
+        """Cloud-cover swing > 50 percentage-points across any 60-min window
+        AND wind-gust climb > 20 km/h within the same window."""
+        # Build a (dt, cc, gust) sequence for slices in [-30, +120] min.
+        seq = []
+        for s in slices:
+            dt = s.get("_dt")
+            if not dt:
+                continue
+            delta = (dt - datetime.now()).total_seconds() / 60.0
+            if delta < -30 or delta > 120:
+                continue
+            cc = s.get("cloud_cover"); g = s.get("wind_gusts_10m")
+            if cc is None or g is None:
+                continue
+            seq.append((dt, float(cc), float(g)))
+        # Slide a 60-min window and check cloud-swing + gust-climb.
+        for i in range(len(seq)):
+            t0, cc0, g0 = seq[i]
+            for j in range(i + 1, len(seq)):
+                tj, ccj, gj = seq[j]
+                if (tj - t0).total_seconds() / 60.0 > 60:
+                    break
+                if abs(ccj - cc0) > 50 and (gj - g0) > 20:
+                    score = min(1.0, abs(ccj - cc0) / 100.0 + (gj - g0) / 100.0)
+                    return score, {
+                        "time_start": t0.isoformat(timespec="minutes"),
+                        "time_end":   tj.isoformat(timespec="minutes"),
+                        "cloud_cover_delta": ccj - cc0,
+                        "wind_gust_delta":   gj - g0,
+                    }
+        return None
+
+    def _detect_storm_front(self, slices: list[dict]) -> tuple[float, dict] | None:
+        """Forecast peak wind gusts > 60 km/h in next 60 min AND
+        cloud_cover > 70 in the same window."""
+        peak_g = 0.0; peak_slot: dict | None = None
+        for s in slices:
+            dt = s.get("_dt")
+            if not dt:
+                continue
+            delta = (dt - datetime.now()).total_seconds() / 60.0
+            if delta < 0 or delta > 60:
+                continue
+            g = s.get("wind_gusts_10m"); cc = s.get("cloud_cover")
+            if g is None or cc is None:
+                continue
+            if float(g) > peak_g and float(cc) > 70.0:
+                peak_g = float(g); peak_slot = s
+        if peak_slot is None or peak_g < 60.0:
+            return None
+        score = min(1.0, peak_g / 120.0)
+        return score, _safe_subset(peak_slot, [
+            "time", "wind_gusts_10m", "cloud_cover", "precipitation",
+            "lightning_potential",
+        ])
+
+    def _run_event_tl_capture(self, cam_id: str, trigger: str, score: float,
+                              api_now: dict, fc_snapshot: dict,
+                              window_min: int, interval_s: int, fps: int):
+        rt = self.runtimes.get(cam_id)
+        if rt is None or not hasattr(rt, "snapshot_jpeg"):
+            log.warning("[Weather-TL] cam %s nicht verfügbar — capture abgebrochen", cam_id)
+            return
+        cam_name = self._cam_name(cam_id)
+        out_dir = self._sightings_dir() / cam_id / "event_timelapse"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        ts_label = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+        stem = f"{ts_label}_{trigger}"
+        mp4_path = out_dir / f"{stem}.mp4"
+        thumb_path = out_dir / f"{stem}.jpg"
+        frames_dir = out_dir / f".scratch_{stem}"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        end_at = datetime.now() + timedelta(minutes=window_min)
+        n_written = 0
+        i = 0
+        while datetime.now() < end_at:
+            jpg = rt.snapshot_jpeg(quality=82) if hasattr(rt, "snapshot_jpeg") else None
+            if jpg:
+                try:
+                    (frames_dir / f"{i:05d}.jpg").write_bytes(jpg)
+                    n_written += 1
+                except Exception:
+                    pass
+            i += 1
+            slept = 0.0
+            while slept < interval_s and datetime.now() < end_at:
+                time.sleep(0.5)
+                slept += 0.5
+        log.info("[Weather-TL] Capture done: %s %s · %d Frames", cam_name, trigger, n_written)
+        if n_written < fps * 2:
+            log.warning("[Weather-TL] Zu wenige Frames (%d) — Encode übersprungen", n_written)
+            self._cleanup_sun_scratch(frames_dir)
+            return
+        try:
+            from .timelapse import TimelapseBuilder
+            tb = TimelapseBuilder(self._sightings_dir().parent.parent)
+            images = sorted(frames_dir.glob("*.jpg"))
+            target_seconds = max(15, min(45, n_written // fps))
+            written = tb._write_video(images, mp4_path, target_seconds, fps)
+            if not written or not mp4_path.exists():
+                log.warning("[Weather-TL] Encode failed: %s %s", cam_name, trigger)
+                self._cleanup_sun_scratch(frames_dir)
+                return
+        except Exception as e:
+            log.warning("[Weather-TL] Encode crash %s %s: %s", cam_name, trigger, e)
+            self._cleanup_sun_scratch(frames_dir)
+            return
+        try:
+            mid = images[len(images) // 2]
+            thumb_path.write_bytes(mid.read_bytes())
+        except Exception:
+            pass
+        manifest = {
+            "id":            f"{cam_id}__{trigger}__{stem}",
+            "cam_id":        cam_id,
+            "cam_name":      cam_name,
+            "event_type":    "event_timelapse",
+            "trigger":       trigger,
+            "started_at":    datetime.now().isoformat(timespec="seconds"),
+            "score":         round(float(score), 3),
+            "severity":      round(float(score), 3),
+            "window_min":    window_min,
+            "interval_s":    interval_s,
+            "fps":           fps,
+            "api_snapshot":  _safe_subset(api_now, [
+                "time", "precipitation", "snowfall", "lightning_potential",
+                "visibility", "wind_gusts_10m", "cloud_cover", "weather_code",
+            ]),
+            "api_forecast":  fc_snapshot,
+            "clip_path":     f"weather/{cam_id}/event_timelapse/{mp4_path.name}",
+            "thumb_path":    f"weather/{cam_id}/event_timelapse/{thumb_path.name}",
+            "duration_s":    max(1, len(images) // fps),
+            "width": 0, "height": 0,
+        }
+        try:
+            import cv2
+            cap = cv2.VideoCapture(str(mp4_path))
+            manifest["width"]  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            manifest["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cap.release()
+        except Exception:
+            pass
+        (out_dir / f"{stem}.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        log.info("[Weather-TL] Manifest geschrieben: %s · score=%.2f", manifest["id"], score)
+        self._cleanup_sun_scratch(frames_dir)
+        # Optional Telegram push reuses the existing weather pipeline. The
+        # event_type for push gating is the trigger name (matches the
+        # WEATHER_TYPES map key on the frontend AND the per-event toggle in
+        # the push.weather.events block once users add it).
+        push_manifest = dict(manifest); push_manifest["event_type"] = trigger
+        self._maybe_push_telegram(push_manifest, mp4_path)
 
     def sun_times_today(self) -> dict:
         """Used by the /api/weather/sun-times endpoint to power the

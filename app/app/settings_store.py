@@ -351,6 +351,21 @@ class SettingsStore:
         "sunset":  {"enabled": False, "window_min": 30, "interval_s": 3, "fps": 25},
     }
 
+    # Per-camera event-timelapse defaults — opt-in master switch + per-trigger
+    # toggles. Default OFF so existing weather cameras don't suddenly start
+    # producing 60-min timelapses without explicit consent.
+    _EVENT_TL_DEFAULTS: dict = {
+        "enabled":    False,
+        "window_min": 60,
+        "interval_s": 6,
+        "fps":        24,
+        "triggers": {
+            "thunder_rising": True,
+            "front_passing":  True,
+            "storm_front":    True,
+        },
+    }
+
     def _ensure_weather_defaults(self):
         """Additively backfill the global weather block + per-camera flag."""
         w = self.data.setdefault("weather", {})
@@ -371,6 +386,9 @@ class SettingsStore:
             sun_tl = cw.setdefault("sun_timelapse", {})
             if isinstance(sun_tl, dict):
                 self._deep_merge_defaults(sun_tl, self._SUN_TL_DEFAULTS)
+            evt_tl = cw.setdefault("event_timelapse", {})
+            if isinstance(evt_tl, dict):
+                self._deep_merge_defaults(evt_tl, self._EVENT_TL_DEFAULTS)
 
     def _ensure_runtime_defaults(self):
         rt = self.data.setdefault("runtime", {})

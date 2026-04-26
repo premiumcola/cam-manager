@@ -5975,6 +5975,16 @@ const WEATHER_TYPES = {
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="15" r="3.5"/><path d="M12 7v-4M5 11l-2-2M19 11l2-2M3 19h18"/><polyline points="9,5 12,2 15,5"/></svg>' },
   sun_timelapse_set:  { de: 'Sonnenuntergang TL', color: '#d4823a',
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="15" r="3.5"/><path d="M12 7v-4M5 11l-2-2M19 11l2-2M3 19h18"/><polyline points="9,1 12,4 15,1"/></svg>' },
+  // Wetter-Ereignis-Timelapses — drei Trigger-Subtypen, ein gemeinsamer
+  // 60-min-Capture-Mechanismus. Eigener event_type je Trigger, damit
+  // Filter-Pills + Card-Badges in der Wetter-Mediathek auseinandergehalten
+  // werden können.
+  thunder_rising: { de: 'Gewitter zieht auf', color: '#7a8eb5',
+                icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 16a5 5 0 0 0 0-10 7 7 0 0 0-13.5 2.5A4 4 0 0 0 5 16h12z"/><polyline points="11,11 9,15 12,15 10,19"/></svg>' },
+  front_passing:  { de: 'Front zieht durch', color: '#9aa5b3',
+                icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7c3-2 6 2 9 0s6-2 9 0M3 12c3-2 6 2 9 0s6-2 9 0M3 17c3-2 6 2 9 0s6-2 9 0"/></svg>' },
+  storm_front:    { de: 'Sturmfront', color: '#b08070',
+                icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 13a5 5 0 0 0 0-10 7 7 0 0 0-13.5 2.5"/><line x1="2" y1="16" x2="20" y2="16"/><line x1="5" y1="20" x2="22" y2="20"/></svg>' },
 };
 
 // Per-type unit hint for the threshold slider in Settings → Ereignistypen.
@@ -6314,6 +6324,7 @@ function _renderWeatherCamList(){
             <span class="ws-sun-window"><span class="ws-sun-window-num">${ss.window_min || 30}</span> min</span>
             ${previewLine('sunset', ss)}
           </div>
+          ${_renderEventTLBlock(c, sun)}
         </div>
       </div>`;
   }).join('');
@@ -6361,6 +6372,100 @@ async function _saveSunPhase(camId, phase, partial){
     showToast('Speichern fehlgeschlagen.', 'error');
   }
 }
+
+// ── Event-Timelapse: per-camera Settings rows ─────────────────────────────────
+
+const _EVENT_TL_TRIGGERS = ['thunder_rising', 'front_passing', 'storm_front'];
+
+function _renderEventTLBlock(cam, sun){
+  const evt = (cam.weather && cam.weather.event_timelapse) || {};
+  const enabled = !!evt.enabled;
+  const triggers = evt.triggers || {};
+  const win = evt.window_min || 60;
+  const trigChips = _EVENT_TL_TRIGGERS.map(t => {
+    const meta = WEATHER_TYPES[t] || { de: t, color: '#94a3b8', icon: '' };
+    const on = triggers[t] !== false;
+    return `
+      <div class="ws-evt-trigger-row" data-trig="${esc(t)}">
+        <span class="ws-evt-trigger-chip" style="background:${meta.color}22;border:1px solid ${meta.color}55;color:${meta.color}">${meta.icon} ${esc(meta.de)}</span>
+        <label class="switch ws-evt-trigger-toggle"><input type="checkbox" data-evt-trigger="${esc(t)}" ${on ? 'checked' : ''}/><span class="slider"></span></label>
+      </div>`;
+  }).join('');
+  return `
+    <div class="ws-evt-block" data-cam-evt="${esc(cam.id)}">
+      <div class="ws-evt-head">
+        <span class="ws-evt-icon">⛈</span>
+        <span class="ws-evt-name">Ereignis-Timelapse</span>
+        <label class="switch"><input type="checkbox" data-evt-master ${enabled ? 'checked' : ''}/><span class="slider"></span></label>
+      </div>
+      <div class="ws-evt-body" ${enabled ? '' : 'hidden'}>
+        <div class="ws-evt-window-row">
+          <span class="ws-evt-window-label">Fenster</span>
+          <input type="range" class="ws-evt-window-slider" min="30" max="120" step="15" value="${win}" data-evt-window/>
+          <span class="ws-evt-window-val"><span class="ws-evt-window-num">${win}</span> min</span>
+        </div>
+        ${trigChips}
+        <div class="ws-evt-hint">Maximal 2 Ereignis-Timelapses pro Kamera und Tag · 4 h Cooldown nach jedem Trigger.</div>
+      </div>
+    </div>`;
+}
+
+async function _saveEventTL(camId, partial){
+  const cam = (state.cameras || []).find(c => c.id === camId);
+  if (!cam) return;
+  // Deep-merge `partial` (e.g. {triggers:{thunder_rising:true}}) into the
+  // current event_timelapse block so a single toggle save doesn't wipe
+  // sibling fields.
+  const cur = (cam.weather && cam.weather.event_timelapse) || {};
+  const merged = { ...cur, ...partial };
+  if (partial.triggers) merged.triggers = { ...(cur.triggers || {}), ...partial.triggers };
+  const updated = { ...cam,
+    weather: {
+      ...(cam.weather || { enabled: false }),
+      event_timelapse: merged,
+    },
+  };
+  try {
+    const r = await fetch('/api/settings/cameras', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+    if (r.ok) {
+      cam.weather = updated.weather;
+      _renderWeatherCamList();
+    }
+  } catch (e) {
+    showToast('Speichern fehlgeschlagen.', 'error');
+  }
+}
+
+// Wire event-tl handlers via the existing weatherCamList delegated listener
+// added in Phase Sun-TL.
+document.addEventListener('change', (e) => {
+  const block = e.target.closest('.ws-evt-block'); if (!block) return;
+  const camId = block.dataset.camEvt;
+  if (e.target.matches('[data-evt-master]')) {
+    _saveEventTL(camId, { enabled: !!e.target.checked });
+    return;
+  }
+  if (e.target.matches('[data-evt-trigger]')) {
+    const trig = e.target.dataset.evtTrigger;
+    _saveEventTL(camId, { triggers: { [trig]: !!e.target.checked } });
+    return;
+  }
+});
+document.addEventListener('input', (e) => {
+  if (!e.target.matches('[data-evt-window]')) return;
+  const block = e.target.closest('.ws-evt-block'); if (!block) return;
+  const numEl = block.querySelector('.ws-evt-window-num');
+  if (numEl) numEl.textContent = e.target.value;
+});
+document.addEventListener('change', (e) => {
+  if (!e.target.matches('[data-evt-window]')) return;
+  const block = e.target.closest('.ws-evt-block'); if (!block) return;
+  const camId = block.dataset.camEvt;
+  _saveEventTL(camId, { window_min: parseInt(e.target.value, 10) });
+});
 
 function _renderWeatherEventsList(events){
   const wrap = byId('weatherEventsList'); if (!wrap) return;
