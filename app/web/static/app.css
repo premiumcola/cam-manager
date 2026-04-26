@@ -435,6 +435,15 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
   outline:none;box-shadow:0 0 0 2px #00ff41;border-color:#00ff41
 }
 #logs.panel select option,#logs.panel .log-level-select option{background:#000000;color:#00ff41}
+/* Highlighted / selected options inside the open dropdown. The inset
+   box-shadow is the Chromium workaround — Chromium ignores plain
+   background on highlighted <option>s, so we paint with a 100px inset
+   shadow instead. Firefox honours background directly. */
+#logs.panel select option:checked,#logs.panel select option:hover,
+#logs.panel .log-level-select option:checked,#logs.panel .log-level-select option:hover{
+  background:#003a14;color:#00ff41;
+  box-shadow:0 0 10px 100px #003a14 inset;
+}
 .discovery-creds{display:grid;grid-template-columns:.75fr .75fr 2fr;gap:8px;margin-top:10px}.disc-input{padding:9px 11px;border-radius:12px;background:var(--surface);color:var(--text);border:none;width:100%;font:inherit}.disc-input::placeholder{color:var(--muted)}.disc-input:focus{outline:none;box-shadow:0 0 0 2px var(--accent)}.disc-select{padding:9px 28px 9px 11px;border-radius:12px;background:var(--surface);color:var(--text);border:none;width:100%;font:inherit;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}.disc-select:focus{outline:none;box-shadow:0 0 0 2px var(--accent)}
 .modal-inner-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
 .modal-actions{display:flex;justify-content:flex-end;padding-top:14px;margin-top:14px}
