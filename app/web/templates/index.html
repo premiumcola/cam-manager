@@ -397,15 +397,9 @@
       <div id="timeline" style="position:absolute;visibility:hidden;pointer-events:none"></div>
 
       <section id="statistik" class="panel section">
-        <div class="section-head" style="flex-wrap:wrap;gap:8px">
+        <div class="section-head">
           <h3>Statistik</h3>
-          <div style="display:flex;align-items:center;gap:10px;margin-left:auto;flex-wrap:wrap">
-            <div class="tl-range-wrap">
-              <span id="tlRangeLabel" class="tl-range-label">letzte 12h</span>
-              <input type="range" id="tlRangeSlider" min="1" max="720" value="12" step="1" style="width:130px;cursor:pointer" />
-            </div>
-            <button type="button" id="statRefreshBtn" class="btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg> Aktualisieren</button>
-          </div>
+          <button type="button" id="statRefreshBtn" class="btn-action action-green" style="margin-left:auto"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg> Aktualisieren</button>
         </div>
         <!-- 1. Overview  2. Per-camera bars  3. Top detections -->
         <div id="statContent"><div class="stat-empty" style="padding:32px 0">Abschnitt öffnen, um Daten zu laden …</div></div>
@@ -413,6 +407,10 @@
         <div class="stat-card stat-tl-card">
           <div class="stat-tl-card-hdr">
             <span class="stat-card-title"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><polyline points="8,4.5 8,8 11,9.5"/></svg>Timeline</span>
+            <div class="tl-range-wrap">
+              <span id="tlRangeLabel" class="tl-range-label">letzte 12h</span>
+              <input type="range" id="tlRangeSlider" min="1" max="720" value="12" step="1" />
+            </div>
           </div>
           <div id="timelineContainer" class="tl-container"></div>
         </div>

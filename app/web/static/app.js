@@ -5251,6 +5251,13 @@ byId('confirmModal')?.addEventListener('click',e=>{if(e.target===byId('confirmMo
 // ── Statistics dashboard ──────────────────────────────────────────────────
 const _STAT_LABEL_ICONS={motion:'👁',person:'🧍',cat:'🐈',bird:'🐦',car:'🚗',dog:'🐕',fox:'🦊',hedgehog:'🦔',squirrel:'🐿️',horse:'🐴'};
 const _STAT_LABEL_COLORS={motion:'#36a2ff',person:'#ff6b6b',cat:'#9b8cff',bird:'#62d26f',car:'#00c2ff',dog:'#7c2d12',fox:'#ff7a1a',hedgehog:'#a67c52',squirrel:'#c8651a'};
+// Section title icons — monochrome, currentColor, ~14px stroke style.
+const _STAT_TITLE_SVG={
+  camera:`<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 5h2.5l1-1.5h5l1 1.5H14a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><circle cx="8" cy="9" r="2.7"/></svg>`,
+  search:`<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/></svg>`,
+  clock:`<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><polyline points="8,4.5 8,8 11,9.5"/></svg>`,
+  grid:`<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.2"/><rect x="9" y="2" width="5" height="5" rx="1.2"/><rect x="2" y="9" width="5" height="5" rx="1.2"/><rect x="9" y="9" width="5" height="5" rx="1.2"/></svg>`
+};
 let _statLoaded=false;
 
 async function loadStatistik(){
@@ -5364,8 +5371,8 @@ function _renderStatistik(monthData,dayData){
           const cells=hmColLabels.map((labelHour,col)=>{
             const hoursAgo=23-col;
             const cnt=hours[hoursAgo]||0;
-            const alpha=cnt===0?0.12:Math.max(0.25,0.15+cnt/hmMax*0.8);
-            const bg=cnt===0?'rgba(41,48,74,0.5)':`rgba(59,130,246,${alpha.toFixed(2)})`;
+            const alpha=cnt===0?0:Math.max(0.18,0.12+cnt/hmMax*0.6);
+            const bg=cnt===0?'rgba(255,255,255,0.04)':`rgba(255,255,255,${alpha.toFixed(2)})`;
             const prevHour=new Date(nowMs-(hoursAgo+1)*3600000).getHours();
             const h0=String(prevHour).padStart(2,'0');
             const h1=String(labelHour).padStart(2,'0');
@@ -5382,13 +5389,13 @@ function _renderStatistik(monthData,dayData){
   content.innerHTML=`
     <div class="stat-period-row">${periodPills}</div>
     <div class="stat-split">
-      <div class="stat-card"><div class="stat-card-title">Events pro Kamera · letzter Monat</div>${camBars}</div>
-      <div class="stat-card"><div class="stat-card-title">Top Erkennungen · letzter Monat</div>${topLabels}</div>
+      <div class="stat-card"><div class="stat-card-title">${_STAT_TITLE_SVG.camera}<span>Events pro Kamera · letzter Monat</span></div>${camBars}</div>
+      <div class="stat-card"><div class="stat-card-title">${_STAT_TITLE_SVG.search}<span>Top Erkennungen · letzter Monat</span></div>${topLabels}</div>
     </div>`;
 
   // 5: last 24h heatmap — rendered after the static timeline block (#4)
   const hmBlock=byId('statHeatmapBlock');
-  if(hmBlock) hmBlock.innerHTML=`<div class="stat-card" style="margin-top:0"><div class="stat-card-title">Letzte 24h · Aktivität nach Stunde</div>${heatmap}</div>`;
+  if(hmBlock) hmBlock.innerHTML=`<div class="stat-card" style="margin-top:0"><div class="stat-card-title">${_STAT_TITLE_SVG.grid}<span>Letzte 24h · Aktivität nach Stunde</span></div>${heatmap}</div>`;
 
   // Camera label column auto-sizes to the widest entry so long names like
   // "Squirrel Town 'Nut Bar'" don't get clipped. Measure with the same
