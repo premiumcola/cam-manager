@@ -1558,7 +1558,14 @@ function hydrateSettings(){
   const hint=byId('coralStatusHint');
   if(hint){
     const reason=cam0?.coral_reason||'—';
-    const lines=[coralAvail?'✅ Coral TPU erkannt und aktiv.':(coralActive?`💻 CPU Fallback aktiv (${esc(reason)})`:'⏸ Erkennung deaktiviert')];
+    // Happy-path "Coral TPU erkannt und aktiv" line was a duplicate of the
+    // status chip in the section header — only WARNING/ERROR lines stay.
+    const lines=[];
+    if(!coralAvail && coralActive){
+      lines.push(`💻 CPU Fallback aktiv (${esc(reason)})`);
+    } else if(!coralActive){
+      lines.push('⏸ Erkennung deaktiviert');
+    }
     if(birdActive && proc.bird_model_available===false){
       const p=proc.bird_model_path||'inat_bird_quant.tflite';
       lines.push(`⚠️ Vogelarten-Modell nicht gefunden. Bitte <code>${esc(p.split('/').pop())}</code> in <code>models/</code> ablegen.`);
@@ -1573,6 +1580,7 @@ function hydrateSettings(){
       lines.push(`⚠️ Modell nicht gefunden: <code>${esc(p.split('/').pop())}</code> — bitte in <code>models/</code> ablegen.`);
     }
     hint.innerHTML=lines.join('<br>');
+    hint.style.display=lines.length?'':'none';
   }
   // Coral device info from /api/system (async, non-blocking)
   _updateCoralDeviceInfo();

@@ -665,7 +665,23 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
    header in the section's accent colour. --sa is an RGB triplet like
    "96,165,250" set by JS from each section's data-accent attribute. */
 .settings-form{display:grid;gap:6px}
-.set-section{--sa:143,158,181;border-radius:14px;background:var(--surface);border:1.5px solid transparent;overflow:hidden;transition:border-color .2s,background .2s}
+.set-section{--sa:143,158,181;--acc:var(--sa);border-radius:14px;background:var(--surface);border:1.5px solid transparent;overflow:hidden;transition:border-color .2s,background .2s}
+/* Subtitles / sublabels / descriptors inside any set-section pick up the
+   section's own accent at low alpha, so the panel reads as a single themed
+   surface. Titles stay white — explicitly NOT covered by these rules. */
+.set-section .toggle-row-sublabel,
+.set-section .field-help,
+.set-section .cpt-node-sub,
+.set-section .cpt-node-list{color:rgb(var(--acc) / 0.65)}
+/* App + Media-config panels use a true neutral warm-grey for subtitles
+   instead of their cool grey-blue accent (matches the previously approved
+   #9ba1a8 used for the app-info-row labels). */
+#set-app .toggle-row-sublabel,
+#set-app .field-help,
+#set-app .cpt-node-sub,
+#set-app .cpt-node-list,
+#set-media-config .toggle-row-sublabel,
+#set-media-config .field-help{color:#9ba1a8}
 .set-section.open{border-color:rgba(var(--sa),0.2);background:rgba(var(--sa),0.04)}
 .set-hd-row{display:flex;align-items:center;border-radius:inherit;overflow:hidden}
 .set-hd{width:100%;display:flex;align-items:center;gap:10px;padding:13px 16px;background:none;border:none;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;text-align:left}
@@ -981,12 +997,15 @@ body.media-select-mode .media-grid .mmc-img-wrap{cursor:pointer}
 .sec-content{border-radius:14px;background:var(--bg);padding:14px 16px}
 
 /* ── Coral section: 3-tab layout (Einstellungen / Test / Modelle) ─────── */
-.coral-tabs{display:flex;gap:0;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:16px;overflow-x:auto;-webkit-overflow-scrolling:touch}
-.coral-tab{display:inline-flex;align-items:center;gap:5px;padding:10px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;transition:color .15s,background .15s,border-color .15s;margin-bottom:-1px}
-.coral-tab:hover:not(.active){color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.02)}
-.coral-tab.active{color:var(--text);font-weight:700;border-bottom-color:rgba(255,255,255,0.5)}
-.coral-tab-content{display:block}
-.coral-tab-content[hidden]{display:none}
+/* Reusable sub-tab pattern for any settings section. Drives off the
+   section's --acc, so set-coral renders pink, set-timelapse purple, etc.
+   .coral-* aliases stay so existing JS (toggleCoralTab) keeps working. */
+.set-tabs,.coral-tabs{display:flex;gap:0;border-bottom:1px solid rgba(var(--acc),0.12);margin-bottom:20px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.set-tab,.coral-tab{display:inline-flex;align-items:center;gap:5px;padding:10px 16px;background:transparent;border:none;border-bottom:2px solid transparent;color:#9ba1a8;font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;transition:color .15s,background .15s,border-color .15s;margin-bottom:-1px}
+.set-tab:hover:not(.active),.coral-tab:hover:not(.active){color:rgb(var(--acc));background:rgba(var(--acc),0.06)}
+.set-tab.active,.coral-tab.active{color:rgb(var(--acc));font-weight:700;border-bottom-color:rgb(var(--acc))}
+.set-tab-content,.coral-tab-content{display:block}
+.set-tab-content[hidden],.coral-tab-content[hidden]{display:none}
 
 /* ── Profiles section: yellow (#fbbf24) accent override ──────────────── */
 #set-profiles .set-inner>div>div>.small.muted{color:#fbbf24}
@@ -994,8 +1013,6 @@ body.media-select-mode .media-grid .mmc-img-wrap{cursor:pointer}
 #set-profiles .set-inner>div:last-child>.small.muted{color:#fbbf24}
 
 /* ── Coral section: pink (#f472b6 / #f9a8d4) accent override ──────────── */
-#set-coral .coral-tab.active{color:#f9a8d4;border-bottom-color:#f472b6}
-#set-coral .coral-tab:hover:not(.active){color:#fbcfe8}
 #set-coral .btn-action.ghost{border-color:rgba(244,114,182,.45)!important;color:#f9a8d4}
 #set-coral .btn-action.ghost:hover{background:rgba(244,114,182,.10)!important;color:#fbcfe8}
 /* Pink CPU-fallback badge — keeps the green --on indicator unchanged. */
