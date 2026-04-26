@@ -1,5 +1,5 @@
 
-const state={config:null,cameras:[],timeline:null,media:[],_allMedia:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),mediaPeriod:'week',tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false};
+const state={config:null,cameras:[],timeline:null,media:[],_allMedia:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false};
 let _hmTip=null; // fixed-position heatmap tooltip, bypasses overflow-x:auto clipping
 const STAT_MEDIA_DRILLDOWN=true;
 
@@ -337,17 +337,6 @@ async function loadAll(){
   startPreviewRefresh(); // 5fps thumbnail refresh for dashboard cards
 }
 
-function _mediaPeriodParams(){
-  const p=state.mediaPeriod||'week';
-  const now=new Date();
-  const today=now.toISOString().slice(0,10);
-  const end=today+'T23:59:59';
-  let start;
-  if(p==='day') start=today+'T00:00:00';
-  else if(p==='month'){const d=new Date(now);d.setDate(d.getDate()-30);start=d.toISOString().slice(0,10)+'T00:00:00';}
-  else{const d=new Date(now);d.setDate(d.getDate()-7);start=d.toISOString().slice(0,10)+'T00:00:00';}
-  return `&start=${start}&end=${end}`;
-}
 // Single source of truth for page size: rows × dynamic column count.
 // Called before every load, page-change, delete, resize, and filter-change.
 let _lastKnownCols=0;
@@ -382,7 +371,6 @@ async function loadMedia(){
   const labels=state.mediaLabels;
   const ps=calcItemsPerPage(); _cachedPageSize=ps;
   const cams=state.mediaCamera?[state.mediaCamera]:state.cameras.map(c=>c.id);
-  const periodParams=_mediaPeriodParams();
   // Unified filter — EventStore now holds both motion and timelapse events.
   const allLabels=[...labels];
   const labelParam=allLabels.length===1?`&label=${encodeURIComponent(allLabels[0])}`
@@ -392,7 +380,7 @@ async function loadMedia(){
   // views produce a consistent global order and every page is fully filled.
   const allItems=[];
   for(const camId of cams){
-    const data=await j(`/api/camera/${camId}/media?limit=9999&offset=0${labelParam}${periodParams}`);
+    const data=await j(`/api/camera/${camId}/media?limit=9999&offset=0${labelParam}`);
     const items=data.items||[];
     for(const item of items) allItems.push({...item,camera_id:camId});
   }
@@ -4248,13 +4236,6 @@ function camColor(camId){
   const idx=state.cameras.findIndex(c=>c.id===camId);
   return CAM_COLORS[(idx<0?0:idx)%CAM_COLORS.length];
 }
-function fmtMediaTime(ts){
-  if(!ts) return '';
-  try{
-    const d=new Date(ts.replace(' ','T'));
-    return d.toLocaleString('de-DE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-  }catch{return ts;}
-}
 const _TL_FILMSTRIP=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><line x1="6" y1="3" x2="18" y2="3"/><line x1="6" y1="21" x2="18" y2="21"/><polygon points="7,4 17,4 12,12" fill="#c4b5fd" opacity=".8"/><polygon points="12,12 7,20 17,20" fill="#c4b5fd" opacity=".5"/></svg>`;
 function hexToRgba(hex,alpha){
   const h=(hex||'').replace('#','');
@@ -4379,7 +4360,13 @@ function mediaCardHTML(item){
       ${motionBadge}
       ${errorBadge}`
     :`<img src="${esc(imgSrc)}" alt="event" loading="lazy" onerror="this.style.display='none'" />
-      <div class="mmc-meta-bar"><span>${fmtMediaTime(item.time||'')}</span></div>`;
+      ${(vidDate||vidTime)?`<div style="position:absolute;bottom:7px;left:8px;z-index:2;pointer-events:none;width:fit-content">
+        ${vidDate?`<div style="${badgeStyle}">${esc(vidDate)}</div>`:''}
+        ${vidTime?`<div style="${subBadge}">${esc(vidTime)}</div>`:''}
+      </div>`:''}
+      ${vidSize?`<div style="position:absolute;bottom:7px;right:8px;z-index:2;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+        <div style="${subBadge}">${vidSize}</div>
+      </div>`:''}`;
   return `<article class="media-card ${confirmed}" data-event-id="${esc(item.event_id||'')}" data-camera-id="${esc(item.camera_id||'')}">
     <div class="mmc-img-wrap" onclick="window._openMediaItem('${esc(item.event_id||'')}')">
       ${mediaInner}
@@ -4554,7 +4541,7 @@ function renderMediaOverview(){
 window.openCategoryDrilldown=async function(label){
   state.mediaCamera=null;
   state.mediaLabels=new Set(label?[label]:[]);
-  state.mediaPeriod='week'; state.mediaPage=0;
+  state.mediaPage=0;
   syncMediaPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
@@ -4658,7 +4645,7 @@ function _setActiveMocCard(camId){
 }
 async function openAllMediaDrilldown(){
   state.mediaCamera=null;
-  state.mediaLabels=new Set(); state.mediaPeriod='week'; state.mediaPage=0;
+  state.mediaLabels=new Set(); state.mediaPage=0;
   state.media=[]; state._allMedia=[];
   const grid=byId('mediaGrid');
   if(grid) grid.innerHTML='<div style="padding:32px;text-align:center;color:var(--muted)">Lade Medien…</div>';
@@ -4673,7 +4660,7 @@ async function openAllMediaDrilldown(){
 window.openAllMediaDrilldown=openAllMediaDrilldown;
 async function openMediaDrilldown(camId){
   state.mediaCamera=camId;
-  state.mediaLabels=new Set(); state.mediaPeriod='week'; state.mediaPage=0;
+  state.mediaLabels=new Set(); state.mediaPage=0;
   // Clear stale state and grid immediately so the previous camera's thumbnails
   // don't flash before the new fetch resolves.
   state.media=[]; state._allMedia=[];
@@ -4700,9 +4687,6 @@ function syncMediaPills(){
     if(val==='') p.classList.toggle('active',labels.size===0);
     else p.classList.toggle('active',labels.has(val));
   });
-  document.querySelectorAll('.media-pill[data-type="period"]').forEach(p=>{
-    p.classList.toggle('active',p.dataset.val===state.mediaPeriod);
-  });
 }
 (function initMediaPills(){
   document.querySelectorAll('.media-pill[data-label-key]').forEach(p=>{
@@ -4711,26 +4695,18 @@ function syncMediaPills(){
       p.innerHTML=`<span class="cfb-icon" style="pointer-events:none">${objIconSvg(key,18)}</span><span style="pointer-events:none">${OBJ_LABEL[key]||key}</span>`;
     }
   });
-  document.querySelectorAll('.media-pill').forEach(p=>{
+  document.querySelectorAll('.media-pill[data-type="label"]').forEach(p=>{
     p.addEventListener('click',()=>{
-      if(p.dataset.type==='label'){
-        const val=p.dataset.val;
-        if(val===''){
-          // "All" — clear all label filters
-          state.mediaLabels=new Set();
-        } else if(state.mediaLabels.has(val)){
-          // Toggle off
-          state.mediaLabels.delete(val);
-        } else {
-          // Toggle on (add to selection)
-          state.mediaLabels.add(val);
-        }
+      const val=p.dataset.val;
+      if(val===''){
+        state.mediaLabels=new Set();
+      } else if(state.mediaLabels.has(val)){
+        state.mediaLabels.delete(val);
       } else {
-        state.mediaPeriod=p.dataset.val;
+        state.mediaLabels.add(val);
       }
       state.mediaPage=0;
       syncMediaPills();
-      // Reload whenever the drilldown is open, regardless of which camera is active
       if(byId('mediaDrilldown')?.style.display!=='none'){
         loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();});
       }
