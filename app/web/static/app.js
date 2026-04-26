@@ -3074,7 +3074,7 @@ function _renderTlModesGrid(cam){
     </div>`;
   }).join('');
   return `<div class="tl-modes-grid">${cols}</div>
-    <button class="settings-save-btn" style="margin-top:4px" onclick="saveTlCameraProfiles('${esc(cam.id)}')">💾 Speichern</button>`;
+    <button class="btn btn-save" style="margin-top:4px" onclick="saveTlCameraProfiles('${esc(cam.id)}')"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h8L13.5 5v8.5h-11z"/><polyline points="5,2.5 5,6.5 10,6.5 10,2.5"/><polyline points="4.5,13.5 4.5,9 11.5,9 11.5,13.5"/></svg>Speichern</button>`;
 }
 window._tlApplyCustomPreset=function(camId,profKey,val){
   const [periodS,targetS]=(val||'').split(',').map(x=>parseInt(x)||0);
