@@ -1470,6 +1470,32 @@ def api_event_delete(cam_id, event_id):
     return jsonify({"ok": True, **result})
 
 
+@app.post('/api/camera/<cam_id>/events/delete-bulk')
+def api_event_delete_bulk(cam_id):
+    payload = request.get_json(force=True, silent=True) or {}
+    raw_ids = payload.get("event_ids")
+    if not isinstance(raw_ids, list):
+        return jsonify({"ok": False, "error": "event_ids muss eine Liste sein"}), 400
+    event_ids = [eid for eid in raw_ids if isinstance(eid, str) and eid]
+    if not event_ids:
+        return jsonify({"ok": False, "error": "Keine event_ids angegeben"}), 400
+    if len(event_ids) > 500:
+        return jsonify({"ok": False, "error": "Maximal 500 Events pro Aufruf"}), 400
+    deleted = 0
+    failed = []
+    for eid in event_ids:
+        try:
+            result = store.delete_event(cam_id, eid)
+            if result.get("json_deleted"):
+                deleted += 1
+            else:
+                failed.append(eid)
+        except Exception:
+            failed.append(eid)
+    logging.getLogger(__name__).info("[bulk-delete] cam=%s deleted=%d failed=%d", cam_id, deleted, len(failed))
+    return jsonify({"ok": True, "deleted": deleted, "failed": failed})
+
+
 @app.post('/api/camera/<cam_id>/events/<event_id>/confirm')
 def api_event_confirm(cam_id, event_id):
     event = store.get_event(cam_id, event_id)

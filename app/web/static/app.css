@@ -954,6 +954,16 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .stat-drillable{cursor:pointer;border-radius:8px;transition:background .12s,opacity .12s}
 .stat-drillable:hover{background:rgba(255,255,255,.04)}
 .stat-drillable:active{opacity:.7}
+/* ── Mediathek multi-select mode ─────────────────────────────────────────── */
+body.media-select-mode .media-grid .mmc-actions{display:none!important}
+body.media-select-mode .media-grid .mmc-play-btn{display:none!important}
+body.media-select-mode .media-grid .media-card{cursor:pointer}
+body.media-select-mode .media-grid .mmc-img-wrap{cursor:pointer}
+.media-card--selected{outline:3px solid #22c55e;outline-offset:-3px;border-radius:14px}
+.media-card--selected::after{content:'✓';position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;background:#22c55e;color:#0a0e1a;font-size:16px;font-weight:800;display:flex;align-items:center;justify-content:center;z-index:5;box-shadow:0 2px 8px rgba(0,0,0,.45)}
+.media-select-bar{position:sticky;bottom:8px;z-index:30;display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;padding:10px 14px;border-radius:14px;background:#1f1f24;box-shadow:0 6px 20px rgba(0,0,0,.4);min-height:56px}
+.media-select-bar .msb-count{font-size:13px;font-weight:700;color:#e2e8f0;margin-right:auto}
+@media (max-width:768px){.media-select-bar{position:sticky;bottom:4px}}
 
 /* ── Shared expandable section tab pattern ────────────────────────────────── */
 .sec-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:4px 0 12px}

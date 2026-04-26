@@ -1,5 +1,5 @@
 
-const state={config:null,cameras:[],timeline:null,media:[],_allMedia:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false};
+const state={config:null,cameras:[],timeline:null,media:[],_allMedia:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false,mediaSelectMode:false,mediaSelected:new Set()};
 let _hmTip=null; // fixed-position heatmap tooltip, bypasses overflow-x:auto clipping
 const STAT_MEDIA_DRILLDOWN=true;
 
@@ -4542,9 +4542,11 @@ window.openCategoryDrilldown=async function(label){
   state.mediaCamera=null;
   state.mediaLabels=new Set(label?[label]:[]);
   state.mediaPage=0;
+  if(state.mediaSelectMode) _exitMediaSelectMode();
   syncMediaPills();
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
+  _updateMediaSelectToggle();
   await loadMedia();
   renderMediaGrid();
 };
@@ -4591,9 +4593,18 @@ function renderMediaGrid(){
   // Light slide-in on page change
   grid.style.opacity='0';grid.style.transform='translateX(10px)';
   grid.innerHTML=items.map(mediaCardHTML).join('')||'<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
+  if(state.mediaSelectMode){
+    grid.querySelectorAll('.media-card').forEach(card=>{
+      if(state.mediaSelected.has(card.dataset.eventId)) card.classList.add('media-card--selected');
+    });
+  }
   requestAnimationFrame(()=>{grid.style.transition='opacity .18s ease,transform .18s ease';grid.style.opacity='1';grid.style.transform='';});
   renderMediaPagination();
-  window._openMediaItem=id=>{const item=items.find(x=>x.event_id===id); if(item) openLightbox(item);};
+  window._openMediaItem=id=>{
+    if(state.mediaSelectMode){ _toggleMediaSelected(id); return; }
+    const item=items.find(x=>x.event_id===id);
+    if(item) openLightbox(item);
+  };
   // Refresh label-pill visibility against current data
   updateAvailableLabelPills();
   // Poll for pending recording/processing items until every visible card is ready
@@ -4646,6 +4657,7 @@ function _setActiveMocCard(camId){
 async function openAllMediaDrilldown(){
   state.mediaCamera=null;
   state.mediaLabels=new Set(); state.mediaPage=0;
+  if(state.mediaSelectMode) _exitMediaSelectMode();
   state.media=[]; state._allMedia=[];
   const grid=byId('mediaGrid');
   if(grid) grid.innerHTML='<div style="padding:32px;text-align:center;color:var(--muted)">Lade Medien…</div>';
@@ -4654,6 +4666,7 @@ async function openAllMediaDrilldown(){
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
   _setActiveMocCard('__all__');
+  _updateMediaSelectToggle();
   await loadMedia();
   renderMediaGrid();
 }
@@ -4661,6 +4674,7 @@ window.openAllMediaDrilldown=openAllMediaDrilldown;
 async function openMediaDrilldown(camId){
   state.mediaCamera=camId;
   state.mediaLabels=new Set(); state.mediaPage=0;
+  if(state.mediaSelectMode) _exitMediaSelectMode();
   // Clear stale state and grid immediately so the previous camera's thumbnails
   // don't flash before the new fetch resolves.
   state.media=[]; state._allMedia=[];
@@ -4671,15 +4685,82 @@ async function openMediaDrilldown(camId){
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
   _setActiveMocCard(camId);
+  _updateMediaSelectToggle();
   await loadMedia();
   renderMediaGrid();
 }
 function closeMediaDrilldown(){
   state.mediaCamera=null; state.media=[];
+  if(state.mediaSelectMode) _exitMediaSelectMode();
   byId('mediaDrilldown').style.display='none';
   byId('mediaOverview').style.display='';
   _setActiveMocCard(null);
+  _updateMediaSelectToggle();
 }
+
+// ── Multi-select / bulk delete ──────────────────────────────────────────────
+function _updateMediaSelectToggle(){
+  const btn=byId('mediaSelectToggleBtn'); if(!btn) return;
+  btn.style.display=state.mediaCamera?'inline-flex':'none';
+  btn.classList.toggle('btn-action',state.mediaSelectMode);
+  btn.classList.toggle('action-green',state.mediaSelectMode);
+  btn.classList.toggle('btn-neutral',!state.mediaSelectMode);
+}
+function _exitMediaSelectMode(){
+  state.mediaSelectMode=false;
+  state.mediaSelected.clear();
+  document.body.classList.remove('media-select-mode');
+  const bar=byId('mediaSelectBar'); if(bar) bar.style.display='none';
+  document.querySelectorAll('.media-card.media-card--selected').forEach(c=>c.classList.remove('media-card--selected'));
+  _updateMediaSelectToggle();
+}
+function _enterMediaSelectMode(){
+  state.mediaSelectMode=true;
+  state.mediaSelected.clear();
+  document.body.classList.add('media-select-mode');
+  _refreshMediaSelectBar();
+  _updateMediaSelectToggle();
+}
+function _refreshMediaSelectBar(){
+  const bar=byId('mediaSelectBar'); if(!bar) return;
+  if(!state.mediaSelectMode){ bar.style.display='none'; return; }
+  bar.style.display='';
+  const c=byId('msbCount'); if(c) c.textContent=String(state.mediaSelected.size);
+}
+function _toggleMediaSelected(eventId){
+  if(!eventId) return;
+  if(state.mediaSelected.has(eventId)) state.mediaSelected.delete(eventId);
+  else state.mediaSelected.add(eventId);
+  const card=document.querySelector(`.media-card[data-event-id="${CSS.escape(eventId)}"]`);
+  if(card) card.classList.toggle('media-card--selected',state.mediaSelected.has(eventId));
+  _refreshMediaSelectBar();
+}
+window.toggleMediaSelectMode=function(){
+  if(state.mediaSelectMode) _exitMediaSelectMode();
+  else _enterMediaSelectMode();
+};
+window.bulkDeleteSelectedMedia=async function(){
+  const ids=Array.from(state.mediaSelected);
+  const camId=state.mediaCamera;
+  if(!camId||!ids.length) return;
+  if(!await showConfirm(`${ids.length} ausgewählte Einträge wirklich löschen?`)) return;
+  try{
+    const r=await j(`/api/camera/${encodeURIComponent(camId)}/events/delete-bulk`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event_ids:ids})});
+    const okSet=new Set(ids.filter(id=>!(r.failed||[]).includes(id)));
+    state._allMedia=(state._allMedia||[]).filter(x=>!okSet.has(x.event_id));
+    const ps_d=calcItemsPerPage();
+    state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps_d));
+    state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
+    state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
+    okSet.forEach(()=>_decrementMediaOverviewCount(camId));
+    _exitMediaSelectMode();
+    renderMediaGrid();
+    renderMediaPagination();
+    refreshTimelineAndStats();
+    const failed=(r.failed||[]).length;
+    showToast(failed?`${r.deleted} gelöscht, ${failed} fehlgeschlagen`:`${r.deleted} gelöscht`,failed?'error':'success');
+  }catch(e){showToast('Bulk-Löschen fehlgeschlagen: '+e.message,'error');}
+};
 function syncMediaPills(){
   const labels=state.mediaLabels;
   document.querySelectorAll('.media-pill[data-type="label"]').forEach(p=>{
