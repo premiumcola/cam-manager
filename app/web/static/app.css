@@ -1166,6 +1166,10 @@ select option{background:#1e1e1e;color:var(--text)}
 .media-pill.cat-filter-btn{border:none;padding:8px 14px;border-radius:10px;min-width:0;background:color-mix(in srgb,var(--cb,#8888aa) 15%,transparent);color:var(--cb,#94a3b8);font-weight:700}
 .media-pill.cat-filter-btn:hover{background:color-mix(in srgb,var(--cb,#8888aa) 24%,transparent);border-color:transparent}
 .media-pill.cat-filter-btn.active{background:color-mix(in srgb,var(--cb,#8888aa) 38%,transparent);color:#fff;border-color:transparent;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cb,#8888aa) 55%,transparent)}
+.media-section-title{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%}
+.media-section-title svg{flex-shrink:0;opacity:.85}
+.media-section-title .mst-cam-icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;line-height:1}
+.media-section-title .mst-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .media-pill.cat-filter-btn .mp-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 6px;margin-left:4px;border-radius:999px;background:rgba(0,0,0,.32);color:inherit;font-size:11px;font-weight:700;line-height:1}
 .media-pill.cat-filter-btn.active .mp-count{background:rgba(0,0,0,.45)}
 .media-pill.cat-filter-btn.media-pill--empty{background:rgba(255,255,255,.05)!important;color:#6b7280!important;opacity:1;pointer-events:none;cursor:default;box-shadow:none!important}

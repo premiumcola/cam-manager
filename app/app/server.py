@@ -1008,12 +1008,18 @@ def api_media_storage_stats():
                             latest_snap_url = f"/media/{rel}"
                         if not latest_object_snap_url and any(l in OBJECT_LABELS for l in labels):
                             latest_object_snap_url = f"/media/{rel}"
-                    # Only count labels whose underlying media still exists — keeps badge
-                    # counts in sync with what the user can actually see in the gallery.
+                    # Count each event ONCE under its most-specific label so the
+                    # filter pills sum to the actual archive size (not the inflated
+                    # multi-label total). Object labels win over motion; if no
+                    # object label is present, motion catches the rest.
                     if media_exists:
-                        for lbl in labels:
-                            if lbl in TRACKED_LABELS:
-                                label_counts[lbl] = label_counts.get(lbl, 0) + 1
+                        primary = next((l for l in labels if l in OBJECT_LABELS), None)
+                        if primary is None and 'motion' in labels:
+                            primary = 'motion'
+                        if primary is None and not labels:
+                            primary = 'motion'
+                        if primary in TRACKED_LABELS:
+                            label_counts[primary] = label_counts.get(primary, 0) + 1
                 except Exception:
                     continue
         tl_dir = tl_root / cam_id

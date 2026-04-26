@@ -339,6 +339,7 @@ async function loadAll(){
   if(state.bootstrap.needs_wizard) openWizard();
   byId('openWizardBtn').classList.toggle('hidden', !!state.bootstrap?.wizard_completed || !state.bootstrap?.needs_wizard);
   startPreviewRefresh(); // 5fps thumbnail refresh for dashboard cards
+  updateMediaSectionTitle();
 }
 
 // Single source of truth for page size: rows × dynamic column count.
@@ -4618,6 +4619,7 @@ window.openCategoryDrilldown=async function(label){
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
   _updateMediaSelectToggle();
+  updateMediaSectionTitle();
   await loadMedia();
   renderMediaGrid();
 };
@@ -4740,6 +4742,7 @@ async function openAllMediaDrilldown(preFilterLabel){
   byId('mediaDrilldown').style.display='';
   _setActiveMocCard('__all__');
   _updateMediaSelectToggle();
+  updateMediaSectionTitle();
   await loadMedia();
   renderMediaGrid();
 }
@@ -4760,6 +4763,7 @@ async function openMediaDrilldown(camId){
   byId('mediaDrilldown').style.display='';
   _setActiveMocCard(camId);
   _updateMediaSelectToggle();
+  updateMediaSectionTitle();
   await loadMedia();
   renderMediaGrid();
 }
@@ -4770,6 +4774,24 @@ function closeMediaDrilldown(){
   byId('mediaOverview').style.display='';
   _setActiveMocCard(null);
   _updateMediaSelectToggle();
+  updateMediaSectionTitle();
+}
+// Library/film glyph for overview + Alle-Medien title; per-camera drilldown
+// uses the camera's thematic icon via getCameraIcon (matches the cv-card).
+const _MEDIA_TITLE_SVG=`<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M7 6V4h10v2"/><circle cx="12" cy="13" r="3"/></svg>`;
+function updateMediaSectionTitle(){
+  const h=byId('mediaSectionTitle'); if(!h) return;
+  const drillOpen=byId('mediaDrilldown')?.style.display!=='none';
+  if(drillOpen && state.mediaCamera){
+    const cam=(state.cameras||[]).find(c=>c.id===state.mediaCamera);
+    const camName=cam?.name||state.mediaCamera;
+    const camIcon=getCameraIcon(camName);
+    h.innerHTML=`<span class="mst-cam-icon" aria-hidden="true">${camIcon}</span><span class="mst-text">Mediathek · ${esc(camName)}</span>`;
+  } else if(drillOpen){
+    h.innerHTML=`${_MEDIA_TITLE_SVG}<span class="mst-text">Mediathek · Alle Medien</span>`;
+  } else {
+    h.innerHTML=`${_MEDIA_TITLE_SVG}<span class="mst-text">Mediathek</span>`;
+  }
 }
 
 // ── Multi-select / bulk delete ──────────────────────────────────────────────
