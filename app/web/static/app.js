@@ -1,5 +1,5 @@
 
-const state={config:null,cameras:[],timeline:null,media:[],_allMedia:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false,mediaSelectMode:false,mediaSelected:new Set()};
+const state={config:null,cameras:[],timeline:null,media:[],_allMedia:[],camera:'',label:'',period:'week',bootstrap:null,mediaCamera:null,mediaStats:[],mediaLabels:new Set(),tlHours:168,mediaPage:0,mediaTotalPages:1,_tlInitialized:false,mediaSelectMode:false,mediaSelected:new Set(),weather:{items:[],counts:{},total:0,filter:null}};
 let _hmTip=null; // fixed-position heatmap tooltip, bypasses overflow-x:auto clipping
 const STAT_MEDIA_DRILLDOWN=true;
 
@@ -335,6 +335,9 @@ async function loadAll(){
   hydrateTelegram();
   initTelegramTabs();
   hydratePushUI();
+  initWeatherTabs();
+  await loadWeatherSightings();
+  hydrateWeatherSettings();
   loadTlStatus();
   _updateTlActiveTags(state.cameras||[]);
   if(state.bootstrap.needs_wizard) openWizard();
@@ -5949,3 +5952,428 @@ window.addEventListener('resize',()=>{
 
 loadAll().then(()=>{startLiveUpdate(); loadAchievements();});
 loadLogs();
+
+// ── Wetter-Sichtungen (Phase 2) ─────────────────────────────────────────────
+
+// Single source of truth for type → label/color/icon. Backend mirror lives
+// in app/app/weather_service.py:EVENT_LABEL_DE / EVENT_ICON_HEX — keep both
+// in sync.
+const WEATHER_TYPES = {
+  thunder:    { de: 'Gewitter',        color: '#7faec9',
+                icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h7l-1 8 11-14h-7l0-6z"/></svg>' },
+  heavy_rain: { de: 'Starkregen',      color: '#5a8aa8',
+                icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 13a5 5 0 0 0 0-10 7 7 0 0 0-13.5 2.5"/><path d="M7 17l-2 4"/><path d="M11 19l-1 2"/><path d="M14 17l-2 4"/></svg>' },
+  snow:       { de: 'Schnee',          color: '#a8c0d4',
+                icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M5 7l14 10M5 17l14-10"/></svg>' },
+  fog:        { de: 'Nebel',           color: '#6d7787',
+                icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h16M3 12h18M5 16h14M7 20h10"/></svg>' },
+  sunset:     { de: 'Sonnenuntergang', color: '#d4823a',
+                icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="4"/><path d="M12 4v3M5.6 7.6l2 2M2 14h3M19 14h3M16.4 9.6l2-2M3 20h18"/></svg>' },
+};
+
+// Per-type unit hint for the threshold slider in Settings → Ereignistypen.
+const WEATHER_THRESHOLD_HINTS = {
+  thunder:    { unit: 'J/kg', min: 0,  max: 3000, step: 50, key: 'threshold' },
+  heavy_rain: { unit: 'mm/h', min: 0,  max: 30,   step: 0.5, key: 'threshold' },
+  snow:       { unit: 'cm/h', min: 0,  max: 5,    step: 0.1, key: 'threshold' },
+  fog:        { unit: 'm',    min: 100,max: 5000, step: 100, key: 'vis_max_m' },
+  sunset:     { unit: '°',    min: -10,max: 15,   step: 1,    key: 'alt_max' },
+};
+
+const WEATHER_FIELD_LABEL_DE = {
+  precipitation:       'Niederschlag',
+  snowfall:            'Schneefall',
+  lightning_potential: 'Blitz-Potential',
+  visibility:          'Sicht',
+  wind_gusts_10m:      'Wind-Böen',
+  cloud_cover:         'Bewölkung',
+  weather_code:        'WMO-Code',
+};
+const WEATHER_FIELD_UNIT_DE = {
+  precipitation:       'mm/h',
+  snowfall:            'cm/h',
+  lightning_potential: 'J/kg',
+  visibility:          'm',
+  wind_gusts_10m:      'km/h',
+  cloud_cover:         '%',
+  weather_code:        '',
+};
+
+async function loadWeatherSightings(filter){
+  try{
+    const params = new URLSearchParams();
+    if (filter) params.set('event_type', filter);
+    const r = await fetch('/api/weather/sightings' + (params.toString() ? '?' + params : ''));
+    const data = await r.json();
+    state.weather.items = data.items || [];
+    state.weather.counts = data.counts || {};
+    state.weather.total = data.total || 0;
+    state.weather.filter = filter || null;
+    renderWeatherSightings();
+  }catch(e){
+    // silently degrade — section stays empty
+  }
+}
+
+function renderWeatherSightings(){
+  const block = byId('weatherSightingsBlock'); if (!block) return;
+  const sub = byId('weatherSightingsSubtitle');
+  if (sub) {
+    const yr = new Date().getFullYear();
+    sub.textContent = `${state.weather.total} Ereignisse · ${yr}`;
+  }
+  _renderWeatherFilterPills();
+  _renderWeatherGrid();
+}
+
+function _renderWeatherFilterPills(){
+  const bar = byId('weatherFilterBar'); if (!bar) return;
+  // Sort by count desc, with ties by spec order. Counts==0 → empty/disabled
+  // (mirrors the Mediathek pill recipe so the visual language is identical).
+  const types = Object.keys(WEATHER_TYPES);
+  const counts = state.weather.counts || {};
+  const sorted = types.slice().sort((a,b) => {
+    const d = (counts[b]||0) - (counts[a]||0);
+    return d || (types.indexOf(a) - types.indexOf(b));
+  });
+  const sel = state.weather.filter;
+  bar.innerHTML = sorted.map(t => {
+    const meta = WEATHER_TYPES[t];
+    const cnt = counts[t] || 0;
+    const empty = cnt === 0;
+    const active = sel === t;
+    const cls = `media-pill cat-filter-btn${active ? ' active' : ''}${empty ? ' media-pill--empty' : ''}`;
+    const cntChip = cnt > 0 ? `<span class="mp-count" style="pointer-events:none">${cnt}</span>` : '';
+    return `<button type="button" class="${cls}" data-type="weather" data-val="${esc(t)}" style="--cb:${meta.color}"${empty ? ' tabindex="-1" aria-disabled="true"' : ''}><span class="cfb-icon" style="pointer-events:none;color:${meta.color}">${meta.icon}</span><span style="pointer-events:none">${esc(meta.de)}</span>${cntChip}</button>`;
+  }).join('');
+  bar.querySelectorAll('.media-pill').forEach(p => {
+    if (p.classList.contains('media-pill--empty')) return;
+    p.addEventListener('click', () => {
+      const val = p.dataset.val;
+      const next = state.weather.filter === val ? null : val;
+      loadWeatherSightings(next);
+    });
+  });
+}
+
+function _renderWeatherGrid(){
+  const grid = byId('weatherSightingsGrid'); if (!grid) return;
+  const empty = byId('weatherSightingsEmpty');
+  const items = state.weather.items || [];
+  if (!items.length) {
+    grid.innerHTML = '';
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+  grid.innerHTML = items.map((s, idx) => {
+    const meta = WEATHER_TYPES[s.event_type] || { de: s.event_type, color: '#94a3b8', icon: '' };
+    const t = new Date(s.started_at);
+    const dateLabel = t.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    const timeLabel = t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    const sevPct = Math.round((s.score || s.severity || 0) * 100);
+    const camName = esc(s.cam_name || s.cam_id || '');
+    return `
+      <div class="ws-card" data-idx="${idx}" data-id="${esc(s.id)}">
+        <div class="ws-card-thumb-wrap">
+          <img class="ws-card-thumb" loading="lazy" src="/api/weather/sightings/${encodeURIComponent(s.id)}/thumb" alt="${esc(meta.de)}" onerror="this.style.opacity=0.2"/>
+          <span class="ws-card-badge ws-card-badge--type" style="background:${meta.color}cc">
+            <span class="ws-card-badge-icon">${meta.icon}</span>${esc(meta.de)}
+          </span>
+          ${sevPct > 0 ? `<span class="ws-card-badge ws-card-badge--score">${sevPct}%</span>` : ''}
+          <span class="ws-card-play">
+            <svg viewBox="0 0 24 24" width="34" height="34" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+          </span>
+          <span class="ws-card-bottom-l">${dateLabel} · ${timeLabel}</span>
+          <span class="ws-card-bottom-r">${camName}</span>
+        </div>
+      </div>`;
+  }).join('');
+  grid.querySelectorAll('.ws-card').forEach(card => {
+    card.addEventListener('click', () => openWeatherLightbox(parseInt(card.dataset.idx, 10)));
+  });
+}
+
+let _wsLbIdx = -1;
+
+function openWeatherLightbox(idx){
+  const items = state.weather.items || [];
+  if (idx < 0 || idx >= items.length) return;
+  _wsLbIdx = idx;
+  const s = items[idx];
+  // Build the modal lazily so the DOM stays clean when no sighting open.
+  let modal = byId('wsLightbox');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'wsLightbox';
+    modal.className = 'ws-lb';
+    modal.innerHTML = `
+      <div class="ws-lb-backdrop" data-action="close"></div>
+      <div class="ws-lb-shell">
+        <button class="ws-lb-close" data-action="close" aria-label="Schließen">✕</button>
+        <button class="ws-lb-prev" data-action="prev" aria-label="Vorherige">‹</button>
+        <button class="ws-lb-next" data-action="next" aria-label="Nächste">›</button>
+        <div class="ws-lb-video-wrap"><video id="wsLbVideo" controls playsinline autoplay muted loop preload="metadata"></video></div>
+        <div class="ws-lb-meta" id="wsLbMeta"></div>
+        <div class="ws-lb-actions">
+          <button class="btn-action" data-action="download">⬇ Herunterladen</button>
+          <button class="btn-action danger-btn" data-action="delete">🗑 Löschen</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => {
+      const action = e.target.closest('[data-action]')?.dataset.action;
+      if (!action) return;
+      if (action === 'close') closeWeatherLightbox();
+      if (action === 'prev') openWeatherLightbox(_wsLbIdx - 1);
+      if (action === 'next') openWeatherLightbox(_wsLbIdx + 1);
+      if (action === 'download') {
+        const cur = state.weather.items[_wsLbIdx];
+        if (cur) window.open(`/api/weather/sightings/${encodeURIComponent(cur.id)}/clip`, '_blank');
+      }
+      if (action === 'delete') {
+        const cur = state.weather.items[_wsLbIdx];
+        if (cur && confirm('Wetter-Sichtung wirklich löschen?')) {
+          fetch(`/api/weather/sightings/${encodeURIComponent(cur.id)}`, { method: 'DELETE' })
+            .then(() => { closeWeatherLightbox(); loadWeatherSightings(state.weather.filter); });
+        }
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (modal.classList.contains('open') === false) return;
+      if (e.key === 'Escape') closeWeatherLightbox();
+      if (e.key === 'ArrowLeft') openWeatherLightbox(_wsLbIdx - 1);
+      if (e.key === 'ArrowRight') openWeatherLightbox(_wsLbIdx + 1);
+    });
+  }
+  // Update video src + metadata
+  const video = byId('wsLbVideo');
+  video.src = `/api/weather/sightings/${encodeURIComponent(s.id)}/clip`;
+  video.load(); video.play().catch(() => {});
+  byId('wsLbMeta').innerHTML = _renderWsLbMeta(s);
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  modal.querySelector('.ws-lb-prev').style.opacity = idx > 0 ? '1' : '0.25';
+  modal.querySelector('.ws-lb-next').style.opacity = idx < items.length - 1 ? '1' : '0.25';
+}
+
+function closeWeatherLightbox(){
+  const modal = byId('wsLightbox'); if (!modal) return;
+  modal.classList.remove('open');
+  document.body.style.overflow = '';
+  const v = byId('wsLbVideo'); if (v) { try { v.pause(); v.src = ''; } catch (e) {} }
+}
+
+function _renderWsLbMeta(s){
+  const meta = WEATHER_TYPES[s.event_type] || { de: s.event_type, color: '#94a3b8' };
+  const t = new Date(s.started_at);
+  const fullDate = t.toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+  const snap = s.api_snapshot || {};
+  const apiRows = Object.entries(snap)
+    .filter(([k, v]) => v !== null && v !== undefined && k !== 'time')
+    .map(([k, v]) => {
+      const lbl = WEATHER_FIELD_LABEL_DE[k] || k;
+      const unit = WEATHER_FIELD_UNIT_DE[k] || '';
+      return `<div class="ws-lb-row"><span class="ws-lb-row-key">${esc(lbl)}</span><span class="ws-lb-row-val">${esc(String(v))}${unit ? ' ' + unit : ''}</span></div>`;
+    }).join('');
+  const showSun = (s.event_type === 'sunset' || s.event_type === 'fog') && s.sun_snapshot;
+  const sunRows = showSun && s.sun_snapshot
+    ? Object.entries(s.sun_snapshot)
+        .filter(([_k, v]) => v !== null && v !== undefined)
+        .map(([k, v]) => `<div class="ws-lb-row"><span class="ws-lb-row-key">${k === 'altitude' ? 'Höhe' : 'Azimut'}</span><span class="ws-lb-row-val">${Number(v).toFixed(1)}°</span></div>`).join('')
+    : '';
+  return `
+    <div class="ws-lb-headline">
+      <span class="ws-lb-type-badge" style="background:${meta.color}33;border:1px solid ${meta.color}66;color:${meta.color}">${meta.icon || ''} ${esc(meta.de)}</span>
+      <span class="ws-lb-date">${esc(fullDate)}</span>
+    </div>
+    <div class="ws-lb-cam">📷 ${esc(s.cam_name || s.cam_id || '')}</div>
+    <div class="ws-lb-section-title">Wetter-Daten zur Aufnahme</div>
+    <div class="ws-lb-rows">${apiRows || '<div class="ws-lb-row ws-lb-row--empty">— keine Mess­werte —</div>'}</div>
+    ${sunRows ? `<div class="ws-lb-section-title">Sonne</div><div class="ws-lb-rows">${sunRows}</div>` : ''}
+  `;
+}
+
+// ── Settings: Wetter-Sichtungen ──────────────────────────────────────────────
+
+function initWeatherTabs(){
+  const bar = document.querySelector('.ws-tab-bar'); if (!bar) return;
+  const allPanels = ['ws-panel-allgemein', 'ws-panel-events', 'ws-panel-status'];
+  bar.querySelectorAll('.set-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      bar.querySelectorAll('.set-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const target = btn.dataset.tab;
+      allPanels.forEach(id => { const p = byId(id); if (p) p.hidden = (id !== target); });
+      if (target === 'ws-panel-status') _refreshWeatherStatus();
+    });
+  });
+}
+
+let _weatherSaveTimer = null;
+async function _saveWeatherCfg(partial){
+  try {
+    await fetch('/api/settings/app', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ weather: partial }),
+    });
+    state.config.weather = state.config.weather || {};
+    _wsMergeDeep(state.config.weather, partial);
+  } catch (e) {
+    showToast('Speichern fehlgeschlagen.', 'error');
+  }
+}
+function _wsMergeDeep(t, s){
+  for (const k of Object.keys(s || {})) {
+    if (s[k] && typeof s[k] === 'object' && !Array.isArray(s[k]) && t[k] && typeof t[k] === 'object') {
+      _wsMergeDeep(t[k], s[k]);
+    } else { t[k] = s[k]; }
+  }
+}
+function _debouncedWeatherSave(partial, ms = 600){
+  clearTimeout(_weatherSaveTimer);
+  _weatherSaveTimer = setTimeout(() => _saveWeatherCfg(partial), ms);
+}
+
+function hydrateWeatherSettings(){
+  const w = state.config?.weather || {};
+  const srvLoc = state.config?.server?.location || {};
+  const badge = byId('weatherStatusBadge');
+  if (badge) {
+    badge.textContent = w.enabled ? 'aktiv' : 'aus';
+    badge.className = 'set-status-badge ' + (w.enabled ? 'set-status-badge--on' : 'set-status-badge--off');
+  }
+  const en = byId('ws_enabled'); if (en) en.checked = !!w.enabled;
+  const lat = byId('ws_lat'); if (lat) lat.value = srvLoc.lat ?? '';
+  const lon = byId('ws_lon'); if (lon) lon.value = srvLoc.lon ?? '';
+  const elv = byId('ws_elev'); if (elv) elv.value = srvLoc.elevation ?? '';
+  _renderWeatherCamList();
+  _renderWeatherEventsList(w.events || {});
+  _bindWeatherHandlers();
+  _refreshWeatherStatus();
+}
+
+function _renderWeatherCamList(){
+  const wrap = byId('weatherCamList'); if (!wrap) return;
+  const cams = state.cameras || [];
+  if (!cams.length) { wrap.innerHTML = '<div class="field-help">Keine Kameras konfiguriert.</div>'; return; }
+  wrap.innerHTML = cams.map(c => `
+    <label class="toggle-row" style="margin:0">
+      <span class="toggle-row-label">📷 ${esc(c.name || c.id)}
+        <span class="toggle-row-sublabel">RAM-Buffer ~12 MB · Polling pro 5 min · idle wenn aus</span>
+      </span>
+      <label class="switch"><input type="checkbox" data-ws-cam="${esc(c.id)}" ${c.weather && c.weather.enabled ? 'checked' : ''}/><span class="slider"></span></label>
+    </label>
+  `).join('');
+}
+
+function _renderWeatherEventsList(events){
+  const wrap = byId('weatherEventsList'); if (!wrap) return;
+  wrap.innerHTML = Object.keys(WEATHER_TYPES).map(t => {
+    const meta = WEATHER_TYPES[t];
+    const cfg = events[t] || {};
+    const hint = WEATHER_THRESHOLD_HINTS[t];
+    const v = cfg[hint.key] != null ? Number(cfg[hint.key]) : (hint.min + (hint.max - hint.min) / 2);
+    return `
+      <div class="ws-event-row" data-event="${esc(t)}">
+        <span class="ws-event-chip" style="background:${meta.color}22;border:1px solid ${meta.color}55;color:${meta.color}">${meta.icon} ${esc(meta.de)}</span>
+        <label class="switch ws-event-toggle"><input type="checkbox" ${cfg.enabled !== false ? 'checked' : ''} data-ws-event-toggle/><span class="slider"></span></label>
+        <input type="range" class="ws-event-slider" min="${hint.min}" max="${hint.max}" step="${hint.step}" value="${v}" data-ws-event-slider/>
+        <span class="ws-event-val"><span class="ws-event-num">${v}</span> ${esc(hint.unit)}</span>
+      </div>`;
+  }).join('');
+}
+
+function _bindWeatherHandlers(){
+  byId('ws_enabled')?.addEventListener('change', (e) => {
+    _saveWeatherCfg({ enabled: e.target.checked });
+    const badge = byId('weatherStatusBadge');
+    if (badge) {
+      badge.textContent = e.target.checked ? 'aktiv' : 'aus';
+      badge.className = 'set-status-badge ' + (e.target.checked ? 'set-status-badge--on' : 'set-status-badge--off');
+    }
+  });
+  for (const id of ['ws_lat', 'ws_lon', 'ws_elev']) {
+    byId(id)?.addEventListener('change', () => {
+      const partial = { server: { location: {
+        lat: parseFloat(byId('ws_lat').value) || null,
+        lon: parseFloat(byId('ws_lon').value) || null,
+        elevation: byId('ws_elev').value === '' ? null : parseFloat(byId('ws_elev').value),
+      } } };
+      fetch('/api/settings/app', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(partial),
+      }).then(() => {
+        state.config.server = state.config.server || {};
+        state.config.server.location = partial.server.location;
+        showToast('Standort gespeichert.', 'success');
+      }).catch(() => showToast('Speichern fehlgeschlagen.', 'error'));
+    });
+  }
+  // Per-camera toggles — read full cam dict from state.cameras, mutate
+  // weather.enabled, POST whole dict back. upsert_camera fills defaults
+  // for missing fields, so a partial post would stomp valid data.
+  byId('weatherCamList')?.addEventListener('change', async (e) => {
+    const cb = e.target.closest('input[data-ws-cam]'); if (!cb) return;
+    const camId = cb.dataset.wsCam;
+    const cam = (state.cameras || []).find(c => c.id === camId);
+    if (!cam) return;
+    const updated = { ...cam, weather: { ...(cam.weather || {}), enabled: !!cb.checked } };
+    try {
+      const r = await fetch('/api/settings/cameras', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      });
+      if (r.ok) {
+        cam.weather = updated.weather;
+        showToast(`${cam.name || cam.id}: Wetter-Kamera ${cb.checked ? 'an' : 'aus'}`, 'success');
+      }
+    } catch (err) {
+      showToast('Speichern fehlgeschlagen.', 'error');
+    }
+  });
+  byId('weatherEventsList')?.addEventListener('change', (e) => {
+    const row = e.target.closest('.ws-event-row'); if (!row) return;
+    const evt = row.dataset.event;
+    if (e.target.matches('[data-ws-event-toggle]')) {
+      _saveWeatherCfg({ events: { [evt]: { enabled: !!e.target.checked } } });
+    }
+  });
+  byId('weatherEventsList')?.addEventListener('input', (e) => {
+    if (!e.target.matches('[data-ws-event-slider]')) return;
+    const row = e.target.closest('.ws-event-row');
+    const evt = row.dataset.event;
+    const hint = WEATHER_THRESHOLD_HINTS[evt];
+    const v = parseFloat(e.target.value) || 0;
+    row.querySelector('.ws-event-num').textContent = v;
+    _debouncedWeatherSave({ events: { [evt]: { [hint.key]: v } } });
+  });
+}
+
+let _wsStatusTimer = null;
+async function _refreshWeatherStatus(){
+  const wrap = byId('weatherStatusPanel'); if (!wrap) return;
+  try {
+    const r = await fetch('/api/weather/status');
+    const d = await r.json();
+    const ago = d.last_poll_at
+      ? Math.max(0, Math.round((Date.now() - new Date(d.last_poll_at).getTime()) / 1000))
+      : null;
+    const stateRows = Object.entries(d.current_state || {})
+      .map(([k, v]) => {
+        const meta = WEATHER_TYPES[k] || { de: k, color: '#94a3b8' };
+        return `<span class="ws-status-pill" style="--cb:${meta.color};opacity:${v ? 1 : 0.45}">${meta.icon} ${esc(meta.de)} ${v ? '·  aktiv' : ''}</span>`;
+      }).join('');
+    wrap.innerHTML = `
+      <div class="field-help">Aktualisiert sich alle 15 Sekunden.</div>
+      <div class="ws-status-row"><span class="ws-status-key">Letzter Poll</span><span class="ws-status-val">${ago == null ? '— noch nie —' : 'vor ' + ago + ' s'}</span></div>
+      <div class="ws-status-row"><span class="ws-status-key">API-Antwort</span><span class="ws-status-val">${d.last_api_ok === true ? '🟢 OK' : d.last_api_ok === false ? '🔴 Fehler' : '— noch nie —'}</span></div>
+      <div class="ws-status-row"><span class="ws-status-key">Standort</span><span class="ws-status-val">${d.location?.lat != null ? `${d.location.lat}, ${d.location.lon}` : '— nicht gesetzt —'}</span></div>
+      <div class="ws-status-row" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="ws-status-key">Aktuelle Trigger</span><div style="display:flex;flex-wrap:wrap;gap:6px">${stateRows}</div></div>
+    `;
+  } catch (e) {
+    wrap.innerHTML = '<div class="field-help">Status nicht erreichbar.</div>';
+  }
+  clearTimeout(_wsStatusTimer);
+  _wsStatusTimer = setTimeout(_refreshWeatherStatus, 15000);
+}

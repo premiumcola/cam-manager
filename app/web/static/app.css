@@ -1251,3 +1251,105 @@ select option{background:#1e1e1e;color:var(--text)}
   .push-label-slider{grid-column:1/3;grid-row:2}
   .push-label-pct{grid-column:1/3;grid-row:2;justify-self:end;align-self:center;pointer-events:none}
 }
+
+
+/* ── Wetter-Sichtungen (Phase 2) ────────────────────────────────────────── */
+
+/* Section block under the existing Sichtungen achievements grid. */
+.weather-sightings-block{margin-top:28px;padding-top:18px;border-top:1px solid rgba(255,255,255,0.04)}
+.weather-sightings-head{display:flex;align-items:baseline;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.ws-title{display:inline-flex;align-items:center;gap:8px;font-size:18px;font-weight:700;color:#7faec9}
+.ws-title svg{flex-shrink:0;color:#7faec9}
+.ws-subtitle{font-size:12px;color:var(--muted);font-style:italic}
+.ws-filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.ws-empty{padding:32px 18px;text-align:center;color:var(--muted);font-size:13px;background:rgba(127,174,201,0.04);border-radius:12px}
+
+/* Galerie 3-spaltig auf Desktop, 2 auf Tablet, 1 auf iPhone */
+.ws-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media (max-width:980px){.ws-grid{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:640px){.ws-grid{grid-template-columns:1fr}}
+
+.ws-card{cursor:pointer;border-radius:12px;overflow:hidden;background:rgba(255,255,255,0.03);transition:background .15s,transform .15s}
+.ws-card:hover{background:rgba(127,174,201,0.08)}
+.ws-card-thumb-wrap{position:relative;aspect-ratio:16/9;background:#0a0e14;overflow:hidden}
+.ws-card-thumb{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s}
+.ws-card:hover .ws-card-thumb{transform:scale(1.03)}
+
+/* Top-Left type badge with icon — blur background like Mediathek */
+.ws-card-badge{position:absolute;display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:8px;font-size:11px;font-weight:700;color:#fff;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);text-shadow:0 1px 2px rgba(0,0,0,0.4);line-height:1}
+.ws-card-badge--type{top:8px;left:8px}
+.ws-card-badge--score{top:8px;right:8px;background:rgba(0,0,0,0.55);font-variant-numeric:tabular-nums}
+.ws-card-badge-icon{display:inline-flex;align-items:center}
+.ws-card-badge-icon svg{width:14px;height:14px}
+
+/* Center play button */
+.ws-card-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:54px;height:54px;border-radius:50%;background:rgba(0,0,0,0.5);color:#fff;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);transition:transform .15s,background .15s;pointer-events:none}
+.ws-card:hover .ws-card-play{transform:translate(-50%,-50%) scale(1.08);background:rgba(127,174,201,0.65)}
+
+/* Bottom row: date left, camera right */
+.ws-card-bottom-l,.ws-card-bottom-r{position:absolute;bottom:8px;font-size:11px;font-weight:600;color:#fff;padding:3px 8px;border-radius:6px;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);text-shadow:0 1px 2px rgba(0,0,0,0.5);line-height:1}
+.ws-card-bottom-l{left:8px}
+.ws-card-bottom-r{right:8px;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── Lightbox ──────────────────────────────────────────────────────────── */
+.ws-lb{position:fixed;inset:0;z-index:9990;display:none;align-items:center;justify-content:center;padding:24px}
+.ws-lb.open{display:flex}
+.ws-lb-backdrop{position:absolute;inset:0;background:rgba(8,5,16,0.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:zoom-out}
+.ws-lb-shell{position:relative;display:grid;grid-template-rows:1fr auto auto;gap:14px;width:min(960px,100%);max-height:calc(100dvh - 48px);background:#0d141d;border-radius:16px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,0.5);overflow:hidden}
+.ws-lb-close,.ws-lb-prev,.ws-lb-next{position:absolute;background:rgba(255,255,255,0.05);color:#fff;border:none;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;transition:background .15s}
+.ws-lb-close{top:14px;right:14px;width:36px;height:36px;z-index:5}
+.ws-lb-prev,.ws-lb-next{top:50%;transform:translateY(-50%);width:44px;height:44px;font-size:28px;line-height:1;z-index:5}
+.ws-lb-prev{left:8px} .ws-lb-next{right:8px}
+.ws-lb-close:hover,.ws-lb-prev:hover,.ws-lb-next:hover{background:rgba(127,174,201,0.35)}
+.ws-lb-video-wrap{display:flex;align-items:center;justify-content:center;background:#000;border-radius:10px;overflow:hidden;min-height:240px}
+.ws-lb-video-wrap video{width:100%;max-height:60vh;object-fit:contain;display:block;background:#000}
+.ws-lb-meta{display:grid;gap:8px;padding:0 4px;color:var(--text);font-size:13px}
+.ws-lb-headline{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.ws-lb-type-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:999px;font-weight:700;font-size:13px}
+.ws-lb-date{font-size:14px;font-weight:600;color:var(--text)}
+.ws-lb-cam{font-size:12px;color:var(--muted)}
+.ws-lb-section-title{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:4px}
+.ws-lb-rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px}
+.ws-lb-row{display:flex;justify-content:space-between;gap:8px;padding:6px 10px;background:rgba(255,255,255,0.03);border-radius:8px}
+.ws-lb-row--empty{justify-content:center;color:var(--muted);font-style:italic}
+.ws-lb-row-key{color:var(--muted);font-size:12px}
+.ws-lb-row-val{font-weight:600;color:var(--text);font-size:12px;font-variant-numeric:tabular-nums}
+.ws-lb-actions{display:flex;justify-content:flex-end;gap:8px;padding-top:4px}
+.ws-lb-actions .danger-btn{color:#ef4444}
+
+@media (max-width:640px){
+  .ws-lb{padding:0}
+  .ws-lb-shell{border-radius:0;max-height:100dvh;padding:12px}
+  .ws-lb-close{top:8px;right:8px;width:34px;height:34px}
+  .ws-lb-prev,.ws-lb-next{width:38px;height:38px;font-size:24px}
+  .ws-lb-meta{font-size:12px}
+}
+
+/* ── Settings: Wetter-Sichtungen ───────────────────────────────────────── */
+.ws-panels-wrap{border-radius:14px;background:var(--bg);padding:12px 14px;margin-top:4px}
+.ws-event-row{display:grid;grid-template-columns:auto auto 1fr auto;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,0.03)}
+.ws-event-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;min-width:140px}
+.ws-event-chip svg{width:14px;height:14px}
+.ws-event-toggle{flex-shrink:0}
+.ws-event-slider{appearance:none;-webkit-appearance:none;width:100%;height:4px;background:rgba(255,255,255,0.08);border-radius:2px;outline:none;min-height:44px;background-clip:content-box;padding:20px 0}
+.ws-event-slider::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#7faec9;cursor:pointer;border:2px solid #0a0e14;box-shadow:0 0 0 1px rgba(127,174,201,0.45)}
+.ws-event-slider::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#7faec9;cursor:pointer;border:2px solid #0a0e14}
+.ws-event-val{font-size:13px;font-weight:700;color:#7faec9;min-width:90px;text-align:right;font-variant-numeric:tabular-nums}
+.ws-event-num{color:#fff}
+.ws-status-row{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,0.03)}
+.ws-status-key{font-size:12px;color:var(--muted);min-width:120px}
+.ws-status-val{font-size:13px;font-weight:600;color:var(--text)}
+.ws-status-pill{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;color:var(--cb,#94a3b8);background:color-mix(in srgb,var(--cb,#94a3b8) 18%,transparent);border:1px solid color-mix(in srgb,var(--cb,#94a3b8) 40%,transparent)}
+
+@media (max-width:768px){
+  .ws-event-row{grid-template-columns:auto auto 1fr auto;gap:8px}
+  .ws-event-chip{min-width:96px;font-size:11px;padding:3px 8px}
+  .ws-event-val{font-size:12px;min-width:64px}
+}
+@media (max-width:380px){
+  .ws-event-row{grid-template-columns:1fr auto;grid-template-rows:auto auto;column-gap:8px;row-gap:6px}
+  .ws-event-chip{grid-column:1;grid-row:1}
+  .ws-event-toggle{grid-column:2;grid-row:1}
+  .ws-event-slider{grid-column:1/3;grid-row:2}
+  .ws-event-val{grid-column:1/3;grid-row:2;justify-self:end;align-self:center;pointer-events:none}
+}

@@ -559,11 +559,18 @@ def api_config():
     bird_cpu_path = bird_cfg.get("cpu_model_path")
     bird_labels_path = bird_cfg.get("labels_path")
     bird_model_available = any(p and Path(p).exists() for p in (bird_model_path, bird_cpu_path))
+    srv = c.get("server", {}) or {}
     return jsonify({
         "app": c.get("app", {}),
-        "server": {"public_base_url": c.get("server", {}).get("public_base_url", "")},
-        "default_discovery_subnet": c.get("server", {}).get("default_discovery_subnet", "192.168.1.0/24"),
+        "server": {
+            "public_base_url": srv.get("public_base_url", ""),
+            # Standortdaten — von der Wetter-UI gelesen, vom Wetter-Service
+            # für Sonnenstand-Berechnung genutzt.
+            "location": srv.get("location") or {"lat": None, "lon": None, "elevation": None},
+        },
+        "default_discovery_subnet": srv.get("default_discovery_subnet", "192.168.1.0/24"),
         "cameras": c.get("cameras", []),
+        "weather": c.get("weather") or {},
         "coral": {
             "mode": proc.get("detection", {}).get("mode", "none"),
             "bird_species_enabled": bool(bird_cfg.get("enabled")),
@@ -641,6 +648,7 @@ def api_cameras():
         s["frame_interval_ms"] = cam.get("frame_interval_ms", 350)
         s["snapshot_interval_s"] = cam.get("snapshot_interval_s", 3)
         s["timelapse"] = cam.get("timelapse", {})
+        s["weather"] = cam.get("weather") or {"enabled": False}
         cams.append(s)
     return jsonify({"cameras": cams})
 
@@ -957,6 +965,12 @@ def api_settings_app_save():
             if "wildlife_enabled" in proc:
                 sec["wildlife"] = {"enabled": bool(proc.get("wildlife_enabled"))}
             settings.update_section("processing", sec)
+            needs_rebuild = True
+        if "weather" in payload:
+            # update_section deep-merges (Phase 2 telegram fix), so partial
+            # writes like {"events": {"thunder": {"threshold": 800}}} don't
+            # wipe sibling keys.
+            settings.update_section("weather", payload.get("weather") or {})
             needs_rebuild = True
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 422

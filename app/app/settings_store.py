@@ -584,6 +584,10 @@ class SettingsStore:
         cfg["telegram"] = deepcopy(self.data.get("telegram", {}))
         cfg["mqtt"] = deepcopy(self.data.get("mqtt", {}))
         cfg["cameras"] = deepcopy(self.data.get("cameras", []))
+        # Wetter-Sichtungen — exported so the WeatherService and the web UI
+        # both read from the same canonical config block.
+        if "weather" in self.data:
+            cfg["weather"] = deepcopy(self.data["weather"])
         # Merge processing overrides (e.g. coral_enabled, bird_species_enabled) from settings
         if "processing" in self.data:
             base_proc = deepcopy(base_cfg.get("processing", {}))

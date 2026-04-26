@@ -483,6 +483,25 @@
         <div class="section-head"><h3>Sichtungen</h3><span class="section-subtitle">Erkannte Gartenwildtiere · Entdeckungstagebuch</span></div>
         <div id="achievementsProgress" class="ach-progress-bar"></div>
         <div id="achievementsGrid" class="ach-grid"></div>
+
+        <!-- Wetter-Sichtungen — eigene Rubrik unter der Tier-Galerie -->
+        <div class="weather-sightings-block" id="weatherSightingsBlock">
+          <div class="weather-sightings-head">
+            <span class="ws-title">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M17 18a5 5 0 0 0 0-10 7 7 0 0 0-13.5 2.5"/>
+                <path d="M7 17l-2 4"/><path d="M11 19l-1 2"/><path d="M14 17l-2 4"/>
+              </svg>
+              Wetter-Sichtungen
+            </span>
+            <span class="ws-subtitle" id="weatherSightingsSubtitle"></span>
+          </div>
+          <div class="ws-filter-bar" id="weatherFilterBar"></div>
+          <div class="ws-grid" id="weatherSightingsGrid"></div>
+          <div class="ws-empty" id="weatherSightingsEmpty" hidden>
+            Noch keine Wetter-Sichtungen. Sobald eine Wetter-Kamera ein Ereignis erkennt (Gewitter, Starkregen, Nebel, Sonnenuntergang …), erscheint hier ein 10-Sekunden-Clip.
+          </div>
+        </div>
       </section>
       <section id="settings" class="panel section">
         <div class="section-head"><h3>Einstellungen</h3></div>
@@ -665,6 +684,56 @@
             </div>
 
             </div><!-- /.tg-panels-wrap -->
+          </div></div>
+        </div>
+
+        <!-- 4b. Wetter-Sichtungen — storm-blue accent -->
+        <div class="set-section" id="set-weather" data-accent="127,174,201">
+          <button type="button" class="set-hd" onclick="toggleSetSection('set-weather')">
+            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#7faec9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 18a5 5 0 0 0 0-10 7 7 0 0 0-13.5 2.5"/><path d="M7 17l-2 4"/><path d="M11 19l-1 2"/><path d="M14 17l-2 4"/></svg></span><span>Wetter-Sichtungen</span><span id="weatherStatusBadge" class="set-status-badge set-status-badge--off">aus</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+          </button>
+          <div class="set-bd"><div class="set-inner">
+            <div class="set-tabs ws-tab-bar" style="margin-top:10px">
+              <button type="button" class="set-tab active" data-tab="ws-panel-allgemein">⚙️ Allgemein</button>
+              <button type="button" class="set-tab" data-tab="ws-panel-events">🎚 Ereignistypen</button>
+              <button type="button" class="set-tab" data-tab="ws-panel-status">📡 Status</button>
+            </div>
+            <div class="ws-panels-wrap">
+              <div id="ws-panel-allgemein" class="set-tab-content">
+                <div style="display:grid;gap:12px;padding-top:8px">
+                  <label class="toggle-row" style="margin:0">
+                    <span class="toggle-row-label">Wetter-Sichtungen aktiv
+                      <span class="toggle-row-sublabel">Master-Schalter — aus heißt: kein Polling, keine Buffer, kein RAM.</span>
+                    </span>
+                    <label class="switch"><input type="checkbox" id="ws_enabled" /><span class="slider"></span></label>
+                  </label>
+                  <div>
+                    <div class="cam-field-label">Wetter-Kameras</div>
+                    <div id="weatherCamList" class="ws-cam-list" style="display:grid;gap:6px"></div>
+                  </div>
+                  <div>
+                    <div class="cam-field-label">Standort</div>
+                    <div class="row" style="grid-template-columns:1fr 1fr 1fr;margin-top:6px">
+                      <div class="field-wrap"><input type="number" step="0.0001" id="ws_lat" placeholder="49.4521" /><span class="field-label">Latitude</span></div>
+                      <div class="field-wrap"><input type="number" step="0.0001" id="ws_lon" placeholder="11.0767" /><span class="field-label">Longitude</span></div>
+                      <div class="field-wrap"><input type="number" step="1" id="ws_elev" placeholder="—" /><span class="field-label">Höhe m (opt.)</span></div>
+                    </div>
+                    <div class="field-help" style="margin-top:6px">Wird vom Wetter-Service für Sonnenstand-Berechnung (Sonnenuntergang) und vom Telegram-Push-System für Nacht-Erkennung verwendet.</div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="ws-panel-events" class="set-tab-content" hidden>
+                <div id="weatherEventsList" class="ws-events-list" style="padding-top:8px;display:grid;gap:10px"></div>
+                <div class="field-help" style="margin-top:8px">Cooldown bleibt fest auf Schema-Default (30–90 min). Schwelle nach Region anpassen — Open-Meteo / icon_d2 liefert die Werte.</div>
+              </div>
+
+              <div id="ws-panel-status" class="set-tab-content" hidden>
+                <div id="weatherStatusPanel" class="ws-status-panel" style="padding-top:8px;display:grid;gap:8px">
+                  <div class="field-help">Aktualisiert sich alle 15 Sekunden.</div>
+                </div>
+              </div>
+            </div>
           </div></div>
         </div>
 
