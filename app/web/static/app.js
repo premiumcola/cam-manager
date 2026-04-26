@@ -397,34 +397,39 @@ function _pruneEmptyMediaFilters(){
   return before>0 && state.mediaLabels.size===0;
 }
 
-function renderMediaFilterPills(){
-  const bar=byId('mediaFilterBar'); if(!bar) return;
+// mode: 'overview' (all pills, no counts, click → openAllMediaDrilldown(label))
+//       'drilldown' (only pills with count>0, with counts, toggles state.mediaLabels)
+function renderMediaFilterPills(mode){
+  const id=mode==='overview'?'mediaFilterBarOverview':'mediaFilterBar';
+  const bar=byId(id); if(!bar) return;
   const counts=_aggregateMediaCounts();
-  const nonTl=MEDIA_FILTER_LABELS.filter(l=>l!=='timelapse');
-  nonTl.sort((a,b)=>{
-    const d=counts[b]-counts[a];
+  const sorted=MEDIA_FILTER_LABELS.slice().sort((a,b)=>{
+    const d=(counts[b]||0)-(counts[a]||0);
     if(d) return d;
     return MEDIA_FILTER_LABELS.indexOf(a)-MEDIA_FILTER_LABELS.indexOf(b);
   });
-  const ordered=[...nonTl,'__divider','timelapse'];
-  bar.innerHTML=ordered.map(l=>{
-    if(l==='__divider') return '<span class="filter-divider"></span>';
+  const labels=mode==='overview'?sorted:sorted.filter(l=>(counts[l]||0)>0);
+  bar.innerHTML=labels.map(l=>{
     const cnt=counts[l]||0;
     const empty=cnt===0;
-    const active=state.mediaLabels.has(l);
+    const active=mode==='drilldown'&&state.mediaLabels.has(l);
     const cls=`media-pill cat-filter-btn${active?' active':''}${empty?' media-pill--empty':''}`;
     const cb=CAT_COLORS[l]||'#94a3b8';
-    const cntChip=cnt>0?`<span class="mp-count" style="pointer-events:none">${cnt}</span>`:'';
+    const cntChip=(mode==='drilldown'&&cnt>0)?`<span class="mp-count" style="pointer-events:none">${cnt}</span>`:'';
     return `<button type="button" class="${cls}" data-type="label" data-val="${l}" style="--cb:${cb}"${empty?' tabindex="-1" aria-disabled="true"':''}><span class="cfb-icon" style="pointer-events:none">${objIconSvg(l,18)}</span><span style="pointer-events:none">${OBJ_LABEL[l]||l}</span>${cntChip}</button>`;
   }).join('');
   bar.querySelectorAll('.media-pill').forEach(p=>{
     if(p.classList.contains('media-pill--empty')) return;
+    const val=p.dataset.val;
     p.addEventListener('click',()=>{
-      const val=p.dataset.val;
+      if(mode==='overview'){
+        openAllMediaDrilldown(val);
+        return;
+      }
       if(state.mediaLabels.has(val)) state.mediaLabels.delete(val);
       else state.mediaLabels.add(val);
       state.mediaPage=0;
-      renderMediaFilterPills();
+      renderMediaFilterPills('drilldown');
       if(byId('mediaDrilldown')?.style.display!=='none'){
         loadMedia().then(()=>{renderMediaGrid();renderMediaPagination();});
       }
@@ -3410,7 +3415,7 @@ async function refreshTimelineAndStats(){
   }catch(_){ /* non-critical: leave previous render in place */ }
   if(byId('mediaDrilldown')?.style.display!=='none'){
     if(_pruneEmptyMediaFilters()) _seedTopMediaLabel();
-    renderMediaFilterPills();
+    renderMediaFilterPills('drilldown');
   }
 }
 
@@ -4584,28 +4589,11 @@ function renderMediaOverview(){
     </div>`;
   }
 
-  // Category filter bar — full-width row above camera cards
-  const _CAT_DEFS=[
-    {label:'motion',    name:'Bewegung',     clr:CAT_COLORS.motion},
-    {label:'person',    name:'Person',       clr:CAT_COLORS.person},
-    {label:'cat',       name:'Katze',        clr:CAT_COLORS.cat},
-    {label:'bird',      name:'Vogel',        clr:CAT_COLORS.bird},
-    {label:'car',       name:'Auto',         clr:CAT_COLORS.car},
-    {label:'dog',       name:'Hund',         clr:CAT_COLORS.dog},
-    {label:'squirrel',  name:'Eichhörnchen', clr:CAT_COLORS.squirrel},
-    {label:'timelapse', name:'Timelapse',    clr:CAT_COLORS.timelapse},
-  ];
-  const catBtns=_CAT_DEFS.map(({label,name,clr})=>{
-    const icon=(label==='timelapse'?objIconSvg('timelapse',18):(OBJ_SVG[label]||'').replace('width="16" height="16"','width="18" height="18"'));
-    return `<button class="cat-filter-btn" data-val="${esc(label)}" onclick="openCategoryDrilldown('${esc(label)}')" style="--cb:${clr}">
-      <span class="cfb-icon">${icon}</span><span>${esc(name)}</span>
-    </button>`;
-  }).join('');
-  const catSection=`<div class="moc-cat-section">
-    <div class="moc-cat-bar">${catBtns}</div>
-  </div>`;
+  // Category filter bar — populated dynamically (see renderMediaFilterPills('overview') below)
+  const catSection=`<div class="media-filter-bar moc-filter-bar" id="mediaFilterBarOverview"></div>`;
 
   ov.innerHTML=catSection+`<div class="media-overview-grid">${allCard}${camCards}</div>`+archivedHtml;
+  renderMediaFilterPills('overview');
 }
 window.openCategoryDrilldown=async function(label){
   state.mediaCamera=null;
@@ -4613,7 +4601,7 @@ window.openCategoryDrilldown=async function(label){
   state.mediaPage=0;
   if(state.mediaSelectMode) _exitMediaSelectMode();
   if(state.mediaLabels.size===0) _seedTopMediaLabel();
-  renderMediaFilterPills();
+  renderMediaFilterPills('drilldown');
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
   _updateMediaSelectToggle();
@@ -4722,16 +4710,16 @@ function _setActiveMocCard(camId){
     c.classList.toggle('moc-active', !!camId && c.dataset.camId===camId);
   });
 }
-async function openAllMediaDrilldown(){
+async function openAllMediaDrilldown(preFilterLabel){
   state.mediaCamera=null;
-  state.mediaLabels=new Set(); state.mediaPage=0;
+  state.mediaLabels=preFilterLabel?new Set([preFilterLabel]):new Set();
+  state.mediaPage=0;
   if(state.mediaSelectMode) _exitMediaSelectMode();
   state.media=[]; state._allMedia=[];
   const grid=byId('mediaGrid');
   if(grid) grid.innerHTML='<div style="padding:32px;text-align:center;color:var(--muted)">Lade Medien…</div>';
-  const pag=byId('mediaPagination'); if(pag) pag.innerHTML='';
-  _seedTopMediaLabel();
-  renderMediaFilterPills();
+  if(state.mediaLabels.size===0) _seedTopMediaLabel();
+  renderMediaFilterPills('drilldown');
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
   _setActiveMocCard('__all__');
@@ -4751,7 +4739,7 @@ async function openMediaDrilldown(camId){
   if(grid) grid.innerHTML='<div style="padding:32px;text-align:center;color:var(--muted)">Lade Medien…</div>';
   const pag=byId('mediaPagination'); if(pag) pag.innerHTML='';
   _seedTopMediaLabel();
-  renderMediaFilterPills();
+  renderMediaFilterPills('drilldown');
   byId('mediaOverview').style.display='none';
   byId('mediaDrilldown').style.display='';
   _setActiveMocCard(camId);
@@ -4832,7 +4820,7 @@ window.bulkDeleteSelectedMedia=async function(){
   }catch(e){showToast('Bulk-Löschen fehlgeschlagen: '+e.message,'error');}
 };
 // Legacy alias — pills are now rendered dynamically via renderMediaFilterPills.
-function syncMediaPills(){ renderMediaFilterPills(); }
+function syncMediaPills(){ renderMediaFilterPills('drilldown'); }
 // ── Media grid resize observer ───────────────────────────────────────────────
 (function(){
   const grid=byId('mediaGrid');
