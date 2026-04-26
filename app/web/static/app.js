@@ -551,12 +551,10 @@ ${isActive?`
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
 const CAT_COLORS={alle:'#8888aa',motion:'#cbd5e1',person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',dog:'#7c2d12',squirrel:'#7c4a1f',timelapse:'#a855f7'};
-// Order matches the Mediathek filter bar exactly so both filter rows read
-// the same left-to-right (Bewegung first, then per-class). Timelapse stays
-// out of the timeline lanes — only physical detection labels here.
+// Lane order, top-down. Lanes auto-filter by content presence: any lane
+// with zero events in the visible time range is omitted entirely.
 const TL_LANES=['motion','person','cat','bird','car','dog','squirrel'];
 const GAP_MS=2*60*1000;
-let _tlActiveLanes=new Set(TL_LANES);
 
 function _tlGroupLane(points, label, tMin, tMax){
   const filtered=points
@@ -612,80 +610,52 @@ function renderTimeline(){
   const lbl=byId('tlRangeLabel');
   if(lbl) lbl.textContent=hours<24?`letzte ${hours}h`:`${Math.round(hours/24)} Tage`;
 
-  // Compute which labels have events in the visible range
-  const _tlTmpMax=now;
-  let _tlTmpMin=now-hours*3600000;
-  if(earliestMs&&earliestMs>_tlTmpMin) _tlTmpMin=earliestMs;
-  const labelsInRange=new Set();
-  tracks.forEach(tr=>{
-    (tr.points||[]).forEach(p=>{
-      const t=new Date(p.time).getTime();
-      if(!t||t<_tlTmpMin||t>_tlTmpMax) return;
-      (p.labels||[]).forEach(l=>labelsInRange.add(l));
-      if(p.top_label) labelsInRange.add(p.top_label);
-    });
-  });
-
-  // Filter pills — same .cat-filter-btn class + data-val attribute the
-  // Mediathek bar uses, so both rows render visually identical. No
-  // "Filter:" prefix, exact label order: motion · person · cat · bird ·
-  // car · dog. Pills with no events in the current time range get the
-  // dim class (still clickable, but visually backgrounded).
-  const leg=byId('tlLegend');
-  if(leg){
-    leg.innerHTML=TL_LANES.map(l=>{
-      const empty=!labelsInRange.has(l);
-      const cls=`media-pill cat-filter-btn${_tlActiveLanes.has(l)?' active':''}${empty?' tl-lane-btn-empty':''}`;
-      return `<button class="${cls}" data-lane="${l}" data-val="${l}" style="--cb:${CAT_COLORS[l]||'#8888aa'}"><span class="cfb-icon">${objIconSvg(l,18)}</span><span>${OBJ_LABEL[l]||l}</span></button>`;
-    }).join('');
-    leg.querySelectorAll('.cat-filter-btn[data-lane]').forEach(btn=>{
-      btn.onclick=()=>{
-        const lane=btn.dataset.lane;
-        if(_tlActiveLanes.has(lane)) _tlActiveLanes.delete(lane); else _tlActiveLanes.add(lane);
-        renderTimeline();
-      };
-    });
-  }
-
-  if(!tracks.length){container.innerHTML='<div class="tl-empty">Keine Ereignisse im gewählten Zeitraum.</div>';return;}
-
   const tMax=now;
   let tMin=now-hours*3600000;
   // Clamp tMin to earliest event — no point showing empty space before first data point
   if(earliestMs&&earliestMs>tMin) tMin=earliestMs;
   const span=tMax-tMin||1;
 
+  // Compute which lanes have events per camera in the visible range. Only
+  // those lanes are rendered. Cameras with no events at all are skipped.
+  const camLaneGroups=tracks.map(tr=>{
+    const lanes=TL_LANES
+      .map(label=>({label,groups:_tlGroupLane(tr.points||[], label, tMin, tMax)}))
+      .filter(l=>l.groups.length>0);
+    return {tr,lanes};
+  }).filter(c=>c.lanes.length>0);
+
+  if(!camLaneGroups.length){container.innerHTML='<div class="tl-empty">Keine Ereignisse im gewählten Zeitraum.</div>';return;}
+
   let html='';
-  tracks.forEach((tr,ti)=>{
+  camLaneGroups.forEach(({tr,lanes},ti)=>{
     const cam=(state.config?.cameras||[]).find(c=>c.id===tr.camera_id)||{};
     const camName=cam.name||tr.camera_id;
     const camIcon=getCameraIcon(camName);
-    // TASK 3: camera label with icon, 15px bold, extra margin for 2nd+ block
     html+=`<div class="tl-cam-block${ti>0?' tl-cam-block--notfirst':''}">`;
     const tlHdrCls=STAT_MEDIA_DRILLDOWN?'tl-cam-header stat-drillable':'tl-cam-header';
     const tlHdrClick=STAT_MEDIA_DRILLDOWN?`onclick="_statOpenMedia('${esc(tr.camera_id)}','')"`:'' ;
     html+=`<div class="${tlHdrCls}" ${tlHdrClick}><span class="tl-cam-icon">${camIcon}</span><span class="tl-cam-name">${esc(camName)}</span></div>`;
-    // TASK 4: sunken pool wrapper with vertical grid lines
     html+=`<div class="tl-lanes-wrap">`;
-    for(let k=1;k<5;k++) html+=`<div class="tl-vgrid" style="left:calc(36px + (100% - 36px)*${k}/5)"></div>`;
-    TL_LANES.forEach(label=>{
+    for(let k=1;k<5;k++) html+=`<div class="tl-vgrid" style="left:calc(var(--tl-label-w) + (100% - var(--tl-label-w))*${k}/5)"></div>`;
+    lanes.forEach(({label,groups})=>{
       const color=colors[label]||colors.unknown;
-      const groups=_tlGroupLane(tr.points||[], label, tMin, tMax);
-      html+=`<div class="tl-lane${_tlActiveLanes.has(label)?'':' tl-lane--hidden'}">`;
-      html+=`<div class="tl-lane-icon">${OBJ_SVG[label]||''}</div>`;
+      const labelText=OBJ_LABEL[label]||label;
+      html+=`<div class="tl-lane">`;
+      html+=`<div class="tl-lane-label" style="--lane-c:${CAT_COLORS[label]||'#8888aa'}"><span class="tl-lane-label-icon">${OBJ_SVG[label]||''}</span><span class="tl-lane-label-text">${labelText}</span></div>`;
       html+=`<div class="tl-track">`;
       groups.forEach(g=>{
         const leftPct=Math.max(0,(g.startTime-tMin)/span*100);
         const widthPct=Math.max(0.8,Math.min((g.endTime-g.startTime)/span*100,100-leftPct));
         if(leftPct>=100) return;
-        html+=`<div class="tl-bar" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;background:${color};opacity:0.85" data-camid="${esc(tr.camera_id)}" data-label="${esc(label)}" title="${g.count} Events · ${OBJ_LABEL[label]||label}"></div>`;
+        html+=`<div class="tl-bar" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;background:${color};opacity:0.85" data-camid="${esc(tr.camera_id)}" data-label="${esc(label)}" title="${g.count} Events · ${labelText}"></div>`;
       });
       html+=`</div></div>`;
     });
     html+=`</div></div>`;
   });
 
-  // X-axis — 6 evenly spaced labels
+  // X-axis — 6 evenly spaced labels, aligned to track start (after label column)
   html+=`<div class="tl-xaxis">`;
   for(let k=0;k<6;k++) html+=`<span class="tl-xlabel">${_tlFmtTs(tMin+span*k/5,hours)}</span>`;
   html+=`</div>`;
