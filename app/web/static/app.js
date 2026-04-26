@@ -1513,11 +1513,10 @@ async function toggleTimelapse(camId,currentlyEnabled){
 window.toggleTimelapse=toggleTimelapse;
 
 function hydrateSettings(){
-  const server=state.config.server||{}, mqtt=state.config.mqtt||{};
+  const mqtt=state.config.mqtt||{};
   const proc=state.config.processing||{}, coral=state.config.coral||{};
-  // App section
-  const pubEl=byId('set_public_base_url'); if(pubEl) pubEl.value=server.public_base_url||'';
-  const subEl=byId('set_discovery_subnet'); if(subEl) subEl.value=state.config.default_discovery_subnet||'';
+  // App section — Public Base URL + Discovery-Subnet now render read-only
+  // inside updateSystemPanel(); no inputs to hydrate here.
   updateSystemPanel();
   // MQTT section
   const mqttEn=byId('mqtt_enabled'); if(mqttEn) mqttEn.checked=!!mqtt.enabled;
@@ -1623,6 +1622,8 @@ async function updateSystemPanel(){
     const uptime=s.uptime_s||0;
     const uptimeStr=uptime>3600?`${Math.floor(uptime/3600)}h ${Math.floor((uptime%3600)/60)}m`:uptime>60?`${Math.floor(uptime/60)}m`:`${Math.round(uptime)}s`;
     const shortCommit=commit.length>7?commit.slice(0,7):commit;
+    const publicUrl=state.config?.server?.public_base_url||'';
+    const subnet=state.config?.default_discovery_subnet||'';
     panel.innerHTML=`
       <div class="app-info-block">
         <div class="app-info-section-title">Build &amp; System</div>
@@ -1636,15 +1637,13 @@ async function updateSystemPanel(){
         ${procMem?`<div class="app-info-row"><span class="app-info-row-label">RAM (App)</span><span class="app-info-row-val">${procMem} MB</span></div>`:''}
         ${memTotal?`<div class="app-info-row"><span class="app-info-row-label">RAM (System)</span><span class="app-info-row-val">${memUsed} / ${memTotal} MB</span></div>`:''}
         <div class="app-info-row"><span class="app-info-row-label">Storage</span><span class="app-info-row-val"><code>${esc(storagePath)}</code></span></div>
+
+        <div class="app-info-section-title">Netzwerk</div>
+        <div class="app-info-row"><span class="app-info-row-label">Public Base URL</span><span class="app-info-row-val">${publicUrl?`<code>${esc(publicUrl)}</code>`:'—'}</span></div>
+        <div class="app-info-row"><span class="app-info-row-label">Discovery-Subnet</span><span class="app-info-row-val">${subnet?`<code>${esc(subnet)}</code>`:'—'}</span></div>
       </div>`;
   }catch(e){/* silent — system info optional */}
 }
-
-let _appSaveTimer=null;
-window.saveAppSettingsDebounced=function(){
-  clearTimeout(_appSaveTimer);
-  _appSaveTimer=setTimeout(()=>saveAppSettings(),600);
-};
 
 // ── Telegram page hydrate & logic ─────────────────────────────────────────────
 
@@ -2350,14 +2349,6 @@ byId('cameraForm').onsubmit=async(e)=>{
 };
 byId('closeCameraEdit')?.addEventListener('click',()=>_closeEditPanel());
 // ── Section-level save functions ──────────────────────────────────────────────
-window.saveAppSettings=async function(){
-  const payload={
-    server:{public_base_url:byId('set_public_base_url')?.value||'',default_discovery_subnet:byId('set_discovery_subnet')?.value||'192.168.1.0/24'}
-  };
-  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  showToast('App-Einstellungen gespeichert.','success');
-  await loadAll();
-};
 window.saveMqttSettings=async function(){
   const existingPass=(state.config?.mqtt?.password||'');
   const payload={
