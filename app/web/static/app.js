@@ -5969,6 +5969,12 @@ const WEATHER_TYPES = {
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h16M3 12h18M5 16h14M7 20h10"/></svg>' },
   sunset:     { de: 'Sonnenuntergang', color: '#d4823a',
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="4"/><path d="M12 4v3M5.6 7.6l2 2M2 14h3M19 14h3M16.4 9.6l2-2M3 20h18"/></svg>' },
+  // Tägliche Sonnen-Timelapses — eigener Sub-Typ in der Wetter-Mediathek,
+  // unabhängig vom score-gefilterten "sunset"-Wetter-Sichtungs-Clip.
+  sun_timelapse_rise: { de: 'Sonnenaufgang', color: '#e89540',
+                icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="15" r="3.5"/><path d="M12 7v-4M5 11l-2-2M19 11l2-2M3 19h18"/><polyline points="9,5 12,2 15,5"/></svg>' },
+  sun_timelapse_set:  { de: 'Sonnenuntergang TL', color: '#d4823a',
+                icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="15" r="3.5"/><path d="M12 7v-4M5 11l-2-2M19 11l2-2M3 19h18"/><polyline points="9,1 12,4 15,1"/></svg>' },
 };
 
 // Per-type unit hint for the threshold slider in Settings → Ereignistypen.
@@ -6247,7 +6253,13 @@ function hydrateWeatherSettings(){
   const lat = byId('ws_lat'); if (lat) lat.value = srvLoc.lat ?? '';
   const lon = byId('ws_lon'); if (lon) lon.value = srvLoc.lon ?? '';
   const elv = byId('ws_elev'); if (elv) elv.value = srvLoc.elevation ?? '';
-  _renderWeatherCamList();
+  // Sun-Times preview lives next to the per-camera toggles. Fetched once
+  // before the first render so window labels show the right values; the
+  // _saveSunPhase handler refreshes it after each save.
+  fetch('/api/weather/sun-times').then(r => r.json()).then(st => {
+    state.weather._sunTimes = st;
+    _renderWeatherCamList();
+  }).catch(() => _renderWeatherCamList());
   _renderWeatherEventsList(w.events || {});
   _bindWeatherHandlers();
   _refreshWeatherStatus();
@@ -6257,19 +6269,106 @@ function _renderWeatherCamList(){
   const wrap = byId('weatherCamList'); if (!wrap) return;
   const cams = state.cameras || [];
   if (!cams.length) { wrap.innerHTML = '<div class="field-help">Keine Kameras konfiguriert.</div>'; return; }
-  wrap.innerHTML = cams.map(c => `
-    <label class="toggle-row" style="margin:0">
-      <span class="toggle-row-label">📷 ${esc(c.name || c.id)}
-        <span class="toggle-row-sublabel">RAM-Buffer ~12 MB · Polling pro 5 min · idle wenn aus</span>
-      </span>
-      <label class="switch"><input type="checkbox" data-ws-cam="${esc(c.id)}" ${c.weather && c.weather.enabled ? 'checked' : ''}/><span class="slider"></span></label>
-    </label>
-  `).join('');
+  // Per camera: master toggle + (when on) the two sun-timelapse rows. The
+  // sun rows are hidden until the master toggle is on so the section
+  // doesn't drown the user with controls for cameras that aren't even
+  // weather-enabled. Live preview rows pull from /api/weather/sun-times
+  // which is loaded by hydrateWeatherSettings() before this render.
+  const sunPreview = state.weather._sunTimes || { cameras: [] };
+  const previewByCam = {};
+  for (const e of (sunPreview.cameras || [])) previewByCam[e.id] = e;
+  wrap.innerHTML = cams.map(c => {
+    const wEnabled = !!(c.weather && c.weather.enabled);
+    const sun = (c.weather && c.weather.sun_timelapse) || {};
+    const sr = sun.sunrise || {}, ss = sun.sunset || {};
+    const pre = previewByCam[c.id] || {};
+    const previewLine = (phase, p) => {
+      if (!p.enabled) return '';
+      if (!sunPreview.location_set) return '<span class="ws-sun-preview ws-sun-preview--err">Standort fehlt</span>';
+      const ev = (pre[phase] || {});
+      if (!ev.window_start) return '<span class="ws-sun-preview">Polartag — kein ' + (phase === 'sunrise' ? 'Aufgang' : 'Untergang') + ' heute</span>';
+      return `<span class="ws-sun-preview">Heute: ${esc(ev.sun_event)} · Fenster ${esc(ev.window_start)} – ${esc(ev.window_end)}</span>`;
+    };
+    return `
+      <div class="ws-cam-block" data-cam="${esc(c.id)}">
+        <label class="toggle-row" style="margin:0">
+          <span class="toggle-row-label">📷 ${esc(c.name || c.id)}
+            <span class="toggle-row-sublabel">RAM-Buffer ~12 MB · Polling pro 5 min · idle wenn aus</span>
+          </span>
+          <label class="switch"><input type="checkbox" data-ws-cam="${esc(c.id)}" ${wEnabled ? 'checked' : ''}/><span class="slider"></span></label>
+        </label>
+        <div class="ws-sun-rows" ${wEnabled ? '' : 'hidden'}>
+          <div class="ws-sun-row" data-phase="sunrise">
+            <span class="ws-sun-icon" style="color:#e89540">${WEATHER_TYPES.sun_timelapse_rise.icon}</span>
+            <span class="ws-sun-name">Sonnenaufgang</span>
+            <label class="switch ws-sun-toggle"><input type="checkbox" data-sun-toggle="sunrise" ${sr.enabled ? 'checked' : ''}/><span class="slider"></span></label>
+            <input type="range" class="ws-sun-slider" min="10" max="60" step="5" value="${sr.window_min || 30}" data-sun-window="sunrise"/>
+            <span class="ws-sun-window"><span class="ws-sun-window-num">${sr.window_min || 30}</span> min</span>
+            ${previewLine('sunrise', sr)}
+          </div>
+          <div class="ws-sun-row" data-phase="sunset">
+            <span class="ws-sun-icon" style="color:#d4823a">${WEATHER_TYPES.sun_timelapse_set.icon}</span>
+            <span class="ws-sun-name">Sonnenuntergang</span>
+            <label class="switch ws-sun-toggle"><input type="checkbox" data-sun-toggle="sunset" ${ss.enabled ? 'checked' : ''}/><span class="slider"></span></label>
+            <input type="range" class="ws-sun-slider" min="10" max="60" step="5" value="${ss.window_min || 30}" data-sun-window="sunset"/>
+            <span class="ws-sun-window"><span class="ws-sun-window-num">${ss.window_min || 30}</span> min</span>
+            ${previewLine('sunset', ss)}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+  // Bind sun toggles + window sliders. Both persist via /api/settings/cameras
+  // with the FULL camera dict (the upsert_camera default-merge is destructive
+  // for missing fields).
+  wrap.querySelectorAll('.ws-cam-block').forEach(block => {
+    const camId = block.dataset.cam;
+    block.querySelectorAll('[data-sun-toggle]').forEach(cb => {
+      cb.addEventListener('change', () => _saveSunPhase(camId, cb.dataset.sunToggle, { enabled: cb.checked }));
+    });
+    block.querySelectorAll('[data-sun-window]').forEach(sl => {
+      const numEl = sl.parentElement.querySelector('.ws-sun-window-num');
+      sl.addEventListener('input', () => { if (numEl) numEl.textContent = sl.value; });
+      sl.addEventListener('change', () => _saveSunPhase(camId, sl.dataset.sunWindow, { window_min: parseInt(sl.value, 10) }));
+    });
+  });
+}
+
+async function _saveSunPhase(camId, phase, partial){
+  const cam = (state.cameras || []).find(c => c.id === camId);
+  if (!cam) return;
+  const updated = { ...cam,
+    weather: {
+      ...(cam.weather || { enabled: false }),
+      sun_timelapse: {
+        ...((cam.weather && cam.weather.sun_timelapse) || {}),
+        [phase]: { ...(((cam.weather || {}).sun_timelapse || {})[phase] || {}), ...partial },
+      },
+    },
+  };
+  try {
+    const r = await fetch('/api/settings/cameras', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updated),
+    });
+    if (r.ok) {
+      cam.weather = updated.weather;
+      // Refresh the preview line for this camera by re-fetching sun-times.
+      const st = await fetch('/api/weather/sun-times').then(x => x.json()).catch(() => null);
+      if (st) state.weather._sunTimes = st;
+      _renderWeatherCamList();
+    }
+  } catch (e) {
+    showToast('Speichern fehlgeschlagen.', 'error');
+  }
 }
 
 function _renderWeatherEventsList(events){
   const wrap = byId('weatherEventsList'); if (!wrap) return;
-  wrap.innerHTML = Object.keys(WEATHER_TYPES).map(t => {
+  // Sun-Timelapse types are configured in the per-camera section below;
+  // they don't have a single global threshold to slide, so skip them in
+  // this list to avoid an undefined-`hint` crash.
+  const tunable = Object.keys(WEATHER_TYPES).filter(t => WEATHER_THRESHOLD_HINTS[t]);
+  wrap.innerHTML = tunable.map(t => {
     const meta = WEATHER_TYPES[t];
     const cfg = events[t] || {};
     const hint = WEATHER_THRESHOLD_HINTS[t];
@@ -6327,6 +6426,9 @@ function _bindWeatherHandlers(){
       if (r.ok) {
         cam.weather = updated.weather;
         showToast(`${cam.name || cam.id}: Wetter-Kamera ${cb.checked ? 'an' : 'aus'}`, 'success');
+        // Re-render so the sun-timelapse rows reveal/collapse with the
+        // master toggle (sun rows live inside .ws-sun-rows[hidden]).
+        _renderWeatherCamList();
       }
     } catch (err) {
       showToast('Speichern fehlgeschlagen.', 'error');

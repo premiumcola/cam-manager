@@ -2637,6 +2637,17 @@ def api_weather_sighting_delete(sighting_id: str):
     return jsonify({"error": "not found"}), 404
 
 
+@app.get('/api/weather/sun-times')
+def api_weather_sun_times():
+    """Today's sunrise/sunset for the configured location, plus per-camera
+    sun-timelapse window previews. Powers the live preview row in
+    Settings → Wetter."""
+    if weather_service is None:
+        return jsonify({"location_set": False, "sunrise": None, "sunset": None,
+                        "cameras": []})
+    return jsonify(weather_service.sun_times_today())
+
+
 @app.get('/api/weather/recaps')
 def api_weather_recaps():
     if weather_service is None:

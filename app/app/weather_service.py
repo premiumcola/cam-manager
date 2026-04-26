@@ -181,6 +181,18 @@ class WeatherService:
         # year so the scheduler always knows the upcoming firings even when
         # the service was started after this year's Q1 has already happened.
         self._register_recap_jobs()
+        # Sun-Timelapse: register today's sunrise/sunset jobs and a daily
+        # cron at 00:05 that re-registers for the new day.
+        self._register_sun_jobs()
+        try:
+            from apscheduler.triggers.cron import CronTrigger
+            self._scheduler.add_job(
+                self._register_sun_jobs, CronTrigger(hour=0, minute=5),
+                id="sun_tl_recompute", replace_existing=True,
+                max_instances=1, coalesce=True,
+            )
+        except Exception as e:
+            log.warning("[Sun-TL] daily recompute job failed: %s", e)
         cams_in = [self._cam_name(cid) for cid in self._enabled_cam_ids()]
         log.info("[Weather] Service started · interval=%ss · cameras=%s", interval, cams_in)
 
@@ -693,7 +705,15 @@ class WeatherService:
             for evt_dir in cam_dir.iterdir():
                 if not evt_dir.is_dir():
                     continue
-                if event_type and evt_dir.name != event_type:
+                # Skip recap dir + scratch dirs leaked from a crashed encode.
+                if evt_dir.name == "recaps" or evt_dir.name.startswith(".scratch_"):
+                    continue
+                # Pre-filter by directory name when the requested event_type
+                # has a 1:1 dir mapping. Sun-Timelapse subtypes share one
+                # dir ("sun_timelapse") so we always recurse and filter
+                # post-translation.
+                _is_sun_request = event_type in ("sun_timelapse_rise", "sun_timelapse_set", "sun_timelapse")
+                if event_type and not _is_sun_request and evt_dir.name != event_type:
                     continue
                 for jf in evt_dir.glob("*.json"):
                     try:
@@ -706,6 +726,22 @@ class WeatherService:
                     if until_dt and started > until_dt:
                         continue
                     et = m.get("event_type") or evt_dir.name
+                    # Sun-Timelapse: collapse the generic "sun_timelapse"
+                    # event_type onto the phase-specific display type so the
+                    # frontend's WEATHER_TYPES map (sun_timelapse_rise /
+                    # sun_timelapse_set) drives both pills and card badges
+                    # without any special-casing on the JS side.
+                    if et == "sun_timelapse":
+                        sp = (m.get("sun_phase") or "").lower()
+                        if sp == "sunrise":
+                            et = "sun_timelapse_rise"
+                        elif sp == "sunset":
+                            et = "sun_timelapse_set"
+                        m["event_type"] = et
+                    if event_type and et != event_type and not (
+                        event_type == "sun_timelapse" and et.startswith("sun_timelapse")
+                    ):
+                        continue
                     counts[et] = counts.get(et, 0) + 1
                     items.append(m)
         items.sort(key=lambda m: m.get("started_at", ""), reverse=True)
@@ -720,9 +756,18 @@ class WeatherService:
         if not path or not path.exists():
             return None
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            m = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             return None
+        # Mirror list_sightings: collapse the on-disk generic type onto the
+        # phase-specific display value the frontend WEATHER_TYPES map uses.
+        if m.get("event_type") == "sun_timelapse":
+            sp = (m.get("sun_phase") or "").lower()
+            if sp == "sunrise":
+                m["event_type"] = "sun_timelapse_rise"
+            elif sp == "sunset":
+                m["event_type"] = "sun_timelapse_set"
+        return m
 
     def delete_sighting(self, sighting_id: str) -> bool:
         path = self._manifest_path_for(sighting_id)
@@ -744,6 +789,14 @@ class WeatherService:
             cam_id, evt, ts = sighting_id.split("__", 2)
         except ValueError:
             return None
+        # Sun-Timelapse manifests live under "sun_timelapse/" regardless of
+        # the per-phase id prefix the API exposes. Collapse the two phase
+        # subtypes back to the shared directory name when looking up.
+        # Also accept the legacy `sun_timelapse_sunrise/sunset` shape from
+        # captures written before the rise/set rename.
+        if evt in ("sun_timelapse_rise", "sun_timelapse_set",
+                   "sun_timelapse_sunrise", "sun_timelapse_sunset"):
+            evt = "sun_timelapse"
         return self._sightings_dir() / cam_id / evt / f"{ts}.json"
 
     def status(self) -> dict:
@@ -1078,6 +1131,307 @@ class WeatherService:
             return json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             return None
+
+    # ── Sonnen-Timelapse (Phase: Sun-TL) ────────────────────────────────────
+
+    def sun_event_today(self, phase: str, when: date | None = None) -> datetime | None:
+        """Return today's sunrise/sunset as a local naive datetime, or None
+        if astral can't compute it (polar day/night) or the location is
+        missing. Cached for 60 seconds via _sun_cache hits is overkill here
+        — we only call this once per cam per day."""
+        loc = self.server_cfg.get("location") or {}
+        lat, lon = loc.get("lat"), loc.get("lon")
+        if lat is None or lon is None:
+            return None
+        try:
+            from astral import Observer
+            from astral.sun import sun as _sun
+            obs = Observer(latitude=float(lat), longitude=float(lon),
+                           elevation=float(loc.get("elevation") or 0.0))
+            d = when or date.today()
+            evts = _sun(obs, date=d)
+            dt = evts.get(phase)
+            # astral returns aware UTC; convert to local naive for scheduling.
+            if dt is None:
+                return None
+            return dt.astimezone().replace(tzinfo=None)
+        except Exception as e:
+            log.info("[Sun-TL] No %s for %s: %s", phase, when or date.today(), e)
+            return None
+
+    def _sun_jobs_keys(self) -> list[str]:
+        if not self._scheduler:
+            return []
+        try:
+            return [j.id for j in self._scheduler.get_jobs() if j.id.startswith("sun_tl_capture_")]
+        except Exception:
+            return []
+
+    def _register_sun_jobs(self):
+        """Cancel any previously-registered sunrise/sunset capture jobs and
+        re-register for today's events. Skips windows that have already
+        started (no rückwirkende triggers). Idempotent — safe at every
+        service start, every reload, and on the daily 00:05 re-compute."""
+        if not self._scheduler:
+            return
+        # Drop stale capture jobs first so a phase-toggle change actually
+        # takes effect (and so we don't keep yesterday's jobs after the
+        # daily recompute).
+        for k in self._sun_jobs_keys():
+            try:
+                self._scheduler.remove_job(k)
+            except Exception:
+                pass
+        loc = self.server_cfg.get("location") or {}
+        if loc.get("lat") is None or loc.get("lon") is None:
+            log.info("[Sun-TL] Standort fehlt — keine Sun-Jobs registriert")
+            return
+        from apscheduler.triggers.date import DateTrigger
+        today = date.today()
+        registered = []
+        cams = self._cfg_cameras()
+        for cam in cams:
+            cam_id = cam.get("id")
+            cam_name = cam.get("name") or cam_id
+            cw = cam.get("weather") or {}
+            stl = cw.get("sun_timelapse") or {}
+            for phase in ("sunrise", "sunset"):
+                pcfg = stl.get(phase) or {}
+                if not pcfg.get("enabled"):
+                    continue
+                sun_dt = self.sun_event_today(phase, today)
+                if sun_dt is None:
+                    continue
+                window = int(pcfg.get("window_min", 30) or 30)
+                start_dt = sun_dt - timedelta(minutes=window // 2)
+                if start_dt <= datetime.now():
+                    log.info("[Sun-TL] %s %s @ %s already passed — skipping today",
+                             cam_name, phase, sun_dt.strftime("%H:%M"))
+                    continue
+                key = f"sun_tl_capture_{cam_id}_{phase}_{today.isoformat()}"
+                self._scheduler.add_job(
+                    self._run_sun_capture_safe,
+                    DateTrigger(run_date=start_dt),
+                    id=key, replace_existing=True,
+                    args=[cam_id, phase, sun_dt, dict(pcfg)],
+                )
+                registered.append(
+                    f"{cam_name} {phase} {sun_dt.strftime('%H:%M')} (window {window} min)"
+                )
+        if registered:
+            log.info("[Sun-TL] Jobs registered: %s", " · ".join(registered))
+        else:
+            log.info("[Sun-TL] Keine Sun-Jobs heute (alle aus oder Fenster vorbei)")
+
+    def _cfg_cameras(self) -> list[dict]:
+        # Read the live, fully-merged camera list from the SettingsStore so
+        # phase-toggles persisted via /api/settings/cameras are visible at
+        # the next _register_sun_jobs() call without a service reload.
+        try:
+            return list(self.settings_store.data.get("cameras", []) or [])
+        except Exception:
+            return []
+
+    def _run_sun_capture_safe(self, cam_id: str, phase: str, sun_dt: datetime, pcfg: dict):
+        """APScheduler entry point. The actual capture loop is long (≥
+        window_min minutes) and must NOT block the scheduler thread, so we
+        spawn a daemon worker and return immediately."""
+        threading.Thread(
+            target=self._run_sun_capture,
+            args=(cam_id, phase, sun_dt, pcfg),
+            daemon=True,
+            name=f"sun-tl-{cam_id}-{phase}",
+        ).start()
+
+    def _run_sun_capture(self, cam_id: str, phase: str, sun_dt: datetime, pcfg: dict):
+        rt = self.runtimes.get(cam_id)
+        if rt is None or not hasattr(rt, "snapshot_jpeg"):
+            log.warning("[Sun-TL] cam %s nicht verfügbar — capture abgebrochen", cam_id)
+            return
+        window_min = int(pcfg.get("window_min", 30) or 30)
+        interval_s = max(1, int(pcfg.get("interval_s", 3) or 3))
+        target_fps = max(1, int(pcfg.get("fps", 25) or 25))
+        cam_name = self._cam_name(cam_id)
+        out_dir = self._sightings_dir() / cam_id / "sun_timelapse"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        date_label = sun_dt.strftime("%Y-%m-%d")
+        stem = f"{date_label}_{phase}"
+        mp4_path = out_dir / f"{stem}.mp4"
+        thumb_path = out_dir / f"{stem}.jpg"
+        # Frames go to a temporary scratch dir; deleted after encode.
+        frames_dir = self._sightings_dir() / cam_id / "sun_timelapse" / f".scratch_{stem}"
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        # Sun snapshot at start (to compare with end).
+        sun_at_start = self._sun_position()
+        # Wetter-Snapshot zum Trigger-Zeitpunkt (für Score + Recap-Picker).
+        api_snapshot = self._latest_api_snapshot_safe()
+        end_at = datetime.now() + timedelta(minutes=window_min)
+        log.info("[Sun-TL] Capture start: %s %s (Fenster %d min, %ds-Intervall, %d fps)",
+                 cam_name, phase, window_min, interval_s, target_fps)
+        n_written = 0
+        i = 0
+        while datetime.now() < end_at:
+            jpg = rt.snapshot_jpeg(quality=82) if hasattr(rt, "snapshot_jpeg") else None
+            if jpg:
+                out = frames_dir / f"{i:05d}.jpg"
+                try:
+                    out.write_bytes(jpg)
+                    n_written += 1
+                except Exception:
+                    pass
+            i += 1
+            # Sleep in short chunks so we react quickly to stop signals.
+            slept = 0.0
+            while slept < interval_s and datetime.now() < end_at:
+                time.sleep(0.5)
+                slept += 0.5
+        sun_at_end = self._sun_position()
+        log.info("[Sun-TL] Capture done: %s %s · %d Frames erfasst", cam_name, phase, n_written)
+        if n_written < target_fps * 2:
+            log.warning("[Sun-TL] Zu wenige Frames (%d) — Encode übersprungen", n_written)
+            self._cleanup_sun_scratch(frames_dir)
+            return
+        # Re-use the existing TimelapseBuilder._write_video logic — same
+        # JPEG-on-disk → ffmpeg pipeline as the regular timelapse builder
+        # so we don't fork the encoder.
+        try:
+            from .timelapse import TimelapseBuilder
+            tb = TimelapseBuilder(self._sightings_dir().parent.parent)
+            images = sorted(frames_dir.glob("*.jpg"))
+            target_seconds = max(8, n_written // target_fps) if target_fps else 24
+            target_seconds = min(target_seconds, 60)  # cap at 60s safety
+            written = tb._write_video(images, mp4_path, target_seconds, target_fps)
+            if not written or not mp4_path.exists():
+                log.warning("[Sun-TL] Encode failed for %s %s", cam_name, phase)
+                self._cleanup_sun_scratch(frames_dir)
+                return
+        except Exception as e:
+            log.warning("[Sun-TL] Encode crash %s %s: %s", cam_name, phase, e)
+            self._cleanup_sun_scratch(frames_dir)
+            return
+        # Write thumb from the middle JPEG (~halfway through the sun event).
+        try:
+            mid = images[len(images) // 2]
+            thumb_path.write_bytes(mid.read_bytes())
+        except Exception:
+            pass
+        # Score: clear sky → higher.
+        cloud = (api_snapshot or {}).get("cloud_cover")
+        score = 0.5 + 0.5 * (1.0 - (float(cloud) / 100.0)) if cloud is not None else 0.6
+        # Use the same phase suffix as the API surfaces (`_rise` / `_set`)
+        # so the id round-trips through `_manifest_path_for`.
+        phase_suffix = "rise" if phase == "sunrise" else "set"
+        manifest = {
+            "id":           f"{cam_id}__sun_timelapse_{phase_suffix}__{stem}",
+            "cam_id":       cam_id,
+            "cam_name":     cam_name,
+            "event_type":   "sun_timelapse",
+            "sun_phase":    phase,
+            "started_at":   datetime.now().isoformat(timespec="seconds"),
+            "score":        round(float(score), 3),
+            "severity":     round(float(score), 3),
+            "window_min":   window_min,
+            "interval_s":   interval_s,
+            "fps":          target_fps,
+            "api_snapshot": _safe_subset(api_snapshot or {}, [
+                "time", "precipitation", "snowfall", "lightning_potential",
+                "visibility", "wind_gusts_10m", "cloud_cover", "weather_code",
+            ]),
+            "sun_snapshot": {
+                "altitude_at_start": sun_at_start.get("altitude"),
+                "altitude_at_end":   sun_at_end.get("altitude"),
+                "azimuth_at_start":  sun_at_start.get("azimuth"),
+                "azimuth_at_end":    sun_at_end.get("azimuth"),
+            },
+            "clip_path":    f"weather/{cam_id}/sun_timelapse/{mp4_path.name}",
+            "thumb_path":   f"weather/{cam_id}/sun_timelapse/{thumb_path.name}",
+            "duration_s":   max(1, len(images) // target_fps),
+            "width":  0, "height": 0,
+        }
+        try:
+            import cv2
+            cap = cv2.VideoCapture(str(mp4_path))
+            manifest["width"]  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            manifest["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            cap.release()
+        except Exception:
+            pass
+        (out_dir / f"{stem}.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        log.info("[Sun-TL] Manifest geschrieben: %s · score=%.2f", manifest["id"], score)
+        self._cleanup_sun_scratch(frames_dir)
+        # Per-event Telegram push reuses the existing weather pipeline —
+        # _maybe_push_telegram already gates on push.weather.events[<type>].
+        # But our new event types ("sun_timelapse_rise"/"_set") are NOT in
+        # the default events block, so users currently have to opt in via
+        # the "Wetter-Pushes"-UI. That's fine — sun TLs default to no push.
+        manifest_for_push = dict(manifest)
+        manifest_for_push["event_type"] = (
+            "sun_timelapse_rise" if phase == "sunrise" else "sun_timelapse_set"
+        )
+        self._maybe_push_telegram(manifest_for_push, mp4_path)
+
+    @staticmethod
+    def _cleanup_sun_scratch(scratch: Path):
+        try:
+            shutil.rmtree(scratch, ignore_errors=True)
+        except Exception:
+            pass
+
+    def _latest_api_snapshot_safe(self) -> dict:
+        """Best-effort fetch of the latest 15-minute API slot. Used by the
+        sun capture so the manifest carries the actual sky conditions."""
+        try:
+            loc = self.server_cfg.get("location") or {}
+            lat, lon = loc.get("lat"), loc.get("lon")
+            if lat is None or lon is None:
+                return {}
+            api = self.cfg.get("api") or {}
+            url = api.get("base_url") or "https://api.open-meteo.com/v1/forecast"
+            params = {
+                "latitude":  lat, "longitude": lon,
+                "minutely_15": "precipitation,snowfall,weather_code,lightning_potential,visibility,wind_gusts_10m,cloud_cover",
+                "timezone": api.get("timezone") or "Europe/Berlin",
+                "models":   api.get("model") or "icon_d2",
+            }
+            r = requests.get(url, params=params, timeout=8)
+            if r.status_code != 200:
+                return {}
+            return self._latest_slice(r.json())
+        except Exception:
+            return {}
+
+    def sun_times_today(self) -> dict:
+        """Used by the /api/weather/sun-times endpoint to power the
+        Settings → Wetter live preview."""
+        out = {"location_set": False, "sunrise": None, "sunset": None,
+               "cameras": []}
+        loc = self.server_cfg.get("location") or {}
+        if loc.get("lat") is None or loc.get("lon") is None:
+            return out
+        out["location_set"] = True
+        sr = self.sun_event_today("sunrise")
+        ss = self.sun_event_today("sunset")
+        out["sunrise"] = sr.isoformat(timespec="minutes") if sr else None
+        out["sunset"]  = ss.isoformat(timespec="minutes") if ss else None
+        for cam in self._cfg_cameras():
+            cw = cam.get("weather") or {}
+            stl = cw.get("sun_timelapse") or {}
+            entry = {"id": cam.get("id"), "name": cam.get("name"),
+                     "weather_enabled": bool(cw.get("enabled")),
+                     "sunrise": dict(stl.get("sunrise") or {}),
+                     "sunset":  dict(stl.get("sunset")  or {})}
+            for phase, sun_dt in (("sunrise", sr), ("sunset", ss)):
+                p = entry[phase]
+                if not p.get("enabled") or sun_dt is None:
+                    p["window_start"] = p["window_end"] = None
+                    continue
+                w = int(p.get("window_min", 30) or 30) // 2
+                p["window_start"] = (sun_dt - timedelta(minutes=w)).strftime("%H:%M")
+                p["window_end"]   = (sun_dt + timedelta(minutes=w)).strftime("%H:%M")
+                p["sun_event"]    = sun_dt.strftime("%H:%M")
+            out["cameras"].append(entry)
+        return out
 
 
 def _is_quiet_now(quiet_hours: dict) -> bool:

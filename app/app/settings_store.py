@@ -343,6 +343,14 @@ class SettingsStore:
         for k, v in self._SERVER_LOCATION_DEFAULTS.items():
             loc.setdefault(k, v)
 
+    # Per-camera sun-timelapse defaults — both phases off until the user
+    # opts in. Window/interval/fps match the spec defaults for a 24-second
+    # reel over a 30-minute span.
+    _SUN_TL_DEFAULTS: dict = {
+        "sunrise": {"enabled": False, "window_min": 30, "interval_s": 3, "fps": 25},
+        "sunset":  {"enabled": False, "window_min": 30, "interval_s": 3, "fps": 25},
+    }
+
     def _ensure_weather_defaults(self):
         """Additively backfill the global weather block + per-camera flag."""
         w = self.data.setdefault("weather", {})
@@ -352,12 +360,17 @@ class SettingsStore:
         self._deep_merge_defaults(w, self._WEATHER_DEFAULTS)
         # Make sure every camera carries the opt-in flag in the new shape;
         # existing cameras with handcrafted weather dicts are left alone.
+        # The sun_timelapse sub-block is added unconditionally — it's the
+        # nested-default backfill the WeatherService relies on at startup.
         for cam in self.data.get("cameras", []):
             cw = cam.setdefault("weather", {"enabled": False})
             if not isinstance(cw, dict):
                 cam["weather"] = {"enabled": False}
                 continue
             cw.setdefault("enabled", False)
+            sun_tl = cw.setdefault("sun_timelapse", {})
+            if isinstance(sun_tl, dict):
+                self._deep_merge_defaults(sun_tl, self._SUN_TL_DEFAULTS)
 
     def _ensure_runtime_defaults(self):
         rt = self.data.setdefault("runtime", {})
