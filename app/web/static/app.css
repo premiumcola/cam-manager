@@ -661,6 +661,11 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
    colours via the comma selector below; only their click handlers differ.
    Inner glyph is an SVG (set by JS or inline in HTML) — never an emoji,
    so size and centring are pixel-stable across fonts/platforms. */
+/* .pw-input-row is the absolute-positioning anchor: it wraps ONLY the
+   input + eye so top:50% on the eye lands at the input's vertical
+   centre, not the field-wrap column's (which also includes the
+   field-label below). */
+.pw-input-row{position:relative;width:100%}
 .pw-wrap,.url-wrap{position:relative}
 .pw-wrap input,.url-wrap input{padding-right:46px!important}
 .pw-eye,.url-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:none;border-radius:8px;background:rgba(255,255,255,.04);color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;transition:background .15s,color .15s;-webkit-tap-highlight-color:transparent;z-index:2}

@@ -168,8 +168,10 @@
                   <div class="cam-userpass">
                     <div class="field-wrap"><input name="rtsp_user" placeholder="admin" /><span class="field-label">Benutzer</span></div>
                     <div class="field-wrap pw-wrap">
-                      <input name="rtsp_pass" type="password" placeholder="Passwort" autocomplete="off" />
-                      <button type="button" class="pw-eye" onclick="togglePwField(this,'rtsp_pass')" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                      <div class="pw-input-row">
+                        <input name="rtsp_pass" type="password" placeholder="Passwort" autocomplete="off" />
+                        <button type="button" class="pw-eye" onclick="togglePwField(this,'rtsp_pass')" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                      </div>
                       <span class="field-label">Passwort</span>
                     </div>
                   </div>
@@ -180,13 +182,17 @@
                 <div class="field-wrap"><input name="rtsp_port" placeholder="554" value="554" /><span class="field-label">Port</span></div>
               </div>
               <div class="field-wrap url-wrap">
-                <input name="rtsp_url" readonly style="color:var(--muted);font-size:11px;padding-right:36px" data-mask-url="1" />
-                <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div class="pw-input-row">
+                  <input name="rtsp_url" readonly style="color:var(--muted);font-size:11px" data-mask-url="1" />
+                  <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                </div>
                 <span class="field-label">RTSP-URL (automatisch)</span>
               </div>
               <div class="field-wrap url-wrap">
-                <input name="snapshot_url" placeholder="http://…" style="padding-right:36px" data-mask-url="1" />
-                <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div class="pw-input-row">
+                  <input name="snapshot_url" placeholder="http://…" data-mask-url="1" />
+                  <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                </div>
                 <span class="field-label">Snapshot-URL – optional</span>
               </div>
               <input type="hidden" name="object_filter" />
@@ -535,8 +541,10 @@
                   <label class="switch"><input type="checkbox" id="tg_enabled" /><span class="slider"></span></label>
                 </label>
                 <div class="field-wrap pw-wrap">
-                  <input id="tg_token" type="password" placeholder="Bot-Token · 123456789:AAExampleBotToken" autocomplete="off" />
-                  <button type="button" class="pw-eye" onclick="togglePwFieldById('tg_token')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                  <div class="pw-input-row">
+                    <input id="tg_token" type="password" placeholder="Bot-Token · 123456789:AAExampleBotToken" autocomplete="off" />
+                    <button type="button" class="pw-eye" onclick="togglePwFieldById('tg_token')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                  </div>
                   <span class="field-label">🔒 Bot-Token</span>
                 </div>
                 <div class="field-wrap">
@@ -757,8 +765,10 @@
                 <div class="field-wrap"><input id="mqtt_port" placeholder="1883" /><span class="field-label">Port</span></div>
                 <div class="field-wrap"><input id="mqtt_username" placeholder="Benutzer" /><span class="field-label">Benutzer</span></div>
                 <div class="field-wrap pw-wrap">
-                  <input id="mqtt_password" type="password" placeholder="Passwort" autocomplete="off" />
-                  <button type="button" class="pw-eye" onclick="togglePwFieldById('mqtt_password')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                  <div class="pw-input-row">
+                    <input id="mqtt_password" type="password" placeholder="Passwort" autocomplete="off" />
+                    <button type="button" class="pw-eye" onclick="togglePwFieldById('mqtt_password')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                  </div>
                   <span class="field-label">🔒 Passwort</span>
                 </div>
               </div>
