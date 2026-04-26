@@ -3675,7 +3675,7 @@ function _initSidebarNav(){
   });
   // Scrollspy: pick the section whose top is closest to the viewport top
   // without going past it. Cheap enough to run on every scroll tick.
-  const sectionIds=['dashboard','statistik','media','achievements','cameras','settings','logs'];
+  const sectionIds=['dashboard','statistik','media','achievements','weather','cameras','settings','logs'];
   let raf=0;
   const tick=()=>{
     raf=0;
@@ -5591,7 +5591,7 @@ function renderAchievements(){
   const total=ACH_DEFS.length;
   const pct=Math.round(unlocked.length/total*100);
   byId('achievementsProgress').innerHTML=`
-    <span class="ach-progress-text">🌿 ${unlocked.length} von ${total} gesichtet</span>
+    <span class="ach-progress-text">${unlocked.length} von ${total} gesichtet</span>
     <div class="ach-progress-track"><div class="ach-progress-fill" style="width:${pct}%"></div></div>
     <span class="ach-progress-pct">${pct}%</span>`;
 
@@ -6735,18 +6735,21 @@ function _bindPushWeatherHandlers(){
 
 function _handleWeatherHashAnchor(){
   const h = window.location.hash || '';
+  // Scroll to the new top-level #weather section (was a sub-block of
+  // #achievements before the Sichtungen↔Wetter split). Falls back to the
+  // inner block id for back-compat with any cached deep links.
+  const target = byId('weather') || byId('weatherSightingsBlock');
   if (h === '#weather') {
-    // Just scroll the section into view
-    const block = byId('weatherSightingsBlock');
-    if (block) block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (typeof _setActiveNav === 'function') _setActiveNav('weather');
     return;
   }
   if (!h.startsWith('#weather/')) return;
   const id = decodeURIComponent(h.slice('#weather/'.length));
   const items = state.weather.items || [];
   const idx = items.findIndex(s => s.id === id);
-  const block = byId('weatherSightingsBlock');
-  if (block) block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (typeof _setActiveNav === 'function') _setActiveNav('weather');
   if (idx >= 0 && typeof openWeatherLightbox === 'function') {
     setTimeout(() => openWeatherLightbox(idx), 350);
   }
