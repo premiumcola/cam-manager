@@ -693,6 +693,16 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 #set-media-config .toggle-row-sublabel,
 #set-media-config .field-help,
 #set-media-config .field-label{color:#9ba1a8}
+/* Accent-driven save buttons — every settings panel gets its own coloured
+   save button without per-panel CSS. Soft tinted fill, accent text/icon. */
+.set-section .btn-save{background:rgba(var(--acc),.14);color:rgb(var(--acc))}
+.set-section .btn-save:hover{background:rgba(var(--acc),.22);color:rgb(var(--acc))}
+/* Telegram "Testnachricht" sits next to the save button — same accent pair. */
+#set-telegram #telegramTestBtn{background:rgba(var(--acc),.14);color:rgb(var(--acc));border:none}
+#set-telegram #telegramTestBtn:hover{background:rgba(var(--acc),.22);color:rgb(var(--acc))}
+/* Toggle switches inside any settings panel adopt the section accent on the
+   "on" state, falling back to green globally elsewhere in the app. */
+.set-section .switch input:checked + .slider{background:rgb(var(--acc));border-color:rgb(var(--acc))}
 .set-section.open{border-color:rgba(var(--sa),0.2);background:rgba(var(--sa),0.04)}
 .set-hd-row{display:flex;align-items:center;border-radius:inherit;overflow:hidden}
 .set-hd{width:100%;display:flex;align-items:center;gap:10px;padding:13px 16px;background:none;border:none;color:var(--text);font-size:14px;font-weight:600;cursor:pointer;text-align:left}
@@ -787,12 +797,6 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 @keyframes cam-tab-fade{from{opacity:0}to{opacity:1}}
 
 /* Legacy Telegram tab bar — kept separate (used on a different page). */
-.tg-tab-bar{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 12px}
-.tg-tab-btn{padding:7px 14px;border:1.5px solid rgba(255,255,255,.1);border-radius:999px;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap}
-.tg-tab-btn:hover{border-color:var(--accent);color:var(--text)}
-.tg-tab-btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
-.tg-tab-panel{display:none}
-.tg-tab-panel.active{display:block}
 
 /* App info panel */
 .app-info-block{display:grid;gap:0;padding:2px 0 10px}
@@ -998,13 +1002,7 @@ body.media-select-mode .media-grid .mmc-img-wrap{cursor:pointer}
 .media-select-bar .msb-count{font-size:13px;font-weight:700;color:#e2e8f0;margin-right:auto}
 @media (max-width:768px){.media-select-bar{position:sticky;bottom:4px}}
 
-/* ── Shared expandable section tab pattern ────────────────────────────────── */
-.sec-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:4px 0 12px}
-/* Flat tab style — same recipe as the sidebar/dashboard nav: transparent
-   default, faint white overlay on hover/active, no blue, no border. */
-.sec-tab-btn{padding:7px 14px;border:none;border-radius:10px;background:transparent;color:#94a3b8;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,color .15s;white-space:nowrap;-webkit-tap-highlight-color:transparent}
-.sec-tab-btn:hover{background:rgba(255,255,255,.05);color:#e2e8f0}
-.sec-tab-btn.active{background:rgba(255,255,255,.07);color:#e2e8f0}
+/* Sub-tab content surface — kept for the Timelapse mode-grid wrapper. */
 .sec-content{border-radius:14px;background:var(--bg);padding:14px 16px}
 
 /* ── Coral section: 3-tab layout (Einstellungen / Test / Modelle) ─────── */

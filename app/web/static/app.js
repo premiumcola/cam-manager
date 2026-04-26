@@ -1686,12 +1686,13 @@ function initCameraEditTabs(){
 }
 function initTelegramTabs(){
   const bar=document.querySelector('.tg-tab-bar'); if(!bar) return;
-  bar.querySelectorAll('.tg-tab-btn').forEach(btn=>{
+  const allPanels=['tg-panel-verbindung','tg-panel-wann','tg-panel-was','tg-panel-tree','tg-panel-presets'];
+  bar.querySelectorAll('.set-tab').forEach(btn=>{
     btn.addEventListener('click',()=>{
-      bar.querySelectorAll('.tg-tab-btn').forEach(b=>b.classList.remove('active'));
-      document.querySelectorAll('.tg-tab-panel').forEach(p=>p.classList.remove('active'));
+      bar.querySelectorAll('.set-tab').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
-      const panel=byId(btn.dataset.tab); if(panel) panel.classList.add('active');
+      const target=btn.dataset.tab;
+      allPanels.forEach(id=>{const p=byId(id); if(p) p.hidden=(id!==target);});
     });
   });
 }
@@ -3070,11 +3071,11 @@ function _renderTlCameraList(cameras){
   const tabs=cameras.map((cam,i)=>{
     const profs=(cam.timelapse||{}).profiles||{};
     const anyOn=_TL_PROFILES_DEF.some(p=>profs[p.key]?.enabled);
-    return `<button type="button" class="sec-tab-btn${i===0?' active':''}" id="tlTab_${esc(cam.id)}" onclick="selectTlCam('${esc(cam.id)}')">
+    return `<button type="button" class="set-tab${i===0?' active':''}" id="tlTab_${esc(cam.id)}" onclick="selectTlCam('${esc(cam.id)}')">
       ${getCameraIcon(cam.name)} ${esc(cam.name)}
     </button>`;
   }).join('');
-  return `<div class="sec-tabs" id="tlCamTabs" style="margin-bottom:0">${tabs}</div>
+  return `<div class="set-tabs" id="tlCamTabs">${tabs}</div>
     <div class="sec-content" id="tlCamContent">${_renderTlModesGrid(firstCam)}</div>`;
 }
 function _renderTlModesGrid(cam){
@@ -3147,7 +3148,9 @@ function _renderTlModesGrid(cam){
     </div>`;
   }).join('');
   return `<div class="tl-modes-grid">${cols}</div>
-    <button class="btn btn-save" style="margin-top:4px" onclick="saveTlCameraProfiles('${esc(cam.id)}')"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h8L13.5 5v8.5h-11z"/><polyline points="5,2.5 5,6.5 10,6.5 10,2.5"/><polyline points="4.5,13.5 4.5,9 11.5,9 11.5,13.5"/></svg>Speichern</button>`;
+    <div style="display:flex;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn-save" onclick="saveTlCameraProfiles('${esc(cam.id)}')"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h8L13.5 5v8.5h-11z"/><polyline points="5,2.5 5,6.5 10,6.5 10,2.5"/><polyline points="4.5,13.5 4.5,9 11.5,9 11.5,13.5"/></svg>Speichern</button>
+    </div>`;
 }
 window._tlApplyCustomPreset=function(camId,profKey,val){
   const [periodS,targetS]=(val||'').split(',').map(x=>parseInt(x)||0);
@@ -3158,7 +3161,7 @@ window._tlApplyCustomPreset=function(camId,profKey,val){
   _tlRefreshDesc(camId,profKey);
 };
 window.selectTlCam=function(camId){
-  document.querySelectorAll('#tlCamTabs .sec-tab-btn').forEach(b=>b.classList.toggle('active',b.id===`tlTab_${camId}`));
+  document.querySelectorAll('#tlCamTabs .set-tab').forEach(b=>b.classList.toggle('active',b.id===`tlTab_${camId}`));
   const cam=(state.cameras||[]).find(c=>c.id===camId);
   const content=byId('tlCamContent');
   if(cam&&content) content.innerHTML=_renderTlModesGrid(cam);
@@ -3182,7 +3185,7 @@ function _tlResultDesc(periodS,targetS,fps){
   // ~40 KB per JPEG at q≈72; sub-1s interval drops to q=50 ≈ 26 KB.
   const perFrameKb=intervalS<1?26:40;
   const diskMb=Math.max(1, Math.round(totalFrames*perFrameKb/1024));
-  return `<div class="tl-drow"><span class="tl-drow-ico">⏱</span><span class="tl-drow-text">${periodLabel} → ${tN}s Video · ${fN} fps</span></div><div class="tl-drow"><span class="tl-drow-ico">📸</span><span class="tl-drow-text">${totalFrames} Frames · Alle ${intervalLabel} ein Foto</span></div><div class="tl-drow tl-drow-accent"><span class="tl-drow-ico">⚡</span><span class="tl-drow-text">${compression}× Zeitraffer · ~${diskMb} MB Speicher</span></div>`;
+  return `<div class="tl-drow"><span class="tl-drow-ico">⏱</span><span class="tl-drow-text">${periodLabel} → ${tN}s Video</span></div><div class="tl-drow"><span class="tl-drow-ico">📸</span><span class="tl-drow-text">${totalFrames} Frames · Alle ${intervalLabel} ein Foto</span></div><div class="tl-drow tl-drow-accent"><span class="tl-drow-ico">⚡</span><span class="tl-drow-text">${compression}× Zeitraffer · ~${diskMb} MB Speicher</span></div>`;
 }
 // _renderTlProfileCards replaced by _renderTlModesGrid (4-column grid)
 window._tlRefreshDesc=function(camId,profKey){
