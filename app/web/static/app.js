@@ -3397,6 +3397,10 @@ window.togglePwFieldById=function(id){
 };
 
 // ── Media storage stats ───────────────────────────────────────────────────────
+// Single source of truth for state.mediaStats. Every caller that mutates the
+// archive (delete, bulk-delete, rescan, fix-thumbnails completion, processing
+// poll completion) funnels through here so chips, size badges, and filter
+// pills always reflect server reality.
 async function loadMediaStorageStats(){
   const bar=byId('mediaStorageBar'); if(!bar) return;
   try{
@@ -3404,7 +3408,15 @@ async function loadMediaStorageStats(){
     state.mediaStats=r.cameras||[];
     state.mediaArchived=r.archived||[];
     bar.innerHTML='';
+    // renderMediaOverview rebuilds the overview cards AND calls
+    // renderMediaFilterPills('overview') internally.
     renderMediaOverview();
+    // Drilldown pill bar reads from the same state.mediaStats — keep it
+    // in sync if the user is currently inside a drilldown.
+    if(byId('mediaDrilldown')?.style.display!=='none'){
+      if(_pruneEmptyMediaFilters()) _seedTopMediaLabel();
+      renderMediaFilterPills('drilldown');
+    }
   }catch{bar.innerHTML=''; state.mediaStats=[]; state.mediaArchived=[];}
 }
 
@@ -3417,10 +3429,6 @@ async function refreshTimelineAndStats(){
     state.timeline=tl;
     renderTimeline();
   }catch(_){ /* non-critical: leave previous render in place */ }
-  if(byId('mediaDrilldown')?.style.display!=='none'){
-    if(_pruneEmptyMediaFilters()) _seedTopMediaLabel();
-    renderMediaFilterPills('drilldown');
-  }
 }
 
 byId('cleanupNowBtn').onclick=async()=>{
@@ -3862,6 +3870,9 @@ function _startFixThumbsPoll(){
         _showFixThumbsBar(done,s.total||0,msg);
         setTimeout(_hideFixThumbsBar,12000);
         try{renderMediaGrid();}catch(_){}
+        // Newly-generated thumbnails may also have surfaced previously
+        // unscanned media — refresh overview chips + size badges.
+        loadMediaStorageStats();
       }
     }catch(_){ /* transient — keep polling */ }
   },1500);
@@ -4298,7 +4309,6 @@ byId('lightboxDelete').onclick=async()=>{
       state.mediaPage--;
       state.media=state._allMedia.slice(state.mediaPage*ps_lb,(state.mediaPage+1)*ps_lb);
     }
-    _decrementMediaOverviewCount(camera_id);
     renderMediaGrid();
     renderMediaPagination();
     _lbIndex=Math.min(_lbIndex,(state.media||[]).length-1);
@@ -4645,6 +4655,9 @@ function _ensureProcessingPoll(){
   }else if(!pending&&_processingPoll){
     clearInterval(_processingPoll);
     _processingPoll=null;
+    // A recording just finished — file landed on disk and size_mb grew.
+    // Refresh overview chips + size badge to match server truth.
+    loadMediaStorageStats();
   }
 }
 function renderMediaGrid(){
@@ -4814,7 +4827,6 @@ window.bulkDeleteSelectedMedia=async function(){
     state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps_d));
     state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
     state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
-    okSet.forEach(()=>_decrementMediaOverviewCount(camId));
     _exitMediaSelectMode();
     renderMediaGrid();
     renderMediaPagination();
@@ -4876,7 +4888,6 @@ window.deleteMediaCard=async(btn)=>{
         state.mediaPage--;
         state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
       }
-      _decrementMediaOverviewCount(camId);
       renderMediaGrid();
       renderMediaPagination();
       refreshTimelineAndStats();
@@ -4908,6 +4919,7 @@ window.deleteTLCard=async(camId,filename,eventId)=>{
     if(!byId('mediaGrid').querySelector('.media-card')){
       byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
     }
+    refreshTimelineAndStats();
   }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
 };
 window.confirmMediaCard=async(camId,eventId,btn)=>{
@@ -4934,15 +4946,6 @@ window.confirmMediaCard=async(camId,eventId,btn)=>{
     }
   }catch(e){showToast('Bestätigen fehlgeschlagen: '+e.message,'error');}
 };
-function _decrementMediaOverviewCount(camId){
-  const s=state.mediaStats.find(x=>x.camera_id===camId||x.id===camId);
-  if(s){
-    if(s.event_count>0) s.event_count--;
-    if(s.jpg_count>0) s.jpg_count--;
-  }
-  renderMediaOverview();
-}
-
 // ── Bird SVG icons — one distinctive silhouette per Bavarian Top-20 species ──
 // viewBox 0 0 80 80 (reused by the medal rendering at size 80×80). Each SVG
 // emphasises the bird's identifying features: plumage pattern, beak shape,
