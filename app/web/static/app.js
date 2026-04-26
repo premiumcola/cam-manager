@@ -534,8 +534,6 @@ function renderDashboard(){
     const motionPillDim=motionEnabled && trigMode==='objects_only';
     // When in motion_only mode, object pill is dimmed
     const objectPillDim=trigMode==='motion_only';
-    // Stumm-style bell-off next to the title when armed=false
-    const mutedIndicator=c.armed?'':`<span class="cv-muted-ico" title="Benachrichtigungen stumm">${bellOff}</span>`;
     return `<article class="cv-card${c.armed?'':' cv-card--muted'}" data-camid="${esc(c.id)}" data-cam-name="${esc(c.name||c.id)}" onclick="_cvCardClick(event,'${esc(c.id)}')">
   <div class="cv-frame">
     <div class="cv-img-wrap">
@@ -547,12 +545,12 @@ function renderDashboard(){
     <div class="cv-grad-top"></div>
     <div class="cv-grad-bot"></div>
 
-    <!-- top-left: name + group — ALWAYS rendered so the offline card is still identifiable -->
+    <!-- top-left: thematic icon + name. Mute state lives in the right-column
+         "Stumm/Benachrichtigung" pill — no duplicate indicator here. -->
     <div class="cv-title-wrap">
       <div class="cv-name-row">
-        ${mutedIndicator}
+        <span class="cv-title-icon" aria-hidden="true">${getCameraIcon(c.name)}</span>
         <div class="cv-name">${esc(c.name)}</div>
-        ${tlOn?`<span class="cv-tl-dot" title="Timelapse aktiv">${objIconSvg('timelapse',15)}</span>`:''}
       </div>
       ${c.location?`<div class="cv-loc">${esc(c.location)}</div>`:''}
     </div>
@@ -581,13 +579,14 @@ ${isActive?`
         ${c.rtsp_url?`<button class="cv-hd-badge${hdOn?' active':''}" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau">HD</button>`:''}
       </div>
       <div class="cv-pill ${c.armed?'cv-pill-alarm-on':'cv-pill-alarm-off'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})" style="cursor:pointer">${c.armed?objIconSvg('notification',14):bellOff}${c.armed?'Benachrichtigung':'Stumm'}</div>
+      ${tlOn?`<div class="cv-pill cv-pill-tl" title="Timelapse aktiv">${objIconSvg('timelapse',14)}Timelapse</div>`:''}
     </div>
 
     <!-- bottom-right: Motion + Objekte pills (horizontal). Visibility +
          dimming mirror the per-camera detection_trigger mode. -->
     <div class="cv-br">
-      ${motionPillHidden?'':`<div class="cv-pill ${motionActive?'cv-pill-motion-on':'cv-pill-motion-off'}${motionPillDim?' cv-pill-dim':''}" style="font-size:10px;padding:3px 7px" title="${motionPillDim?'Motion wird erkannt, löst aber KEIN Event aus (Nur Objekte)':'Motion-Erkennung'}">${objIconSvg('motion',11)} Motion</div>`}
-      ${c.coral_available?`<div class="cv-pill ${coralActive?'cv-pill-coral-on':'cv-pill-coral-off'}${objectPillDim?' cv-pill-dim':''}" style="font-size:10px;padding:3px 7px" title="${objectPillDim?'Objekte werden erkannt, lösen aber KEIN Event aus (Nur Motion)':'Objekt-Erkennung'}">${objIconSvg('motion_objects',11)} Objekte</div>`:''}
+      ${motionPillHidden?'':`<div class="cv-pill ${motionActive?'cv-pill-motion-on':'cv-pill-motion-off'}${motionPillDim?' cv-pill-dim':''}" title="${motionPillDim?'Motion wird erkannt, löst aber KEIN Event aus (Nur Objekte)':'Motion-Erkennung'}">${objIconSvg('motion',14)} Motion</div>`}
+      ${c.coral_available?`<div class="cv-pill ${coralActive?'cv-pill-coral-on':'cv-pill-coral-off'}${objectPillDim?' cv-pill-dim':''}" title="${objectPillDim?'Objekte werden erkannt, lösen aber KEIN Event aus (Nur Motion)':'Objekt-Erkennung'}">${objIconSvg('motion_objects',14)} Objekte</div>`:''}
     </div>
 `:''}
     <!-- bottom: hover action button -->
