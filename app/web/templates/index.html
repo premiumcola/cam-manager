@@ -176,21 +176,31 @@
               <button type="button" class="cam-tab-btn" data-tab="cam-tab-erkennung"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span>Erkennung</span></button>
               <button type="button" class="cam-tab-btn" data-tab="cam-tab-alerting"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Alerting</span></button>
               <button type="button" class="cam-tab-btn" data-tab="cam-tab-zonen"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg><span>Zonen</span></button>
+              <!-- Connection-recovery indicator: always present, pinned to
+                   the right edge so the existing horizontal-scrolling tab
+                   list keeps its behaviour. Two states (.is-warn flips
+                   colour + adds the ⚠ badge). The state is driven by
+                   _refreshConnectionWarn() in app.js. -->
+              <button type="button" id="camTabRecoveryBtn"
+                      class="cam-tab-recovery-btn"
+                      onclick="openCamRecoveryModal()"
+                      aria-label="Verbindung wiederherstellen"
+                      title="Verbindung wiederherstellen">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                     stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 12a9 9 0 1 0 3-6.7"/>
+                  <polyline points="3 4 3 9 8 9"/>
+                </svg>
+                <span class="cam-tab-recovery-badge" aria-hidden="true">⚠</span>
+              </button>
             </div>
 
-            <!-- Panel: Verbindung -->
+            <!-- Panel: Verbindung. The old full-width "Verbindungsdaten
+                 unvollständig" banner that lived here has been replaced by
+                 the right-aligned ↺ indicator in the tab bar above and the
+                 .cam-field-warn highlight on the specific missing fields. -->
             <div class="cam-tab-panel active" id="cam-tab-verbindung">
-              <!-- Recovery banner: only visible when the cam's connection is
-                   incomplete (rtsp_url or username empty). Toggled by JS in
-                   editCamera(). The button opens the recovery modal which
-                   tries Sicherung first, then Auto-Erkennung. -->
-              <div id="camRecoveryBanner" class="cam-recovery-banner" hidden>
-                <span class="cam-recovery-banner-msg">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
-                  Verbindungsdaten unvollständig
-                </span>
-                <button type="button" class="btn-action cam-recovery-btn" onclick="openCamRecoveryModal()">↺ Wiederherstellen</button>
-              </div>
               <div class="cam-2col">
                 <div style="display:grid;gap:8px">
                   <div class="field-wrap"><input name="name" placeholder="Werkstatt" required /><span class="field-label">Anzeigename</span></div>

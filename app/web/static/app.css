@@ -1433,19 +1433,59 @@ select option{background:#1e1e1e;color:var(--text)}
   .ws-evt-window-label{font-size:11px;min-width:48px}
 }
 
-/* ── Camera connection-recovery banner + modal ─────────────────────────── */
-/* Shown at the top of the Verbindung tab when a cam has missing rtsp_url
-   or username. Amber tone to signal "needs attention without being a hard
-   error", matching the connection-diagnostics warning palette. */
-.cam-recovery-banner{
-  display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:10px 14px;border-radius:10px;margin-bottom:12px;
-  background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35)
+/* ── Camera connection-recovery indicator + modal ──────────────────────── */
+/* Right-pinned ↺ button in the cam tab bar. Replaces the old full-width
+   banner that used to live at the top of the Verbindung panel — that
+   banner was too prominent for what is rarely an actionable state, and
+   its trigger condition kept firing falsely on race conditions while
+   the form was rebuilding from parts. The indicator is always present
+   so the "open recovery modal" path stays one tap away regardless of
+   the warn flag.
+
+   .cam-tab-recovery-btn        : default (OK) state — muted grey, dormant
+   .cam-tab-recovery-btn.is-warn: WARN state — orange icon + ⚠ badge dot
+   The pulse animation only runs for the first ~5 s after entering WARN
+   so it doesn't loop in the user's peripheral vision indefinitely. */
+.cam-tab-recovery-btn{
+  margin-left:auto;flex-shrink:0;position:sticky;right:0;
+  display:inline-flex;align-items:center;justify-content:center;
+  width:44px;height:44px;border:none;background:transparent;
+  color:var(--muted);cursor:pointer;border-radius:10px;
+  transition:color .2s,background .2s;align-self:center;
+  /* Sticky right pin so it stays visible while the tab list scrolls. */
 }
-.cam-recovery-banner-msg{display:inline-flex;align-items:center;gap:8px;color:#fbbf24;font-weight:600;font-size:13px}
-.cam-recovery-banner-msg svg{flex-shrink:0}
-.cam-recovery-btn{background:rgba(245,158,11,0.18);color:#fbbf24;border:1px solid rgba(245,158,11,0.45);font-weight:700;flex-shrink:0}
-.cam-recovery-btn:hover{background:rgba(245,158,11,0.28)}
+.cam-tab-recovery-btn:hover{background:rgba(255,255,255,.05);color:var(--text)}
+.cam-tab-recovery-btn svg{position:relative;z-index:1}
+.cam-tab-recovery-btn .cam-tab-recovery-badge{display:none}
+.cam-tab-recovery-btn.is-warn{color:#fbbf24}
+.cam-tab-recovery-btn.is-warn:hover{background:rgba(245,158,11,.15);color:#fbbf24}
+.cam-tab-recovery-btn.is-warn .cam-tab-recovery-badge{
+  display:inline-flex;align-items:center;justify-content:center;
+  position:absolute;top:4px;right:4px;
+  width:14px;height:14px;border-radius:50%;
+  background:#fbbf24;color:#1c1c1c;
+  font-size:9px;font-weight:900;line-height:1;
+  box-shadow:0 0 0 2px var(--panel)
+}
+.cam-tab-recovery-btn.is-warn.is-pulsing{animation:cam-tab-recovery-pulse 1.4s ease-in-out 0s 4;}
+@keyframes cam-tab-recovery-pulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(251,191,36,0)}
+  50%   {box-shadow:0 0 0 6px rgba(251,191,36,0.15)}
+}
+
+/* Field-level highlight: applied to a .field-wrap when the connection
+   warn is active AND that specific field is part of the missing set.
+   Single source: _refreshConnectionWarn() flips the class live. */
+.field-wrap.cam-field-warn{
+  background:rgba(245,158,11,0.08);
+  border-radius:10px;
+  box-shadow:inset 0 0 0 1px rgba(245,158,11,0.45);
+}
+.field-wrap.cam-field-warn input,
+.field-wrap.cam-field-warn select{
+  background:transparent
+}
+.field-wrap.cam-field-warn .field-label{color:#fbbf24}
 
 .cam-recovery-tabs{display:flex;gap:6px;border-bottom:1px solid var(--surface);margin-bottom:12px}
 .cam-recovery-tab{
@@ -1471,7 +1511,6 @@ select option{background:#1e1e1e;color:var(--text)}
 .cam-recovery-tag--on{background:rgba(34,197,94,0.14);color:#4ade80}
 .cam-recovery-tag--off{background:rgba(255,255,255,0.06);color:var(--muted)}
 @media (max-width:520px){
-  .cam-recovery-banner{flex-direction:column;align-items:flex-start}
   .cam-recovery-row{flex-direction:column;align-items:flex-start}
   .cam-recovery-row-actions{width:100%;justify-content:flex-end}
 }

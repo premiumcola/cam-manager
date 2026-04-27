@@ -820,7 +820,7 @@ function initRtspBuilder(){
       else input.value=realVal;
     };
     if(!ip){setMaskable(f['rtsp_url'],'');
-      if (typeof _refreshIncompleteBanner === 'function') _refreshIncompleteBanner();
+      if (typeof _refreshConnectionWarn === 'function') _refreshConnectionWarn();
       return;}
     const auth=user?(user+(pass?':'+_rtspEnc(pass):'')+'@'):'';
     const portPart=port&&port!=='554'?':'+port:'';
@@ -829,9 +829,10 @@ function initRtspBuilder(){
     const snapReal=f['snapshot_url']?.dataset.real||f['snapshot_url']?.value||'';
     if(!snapReal && user)
       setMaskable(f['snapshot_url'],`http://${user}:${_rtspEnc(pass)}@${ip}/cgi-bin/snapshot.cgi`);
-    // Re-evaluate the "Verbindungsdaten unvollständig" banner — the user
-    // may have just typed credentials that close the gap, no save needed.
-    if (typeof _refreshIncompleteBanner === 'function') _refreshIncompleteBanner();
+    // Re-evaluate the connection-warn indicator + field highlights — the
+    // user may have just typed credentials that close the gap, no save
+    // needed for the indicator to flip back to grey.
+    if (typeof _refreshConnectionWarn === 'function') _refreshConnectionWarn();
   };
   ['rtsp_ip','rtsp_user','rtsp_pass','rtsp_port'].forEach(n=>f[n]?.addEventListener('input',rebuild));
   sel.addEventListener('change',rebuild);
@@ -1357,37 +1358,83 @@ function editCamera(camId){
   setTimeout(()=>wrapper.scrollIntoView({behavior:'smooth',block:'nearest'}),120);
   // Populate connection diagnostics panel
   _loadCamDiagnostics(camId);
-  // Show recovery banner only when truly nothing usable is present.
-  // Drives off the live form values rather than the persisted cam dict
-  // so the banner reacts to edits (rebuild() in setupRtspBuilder calls
-  // _refreshIncompleteBanner on every input).
-  _refreshIncompleteBanner();
+  // Tab-bar recovery indicator + field highlights — replaces the old
+  // full-width "Verbindungsdaten unvollständig" banner. Drives off the
+  // live form values, not the persisted cam dict, so it reacts to
+  // edits (rebuild() in setupRtspBuilder calls _refreshConnectionWarn
+  // on every input). Run AFTER all fields have been populated above
+  // so the historical "race during _applyUrlMask" can't fire a false
+  // positive on cards that already have valid creds.
+  _refreshConnectionWarn();
   // Initial render of the live ID preview now that every input is populated.
   _refreshCamIdPreview();
 }
 
-// Banner shown at the top of the Verbindung tab when the cam has no usable
-// credentials at all. Historical bug: the check was `!rtsp_url || !username`,
-// but cameras with credentials embedded inside rtsp_url (rtsp://user:pass@…)
-// have an empty top-level username field and were falsely flagged. Now we
-// treat the cam as complete when rtsp_url is non-empty AND credentials are
-// reachable either through the dedicated field OR via the embedded form.
-function _refreshIncompleteBanner(){
-  const banner = byId('camRecoveryBanner'); if (!banner) return;
+// Compute the "connection warn" state from the live form and reflect it
+// on (a) the tab-bar ↺ indicator and (b) the specific .field-wrap blocks
+// for the inputs that are still empty. Single source — the listeners
+// attached by initRtspBuilder + the one-shot calls from editCamera /
+// post-save go through here.
+function _refreshConnectionWarn(){
+  const indicator = byId('camTabRecoveryBtn'); if (!indicator) return;
   const f = byId('cameraForm')?.elements;
-  // Prefer the unmasked real value (set by initRtspBuilder's setMaskable)
-  // so a freshly typed credential triggers the right state immediately,
-  // not after the next blur.
-  const rtspUrl = (f?.['rtsp_url']?.dataset?.real ?? f?.['rtsp_url']?.value ?? '').trim();
-  const userField = (f?.['rtsp_user']?.value ?? '').trim();
-  let embeddedUser = '';
-  if (rtspUrl) {
-    try { embeddedUser = (parseRtspUrl(rtspUrl).user || '').trim(); }
-    catch { embeddedUser = ''; }
+  if (!f){
+    indicator.classList.remove('is-warn', 'is-pulsing');
+    return;
   }
-  const hasCreds = !!(userField || embeddedUser);
-  const incomplete = !rtspUrl || !hasCreds;
-  banner.hidden = !incomplete;
+  // 1. Resolve the effective rtsp_url. Order:
+  //    (a) the unmasked real value (set by initRtspBuilder.setMaskable),
+  //    (b) the visible field value,
+  //    (c) a synthesised URL built from the parts (mirrors rebuild()
+  //        in setupRtspBuilder so a half-typed form behaves consistently),
+  //    (d) "".
+  const rawReal = f['rtsp_url']?.dataset?.real;
+  const rawVis = f['rtsp_url']?.value;
+  const ip   = (f['rtsp_ip']?.value || '').trim();
+  const user = (f['rtsp_user']?.value || '').trim();
+  const pass = (f['rtsp_pass']?.value || '').trim();
+  const port = (f['rtsp_port']?.value || '554').trim();
+  const path = f['rtsp_path']?.value || '';
+  let effective = '';
+  if (rawReal && rawReal.trim()) effective = rawReal.trim();
+  else if (rawVis && rawVis.trim()) effective = rawVis.trim();
+  else if (ip) {
+    const auth = user ? (user + (pass ? ':' + (typeof _rtspEnc==='function'?_rtspEnc(pass):encodeURIComponent(pass)) : '') + '@') : '';
+    const portPart = (port && port !== '554') ? ':' + port : '';
+    effective = `rtsp://${auth}${ip}${portPart}${path}`;
+  }
+  // 2. Parse it and combine with the dedicated user field.
+  let parsed = {};
+  if (effective) {
+    try { parsed = parseRtspUrl(effective) || {}; } catch { parsed = {}; }
+  }
+  const hasHost  = !!(parsed.host && parsed.host.trim()) || !!ip;
+  const hasCreds = !!(parsed.user && parsed.user.trim()) || !!user;
+  const warn = !hasHost || !hasCreds;
+  // 3. Reflect on the tab-bar indicator.
+  if (warn){
+    if (!indicator.classList.contains('is-warn')){
+      indicator.classList.add('is-warn', 'is-pulsing');
+      // Pulse runs 4 iterations (~5.6s) then stays solid; strip the
+      // pulse class so the box-shadow animation doesn't loop forever.
+      setTimeout(() => indicator.classList.remove('is-pulsing'), 5600);
+    }
+    indicator.setAttribute('title',
+      'Verbindungsdaten unvollständig — klicken zum Wiederherstellen');
+  } else {
+    indicator.classList.remove('is-warn', 'is-pulsing');
+    indicator.setAttribute('title', 'Verbindung wiederherstellen');
+  }
+  // 4. Field-level highlights — only when the indicator is in WARN mode,
+  //    and only on the specific wraps that are missing input.
+  const setWarn = (input, on) => {
+    const wrap = input?.closest?.('.field-wrap');
+    if (!wrap) return;
+    wrap.classList.toggle('cam-field-warn', !!on);
+  };
+  setWarn(f['rtsp_ip'],   warn && !hasHost);
+  setWarn(f['rtsp_user'], warn && !hasCreds);
+  setWarn(f['rtsp_pass'], warn && !hasCreds);
 }
 
 // ── Connection-recovery modal (Verbindung tab "Wiederherstellen ↺") ──────────
