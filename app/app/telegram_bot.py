@@ -1640,6 +1640,43 @@ class TelegramService:
             return
         await q.answer()
 
+    def _other_cam_nav_row(self, current_cam_id: str, action: str) -> list:
+        """Build a one-tap navigation row pointing at every OTHER camera.
+
+        ``action`` is the verb appended after ``cam:<id>:`` — currently
+        ``"livebild"`` for snapshots and ``"clip:5"`` for ad-hoc clips.
+
+        - 0 other cams → empty list (caller skips the row entirely).
+        - 1–3 other cams → one button per cam, status-icon + short name.
+          Names get truncated to the first word if Telegram's 64-byte
+          callback_data ceiling threatens to clip the cam id.
+        - 4+ other cams → a single "🔁 Andere Kamera" button that re-opens
+          the existing /menu cam picker (which routes through
+          ``menu:livebild`` / ``menu:clip``)."""
+        others: list[tuple[str, dict]] = []
+        for other_id, rt in (self.runtimes or {}).items():
+            if other_id == current_cam_id:
+                continue
+            try:
+                st = rt.status() if hasattr(rt, "status") else {}
+            except Exception:
+                st = {}
+            others.append((other_id, st))
+        if not others:
+            return []
+        if len(others) >= 4:
+            menu_target = "menu:livebild" if action == "livebild" else "menu:clip"
+            return [InlineKeyboardButton("🔁 Andere Kamera", callback_data=menu_target)]
+        row = []
+        for other_id, st in others:
+            icon = self._cam_status_icon(st)
+            name = st.get("name") or other_id
+            short = name.split()[0] if name else other_id
+            label = f"{icon} {short}"[:24]  # Telegram visible label is fine; cap defensively
+            cb = f"cam:{other_id}:{action}"[:64]
+            row.append(InlineKeyboardButton(label, callback_data=cb))
+        return row
+
     async def _cam_send_snapshot(self, q, context, cam_id, rt, cam_name):
         await q.answer("📷 Snapshot wird geholt…")
         log.info("[Telegram] cam:%s:livebild triggered by chat=%s",
@@ -1649,10 +1686,14 @@ class TelegramService:
             await q.message.reply_text(f"Kein Live-Bild für {cam_name} verfügbar.")
             return
         bio = BytesIO(jpeg); bio.name = f"{cam_id}.jpg"
-        markup = InlineKeyboardMarkup([[
+        rows = [[
             InlineKeyboardButton("🔄 Neu", callback_data=f"cam:{cam_id}:livebild"),
             InlineKeyboardButton("🎬 5 s Clip", callback_data=f"cam:{cam_id}:clip:5"),
-        ]])
+        ]]
+        nav_row = self._other_cam_nav_row(cam_id, "livebild")
+        if nav_row:
+            rows.append(nav_row)
+        markup = InlineKeyboardMarkup(rows)
         ts_hm = datetime.now().strftime("%H:%M")
         try:
             # reply_to_message_id threads the snapshot under the originating
@@ -1685,12 +1726,23 @@ class TelegramService:
                 f"(ffmpeg/RTSP-Problem). Snapshot stattdessen verfügbar.")
             return
         ts_hm = datetime.now().strftime("%H:%M")
+        # Same nav layout as snapshots: same-cam refresh / snapshot row,
+        # plus a row of OTHER cameras (or a single "Andere Kamera" picker
+        # when there are too many to fit).
+        rows = [[
+            InlineKeyboardButton("🔄 Neuer Clip", callback_data=f"cam:{cam_id}:clip:5"),
+            InlineKeyboardButton("📷 Live-Bild", callback_data=f"cam:{cam_id}:livebild"),
+        ]]
+        nav_row = self._other_cam_nav_row(cam_id, "clip:5")
+        if nav_row:
+            rows.append(nav_row)
+        markup = InlineKeyboardMarkup(rows)
         try:
             with open(path, "rb") as f:
                 await context.bot.send_video(
                     chat_id=q.message.chat_id, video=f,
                     caption=f"🎬 <b>{cam_name}</b> · {sec} s · {ts_hm}",
-                    parse_mode="HTML",
+                    parse_mode="HTML", reply_markup=markup,
                     reply_to_message_id=q.message.message_id if q.message else None,
                 )
         except Exception as e:
