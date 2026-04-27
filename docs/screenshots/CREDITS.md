@@ -16,6 +16,10 @@ Why mockups instead of real screenshots:
 - SVG renders natively on GitHub, scales cleanly on retina and mobile, and
   has no third-party licensing concerns.
 
+All shaped values inside the mockups (IP addresses, host names, RTSP
+URLs) are RFC 5737/3849 documentation placeholders — `192.0.2.x` and
+`<user>:•••@` patterns. Never copy a real LAN address into these files.
+
 If you replace these with real screenshots later, please ensure:
 
 - No user data (camera names that map to your address, IPs, Telegram tokens
