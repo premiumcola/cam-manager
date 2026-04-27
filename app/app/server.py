@@ -156,8 +156,23 @@ def _file_hash(filename: str) -> str:
 app.jinja_env.globals["static_v"] = _file_hash
 
 store = EventStore(str(storage_root))
-(storage_root / "object_detection").mkdir(parents=True, exist_ok=True)
+# storage/object_detection/ used to be pre-created here as a placeholder for
+# a feature that never landed (motion_detection events already carry
+# classifier results via top_label + detections[]). The startup migration
+# below rmdirs it when empty; future per-classifier physical separation,
+# if we ever do it, will route by top_label at write time instead.
 settings = SettingsStore(storage_root / "settings.json", base_cfg)
+# One-shot semantic-id migration. Idempotent — on a clean boot it logs
+# a single "no migration needed" line. Must run BEFORE rebuild_runtimes()
+# so the camera threads pick up the new ids on first start, never the old.
+try:
+    from .storage_migration import migrate as _migrate_storage
+    _migrate_storage(settings, storage_root)
+except Exception as _e:
+    logging.getLogger(__name__).error(
+        "[Migration] storage migration failed (continuing with existing state): %s", _e,
+        exc_info=True,
+    )
 cfg = settings.export_effective_config(base_cfg)
 cat_registry = IdentityRegistry(storage_root / "cat_registry.json", threshold=int(cfg.get("processing", {}).get("cat_identity", {}).get("match_threshold", 10)))
 person_registry = IdentityRegistry(storage_root / "person_registry.json", threshold=int(cfg.get("processing", {}).get("person_identity", {}).get("match_threshold", 10)))
