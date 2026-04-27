@@ -3621,9 +3621,15 @@ window.toggleSetSection=function(id){
 };
 // Seed --sa on page load so even closed sections render with the correct
 // accent once opened (without waiting for the first click to set it).
+// Top-level panels (#achievements, #weather) get the same RGB triplet on
+// --acc so accent-driven rules like the section-head icon and
+// .ach-progress-fill resolve to the panel's own colour.
 document.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('.set-section[data-accent]').forEach(el=>{
     el.style.setProperty('--sa',el.dataset.accent);
+  });
+  document.querySelectorAll('.panel.section[data-accent]').forEach(el=>{
+    el.style.setProperty('--acc',el.dataset.accent);
   });
 });
 

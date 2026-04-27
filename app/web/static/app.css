@@ -861,20 +861,32 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 @keyframes toast-in{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}
 @keyframes toast-out{from{opacity:1;transform:none}to{opacity:0;transform:translateX(40px)}}
 
+/* ── Section-head icon (shared across top-level .panel.section blocks) ──── */
+/* When a section uses .section-head--with-icon, the SVG sits left of the H3
+   and inherits the panel's --acc (set via data-accent on the section root).
+   No fixed colour here — accent is the single source of truth. */
+.section-head--with-icon{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.section-head--with-icon h3{margin:0}
+.section-head-icon{display:inline-flex;align-items:center;color:rgb(var(--acc, 143,158,181))}
+.section-head-icon svg{display:block}
+
 /* ── Achievements / Sichtungen ─────────────────────────────────────────── */
-/* Warm golden tint across the whole section. No border-top — the tint
-   alone is enough to set this apart from the surrounding dark UI. */
+/* Warm bronze tint matching the "Bronze 1–4×" achievement badge. The accent
+   (--acc) is fed by data-accent="200,120,64" on the section root and seeded
+   by the panel-section accent loop in app.js. No border-top — the tint
+   alone separates this from the surrounding dark UI. */
 #achievements{
-  background:linear-gradient(160deg, rgba(250,200,50,0.07) 0%, rgba(200,150,30,0.04) 100%);
+  --acc:200,120,64;
+  background:linear-gradient(160deg, rgba(var(--acc),0.08) 0%, rgba(var(--acc),0.03) 100%);
   padding:12px 16px;
 }
 #achievements .section-head h3,
-#achievements .section-head .section-subtitle{color:rgba(250,200,50,0.8)}
+#achievements .section-head .section-subtitle{color:rgba(var(--acc),0.85)}
 .ach-progress-bar{margin-bottom:10px;padding:10px 14px;border-radius:12px;background:rgba(0,0,0,0.15);display:flex;align-items:center;gap:12px}
-.ach-progress-text{font-weight:700;font-size:14px;white-space:nowrap;color:rgba(250,200,50,0.85)}
+.ach-progress-text{font-weight:700;font-size:14px;white-space:nowrap;color:rgba(var(--acc),0.9)}
 .ach-progress-track{flex:1;height:8px;border-radius:999px;background:rgba(255,255,255,0.06);overflow:hidden}
-.ach-progress-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#22c55e,#86efac);transition:width .5s cubic-bezier(.4,0,.2,1)}
-.ach-progress-pct{font-size:12px;font-weight:700;color:rgba(250,200,50,0.85);white-space:nowrap}
+.ach-progress-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,rgba(var(--acc),0.85),rgba(var(--acc),0.55));transition:width .5s cubic-bezier(.4,0,.2,1)}
+.ach-progress-pct{font-size:12px;font-weight:700;color:rgba(var(--acc),0.9);white-space:nowrap}
 .ach-grid{margin-top:2px}
 .ach-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px;margin-bottom:2px;margin-left:4px;font-size:12px;color:var(--muted);align-items:center}
 .ach-leg-dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:4px;vertical-align:middle;flex-shrink:0}
@@ -1256,8 +1268,12 @@ select option{background:#1e1e1e;color:var(--text)}
 
 /* ── Wetter-Sichtungen (Phase 2) ────────────────────────────────────────── */
 
-/* Section block under the existing Sichtungen achievements grid. */
-.weather-sightings-block{margin-top:28px;padding-top:18px;border-top:1px solid rgba(255,255,255,0.04)}
+/* Top-level container inside the #weather section. The block used to live
+   under the achievements grid with a margin/border-top divider; after the
+   section split it is the only child of #weather, so the old border-top
+   shows up as an unwanted line at the top of the panel — hence flat margin
+   and no border. */
+.weather-sightings-block{margin-top:0;padding-top:0;border-top:0}
 .weather-sightings-head{display:flex;align-items:baseline;gap:12px;margin-bottom:12px;flex-wrap:wrap}
 .ws-title{display:inline-flex;align-items:center;gap:8px;font-size:18px;font-weight:700;color:#7faec9}
 .ws-title svg{flex-shrink:0;color:#7faec9}
