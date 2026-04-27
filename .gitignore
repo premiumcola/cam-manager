@@ -33,8 +33,10 @@ storage/events/
 storage/timelapse/
 storage/motion_detection/
 storage/timelapse_frames/
+storage/weather/
 app/storage/events/
 app/storage/timelapse/
+app/storage/weather/
 app/storage/
 
 # ML models
