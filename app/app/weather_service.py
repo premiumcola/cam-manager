@@ -1288,6 +1288,7 @@ class WeatherService:
         ).start()
 
     def _run_sun_capture(self, cam_id: str, phase: str, sun_dt: datetime, pcfg: dict):
+        from .frame_helpers import grab_valid_frame, CaptureStats
         rt = self.runtimes.get(cam_id)
         if rt is None or not hasattr(rt, "snapshot_jpeg"):
             log.warning("[Sun-TL] cam %s nicht verfügbar — capture abgebrochen", cam_id)
@@ -1312,17 +1313,30 @@ class WeatherService:
         end_at = datetime.now() + timedelta(minutes=window_min)
         log.info("[Sun-TL] Capture start: %s %s (Fenster %d min, %ds-Intervall, %d fps)",
                  cam_name, phase, window_min, interval_s, target_fps)
+        expected_frames = int((window_min * 60) / max(1, interval_s))
+        stats = CaptureStats(out_dir=frames_dir, expected_frames=expected_frames)
         n_written = 0
         i = 0
         while datetime.now() < end_at:
-            jpg = rt.snapshot_jpeg(quality=82) if hasattr(rt, "snapshot_jpeg") else None
+            # 3-attempt retry: snapshot_jpeg is a fresh fetch from the cam,
+            # so each attempt actually pulls a new frame past the hickup.
+            jpg, attempt_used, last_reason = grab_valid_frame(
+                lambda: rt.snapshot_jpeg(quality=82),
+                attempts=3, sleep_s=0.7,
+            )
             if jpg:
                 out = frames_dir / f"{i:05d}.jpg"
                 try:
                     out.write_bytes(jpg)
                     n_written += 1
+                    stats.record_capture(attempt_used=attempt_used)
                 except Exception:
                     pass
+            else:
+                stats.record_invalid()
+                log.info("[Sun-TL] %s slot %05d: 3 invalid grabs, leaving slot empty (%s)",
+                         cam_name, i, last_reason)
+            stats.flush()
             i += 1
             # Sleep in short chunks so we react quickly to stop signals.
             slept = 0.0
@@ -1674,6 +1688,7 @@ class WeatherService:
     def _run_event_tl_capture(self, cam_id: str, trigger: str, score: float,
                               api_now: dict, fc_snapshot: dict,
                               window_min: int, interval_s: int, fps: int):
+        from .frame_helpers import grab_valid_frame, CaptureStats
         rt = self.runtimes.get(cam_id)
         if rt is None or not hasattr(rt, "snapshot_jpeg"):
             log.warning("[Weather-TL] cam %s nicht verfügbar — capture abgebrochen", cam_id)
@@ -1688,16 +1703,27 @@ class WeatherService:
         frames_dir = out_dir / f".scratch_{stem}"
         frames_dir.mkdir(parents=True, exist_ok=True)
         end_at = datetime.now() + timedelta(minutes=window_min)
+        expected_frames = int((window_min * 60) / max(1, interval_s))
+        stats = CaptureStats(out_dir=frames_dir, expected_frames=expected_frames)
         n_written = 0
         i = 0
         while datetime.now() < end_at:
-            jpg = rt.snapshot_jpeg(quality=82) if hasattr(rt, "snapshot_jpeg") else None
+            jpg, attempt_used, last_reason = grab_valid_frame(
+                lambda: rt.snapshot_jpeg(quality=82),
+                attempts=3, sleep_s=0.7,
+            )
             if jpg:
                 try:
                     (frames_dir / f"{i:05d}.jpg").write_bytes(jpg)
                     n_written += 1
+                    stats.record_capture(attempt_used=attempt_used)
                 except Exception:
                     pass
+            else:
+                stats.record_invalid()
+                log.info("[Weather-TL] %s slot %05d: 3 invalid grabs, leaving slot empty (%s)",
+                         cam_name, i, last_reason)
+            stats.flush()
             i += 1
             slept = 0.0
             while slept < interval_s and datetime.now() < end_at:

@@ -62,46 +62,13 @@ class TimelapseBuilder:
     def _is_valid_frame(img) -> tuple[bool, str]:
         """Validate a decoded frame before it enters a timelapse video.
         Returns (is_valid, reason_if_rejected).
-        Conservative thresholds — night/dark and IR (B=G=R) frames pass as long as
-        they have spatial detail. Do NOT reject based on color uniformity: many cameras
-        output grayscale (B=G=R) in nighttime/IR mode and these are fully valid frames."""
-        if img is None or img.size == 0:
-            return False, "null/empty"
-        h, w = img.shape[:2]
-        if w < 32 or h < 24:
-            return False, "too_small"
-        b = float(img[:, :, 0].mean())
-        g = float(img[:, :, 1].mean())
-        r = float(img[:, :, 2].mean())
-        brightness = (b + g + r) / 3.0
-        # Completely black frame
-        if brightness < 2.0:
-            return False, f"too_dark(brightness={brightness:.1f})"
-        # Completely white/oversaturated
-        if brightness > 253.0:
-            return False, f"too_bright(brightness={brightness:.1f})"
-        # Full-frame pink/magenta H.265 artifact: heavy red dominance
-        if r > 160 and r > g * 2.5 and r > b * 2.5:
-            return False, f"pink_artifact(r={r:.0f},g={g:.0f},b={b:.0f})"
-        # Quadrant-level partial pink check (stricter threshold to catch partial corruption)
-        qh, qw = h // 2, w // 2
-        for qi, (rs, cs) in enumerate([(slice(0, qh), slice(0, qw)),
-                                        (slice(0, qh), slice(qw, None)),
-                                        (slice(qh, None), slice(0, qw)),
-                                        (slice(qh, None), slice(qw, None))]):
-            sub = img[rs, cs]
-            sb = float(sub[:, :, 0].mean())
-            sg = float(sub[:, :, 1].mean())
-            sr = float(sub[:, :, 2].mean())
-            if sr > 180 and sr > sg * 3.0 and sr > sb * 3.0:
-                return False, f"partial_pink_q{qi}(r={sr:.0f},g={sg:.0f},b={sb:.0f})"
-        # No spatial detail: std < 2.0 means a completely solid/flat frame
-        # (works for both color and grayscale; a solid gray or solid color both fail this)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        gray_std = float(gray.std())
-        if gray_std < 2.0:
-            return False, f"no_detail(std={gray_std:.2f})"
-        return True, ""
+
+        Thin wrapper that delegates to ``frame_helpers.is_valid_frame`` so the
+        capture loops, the build pre-filter, and the weather captures all
+        agree on what a "good" frame looks like. Update thresholds in
+        ``frame_helpers`` rather than here."""
+        from .frame_helpers import is_valid_frame as _is_valid
+        return _is_valid(img)
 
     @staticmethod
     def _scale_dims(w: int, h: int, max_w: int = _MAX_OUTPUT_WIDTH) -> tuple[int, int]:
@@ -256,6 +223,10 @@ class TimelapseBuilder:
             valid_paths.append(img_path)  # keep all valid frames regardless of duplicates
 
         total_input = skipped + len(valid_paths)
+        # One-line build summary in the structured "[Timelapse-Build]" prefix
+        # so log filters can pull all encode outcomes at a glance.
+        log.info("[Timelapse-Build] %s: %d frames total, %d valid, %d skipped (grey/colorbar/corrupt)",
+                 out_path.name, total_input, len(valid_paths), skipped)
         if skipped > 0:
             log.info("timelapse: skipped %d/%d corrupt frames for %s",
                      skipped, total_input, out_path.name)

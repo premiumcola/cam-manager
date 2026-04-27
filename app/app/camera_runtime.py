@@ -1756,6 +1756,13 @@ class CameraRuntime:
                     "relpath": f"timelapse/{self.camera_id}/{out_path.name}",
                     "size_mb": size_mb,
                 }
+                # Merge per-window capture stats (_stats.json next to the
+                # frames). Empty dict if missing — the build still writes a
+                # sidecar with everything else.
+                from .frame_helpers import read_capture_stats
+                cap_stats = read_capture_stats(frames_dir)
+                if cap_stats:
+                    meta["capture_stats"] = cap_stats
                 meta_path = out_dir / f"{stem}.json"
                 meta_path.write_text(_json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
                 log_tl.debug("[%s][timelapse] sidecar JSON written: %s", self.camera_id, meta_path.name)
@@ -1879,9 +1886,14 @@ class CameraRuntime:
         - custom: fixed-duration rolling windows (period_seconds long each)
         - daily/weekly/monthly: one window per calendar day, encoded at day boundary
         """
+        from .frame_helpers import is_valid_frame as _fh_valid, CaptureStats as _CaptureStats
         window_key: str | None = None
         window_start_t: float = 0.0
         _last_frame_ts: float = 0.0   # frame_ts at last capture — detects stale buffer
+        # Per-window stats. Replaced when the window key rolls over so each
+        # day/period gets its own _stats.json next to its frames.
+        stats: _CaptureStats | None = None
+        stats_window_key: str | None = None
         # Per-profile stale streak — local instead of a self. attribute so
         # two profiles running at different cadences don't corrupt each
         # other's counter. self._stale_streak is still written for the
@@ -1980,22 +1992,53 @@ class CameraRuntime:
                                          self.camera_id, profile_name, stale_streak)
                         stale_streak = 0  # reset local streak on any fresh frame
                         self._stale_streak = 0  # clear the UI mirror too
-                        # Validate frame quality before saving — reject corrupted/blank frames
-                        from .timelapse import TimelapseBuilder as _TLB_check
-                        ok, reason = _TLB_check._is_valid_frame(frame)
-                        if not ok:
-                            log_tl.debug("[%s][%s] frame skipped at capture: %s",
-                                      self.camera_id, profile_name, reason)
-                        else:
-                            tl_dir = (Path(self.global_cfg["storage"]["root"])
-                                      / "timelapse_frames" / self.camera_id
-                                      / profile_name / window_key)
+                        # Resolve the per-window stats container (lazy: first
+                        # frame in a window gets a fresh CaptureStats keyed
+                        # to that window's frame directory).
+                        tl_dir = (Path(self.global_cfg["storage"]["root"])
+                                  / "timelapse_frames" / self.camera_id
+                                  / profile_name / window_key)
+                        if stats is None or stats_window_key != window_key:
                             tl_dir.mkdir(parents=True, exist_ok=True)
+                            stats = _CaptureStats(out_dir=tl_dir,
+                                                  expected_frames=int(period_s / max(0.5, interval_s)))
+                            stats_window_key = window_key
+                        # Three-attempt validity check. The shared frame buffer
+                        # is refreshed by the main RTSP loop, so a 0.7 s pause
+                        # between attempts gives the decode loop time to
+                        # produce a fresh frame past the hickup. We only
+                        # attempt up to 3 times — past that the slot stays
+                        # empty (gap-tolerant: ffmpeg concat just skips it).
+                        ok, reason = _fh_valid(frame)
+                        attempt_used = 0
+                        if not ok:
+                            for retry in range(1, 3):
+                                time.sleep(0.7)
+                                with self.lock:
+                                    cand = self.frame.copy() if self.frame is not None else None
+                                if cand is None:
+                                    continue
+                                ok, reason = _fh_valid(cand)
+                                if ok:
+                                    frame = cand
+                                    attempt_used = retry
+                                    break
+                        if not ok:
+                            stats.record_invalid()
+                            log_tl.info("[Timelapse] %s frame %s: 3 invalid grabs, leaving slot empty (%s)",
+                                        self.camera_id, now.strftime("%H%M%S_%f")[:10], reason)
+                        else:
                             ts = now.strftime("%H%M%S_%f")[:10]
                             out = tl_dir / f"{ts}.jpg"
                             cv2.imwrite(str(out), frame, [int(cv2.IMWRITE_JPEG_QUALITY), jpeg_q])
-                            log_tl.debug("[%s][%s] frame saved: %s window=%s (%.2fs/frame, q=%d)",
-                                      self.camera_id, profile_name, out.name, window_key, interval_s, jpeg_q)
+                            stats.record_capture(attempt_used=attempt_used)
+                            log_tl.debug("[%s][%s] frame saved: %s window=%s (%.2fs/frame, q=%d, attempt=%d)",
+                                      self.camera_id, profile_name, out.name, window_key, interval_s, jpeg_q,
+                                      attempt_used + 1)
+                        # Cheap to flush each interval; lets the build path
+                        # see partial-window stats if it runs while capture
+                        # is still going.
+                        stats.flush()
                 except Exception as e:
                     log_tl.debug("[%s][%s] frame write error: %s", self.camera_id, profile_name, e)
 
