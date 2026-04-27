@@ -336,6 +336,7 @@ async function loadAll(){
   initTelegramTabs();
   hydratePushUI();
   initWeatherTabs();
+  initWeatherStats();
   await loadWeatherSightings();
   hydrateWeatherSettings();
   loadTlStatus();
@@ -6185,6 +6186,243 @@ const WEATHER_TYPES = {
   storm_front:    { de: 'Sturmfront', color: '#b08070',
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 13a5 5 0 0 0 0-10 7 7 0 0 0-13.5 2.5"/><line x1="2" y1="16" x2="20" y2="16"/><line x1="5" y1="20" x2="22" y2="20"/></svg>' },
 };
+
+// ── Wetterstatistik chart (Phase 4) ─────────────────────────────────────────
+// Single-source palette for the multi-line history chart. Re-uses the
+// WEATHER_TYPES colours where the parameter maps cleanly onto an event
+// type, picks close siblings for the diagnostic-only fields. Order here
+// determines render order (last drawn sits on top).
+const WEATHER_STATS_PALETTE = {
+  precipitation:       '#5a8aa8',  // matches heavy_rain
+  snowfall:            '#a8c0d4',  // matches snow
+  lightning_potential: '#facc15',  // matches thunder badge
+  visibility:          '#94a3b8',  // matches fog
+  wind_gusts_10m:      '#84cc16',  // lime — diagnostic, distinct from the rain blues
+  cloud_cover:         '#a78bfa',  // violet — diagnostic
+  sun_altitude:        '#fb923c',  // matches sunset
+};
+
+const _WS_FIELD_ORDER = [
+  'precipitation', 'snowfall', 'lightning_potential', 'visibility',
+  'wind_gusts_10m', 'cloud_cover', 'sun_altitude',
+];
+
+let _wsStatsTimer_chart = null;
+let _wsStatsObserver = null;
+let _wsStatsState = {
+  hours: 24,
+  isolated: null,         // field key in isolated-mode, null = all lines
+  data: null,             // last fetched payload
+  inFlight: false,
+};
+
+async function loadWeatherStats(){
+  if (_wsStatsState.inFlight) return;
+  _wsStatsState.inFlight = true;
+  try {
+    const r = await fetch('/api/weather/history?hours=' + _wsStatsState.hours);
+    _wsStatsState.data = await r.json();
+    renderWeatherStats();
+  } catch (e) {
+    /* leave the previous render up — single transient error shouldn't blank the chart */
+  } finally {
+    _wsStatsState.inFlight = false;
+  }
+}
+
+function _wsBuildLinePath(samples, key, x0, y0, w, h){
+  // Per-line normalisation: each parameter gets its own min/max so a 30
+  // mm/h precipitation peak doesn't flatten the 0.5 cm/h snow line.
+  // Skip null values — connect only consecutive defined points.
+  const vals = [];
+  for (const s of samples){
+    const v = (s.values || {})[key];
+    vals.push(typeof v === 'number' && isFinite(v) ? v : null);
+  }
+  const def = vals.filter(v => v != null);
+  if (def.length < 2) return null;
+  let lo = Math.min(...def), hi = Math.max(...def);
+  if (hi - lo < 1e-9){ lo -= 0.5; hi += 0.5; } // flat line: pin to mid-band
+  const N = vals.length;
+  let d = '';
+  let pen = false;
+  for (let i = 0; i < N; i++){
+    const v = vals[i];
+    if (v == null){ pen = false; continue; }
+    const x = x0 + (N === 1 ? 0 : (i / (N - 1)) * w);
+    const norm = (v - lo) / (hi - lo);
+    const y = y0 + h - norm * h;
+    d += (pen ? ' L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
+    pen = true;
+  }
+  return { path: d, lo, hi };
+}
+
+function _wsFmtVal(key, v){
+  if (v == null || !isFinite(v)) return '—';
+  const u = (_wsStatsState.data?.units || {})[key] || '';
+  let s;
+  if (key === 'sun_altitude') s = v.toFixed(0);
+  else if (key === 'cloud_cover' || key === 'wind_gusts_10m') s = v.toFixed(0);
+  else if (key === 'visibility') s = v.toFixed(0);
+  else if (key === 'lightning_potential') s = v.toFixed(0);
+  else s = v.toFixed(2);
+  return u ? (s + ' ' + u) : s;
+}
+
+function _wsCurrentValue(key){
+  const samples = _wsStatsState.data?.samples || [];
+  if (!samples.length) return null;
+  const last = samples[samples.length - 1].values || {};
+  const v = last[key];
+  return typeof v === 'number' && isFinite(v) ? v : null;
+}
+
+function renderWeatherStats(){
+  renderWeatherStatsChart();
+  renderWeatherStatsLegend();
+}
+
+function renderWeatherStatsChart(){
+  const wrap = byId('weatherStatsChartWrap'); if (!wrap) return;
+  const data = _wsStatsState.data;
+  const samples = data?.samples || [];
+  if (samples.length < 2){
+    wrap.innerHTML = '<div class="ws-stats-empty">Noch zu wenige Messpunkte — der Verlauf füllt sich alle 5 min.</div>';
+    return;
+  }
+  // Layout: 16 px padding inside, x-tick row at the bottom.
+  const VB_W = 600, VB_H = 220;
+  const pad = { l: 8, r: 8, t: 12, b: 22 };
+  const cw = VB_W - pad.l - pad.r;
+  const ch = VB_H - pad.t - pad.b;
+  const isolated = _wsStatsState.isolated;
+  const fields = isolated ? [isolated] : _WS_FIELD_ORDER;
+  // X-axis tick labels: 4 evenly spaced timestamps, HH:MM.
+  const tickIdx = [0, Math.round((samples.length - 1) / 3),
+                   Math.round((samples.length - 1) * 2 / 3), samples.length - 1];
+  let tickSvg = '';
+  for (const idx of tickIdx){
+    const t = samples[idx]?.ts || '';
+    const hhmm = t.length >= 16 ? t.slice(11, 16) : '';
+    const x = pad.l + (samples.length === 1 ? 0 : (idx / (samples.length - 1)) * cw);
+    tickSvg += `<text x="${x.toFixed(1)}" y="${VB_H - 6}" text-anchor="middle" font-size="10" fill="#7faec9" opacity="0.85">${hhmm}</text>`;
+  }
+  // Lines
+  let linesSvg = '';
+  let isolatedLineMeta = null;
+  for (const key of fields){
+    const meta = _wsBuildLinePath(samples, key, pad.l, pad.t, cw, ch);
+    if (!meta) continue;
+    const colour = WEATHER_STATS_PALETTE[key] || '#94a3b8';
+    const opacity = isolated && isolated !== key ? 0.15 : 1;
+    linesSvg += `<path d="${meta.path}" fill="none" stroke="${colour}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}" />`;
+    if (isolated === key) isolatedLineMeta = meta;
+  }
+  // Threshold overlay — only in isolated mode and only when the field
+  // has a configured threshold AND the threshold sits inside the visible
+  // y-range. Otherwise it'd be an invisible line off the top/bottom edge.
+  let thresholdSvg = '';
+  let noThresholdHint = '';
+  if (isolated){
+    const thr = (data?.thresholds || {})[isolated];
+    if (thr == null){
+      noThresholdHint = '<div class="ws-stats-no-threshold">keine Schwelle konfiguriert</div>';
+    } else if (isolatedLineMeta){
+      const { lo, hi } = isolatedLineMeta;
+      // Renormalise threshold against the SAME line's range so the dashed
+      // line lines up visually with the data points.
+      const norm = (thr - lo) / (hi - lo);
+      if (norm >= -0.05 && norm <= 1.05){
+        const y = pad.t + ch - Math.max(0, Math.min(1, norm)) * ch;
+        const u = (data?.units || {})[isolated] || '';
+        const lbl = `Schwelle ${thr}${u ? ' ' + u : ''}`;
+        thresholdSvg = `
+          <line x1="${pad.l}" y1="${y.toFixed(1)}" x2="${pad.l + cw}" y2="${y.toFixed(1)}"
+                stroke="#fb7185" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.85" />
+          <text class="ws-stats-threshold-label" x="${pad.l + cw - 4}" y="${(y - 4).toFixed(1)}" text-anchor="end">${lbl}</text>
+        `;
+      } else {
+        noThresholdHint = '<div class="ws-stats-no-threshold">Schwelle außerhalb des sichtbaren Bereichs</div>';
+      }
+    }
+  }
+  wrap.innerHTML = `
+    <svg viewBox="0 0 ${VB_W} ${VB_H}" preserveAspectRatio="none" role="img" aria-label="Wetterverlauf">
+      ${tickSvg}
+      ${linesSvg}
+      ${thresholdSvg}
+    </svg>
+    ${noThresholdHint}
+  `;
+}
+
+function renderWeatherStatsLegend(){
+  const wrap = byId('weatherStatsLegend'); if (!wrap) return;
+  const data = _wsStatsState.data;
+  if (!data){ wrap.innerHTML = ''; return; }
+  const isolated = _wsStatsState.isolated;
+  const labels = data.labels_de || {};
+  const html = _WS_FIELD_ORDER.map(key => {
+    const colour = WEATHER_STATS_PALETTE[key] || '#94a3b8';
+    const label = labels[key] || key;
+    const val = _wsFmtVal(key, _wsCurrentValue(key));
+    const cls = (isolated === key) ? 'ws-stats-chip is-isolated' : 'ws-stats-chip';
+    return `<button type="button" class="${cls}" data-field="${key}" aria-pressed="${isolated === key ? 'true' : 'false'}">
+      <span class="ws-stats-chip-dot" style="--cb:${colour};background:${colour}"></span>
+      <span class="ws-stats-chip-meta">
+        <span class="ws-stats-chip-label">${label}</span>
+        <span class="ws-stats-chip-value">${val}</span>
+      </span>
+    </button>`;
+  }).join('');
+  wrap.innerHTML = html;
+  // Wire chip clicks once per render (innerHTML wipes prior listeners).
+  wrap.querySelectorAll('.ws-stats-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.field;
+      _wsStatsState.isolated = (_wsStatsState.isolated === key) ? null : key;
+      renderWeatherStats();
+    });
+  });
+}
+
+function _bindWeatherStatsPills(){
+  const bar = byId('weatherStatsPills'); if (!bar || bar.dataset.wired) return;
+  bar.querySelectorAll('.ws-stats-pill').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const h = parseInt(btn.dataset.hours, 10) || 24;
+      if (h === _wsStatsState.hours) return;
+      _wsStatsState.hours = h;
+      bar.querySelectorAll('.ws-stats-pill').forEach(b => b.classList.toggle('is-active', b === btn));
+      loadWeatherStats();
+    });
+  });
+  bar.dataset.wired = '1';
+}
+
+function _startWeatherStatsRefresh(){
+  if (_wsStatsTimer_chart) return; // already running
+  loadWeatherStats();
+  _wsStatsTimer_chart = setInterval(loadWeatherStats, 60_000);
+}
+
+function _stopWeatherStatsRefresh(){
+  if (_wsStatsTimer_chart){ clearInterval(_wsStatsTimer_chart); _wsStatsTimer_chart = null; }
+}
+
+function initWeatherStats(){
+  const block = byId('weatherStatsBlock'); if (!block) return;
+  _bindWeatherStatsPills();
+  if (_wsStatsObserver) return;  // already initialised
+  // Pause polling while the section is off-screen — the chart is a
+  // dashboard for the Wetter section, not a background task.
+  _wsStatsObserver = new IntersectionObserver((entries) => {
+    if (entries.some(e => e.isIntersecting)) _startWeatherStatsRefresh();
+    else _stopWeatherStatsRefresh();
+  }, { threshold: 0.05 });
+  _wsStatsObserver.observe(block);
+}
 
 // Per-type unit hint for the threshold slider in Settings → Ereignistypen.
 const WEATHER_THRESHOLD_HINTS = {

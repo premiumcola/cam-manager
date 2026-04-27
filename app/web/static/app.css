@@ -1475,3 +1475,75 @@ select option{background:#1e1e1e;color:var(--text)}
   .cam-recovery-row{flex-direction:column;align-items:flex-start}
   .cam-recovery-row-actions{width:100%;justify-content:flex-end}
 }
+
+/* ── Wetterstatistik chart block (Phase 4) ────────────────────────────── */
+/* Lives at the top of the #weather section, above the sightings grid.
+   The chart itself is hand-rolled inline SVG — no external dep, matches
+   the rest of the app's vanilla approach. Background/depth comes from a
+   subtle storm-blue tint (the section's data-accent) instead of borders. */
+.ws-stats-block{
+  margin-bottom:18px;padding:14px 16px;border-radius:14px;
+  background:rgba(127,174,201,0.06);
+}
+.ws-stats-head{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  margin-bottom:12px;flex-wrap:wrap
+}
+.ws-stats-head .ws-title{display:inline-flex;align-items:center;gap:8px;font-size:18px;font-weight:700;color:#7faec9}
+.ws-stats-head .ws-title svg{flex-shrink:0;color:#7faec9}
+.ws-stats-pills{display:flex;gap:6px;background:rgba(0,0,0,0.18);border-radius:999px;padding:3px}
+.ws-stats-pill{
+  background:transparent;border:0;color:var(--muted);
+  font-size:12px;font-weight:700;letter-spacing:.04em;
+  padding:6px 12px;border-radius:999px;cursor:pointer;
+  min-height:32px;transition:background .15s,color .15s
+}
+.ws-stats-pill:hover{color:var(--text)}
+.ws-stats-pill.is-active{background:rgba(127,174,201,0.22);color:#cfe1ee}
+
+/* Chart svg fills its wrapper. Height is fixed on desktop, slightly
+   shorter on mobile so the legend isn't pushed off-screen. */
+.ws-stats-chart-wrap{
+  position:relative;width:100%;height:220px;
+  border-radius:10px;background:rgba(0,0,0,0.18);overflow:hidden
+}
+.ws-stats-chart-wrap svg{display:block;width:100%;height:100%}
+.ws-stats-empty{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  text-align:center;color:var(--muted);font-size:13px;padding:20px
+}
+.ws-stats-threshold-label{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:10px;font-weight:700;fill:#fb7185;letter-spacing:.04em
+}
+.ws-stats-no-threshold{
+  position:absolute;top:8px;right:10px;
+  font-size:11px;color:rgba(251,113,133,0.85);font-weight:600;
+  background:rgba(0,0,0,0.45);padding:3px 8px;border-radius:6px;
+  pointer-events:none
+}
+
+/* Legend chips below the chart. Mobile-first: 2 columns by default,
+   3 on wider viewports. Each chip is its own button (>=44 px tall for
+   iPhone) with a coloured dot + label + current value. */
+.ws-stats-legend{
+  display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:10px
+}
+@media (min-width:640px){.ws-stats-legend{grid-template-columns:repeat(3,1fr)}}
+.ws-stats-chip{
+  display:flex;align-items:center;gap:8px;padding:8px 10px;
+  background:rgba(255,255,255,0.04);border:1px solid transparent;
+  border-radius:10px;cursor:pointer;text-align:left;
+  min-height:44px;transition:background .15s,border-color .15s
+}
+.ws-stats-chip:hover{background:rgba(255,255,255,0.07)}
+.ws-stats-chip.is-isolated{background:rgba(127,174,201,0.16);border-color:rgba(127,174,201,0.45)}
+.ws-stats-chip-dot{
+  width:10px;height:10px;border-radius:50%;background:var(--cb,#94a3b8);
+  flex-shrink:0;box-shadow:0 0 0 2px rgba(0,0,0,0.25) inset
+}
+.ws-stats-chip-meta{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.ws-stats-chip-label{font-size:11px;font-weight:700;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ws-stats-chip-value{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.ws-stats-chip.is-isolated .ws-stats-chip-value{color:#cfe1ee}

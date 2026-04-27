@@ -526,6 +526,31 @@
            im #achievements panel; rausgezogen damit Tier-Sichtungen und Wetter
            thematisch sauber getrennte Welten in der Navigation sind). -->
       <section id="weather" class="panel section" data-accent="127,174,201">
+        <!-- Wetterstatistik: persisted history of all numeric Open-Meteo
+             parameters + sun altitude, rendered as a single multi-line SVG
+             chart with per-line normalisation. Fetches /api/weather/history
+             on visibility (IntersectionObserver) and refreshes every 60 s
+             while the section is in view. -->
+        <div class="ws-stats-block" id="weatherStatsBlock">
+          <div class="ws-stats-head">
+            <span class="ws-title">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><use href="#icon-cloud-rain"/></svg>
+              Wetterstatistik
+            </span>
+            <div class="ws-stats-pills" id="weatherStatsPills" role="tablist" aria-label="Zeitfenster">
+              <button type="button" class="ws-stats-pill" data-hours="1">1 h</button>
+              <button type="button" class="ws-stats-pill" data-hours="6">6 h</button>
+              <button type="button" class="ws-stats-pill is-active" data-hours="24">24 h</button>
+            </div>
+          </div>
+          <div class="ws-stats-chart-wrap" id="weatherStatsChartWrap">
+            <!-- populated by renderWeatherStatsChart() -->
+          </div>
+          <div class="ws-stats-legend" id="weatherStatsLegend">
+            <!-- populated by renderWeatherStatsLegend() -->
+          </div>
+        </div>
+
         <div class="weather-sightings-block" id="weatherSightingsBlock">
           <div class="weather-sightings-head">
             <span class="ws-title">
