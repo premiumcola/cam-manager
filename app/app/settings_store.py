@@ -4,6 +4,8 @@ from pathlib import Path
 from copy import deepcopy
 import json
 import logging
+import os
+import shutil
 import threading
 import yaml
 
@@ -293,7 +295,31 @@ class SettingsStore:
             self.save()
 
     def save(self):
-        self.path.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
+        """Persist settings.json with a 2-deep backup rotation.
+
+        Sequence on every save:
+          1. Existing settings.json.bak  → settings.json.bak2  (oldest moves out)
+          2. Existing settings.json      → settings.json.bak   (previous state preserved)
+          3. New content                 → settings.json       (atomic via os.replace)
+
+        The rotation runs before the write so a crash mid-write leaves the
+        previous state recoverable from .bak. We deliberately do not rotate
+        when self.path doesn't exist yet (first-run write)."""
+        new_text = json.dumps(self.data, ensure_ascii=False, indent=2)
+        bak = self.path.with_suffix(self.path.suffix + ".bak")
+        bak2 = self.path.with_suffix(self.path.suffix + ".bak2")
+        try:
+            if bak.exists():
+                shutil.copy2(str(bak), str(bak2))
+            if self.path.exists():
+                shutil.copy2(str(self.path), str(bak))
+        except Exception as e:
+            log.warning("settings: backup rotation failed: %s (continuing with save)", e)
+        # Atomic write via temp file + os.replace, so a partial write never
+        # leaves settings.json truncated.
+        tmp = self.path.with_suffix(self.path.suffix + ".tmp")
+        tmp.write_text(new_text, encoding="utf-8")
+        os.replace(str(tmp), str(self.path))
 
     def _ensure_timelapse_settings(self):
         self.data.setdefault("timelapse_settings", {"global_enabled": False})

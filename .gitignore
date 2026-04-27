@@ -3,6 +3,13 @@ config/config.yaml
 app/config/config.yaml
 storage/settings.json
 app/storage/settings.json
+storage/settings.json.bak
+storage/settings.json.bak2
+storage/settings.json.tmp
+app/storage/settings.json.bak
+app/storage/settings.json.bak2
+app/storage/settings.json.tmp
+storage/backups/
 
 # Runtime storage - generated data (all binary/media output)
 storage/events/

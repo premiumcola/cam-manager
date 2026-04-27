@@ -1283,7 +1283,169 @@ function editCamera(camId){
   setTimeout(()=>wrapper.scrollIntoView({behavior:'smooth',block:'nearest'}),120);
   // Populate connection diagnostics panel
   _loadCamDiagnostics(camId);
+  // Show recovery banner when connection fields are incomplete. Threshold:
+  // a usable cam needs both an RTSP URL and a username; missing either is
+  // the "lost credentials" case the recovery flow targets.
+  const banner=byId('camRecoveryBanner');
+  if(banner){
+    const incomplete=!c.rtsp_url || !c.username;
+    banner.hidden=!incomplete;
+  }
 }
+
+// ── Connection-recovery modal (Verbindung tab "Wiederherstellen ↺") ──────────
+// Two paths, in priority order:
+//   A) Sicherung — settings.json.bak / .bak2 + storage/backups/*.json. Restores
+//      the four connection fields server-side and triggers an immediate
+//      reconnect via /api/settings/cameras/<id>/restore-connection.
+//   B) Auto-Erkennung — calls the existing /api/discover and lets the user
+//      pick a device; only IP + suggested RTSP path are written into the
+//      form. The user enters credentials and uses the normal Save button.
+window.openCamRecoveryModal=function(){
+  if(!_currentEditCamId) return;
+  const m=byId('camRecoveryModal'); if(!m) return;
+  m.classList.remove('hidden');
+  // Default to the Sicherung tab.
+  _switchCamRecoveryTab('rec-backup');
+  loadCamRecoveryBackups();
+  // Wire tab clicks once.
+  if(!m.dataset.wired){
+    m.querySelectorAll('.cam-recovery-tab').forEach(b=>{
+      b.addEventListener('click',()=>_switchCamRecoveryTab(b.dataset.tab));
+    });
+    m.dataset.wired='1';
+  }
+};
+window.closeCamRecoveryModal=function(){
+  const m=byId('camRecoveryModal'); if(!m) return;
+  m.classList.add('hidden');
+};
+function _switchCamRecoveryTab(tabId){
+  const m=byId('camRecoveryModal'); if(!m) return;
+  m.querySelectorAll('.cam-recovery-tab').forEach(b=>{
+    b.classList.toggle('active', b.dataset.tab===tabId);
+  });
+  m.querySelectorAll('.cam-recovery-tab-content').forEach(c=>{
+    c.hidden=(c.id!==tabId);
+  });
+}
+async function loadCamRecoveryBackups(){
+  const wrap=byId('camRecoveryBackupList'); if(!wrap) return;
+  wrap.innerHTML=`<div class="muted small">Lade Sicherungen…</div>`;
+  let items=[];
+  try{
+    const r=await fetch(`/api/settings/backups?cam_id=${encodeURIComponent(_currentEditCamId)}`);
+    items=(await r.json()).items||[];
+  }catch(e){
+    wrap.innerHTML=`<div class="cam-recovery-empty">Sicherungen nicht abrufbar (${esc(String(e))}).</div>`;
+    return;
+  }
+  if(!items.length){
+    wrap.innerHTML=`<div class="cam-recovery-empty">Noch keine Sicherungen vorhanden. Sicherungen werden ab dem nächsten Speichern automatisch angelegt — solange ist nur die Auto-Erkennung verfügbar.</div>`;
+    return;
+  }
+  wrap.innerHTML=items.map(it=>{
+    const dt=it.mtime_iso? it.mtime_iso.replace('T',' ').slice(0,16) : '?';
+    const sizeKb=(it.size/1024).toFixed(1);
+    let usable='', btn='';
+    if(!it.has_cam){
+      usable=`<span class="cam-recovery-tag cam-recovery-tag--off">Kamera nicht enthalten</span>`;
+    }else if(!it.has_connection){
+      usable=`<span class="cam-recovery-tag cam-recovery-tag--off">Verbindungsfelder leer</span>`;
+    }else{
+      usable=`<span class="cam-recovery-tag cam-recovery-tag--on">Verbindung gespeichert</span>`;
+      btn=`<button type="button" class="btn-action" onclick="applyCamRecoveryBackup('${esc(it.filename)}')">Übernehmen</button>`;
+    }
+    return `<div class="cam-recovery-row">
+      <div class="cam-recovery-row-meta">
+        <div class="cam-recovery-row-title">${esc(it.filename)}</div>
+        <div class="cam-recovery-row-sub">${dt} · ${it.n_cameras} Kameras · ${sizeKb} KB</div>
+      </div>
+      <div class="cam-recovery-row-actions">${usable}${btn}</div>
+    </div>`;
+  }).join('');
+}
+window.applyCamRecoveryBackup=async function(filename){
+  const camId=_currentEditCamId; if(!camId) return;
+  try{
+    const r=await fetch(`/api/settings/cameras/${encodeURIComponent(camId)}/restore-connection`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({filename}),
+    });
+    const d=await r.json();
+    if(!r.ok||!d.ok){
+      showToast(`Wiederherstellen fehlgeschlagen: ${d.error||r.statusText}`,'error');
+      return;
+    }
+    showToast(`Verbindung aus ${filename} wiederhergestellt — Kamera startet neu`,'success');
+    closeCamRecoveryModal();
+    // Refresh state + re-open the edit panel so the user sees the restored fields.
+    await loadAll();
+    if(_currentEditCamId===camId){_closeEditPanel();}
+    setTimeout(()=>editCamera(camId),250);
+  }catch(e){
+    showToast(`Wiederherstellen fehlgeschlagen: ${String(e)}`,'error');
+  }
+};
+window.loadCamRecoveryDiscovery=async function(){
+  const wrap=byId('camRecoveryDiscoveryList');
+  const status=byId('camRecoveryDiscoverStatus');
+  if(!wrap) return;
+  wrap.innerHTML='';
+  if(status) status.textContent='Scanne Subnetz…';
+  let items=[];
+  try{
+    const r=await fetch('/api/discover');
+    items=(await r.json()).devices||[];
+  }catch(e){
+    if(status) status.textContent='Scan fehlgeschlagen';
+    return;
+  }
+  if(status) status.textContent=`${items.length} Geräte gefunden`;
+  if(!items.length){
+    wrap.innerHTML=`<div class="cam-recovery-empty">Keine Geräte im Subnetz erkannt.</div>`;
+    return;
+  }
+  wrap.innerHTML=items.map((d,idx)=>{
+    const guess=d.guess||'Unknown';
+    const host=d.hostname?` · ${esc(d.hostname)}`:'';
+    const ports=(d.open_ports||[]).join(', ')||'—';
+    const path=d.reolink_hints?.suggested_path||'';
+    const canApply=!!path;
+    const btn=canApply
+      ? `<button type="button" class="btn-action" onclick="applyCamRecoveryDiscovery(${idx})">In Formular übernehmen</button>`
+      : `<span class="cam-recovery-tag cam-recovery-tag--off">Kein RTSP-Pfad erkannt</span>`;
+    return `<div class="cam-recovery-row" data-idx="${idx}">
+      <div class="cam-recovery-row-meta">
+        <div class="cam-recovery-row-title">${esc(d.ip)} · ${esc(guess)}${host}</div>
+        <div class="cam-recovery-row-sub">Ports ${esc(ports)}${path?` · Pfad ${esc(path)}`:''}</div>
+      </div>
+      <div class="cam-recovery-row-actions">${btn}</div>
+    </div>`;
+  }).join('');
+  // Cache the device list so the apply handler can find it without re-fetching.
+  byId('camRecoveryModal').__discoveryCache=items;
+};
+window.applyCamRecoveryDiscovery=function(idx){
+  const cache=(byId('camRecoveryModal')||{}).__discoveryCache||[];
+  const d=cache[idx]; if(!d) return;
+  const f=byId('cameraForm').elements;
+  if(f['rtsp_ip']) f['rtsp_ip'].value=d.ip||'';
+  const path=d.reolink_hints?.suggested_path||'';
+  if(path && f['rtsp_path']){
+    // The select holds canonical Reolink paths; pick the option whose value
+    // matches, otherwise leave the existing default alone.
+    const opt=Array.from(f['rtsp_path'].options).find(o=>o.value===path);
+    if(opt) f['rtsp_path'].value=opt.value;
+  }
+  // Nudge the existing rtsp_url builder by dispatching an input event on
+  // any of the fields it listens to — that rebuild closure is private to
+  // initRtspBuilder so we trigger it via the DOM rather than calling it.
+  if(f['rtsp_ip']) f['rtsp_ip'].dispatchEvent(new Event('input',{bubbles:true}));
+  closeCamRecoveryModal();
+  showToast(`IP ${d.ip} übernommen — bitte Benutzer & Passwort ergänzen, dann speichern`,'success');
+};
 
 async function _loadCamDiagnostics(camId){
   const panel=byId('camDiagnostics'); if(!panel) return;

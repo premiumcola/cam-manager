@@ -2,6 +2,7 @@
 from __future__ import annotations
 import os
 import copy as _copy
+import json
 import threading
 import time
 from pathlib import Path
@@ -719,6 +720,151 @@ def api_settings_cameras():
 
 
 _CONN_FIELDS = {"rtsp_url", "snapshot_url", "username", "password", "enabled"}
+
+# Connection-only fields used by the camera-recovery flow. Excludes "enabled"
+# because we never want a recovery to silently flip a disabled cam back on.
+_RESTORE_CONN_FIELDS = ("rtsp_url", "snapshot_url", "username", "password")
+
+
+def _mask_password_in_url(url: str) -> str:
+    """Replace the password in an embedded-credential URL with '•••' so the
+    recovery preview can show the URL shape without leaking the secret."""
+    if not url or "://" not in url or "@" not in url:
+        return url
+    try:
+        scheme, rest = url.split("://", 1)
+        creds, host = rest.rsplit("@", 1)
+        if ":" in creds:
+            user, _ = creds.split(":", 1)
+            return f"{scheme}://{user}:•••@{host}"
+        return url
+    except Exception:
+        return url
+
+
+def _list_backup_files() -> list[Path]:
+    """Backup sources, oldest-priority order:
+       1. settings.json.bak  (last save)
+       2. settings.json.bak2 (second-last save)
+       3. storage/backups/*.json (manual exports — newest first)"""
+    out: list[Path] = []
+    for name in ("settings.json.bak", "settings.json.bak2"):
+        p = settings.path.parent / name
+        if p.exists():
+            out.append(p)
+    backups_dir = settings.path.parent / "backups"
+    if backups_dir.exists():
+        out.extend(sorted(backups_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True))
+    return out
+
+
+def _read_backup(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+@app.get('/api/settings/backups')
+def api_settings_backups_list():
+    """List available settings backups for the recovery UI. Each entry
+    summarises the snapshot (mtime, size, total cams) and — when ?cam_id=…
+    is supplied — flags whether that backup contains the cam and whether
+    its connection fields are usable."""
+    cam_id = request.args.get("cam_id") or ""
+    items = []
+    for p in _list_backup_files():
+        try:
+            st = p.stat()
+        except OSError:
+            continue
+        data = _read_backup(p)
+        n_cameras = len((data or {}).get("cameras", []) or [])
+        has_cam = False
+        has_connection = False
+        if cam_id and isinstance(data, dict):
+            for c in data.get("cameras", []) or []:
+                if c.get("id") == cam_id:
+                    has_cam = True
+                    has_connection = bool(c.get("rtsp_url") and c.get("username"))
+                    break
+        items.append({
+            "filename": p.name,
+            "mtime_iso": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
+            "size": st.st_size,
+            "n_cameras": n_cameras,
+            "has_cam": has_cam,
+            "has_connection": has_connection,
+        })
+    return jsonify({"items": items})
+
+
+@app.get('/api/settings/backups/<filename>/cam/<cam_id>')
+def api_settings_backup_cam(filename: str, cam_id: str):
+    """Return the connection fields for `cam_id` from the named backup, with
+    the password masked so the preview can show what the user is about to
+    restore without leaking the secret."""
+    if "/" in filename or "\\" in filename or filename.startswith(".."):
+        return jsonify({"ok": False, "error": "invalid filename"}), 400
+    candidates = [p for p in _list_backup_files() if p.name == filename]
+    if not candidates:
+        return jsonify({"ok": False, "error": "backup not found"}), 404
+    data = _read_backup(candidates[0])
+    if not isinstance(data, dict):
+        return jsonify({"ok": False, "error": "backup not parseable"}), 400
+    for c in data.get("cameras", []) or []:
+        if c.get("id") == cam_id:
+            return jsonify({
+                "ok": True,
+                "cam_id": cam_id,
+                "name": c.get("name", ""),
+                "rtsp_url_masked": _mask_password_in_url(c.get("rtsp_url", "")),
+                "snapshot_url_masked": _mask_password_in_url(c.get("snapshot_url", "")),
+                "username": c.get("username", ""),
+                "password_set": bool(c.get("password")),
+            })
+    return jsonify({"ok": False, "error": "cam not in this backup"}), 404
+
+
+@app.post('/api/settings/cameras/<cam_id>/restore-connection')
+def api_settings_cam_restore_connection(cam_id: str):
+    """Restore connection-only fields for one camera from a named backup.
+
+    Touches exactly the four fields in _RESTORE_CONN_FIELDS — every other
+    field on the cam (zones, schedule, profiles…) and every other camera
+    is left alone. Triggers restart_single_camera so the cam comes back
+    online without a full reload."""
+    payload = request.get_json(force=True) or {}
+    filename = (payload.get("filename") or "").strip()
+    if "/" in filename or "\\" in filename or filename.startswith("..") or not filename:
+        return jsonify({"ok": False, "error": "invalid filename"}), 400
+    if not settings.get_camera(cam_id):
+        return jsonify({"ok": False, "error": "cam not configured"}), 404
+    candidates = [p for p in _list_backup_files() if p.name == filename]
+    if not candidates:
+        return jsonify({"ok": False, "error": "backup not found"}), 404
+    data = _read_backup(candidates[0])
+    if not isinstance(data, dict):
+        return jsonify({"ok": False, "error": "backup not parseable"}), 400
+    src = next((c for c in data.get("cameras", []) or [] if c.get("id") == cam_id), None)
+    if not src:
+        return jsonify({"ok": False, "error": "cam not in this backup"}), 404
+    if not src.get("rtsp_url"):
+        return jsonify({"ok": False, "error": "backup has empty rtsp_url for this cam"}), 400
+    current = settings.get_camera(cam_id) or {}
+    patch = {f: src.get(f, "") for f in _RESTORE_CONN_FIELDS}
+    merged = {**current, **patch}
+    try:
+        settings.upsert_camera(merged)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 422
+    restart_single_camera(cam_id)
+    return jsonify({
+        "ok": True,
+        "cam_id": cam_id,
+        "restored_fields": list(_RESTORE_CONN_FIELDS),
+        "from": filename,
+    })
 
 
 @app.post('/api/settings/cameras')

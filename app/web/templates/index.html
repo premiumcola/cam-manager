@@ -180,6 +180,17 @@
 
             <!-- Panel: Verbindung -->
             <div class="cam-tab-panel active" id="cam-tab-verbindung">
+              <!-- Recovery banner: only visible when the cam's connection is
+                   incomplete (rtsp_url or username empty). Toggled by JS in
+                   editCamera(). The button opens the recovery modal which
+                   tries Sicherung first, then Auto-Erkennung. -->
+              <div id="camRecoveryBanner" class="cam-recovery-banner" hidden>
+                <span class="cam-recovery-banner-msg">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+                  Verbindungsdaten unvollständig
+                </span>
+                <button type="button" class="btn-action cam-recovery-btn" onclick="openCamRecoveryModal()">↺ Wiederherstellen</button>
+              </div>
               <div class="cam-2col">
                 <div style="display:grid;gap:8px">
                   <div class="field-wrap"><input name="name" placeholder="Werkstatt" required /><span class="field-label">Anzeigename</span></div>
@@ -1056,6 +1067,41 @@
       <div class="modal-actions">
         <button id="confirmCancel" style="padding:10px 22px;border-radius:12px;border:1px solid #3a5060;background:var(--surface);color:var(--text);cursor:pointer;font-weight:600;font-size:14px">Abbrechen</button>
         <button id="confirmOk" style="padding:10px 22px;border-radius:12px;border:none;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;margin-left:10px">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Camera connection-recovery modal. Two tabs: Sicherung (server-stored
+       backups → full restore + auto-reconnect) and Auto-Erkennung (network
+       discovery → fills the form, user enters creds, normal Save). -->
+  <div id="camRecoveryModal" class="modal hidden">
+    <div class="modal-card panel" style="max-width:560px;width:100%">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#7faec9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 9 8 9"/></svg>
+        <h3 style="margin:0;font-size:17px">Verbindungsdaten wiederherstellen</h3>
+      </div>
+      <div class="cam-recovery-tabs">
+        <button type="button" class="cam-recovery-tab active" data-tab="rec-backup">Aus Sicherung</button>
+        <button type="button" class="cam-recovery-tab" data-tab="rec-discovery">Auto-Erkennung</button>
+      </div>
+      <div class="cam-recovery-tab-content" id="rec-backup">
+        <div id="camRecoveryBackupList" class="cam-recovery-list"></div>
+        <div class="field-help" style="margin-top:8px">
+          Beim Übernehmen werden ausschließlich die vier Verbindungsfelder dieser Kamera (RTSP-URL, Snapshot-URL, Benutzer, Passwort) zurückgespielt. Alle anderen Einstellungen und alle anderen Kameras bleiben unverändert.
+        </div>
+      </div>
+      <div class="cam-recovery-tab-content" id="rec-discovery" hidden>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <button type="button" class="btn-action" onclick="loadCamRecoveryDiscovery()" id="camRecoveryDiscoverBtn">🔍 Subnetz scannen</button>
+          <span id="camRecoveryDiscoverStatus" class="small muted"></span>
+        </div>
+        <div id="camRecoveryDiscoveryList" class="cam-recovery-list"></div>
+        <div class="field-help" style="margin-top:8px">
+          Discovery findet IP und RTSP-Pfad. Benutzer und Passwort werden danach in den Formularfeldern eingegeben — anschließend speichern.
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button type="button" class="btn-action" onclick="closeCamRecoveryModal()">Schließen</button>
       </div>
     </div>
   </div>
