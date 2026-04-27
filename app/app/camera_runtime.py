@@ -1993,6 +1993,16 @@ class CameraRuntime:
                         # empty (gap-tolerant: ffmpeg concat just skips it).
                         ok, reason = _fh_valid(frame)
                         attempt_used = 0
+                        # For the daily profile we emit a per-rejection INFO
+                        # line on every failed attempt — diagnostic to
+                        # explain dawn-hour gaps in the assembled video.
+                        # Other profiles stay on the existing post-3-attempts
+                        # summary to keep the log volume sane.
+                        if not ok and profile_name == "daily":
+                            log_tl.info(
+                                "[Timelapse] %s/daily reject @ %s (attempt 1): %s",
+                                self.camera_id, now.strftime("%H:%M:%S"), reason,
+                            )
                         if not ok:
                             for retry in range(1, 3):
                                 time.sleep(0.7)
@@ -2001,6 +2011,12 @@ class CameraRuntime:
                                 if cand is None:
                                     continue
                                 ok, reason = _fh_valid(cand)
+                                if not ok and profile_name == "daily":
+                                    log_tl.info(
+                                        "[Timelapse] %s/daily reject @ %s (attempt %d): %s",
+                                        self.camera_id, datetime.now().strftime("%H:%M:%S"),
+                                        retry + 1, reason,
+                                    )
                                 if ok:
                                     frame = cand
                                     attempt_used = retry
