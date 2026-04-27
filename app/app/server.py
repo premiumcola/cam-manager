@@ -301,12 +301,14 @@ def _compute_camera_diff(
     return to_remove, to_add, to_restart
 
 
-def restart_single_camera(cam_id: str):
+def restart_single_camera(cam_id: str, *, reason: str = "bound"):
     """Stop and restart one camera runtime with fresh config.
 
-    Logs every outcome (added / skipped / exception) at INFO level so a
-    silent constructor crash can't make a configured camera disappear
-    from /status and the Telegram bot's cam-picker without a trace."""
+    ``reason`` is the suffix on the success log line — defaults to
+    ``bound runtime`` (used by the boot loop) but the per-camera save
+    handler passes ``rebound after migration`` when the id was just
+    rewritten by storage_migration. Either way the line surfaces a
+    successful runtime swap; failures emit an ERROR with stacktrace."""
     log = logging.getLogger(__name__)
     existing = runtimes.pop(cam_id, None)
     if existing:
@@ -314,10 +316,10 @@ def restart_single_camera(cam_id: str):
     _runtime_cfgs.pop(cam_id, None)
     cam_cfg = get_camera_cfg(cam_id)
     if not cam_cfg:
-        log.info("[Boot] runtime %s skipped (not in settings)", cam_id)
+        log.info("[Boot] cam %s: skipped (not in settings)", cam_id)
         return
     if not cam_cfg.get("enabled", True):
-        log.info("[Boot] runtime %s skipped (disabled)", cam_id)
+        log.info("[Boot] cam %s: skipped (disabled)", cam_id)
         return
     try:
         rt = CameraRuntime(cam_id, get_camera_cfg, cfg, store, telegram_service,
@@ -326,9 +328,13 @@ def restart_single_camera(cam_id: str):
         runtimes[cam_id] = rt
         _runtime_cfgs[cam_id] = _copy.deepcopy(cam_cfg)
         rt.start()
-        log.info("[Boot] runtime %s added to runtimes", cam_id)
+        if reason == "bound":
+            log.info("[Boot] cam %s: bound runtime", cam_id)
+        else:
+            log.info("[Boot] cam %s: %s", cam_id, reason)
     except Exception as e:
-        log.error("[Boot] runtime %s constructor failed: %s", cam_id, e, exc_info=True)
+        log.error("[Boot] cam %s: constructor failed: %s — will retry",
+                  cam_id, e, exc_info=True)
 
 
 def rebuild_runtimes():
@@ -915,8 +921,8 @@ def api_settings_cameras_save():
     payload = request.get_json(force=True) or {}
     if not payload.get("id"):
         return jsonify({"ok": False, "error": "id fehlt"}), 400
-    cam_id = payload["id"]
-    old_cfg = settings.get_camera(cam_id) or {}
+    old_id = payload["id"]
+    old_cfg = settings.get_camera(old_id) or {}
     # Guard: never persist dashboard-display URLs as the upstream connection fields.
     # These get into the payload when quick-actions spread state.cameras objects.
     for field in ("snapshot_url", "rtsp_url"):
@@ -926,22 +932,35 @@ def api_settings_cameras_save():
             preserved = old_cfg.get(field, "")
             payload[field] = preserved
     try:
-        settings.upsert_camera(payload)
+        new_id = settings.upsert_camera(payload)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 422
-    # Only restart this camera's runtime when connection-relevant fields changed
-    conn_changed = any(payload.get(f) != old_cfg.get(f) for f in _CONN_FIELDS)
+    # If the canonical id changed underneath us (manufacturer / model /
+    # name / rtsp_url edit triggered storage_migration), the runtime
+    # under the OLD id is now orphaned — drop it before binding a fresh
+    # one under the NEW id. Without this, every cam-edit save quietly
+    # broke the Telegram bot's cam picker for an hour until something
+    # else triggered a rebuild_runtimes.
+    cfg = get_effective_config()
     enabled_now = payload.get("enabled", True)
-    if conn_changed or (cam_id not in runtimes and enabled_now):
-        existing = runtimes.pop(cam_id, None)
+    id_renamed = (old_id != new_id)
+    conn_changed = any(payload.get(f) != old_cfg.get(f) for f in _CONN_FIELDS)
+    if id_renamed:
+        existing = runtimes.pop(old_id, None)
         if existing:
             existing.stop()
-        cfg = get_effective_config()
+        _runtime_cfgs.pop(old_id, None)
         if enabled_now:
-            rt = CameraRuntime(cam_id, get_camera_cfg, cfg, store, telegram_service, mqtt=mqtt_service, cat_registry=cat_registry, person_registry=person_registry)
-            runtimes[cam_id] = rt
-            rt.start()
-    return jsonify({"ok": True, "camera": settings.get_camera(cam_id), "reloaded": conn_changed})
+            restart_single_camera(new_id, reason="rebound after migration")
+    elif conn_changed or (new_id not in runtimes and enabled_now):
+        restart_single_camera(new_id, reason="rebound after edit")
+    return jsonify({
+        "ok": True,
+        "camera": settings.get_camera(new_id),
+        "reloaded": conn_changed or id_renamed,
+        "id": new_id,
+        "id_renamed_from": old_id if id_renamed else None,
+    })
 
 
 @app.post('/api/camera/<cam_id>/reload')

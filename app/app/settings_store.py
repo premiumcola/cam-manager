@@ -614,9 +614,15 @@ class SettingsStore:
         return next((c for c in self.data.get("cameras", []) if c.get("id") == cam_id), None)
 
     def upsert_camera(self, camera: dict):
+        """Insert/update one camera. Returns the canonical id post-migration
+        so the HTTP handler can detect a rename (manufacturer / model / name
+        / rtsp_url change → build_camera_id rebuilds → migration renames
+        folders + the cam id in settings.json) and rebind the live runtime
+        accordingly."""
         camera = validate_and_coerce(camera, CAMERA_SCHEMA)
         merged = self._default_camera(camera)
-        existing = self.get_camera(merged["id"])
+        in_id = merged["id"]
+        existing = self.get_camera(in_id)
         id_relevant_changed = False
         if existing:
             # Track whether any input that feeds build_camera_id actually
@@ -643,6 +649,20 @@ class SettingsStore:
             except Exception as e:
                 log.warning("[Settings] per-cam migration after save failed: %s", e)
         self.save()
+        # Resolve the canonical id post-migration. The cam dict in
+        # self.data was mutated in place by the migration, so we look it
+        # up by the input identity (manufacturer/model/name/rtsp_url) and
+        # return whatever id now points at the same record.
+        for c in self.data.get("cameras", []) or []:
+            same_record = (
+                c.get("name") == merged.get("name")
+                and c.get("rtsp_url") == merged.get("rtsp_url")
+                and c.get("manufacturer", "") == merged.get("manufacturer", "")
+                and c.get("model", "") == merged.get("model", "")
+            )
+            if same_record or c.get("id") == in_id:
+                return c.get("id", in_id)
+        return in_id
 
     def delete_camera(self, cam_id: str) -> bool:
         cameras = self.data.get("cameras", [])
