@@ -6298,7 +6298,7 @@ window.addEventListener('resize',()=>{
 loadAll().then(()=>{startLiveUpdate(); loadAchievements();});
 loadLogs();
 
-// ── Wetter-Sichtungen (Phase 2) ─────────────────────────────────────────────
+// ── Wetter-Ereignisse (Phase 2) ─────────────────────────────────────────────
 
 // Single source of truth for type → label/color/icon. Backend mirror lives
 // in app/app/weather_service.py:EVENT_LABEL_DE / EVENT_ICON_HEX — keep both
@@ -6315,7 +6315,7 @@ const WEATHER_TYPES = {
   sunset:     { de: 'Sonnenuntergang', color: '#d4823a',
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="4"/><path d="M12 4v3M5.6 7.6l2 2M2 14h3M19 14h3M16.4 9.6l2-2M3 20h18"/></svg>' },
   // Tägliche Sonnen-Timelapses — eigener Sub-Typ in der Wetter-Mediathek,
-  // unabhängig vom score-gefilterten "sunset"-Wetter-Sichtungs-Clip.
+  // unabhängig vom score-gefilterten "sunset"-Wetter-Ereignis-Clip.
   sun_timelapse_rise: { de: 'Sonnenaufgang', color: '#e89540',
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="15" r="3.5"/><path d="M12 7v-4M5 11l-2-2M19 11l2-2M3 19h18"/><polyline points="9,5 12,2 15,5"/></svg>' },
   sun_timelapse_set:  { de: 'Sonnenuntergang TL', color: '#d4823a',
@@ -6332,7 +6332,7 @@ const WEATHER_TYPES = {
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 13a5 5 0 0 0 0-10 7 7 0 0 0-13.5 2.5"/><line x1="2" y1="16" x2="20" y2="16"/><line x1="5" y1="20" x2="22" y2="20"/></svg>' },
 };
 
-// ── Wetterstatistik chart (Phase 4) ─────────────────────────────────────────
+// ── Wetterdaten & Prognose chart (Phase 4) ──────────────────────────────────
 // Single-source palette for the multi-line history chart. Re-uses the
 // WEATHER_TYPES colours where the parameter maps cleanly onto an event
 // type, picks close siblings for the diagnostic-only fields. Order here
@@ -6436,9 +6436,10 @@ function renderWeatherStatsChart(){
     wrap.innerHTML = '<div class="ws-stats-empty">Noch zu wenige Messpunkte — der Verlauf füllt sich alle 5 min.</div>';
     return;
   }
-  // Layout: 16 px padding inside, x-tick row at the bottom.
+  // Layout. Right padding is generous so per-field threshold labels can
+  // sit outside the chart area in all-lines mode without clipping.
   const VB_W = 600, VB_H = 220;
-  const pad = { l: 8, r: 8, t: 12, b: 22 };
+  const pad = { l: 8, r: 72, t: 12, b: 22 };
   const cw = VB_W - pad.l - pad.r;
   const ch = VB_H - pad.t - pad.b;
   const isolated = _wsStatsState.isolated;
@@ -6453,30 +6454,38 @@ function renderWeatherStatsChart(){
     const x = pad.l + (samples.length === 1 ? 0 : (idx / (samples.length - 1)) * cw);
     tickSvg += `<text x="${x.toFixed(1)}" y="${VB_H - 6}" text-anchor="middle" font-size="10" fill="#7faec9" opacity="0.85">${hhmm}</text>`;
   }
-  // Lines
+  // Lines — collect per-field meta so the threshold pass can renormalise
+  // each tick against the same {lo, hi} the line was drawn against.
   let linesSvg = '';
-  let isolatedLineMeta = null;
+  const lineMetas = {};
   for (const key of fields){
     const meta = _wsBuildLinePath(samples, key, pad.l, pad.t, cw, ch);
     if (!meta) continue;
+    lineMetas[key] = meta;
     const colour = WEATHER_STATS_PALETTE[key] || '#94a3b8';
     const opacity = isolated && isolated !== key ? 0.15 : 1;
     linesSvg += `<path d="${meta.path}" fill="none" stroke="${colour}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}" />`;
-    if (isolated === key) isolatedLineMeta = meta;
   }
-  // Threshold overlay — only in isolated mode and only when the field
-  // has a configured threshold AND the threshold sits inside the visible
-  // y-range. Otherwise it'd be an invisible line off the top/bottom edge.
+  // Threshold overlay.
+  //
+  //  - Isolated mode: full horizontal dashed red line + right-side label
+  //    (existing behaviour — that mode is for direct line-vs-boundary
+  //    comparisons).
+  //  - All-lines mode: per-field 18 px tick on the right edge in the
+  //    line's own colour, with a 9 px label to the right of the tick.
+  //    Always rendered when a threshold is configured, regardless of
+  //    the event's enabled flag — events_enabled[k]==false dims the
+  //    tick/label to 0.4 opacity. Out-of-range thresholds clamp to
+  //    the top/bottom edge with ▲/▼ glyphs.
   let thresholdSvg = '';
   let noThresholdHint = '';
   if (isolated){
     const thr = (data?.thresholds || {})[isolated];
+    const meta = lineMetas[isolated];
     if (thr == null){
       noThresholdHint = '<div class="ws-stats-no-threshold">keine Schwelle konfiguriert</div>';
-    } else if (isolatedLineMeta){
-      const { lo, hi } = isolatedLineMeta;
-      // Renormalise threshold against the SAME line's range so the dashed
-      // line lines up visually with the data points.
+    } else if (meta){
+      const { lo, hi } = meta;
       const norm = (thr - lo) / (hi - lo);
       if (norm >= -0.05 && norm <= 1.05){
         const y = pad.t + ch - Math.max(0, Math.min(1, norm)) * ch;
@@ -6490,6 +6499,57 @@ function renderWeatherStatsChart(){
       } else {
         noThresholdHint = '<div class="ws-stats-no-threshold">Schwelle außerhalb des sichtbaren Bereichs</div>';
       }
+    }
+  } else {
+    const tickX1 = pad.l + cw - 18;
+    const tickX2 = pad.l + cw;
+    const labelX = pad.l + cw + 4;
+    const placedYs = [];  // track placed label baselines to stack collisions
+    for (const key of _WS_FIELD_ORDER){
+      const meta = lineMetas[key]; if (!meta) continue;
+      const thr = (data?.thresholds || {})[key];
+      if (thr == null) continue;
+      const enabled = (data?.events_enabled || {})[key];
+      // events_enabled === null → field has no associated event (cloud,
+      // wind, sun) and no threshold either, so the thr==null branch above
+      // already handled it. true = armed (full opacity), false = configured
+      // but off (dim).
+      const opacity = enabled === false ? 0.4 : 1.0;
+      const colour = WEATHER_STATS_PALETTE[key] || '#94a3b8';
+      const { lo, hi } = meta;
+      const norm = (thr - lo) / (hi - lo);
+      let tickY, glyph = '', clampNote = '';
+      if (norm > 1){
+        tickY = pad.t + 4;
+        glyph = '▲ ';
+        clampNote = ` · aktuell ≪`;
+      } else if (norm < 0){
+        tickY = pad.t + ch - 4;
+        glyph = '▼ ';
+        clampNote = ` · aktuell ≫`;
+      } else {
+        tickY = pad.t + ch - norm * ch;
+      }
+      // Avoid label-on-label: shift down by 11 px until clear of any
+      // already-placed label baseline (within ±11 px).
+      let labelY = tickY + 3.5;
+      while (placedYs.some(y => Math.abs(y - labelY) < 11)){
+        labelY += 11;
+      }
+      placedYs.push(labelY);
+      const u = (data?.units || {})[key] || '';
+      const thrFmt = (typeof thr === 'number' && !Number.isInteger(thr) && Math.abs(thr) < 100)
+        ? thr.toFixed(2)
+        : Math.round(thr);
+      const labelText = `${glyph}${thrFmt}${u ? ' ' + u : ''}`;
+      const aria = `Schwelle ${thr}${u ? ' ' + u : ''}${clampNote}`;
+      thresholdSvg += `
+        <line x1="${tickX1.toFixed(1)}" y1="${tickY.toFixed(1)}" x2="${tickX2.toFixed(1)}" y2="${tickY.toFixed(1)}"
+              stroke="${colour}" stroke-width="2" stroke-linecap="round" opacity="${opacity}">
+          <title>${aria}</title>
+        </line>
+        <text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" font-size="9" fill="${colour}" opacity="${opacity}">${labelText}</text>
+      `;
     }
   }
   wrap.innerHTML = `
@@ -6731,7 +6791,7 @@ function openWeatherLightbox(idx){
       }
       if (action === 'delete') {
         const cur = state.weather.items[_wsLbIdx];
-        if (cur && confirm('Wetter-Sichtung wirklich löschen?')) {
+        if (cur && confirm('Wetter-Ereignis wirklich löschen?')) {
           fetch(`/api/weather/sightings/${encodeURIComponent(cur.id)}`, { method: 'DELETE' })
             .then(() => { closeWeatherLightbox(); loadWeatherSightings(state.weather.filter); });
         }
@@ -6792,7 +6852,7 @@ function _renderWsLbMeta(s){
   `;
 }
 
-// ── Settings: Wetter-Sichtungen ──────────────────────────────────────────────
+// ── Settings: Wetter-Ereignisse ──────────────────────────────────────────────
 
 function initWeatherTabs(){
   const bar = document.querySelector('.ws-tab-bar'); if (!bar) return;
@@ -7168,7 +7228,7 @@ async function _refreshWeatherStatus(){
 }
 
 
-// ── Wetter-Sichtungen Phase 3: Recaps + push UI + hash anchor ───────────────
+// ── Wetter-Ereignisse Phase 3: Recaps + push UI + hash anchor ───────────────
 
 async function loadWeatherRecaps(){
   try{
