@@ -2907,9 +2907,28 @@ def api_weather_status():
     if weather_service is None:
         return jsonify({
             "enabled": False, "last_poll_at": None, "last_api_ok": None,
-            "current_state": {}, "location": {"lat": None, "lon": None},
+            "current_state": {}, "current_values": {},
+            "location": {"lat": None, "lon": None},
         })
     return jsonify(weather_service.status())
+
+
+@app.get('/api/weather/history')
+def api_weather_history():
+    """Backing endpoint for the Wetterstatistik chart. `hours` clamped
+    to 1..72 by the service. Returns a sample list, per-field thresholds
+    drawn from the configured event triggers, units, German labels,
+    and the configured poll interval."""
+    if weather_service is None:
+        return jsonify({
+            "hours": 24, "samples": [], "thresholds": {}, "units": {},
+            "labels_de": {}, "fields": [], "poll_interval_s": 300,
+        })
+    try:
+        hours = int(request.args.get("hours", 24))
+    except (TypeError, ValueError):
+        hours = 24
+    return jsonify(weather_service.history(hours))
 
 
 @app.get('/api/system')

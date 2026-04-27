@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 import threading
 import time
+from collections import deque
 from datetime import datetime, date, timedelta
 from pathlib import Path
 
@@ -42,6 +44,53 @@ EVENT_ICON_HEX: dict[str, str] = {
     "fog":        "#94a3b8",  # slate
     "sunset":     "#fb923c",  # orange
 }
+
+# ── History (Wetterstatistik chart backend) ────────────────────────────────
+# Numeric Open-Meteo parameters we persist + the cached sun altitude. Kept in
+# a single deque of {ts, values} rows so callers can ship the buffer as JSON
+# and the frontend can filter by time range without juggling 7 parallel
+# arrays. Capacity = 288 samples ≈ 24 h at the default 5-min poll.
+HISTORY_FIELDS: tuple[str, ...] = (
+    "precipitation",
+    "snowfall",
+    "lightning_potential",
+    "visibility",
+    "wind_gusts_10m",
+    "cloud_cover",
+    "sun_altitude",
+)
+
+HISTORY_LABELS_DE: dict[str, str] = {
+    "precipitation":       "Niederschlag",
+    "snowfall":            "Schneefall",
+    "lightning_potential": "Blitz-Potential",
+    "visibility":          "Sicht",
+    "wind_gusts_10m":      "Wind-Böen",
+    "cloud_cover":         "Bewölkung",
+    "sun_altitude":        "Sonnenhöhe",
+}
+
+HISTORY_UNITS: dict[str, str] = {
+    "precipitation":       "mm/h",
+    "snowfall":            "cm/h",
+    "lightning_potential": "J/kg",
+    "visibility":          "m",
+    "wind_gusts_10m":      "km/h",
+    "cloud_cover":         "%",
+    "sun_altitude":        "°",
+}
+
+# Maps a HISTORY_FIELDS key to the event-type whose configured threshold is
+# the natural "alarm" line for that parameter. Values whose key is missing
+# are diagnostic-only and have no threshold.
+HISTORY_FIELD_TO_EVENT: dict[str, str] = {
+    "precipitation":       "heavy_rain",
+    "snowfall":            "snow",
+    "lightning_potential": "thunder",
+    "visibility":          "fog",
+}
+
+HISTORY_MAXLEN = 288  # 24 h @ 5 min
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -130,11 +179,21 @@ class WeatherService:
             "last_poll_at": None,
             "last_api_ok":  None,
             "current_state": {k: False for k in EVENT_LABEL_DE},
+            "current_values": {k: None for k in HISTORY_FIELDS},
             "location": {
                 "lat": (self.server_cfg.get("location") or {}).get("lat"),
                 "lon": (self.server_cfg.get("location") or {}).get("lon"),
             },
         }
+        # History buffer for the Wetterstatistik chart. Loaded from disk on
+        # startup so the chart isn't blank for ~5 minutes after every
+        # restart. Survives reload() — it's diagnostic data, not config.
+        self._history_lock = threading.Lock()
+        self._history: deque = deque(maxlen=HISTORY_MAXLEN)
+        try:
+            self._load_history()
+        except Exception as e:
+            log.warning("[Weather] history load failed (starting fresh): %s", e)
 
     # ── Lifecycle ───────────────────────────────────────────────────────────
 
@@ -385,6 +444,20 @@ class WeatherService:
             self._status["last_poll_at"] = datetime.now().isoformat(timespec="seconds")
             self._status["last_api_ok"] = True
             self._status["current_state"] = cur_state
+        # Persist this slot to the history ring buffer for the
+        # Wetterstatistik chart. Best-effort — a write failure must never
+        # interrupt the poll cadence.
+        try:
+            self._record_sample(latest, sun)
+        except Exception as e:
+            log.warning("[Weather] history record failed: %s", e)
+        # Mirror the last-poll timestamp into the runtime store so the
+        # Telegram /status command can show "letzter Poll vor N min".
+        try:
+            if self.settings_store:
+                self.settings_store.runtime_set("weather_last_poll_ts", time.time())
+        except Exception:
+            pass
 
     def _latest_slice(self, payload: dict) -> dict:
         """Pick the most recent 15-minute time slot whose data is non-null.
@@ -831,6 +904,140 @@ class WeatherService:
     def status(self) -> dict:
         with self._lock:
             return dict(self._status)
+
+    # ── History (Wetterstatistik) ──────────────────────────────────────────
+    def _history_path(self) -> Path:
+        """Resolve `<storage_root>/weather_history.json` from settings_store."""
+        try:
+            root = self.settings_store.base_config.get("storage", {}).get("root", "/app/storage")
+        except Exception:
+            root = "/app/storage"
+        return Path(root) / "weather_history.json"
+
+    def _load_history(self):
+        path = self._history_path()
+        if not path.exists():
+            return
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as e:
+            log.warning("[Weather] history file unparseable, starting fresh: %s", e)
+            return
+        items = payload.get("samples") if isinstance(payload, dict) else payload
+        if not isinstance(items, list):
+            log.warning("[Weather] history file has unexpected shape, starting fresh")
+            return
+        kept = 0
+        with self._history_lock:
+            self._history.clear()
+            for row in items[-HISTORY_MAXLEN:]:
+                if not isinstance(row, dict):
+                    continue
+                ts = row.get("ts")
+                values = row.get("values")
+                if not isinstance(ts, str) or not isinstance(values, dict):
+                    continue
+                # Migration: drop fields no longer in HISTORY_FIELDS, fill
+                # missing ones with None — never crash on old/extra keys.
+                clean = {k: values.get(k) for k in HISTORY_FIELDS}
+                self._history.append({"ts": ts, "values": clean})
+                kept += 1
+        log.info("[Weather] history loaded: %d samples from %s", kept, path)
+
+    def _save_history(self):
+        """Atomic write to .tmp + os.replace so a kill -9 mid-write cannot
+        leave a half-written history.json on disk."""
+        path = self._history_path()
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            log.warning("[Weather] history dir mkdir failed: %s", e)
+            return
+        with self._history_lock:
+            samples = list(self._history)
+        payload = {
+            "version": 1,
+            "saved_at": datetime.now().isoformat(timespec="seconds"),
+            "samples": samples,
+        }
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        try:
+            with open(tmp, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, ensure_ascii=False, indent=2)
+                fh.flush()
+                try:
+                    os.fsync(fh.fileno())
+                except OSError:
+                    pass
+            os.replace(str(tmp), str(path))
+        except Exception as e:
+            log.warning("[Weather] history write failed: %s", e)
+
+    def _record_sample(self, latest: dict, sun: dict):
+        """Append the latest poll's numeric values to the ring buffer.
+        Called from _poll_once after a successful API response. Stores
+        `None` for any field the API didn't return so the chart can show a
+        gap instead of pretending to have data."""
+        values = {}
+        for key in HISTORY_FIELDS:
+            if key == "sun_altitude":
+                values[key] = sun.get("altitude") if isinstance(sun, dict) else None
+            else:
+                v = latest.get(key) if isinstance(latest, dict) else None
+                values[key] = float(v) if isinstance(v, (int, float)) else None
+        ts_iso = datetime.now().isoformat(timespec="seconds")
+        with self._history_lock:
+            self._history.append({"ts": ts_iso, "values": values})
+        # Update the live status snapshot so /api/weather/status carries the
+        # last polled slice without a separate fetch.
+        with self._lock:
+            self._status["current_values"] = dict(values)
+        self._save_history()
+
+    def history(self, hours: int = 24) -> dict:
+        """Backing call for /api/weather/history."""
+        hours = max(1, min(72, int(hours or 24)))
+        cutoff = datetime.now() - timedelta(hours=hours)
+        with self._history_lock:
+            samples = list(self._history)
+        # Filter to time window. Tolerate parse failures by falling back to
+        # "include the row" — a malformed timestamp shouldn't shrink the
+        # visible window.
+        out: list[dict] = []
+        for row in samples:
+            ts_str = row.get("ts") or ""
+            try:
+                if datetime.fromisoformat(ts_str) >= cutoff:
+                    out.append(row)
+            except Exception:
+                out.append(row)
+        # Thresholds from configured event settings — only for fields whose
+        # event is enabled. Diagnostic-only fields (cloud_cover, wind_gusts,
+        # sun_altitude) get null.
+        events_cfg = (self.cfg.get("events") or {})
+        thresholds: dict[str, float | None] = {k: None for k in HISTORY_FIELDS}
+        for key in HISTORY_FIELDS:
+            evt = HISTORY_FIELD_TO_EVENT.get(key)
+            if not evt:
+                continue
+            ev_cfg = events_cfg.get(evt) or {}
+            if not ev_cfg.get("enabled", False):
+                continue
+            thr = ev_cfg.get("threshold")
+            try:
+                thresholds[key] = float(thr) if thr is not None else None
+            except (TypeError, ValueError):
+                thresholds[key] = None
+        poll_interval_s = int(self.cfg.get("poll_interval", 300) or 300)
+        return {
+            "hours":           hours,
+            "samples":         out,
+            "thresholds":      thresholds,
+            "units":           dict(HISTORY_UNITS),
+            "labels_de":       dict(HISTORY_LABELS_DE),
+            "fields":          list(HISTORY_FIELDS),
+            "poll_interval_s": poll_interval_s,
+        }
 
     # ── Telegram push (Phase 3) ─────────────────────────────────────────────
 
