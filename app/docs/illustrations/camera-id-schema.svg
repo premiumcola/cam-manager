@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 240" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Camera ID schema: manufacturer underscore model underscore name underscore IP-last-octet, with a worked example of Reolink CX810 Garten 192.0.2.42 producing reolink_cx810_garten_42.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a0f1a"/>
+      <stop offset="100%" stop-color="#10182a"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a2333"/>
+      <stop offset="100%" stop-color="#141d2c"/>
+    </linearGradient>
+    <linearGradient id="terminal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#102818"/>
+      <stop offset="100%" stop-color="#0a1c10"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="240" fill="url(#bg)"/>
+
+  <text x="400" y="32" font-family="ui-sans-serif, system-ui, sans-serif" font-size="16" font-weight="800" fill="#edf4fb" text-anchor="middle">Camera-ID Schema</text>
+  <text x="400" y="50" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#7faec9" text-anchor="middle">deterministisch · vier Tokens · sanitised lowercase</text>
+
+  <!-- Input row -->
+  <g font-family="ui-sans-serif, system-ui, sans-serif">
+    <rect x="20" y="76" width="170" height="60" rx="10" fill="url(#card)" stroke="#2a3a52"/>
+    <text x="105" y="98" font-size="10" font-weight="700" fill="#7faec9" text-anchor="middle" letter-spacing="2">MANUFACTURER</text>
+    <text x="105" y="121" font-size="14" font-weight="700" fill="#edf4fb" text-anchor="middle">Reolink</text>
+
+    <rect x="200" y="76" width="170" height="60" rx="10" fill="url(#card)" stroke="#2a3a52"/>
+    <text x="285" y="98" font-size="10" font-weight="700" fill="#7faec9" text-anchor="middle" letter-spacing="2">MODEL</text>
+    <text x="285" y="121" font-size="14" font-weight="700" fill="#edf4fb" text-anchor="middle">CX810</text>
+
+    <rect x="380" y="76" width="170" height="60" rx="10" fill="url(#card)" stroke="#2a3a52"/>
+    <text x="465" y="98" font-size="10" font-weight="700" fill="#7faec9" text-anchor="middle" letter-spacing="2">NAME</text>
+    <text x="465" y="121" font-size="14" font-weight="700" fill="#edf4fb" text-anchor="middle">Garten</text>
+
+    <rect x="560" y="76" width="220" height="60" rx="10" fill="url(#card)" stroke="#2a3a52"/>
+    <text x="670" y="98" font-size="10" font-weight="700" fill="#7faec9" text-anchor="middle" letter-spacing="2">IP · LAST-OCTET</text>
+    <text x="670" y="121" font-size="14" font-weight="700" fill="#edf4fb" text-anchor="middle">192.0.2.42  →  42</text>
+  </g>
+
+  <!-- Arrows down -->
+  <g stroke="#5e2942" stroke-width="1.5" fill="none">
+    <line x1="105" y1="140" x2="105" y2="170"/>
+    <line x1="285" y1="140" x2="285" y2="170"/>
+    <line x1="465" y1="140" x2="465" y2="170"/>
+    <line x1="670" y1="140" x2="670" y2="170"/>
+  </g>
+
+  <!-- Output row -->
+  <g font-family="ui-monospace, ui-sans-serif, monospace">
+    <rect x="20" y="174" width="760" height="48" rx="10" fill="url(#terminal)" stroke="#22c55e" stroke-width="1.5"/>
+    <text x="400" y="206" font-size="18" font-weight="800" fill="#a7f3d0" text-anchor="middle" letter-spacing="3">reolink_cx810_garten_42</text>
+  </g>
+</svg>
