@@ -27,41 +27,63 @@ LAN — keine Cloud, keine Telemetrie, kein Tracking.
   <tr>
     <td width="50%" valign="top">
       <strong>📷 Live-View</strong><br/>
-      Mosaic, Single-Cam, HD-Toggle, Per-Cam Mute / Schedule
+      Mosaic, Single-Cam, HD-Toggle, Per-Cam Mute / Schedule.
+      iOS / Mobile: native Video-Fullscreen, Swipe-Gesten, Safe-Area-Insets.
     </td>
     <td width="50%" valign="top">
       <strong>🎞 Mediathek</strong><br/>
       Bewegungsereignisse, gefiltert nach Person, Tier, Auto …
+      Lightbox mit Prev/Next über Tagesgrenzen hinweg.
     </td>
   </tr>
   <tr>
     <td valign="top">
       <strong>🐿 Sichtungen</strong><br/>
       Wildlife-Achievements: Vögel (~960 Arten), Säugetiere
+      (Eichhörnchen, Igel, Fuchs, Reh, Feldhase) via Cascade-Classifier.
     </td>
     <td valign="top">
       <strong>⛈ Wetter</strong><br/>
-      Open-Meteo-Trigger: Gewitter, Sonnenuntergänge, Nebel als 10 s-Clips
+      Open-Meteo-Trigger: Gewitter, Sonnenuntergänge, Nebel als 10 s-Clips.
+      Statistik-Tab mit 7 numerischen Parametern + Threshold-Linien.
     </td>
   </tr>
   <tr>
     <td valign="top">
-      <strong>🤖 Coral TPU</strong><br/>
-      Hardware-beschleunigte Objekterkennung (~30 ms pro Frame)
+      <strong>🤖 Coral TPU + CPU-Fallback</strong><br/>
+      Drei-Tier-Pipeline: EdgeTPU (~30 ms) → tflite-runtime CPU
+      (~300 ms) → motion-only. Status-Pill zeigt aktiven Tier.
     </td>
     <td valign="top">
       <strong>💬 Telegram-Bot</strong><br/>
-      Push-Alerts mit Inline-Bestätigungs-Buttons + Live-Snapshot-Menü
+      Self-mutating Anchor-Bubble: Drilldowns ändern dieselbe Nachricht
+      via Edit-in-Place — kein Chat-Spam, nur eine ständige Steuerzentrale.
     </td>
   </tr>
   <tr>
     <td valign="top">
       <strong>⏱ Zeitraffer</strong><br/>
-      Tag / Woche / Monat / Quartal / Jahr — plus Sonnenauf-/-untergang
+      Tag / Woche / Monat / Quartal / Jahr — plus Sonnenauf-/-untergang.
+      ffmpeg-stream-copy wenn verfügbar, sonst OpenCV-Frame-Buffer.
     </td>
     <td valign="top">
       <strong>🔔 Alerting-Profile</strong><br/>
       Hart / Mittel / Sanft pro Kamera, mit Zeitplan + MQTT-Bridge
+      und Whitelist-Personen für Schedule-aware-Suppression.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <strong>🆔 Deterministic Camera-IDs</strong><br/>
+      ID-Schema <code>manufacturer_model_name_iplastoctet</code>
+      (siehe <code>camera_id.py</code>). Storage-Migration bindet beim
+      Boot Legacy-Folder idempotent auf das neue Schema um.
+    </td>
+    <td valign="top">
+      <strong>📋 Strukturierte Logs</strong><br/>
+      Tag-Schema <code>[boot]</code> · <code>[cam:&lt;id&gt;]</code>
+      · <code>[det]</code> · <code>[tg]</code> · <code>[weather]</code> …
+      Boot-Inventory, 24-h-Reconnect-Counter, periodisches Heartbeat.
     </td>
   </tr>
 </table>
@@ -121,8 +143,15 @@ cd cam-manager
 docker compose up -d
 ```
 
-Der erste Build dauert 5 – 10 Minuten (PyCoral- und OpenCV-Wheels werden
-installiert).
+Der `docker-compose.yml` baut das Image aus `app/docker/Dockerfile` und
+mountet `./app/app`, `./app/config`, `./app/web`, `./storage`, `./models`
+sowie `--device /dev/bus/usb` für den Coral-Stick. Der erste Build dauert
+5 – 10 Minuten (PyCoral- und OpenCV-Wheels werden installiert).
+
+> **Coral-Variante:** Wer zwingend EdgeTPU erzwingen will, kommentiert
+> den `tam-spy-coral`-Service in `docker-compose.yml` ein und baut mit
+> `app/docker/Dockerfile.coral`. Der Standard-Stack erkennt den TPU
+> automatisch und fällt sonst auf CPU-tflite zurück — kein Switch nötig.
 
 ### 3. Web-UI öffnen
 
@@ -138,6 +167,14 @@ Falls ein Coral-USB-Stick angeschlossen ist:
 
 - Settings → **Objekterkennung** → "Coral TPU" einschalten
 - "Reload Runtime" klicken — Status zeigt "Coral TPU erkannt und aktiv"
+
+### 5. Telegram-Deep-Links (optional)
+
+Damit die "Im Browser öffnen"-Buttons im Telegram-Bot auf die Web-UI
+zeigen, in **Einstellungen → Server** den Eintrag `public_base_url`
+auf eine extern erreichbare URL setzen
+(z. B. `https://tam-spy.example.org`). Ohne Wert fallen die Buttons
+still aus — die Push-Alerts selbst funktionieren weiter.
 
 ## Configuration
 
@@ -174,9 +211,12 @@ Felder zu berühren.
 ## Roadmap
 
 - [x] Coral-Pipeline + Wildlife-Klassifikation
-- [x] Telegram-Push mit Inline-Confirm-Buttons + Backoff bei Polling-Conflict
+- [x] Telegram self-mutating Anchor-Bubble (Edit-in-Place statt Chat-Spam)
 - [x] Wetter-Sichtungen Phase 1 (Backend) + Phase 2 (Mediathek-UI)
 - [x] Settings-Backup-Rotation + Connection-Recovery-Flow
+- [x] Deterministic Camera-IDs + Storage-Migration on every boot
+- [x] iOS / Mobile pass: native fullscreen, swipe, safe-area, deep-links
+- [x] Logging overhaul: tag-schema, boot-inventory, 24-h reconnect counter
 - [ ] Quartals- und Jahres-Recap-Reels
 - [ ] EN-UI-Übersetzung
 - [ ] Real screenshots (siehe `docs/screenshots/CREDITS.md`)
