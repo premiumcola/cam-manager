@@ -233,6 +233,10 @@ class CameraRuntime:
         self.connect_time = None
         self.prev_gray = None
         self._error_streak = 0
+        # Rolling-average Coral inference latency. Sized to ~30 frames so
+        # transient spikes don't dominate; the /status bubble reads the
+        # current average from inference_avg_ms property below.
+        self._inference_times_ms: deque = deque(maxlen=30)
         # Video recording state (ring pre-buffer + session tracking)
         self._pre_buffer: deque = deque(maxlen=300)  # (frame, epoch_float) pairs; time-filtered to 3s on use
         self._recording: bool = False
@@ -2148,11 +2152,16 @@ class CameraRuntime:
                 # static garden cameras without affecting recall on
                 # cat/bird/etc.
                 label_thresholds = self.cfg.get("label_thresholds") or None
+                _t0 = time.time()
                 detections = self.detector.detect_frame(
                     proc_frame,
                     min_score=cam_min_score,
                     label_thresholds=label_thresholds,
                 )
+                # Track a rolling-average inference latency for the /status
+                # bubble. Cheap (one append + one slice) and gives operators
+                # a visible sign that the Coral path is healthy.
+                self._inference_times_ms.append((time.time() - _t0) * 1000.0)
                 allowed = set(self.cfg.get("object_filter") or [])
                 if allowed:
                     detections = [d for d in detections if d.label in allowed]
@@ -2594,4 +2603,6 @@ class CameraRuntime:
             "live_viewers": self._live_viewers,
             "stream_mode": "live" if self._live_viewers > 0 else "baseline",
             "supervisor_restarts": self._supervisor_restarts,
+            "inference_avg_ms": (sum(self._inference_times_ms) / len(self._inference_times_ms))
+                                if self._inference_times_ms else None,
         }
