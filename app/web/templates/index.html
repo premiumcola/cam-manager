@@ -186,12 +186,19 @@
       </section>
 
       <section id="dashboard" class="panel section">
-        <div class="section-head"><h3>Live Feed</h3></div>
+        <div class="section-head section-head--with-icon">
+          <span class="section-head-icon" aria-hidden="true"><svg width="24" height="24"><use href="#icon-livefeed"/></svg></span>
+          <h3>Live Feed</h3>
+        </div>
         <div id="cameraCards" class="camera-grid"></div>
       </section>
 
       <section id="cameras" class="panel section">
-        <div class="section-head"><h3>Geräte</h3><button id="discoverBtn" type="button" class="btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/><circle cx="7" cy="7" r="2" opacity=".4"/></svg> Netzwerk-Discovery</button></div>
+        <div class="section-head section-head--with-icon">
+          <span class="section-head-icon" aria-hidden="true"><svg width="24" height="24"><use href="#icon-cameras"/></svg></span>
+          <h3>Geräte</h3>
+          <button id="discoverBtn" type="button" class="btn-action action-green" style="margin-left:auto"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/><circle cx="7" cy="7" r="2" opacity=".4"/></svg> Netzwerk-Discovery</button>
+        </div>
         <div id="tlStatusBar" class="tl-status-bar"></div>
         <div id="cameraSettingsList" class="list"></div>
         <div id="cameraEditWrapper" class="cam-edit-wrapper">
@@ -491,7 +498,8 @@
       <div id="timeline" style="position:absolute;visibility:hidden;pointer-events:none"></div>
 
       <section id="statistik" class="panel section">
-        <div class="section-head">
+        <div class="section-head section-head--with-icon">
+          <span class="section-head-icon" aria-hidden="true"><svg width="24" height="24"><use href="#icon-statistik"/></svg></span>
           <h3>Statistik</h3>
           <button type="button" id="statRefreshBtn" class="btn-action action-green" style="margin-left:auto"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg> Aktualisieren</button>
         </div>
@@ -633,12 +641,15 @@
         </div>
       </section>
       <section id="settings" class="panel section">
-        <div class="section-head"><h3>Einstellungen</h3></div>
+        <div class="section-head section-head--with-icon">
+          <span class="section-head-icon" aria-hidden="true"><svg width="24" height="24"><use href="#icon-settings"/></svg></span>
+          <h3>Einstellungen</h3>
+        </div>
 
         <!-- 1. App & Allgemein -->
         <div class="set-section" id="set-app" data-accent="143,158,181">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-app')">
-            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#9ba1a8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span>App &amp; Server</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+            <span class="set-icon"><svg width="24" height="24" stroke="#9ba1a8"><use href="#icon-server-rack"/></svg></span><span>App &amp; Server</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
           </button>
           <div class="set-bd"><div class="set-inner">
             <div style="display:grid;gap:0;padding-top:4px">
