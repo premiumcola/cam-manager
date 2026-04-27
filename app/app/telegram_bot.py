@@ -7,9 +7,24 @@ import asyncio
 import logging
 import time
 
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import (
+    Bot,
+    BotCommand,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+    Update,
+)
 from telegram.error import Conflict
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+    MessageHandler,
+    filters,
+)
 
 from .telegram_helpers import (
     LABEL_DE,
@@ -28,6 +43,39 @@ log = logging.getLogger(__name__)
 # tops out at 50 MB; both fall through to sendDocument when exceeded.
 _PHOTO_LIMIT_BYTES = 10 * 1024 * 1024
 _VIDEO_LIMIT_BYTES = 50 * 1024 * 1024
+
+# ── Persistent reply keyboard (4 buttons in 2 rows) ──────────────────────────
+# Telegram persists this server-side after the first message that includes it,
+# so it stays visible under the input field across sessions. Every plain
+# outbound send (no inline buttons) reattaches it as reply_markup so a user
+# who installs the bot fresh sees the keyboard on the very first message.
+ACTION_LIVE = "📷 Live-Bild"
+ACTION_CLIP = "🎬 5 s Clip"
+ACTION_STATUS = "📊 Status"
+ACTION_MUTE = "🔇 Alles still 1 h"
+
+PERSISTENT_KEYBOARD = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(ACTION_LIVE), KeyboardButton(ACTION_CLIP)],
+        [KeyboardButton(ACTION_STATUS), KeyboardButton(ACTION_MUTE)],
+    ],
+    resize_keyboard=True,
+    is_persistent=True,
+    one_time_keyboard=False,
+)
+
+# ── Slash-command catalogue (sent to Telegram via setMyCommands) ─────────────
+BOT_COMMANDS = [
+    BotCommand("live", "Live-Bild aller / einer Kamera"),
+    BotCommand("clip", "5-s-Clip einer Kamera"),
+    BotCommand("status", "System- und Kamera-Status"),
+    BotCommand("mute", "Alle Pushes 1 h still"),
+    BotCommand("menu", "Hauptmenü mit Drilldowns"),
+]
+
+# Mute durations in seconds (referenced by the 4-h-extend inline button).
+_MUTE_DEFAULT_S = 3600
+_MUTE_EXTEND_S = 4 * 3600
 
 
 class TelegramService:
@@ -256,12 +304,21 @@ class TelegramService:
     async def _polling_main(self):
         app = ApplicationBuilder().token(self.token).build()
         self._polling_app = app
+        # Slash commands shown in the "/" picker. /status now renders the
+        # system overview (was: cam picker) — the cam-arm UI lives behind
+        # /menu → 🛠 Kamera-Status.
         app.add_handler(CommandHandler("start", self.cmd_menu))
         app.add_handler(CommandHandler("menu", self.cmd_menu))
-        app.add_handler(CommandHandler("status", self.cmd_status))
+        app.add_handler(CommandHandler("status", self._handle_status))
+        app.add_handler(CommandHandler("live", self._handle_livebild))
+        app.add_handler(CommandHandler("clip", self._handle_clip5))
+        app.add_handler(CommandHandler("mute", self._handle_mute_all))
         app.add_handler(CommandHandler("today", self.cmd_today))
         app.add_handler(CommandHandler("week", self.cmd_week))
         app.add_handler(CommandHandler("stats", self.cmd_today))
+        # Reply-keyboard text dispatch — anything that's not a /command
+        # routes through on_text, which matches the four button labels.
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.on_text))
         app.add_handler(CallbackQueryHandler(self.on_callback))
         app.add_error_handler(self._on_polling_error)
         try:
@@ -270,6 +327,16 @@ class TelegramService:
             await app.updater.start_polling(drop_pending_updates=True)
             self._polling_active_since = time.time()
             log.info("[Telegram] Polling active")
+            # Register the slash-command catalogue serverside. Idempotent —
+            # Telegram dedups by command name. Failure here is non-fatal:
+            # the handlers still work, the user just doesn't see auto-
+            # complete in the "/" picker.
+            try:
+                await app.bot.set_my_commands(BOT_COMMANDS)
+                log.info("[Telegram] Bot commands registered: %s",
+                         ", ".join(c.command for c in BOT_COMMANDS))
+            except Exception as e:
+                log.warning("[Telegram] set_my_commands failed: %s", e)
             await self._polling_stop_event.wait()
         finally:
             log.info("[Telegram] Polling shutting down")
@@ -449,7 +516,14 @@ class TelegramService:
             return
         if dark:
             log.info("[Telegram] dark/night alert")
+        # Inline buttons win — Telegram only allows one reply_markup per
+        # message, so when an alert carries Gültig/Falsch/Stumm we send those
+        # and the persistent reply keyboard stays visible from the previous
+        # message. When no inline buttons are present, reattach the
+        # persistent keyboard so it always appears under the input field.
         markup = self._build_markup(buttons)
+        if markup is None:
+            markup = PERSISTENT_KEYBOARD
         common = dict(chat_id=self.chat_id, reply_markup=markup, disable_notification=bool(silent))
         if parse_mode:
             common["parse_mode"] = parse_mode
@@ -545,6 +619,17 @@ class TelegramService:
         if not pcfg.get("enabled", True):
             log.debug("[Telegram] push: disabled")
             return
+        # Global mute (set by the "🔇 Alles still 1 h" button or /mute).
+        # Detection-style alerts honour it; daily reports/highlights/
+        # watchdog go through their own jobs and stay silent-by-design.
+        if self.settings_store:
+            try:
+                mute_until = float(self.settings_store.runtime_get("global_mute_until") or 0)
+            except Exception:
+                mute_until = 0
+            if mute_until and time.time() < mute_until:
+                log.info("[Telegram] skip: global mute active until epoch=%d", int(mute_until))
+                return
         labels = meta.get("labels") or []
         primary = most_specific_label(labels)
         label_cfg = (pcfg.get("labels") or {}).get(primary, {})
@@ -1113,11 +1198,20 @@ class TelegramService:
     async def cmd_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         self.log_action("menu_open")
         text, markup = self._root_view()
-        await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
-
-    async def cmd_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        text, markup = self._status_view()
-        await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
+        # Reattach the persistent keyboard on /start so a new chat sees it
+        # immediately. Subsequent messages with inline buttons keep the
+        # keyboard visible because Telegram persists it server-side once
+        # registered.
+        await update.message.reply_text(
+            text, reply_markup=markup, parse_mode="HTML",
+        )
+        try:
+            await update.message.reply_text(
+                "💡 Schnellzugriff bleibt unten.",
+                reply_markup=PERSISTENT_KEYBOARD,
+            )
+        except Exception:
+            pass
 
     async def cmd_today(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         text, markup = self._stats_view(days=1)
@@ -1126,6 +1220,193 @@ class TelegramService:
     async def cmd_week(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         text, markup = self._stats_view(days=7)
         await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
+
+    # ── Reply-keyboard + slash-command action handlers ────────────────────
+    # Single source of truth for the four top-level actions: each helper
+    # accepts (update, context) and is reachable from BOTH the persistent
+    # keyboard text dispatch (on_text) and the slash commands. The cam-
+    # picker variants reuse the existing "cam:<id>:livebild" / "cam:<id>:
+    # clip:5" dispatch in _handle_camera_cb so there is no second
+    # implementation of snapshot / clip.
+
+    def _active_cams(self) -> list[tuple[str, str]]:
+        out: list[tuple[str, str]] = []
+        for cam_id, rt in (self.runtimes or {}).items():
+            try:
+                st = rt.status() if hasattr(rt, "status") else {}
+            except Exception:
+                st = {}
+            out.append((cam_id, st.get("name") or cam_id))
+        return out
+
+    async def _handle_livebild(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Send a snapshot or — when there are multiple cams — an inline
+        cam picker. The picker buttons route through cam:<id>:livebild
+        which the existing dispatcher already handles."""
+        log.info("[Telegram] /live invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
+        cams = self._active_cams()
+        if not cams:
+            await update.message.reply_text("Keine Kameras konfiguriert.",
+                                            reply_markup=PERSISTENT_KEYBOARD)
+            return
+        if len(cams) == 1:
+            cam_id, _ = cams[0]
+            text, markup = ("📷 Kamera wählen — livebild",
+                            InlineKeyboardMarkup([
+                                [InlineKeyboardButton(cams[0][1], callback_data=f"cam:{cam_id}:livebild")],
+                            ]))
+            await update.message.reply_text(text, reply_markup=markup)
+            return
+        text, markup = self._cam_picker("livebild")
+        await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
+
+    async def _handle_clip5(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """5-s clip cam picker. We deliberately don't offer 'all cams' —
+        running 4 ad-hoc ffmpeg recordings in parallel pegs the host."""
+        log.info("[Telegram] /clip invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
+        cams = self._active_cams()
+        if not cams:
+            await update.message.reply_text("Keine Kameras konfiguriert.",
+                                            reply_markup=PERSISTENT_KEYBOARD)
+            return
+        rows = []
+        for cam_id, name in cams:
+            rows.append([InlineKeyboardButton(f"🎬 {name}",
+                                              callback_data=f"cam:{cam_id}:clip:5"[:64])])
+        await update.message.reply_text(
+            "🎬 Kamera wählen — 5 s Clip",
+            reply_markup=InlineKeyboardMarkup(rows),
+        )
+
+    async def _handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Compact system overview: cams + Telegram polling + Coral + weather + storage."""
+        log.info("[Telegram] /status invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
+        try:
+            text = self._render_system_status_text()
+        except Exception as e:
+            log.warning("[Telegram] status render failed: %s", e)
+            text = "Status nicht verfügbar."
+        await update.message.reply_text(text, parse_mode="HTML",
+                                        reply_markup=PERSISTENT_KEYBOARD)
+
+    def _render_system_status_text(self) -> str:
+        """Build the /status bubble. Pulls from runtime cam status, the
+        polling-status snapshot, the settings runtime store and shutil
+        for storage. All defensive — any single source missing falls back
+        to a question mark instead of crashing the whole render."""
+        import shutil as _sh
+        from html import escape as _esc
+        cfg = self._cfg()
+        today_iso = datetime.now().strftime("%Y-%m-%d")
+        cam_cfgs = {c.get("id"): c for c in (cfg.get("cameras", []) or [])}
+        lines = ["📊 <b>System-Status</b>", ""]
+        for cam_id, rt in (self.runtimes or {}).items():
+            try:
+                st = rt.status() if hasattr(rt, "status") else {}
+            except Exception:
+                st = {}
+            name = _esc(st.get("name") or cam_id)
+            online = st.get("status") in ("active", "starting")
+            icon = "🟢" if online else "🔴"
+            armed = bool((cam_cfgs.get(cam_id) or {}).get("armed",
+                                                          st.get("armed", True)))
+            arm_label = "scharf" if armed else "stumm"
+            n_today = "?"
+            if self.store:
+                try:
+                    n_today = len(self.store.list_events(cam_id, start=today_iso, limit=5000))
+                except Exception:
+                    n_today = "?"
+            lines.append(f"{icon} <b>{name}</b> · {arm_label} · {n_today} Events heute")
+        lines.append("────")
+        # Telegram polling
+        try:
+            ps = self.get_polling_status() if hasattr(self, "get_polling_status") else {}
+        except Exception:
+            ps = {}
+        ps_state = ps.get("state", "?")
+        ps_icon = {"active": "🟢", "conflict": "🟡",
+                   "starting": "🟡", "off": "⚪"}.get(ps_state, "⚪")
+        ps_dur = ps.get("since_seconds", 0)
+        ps_dur_h = ps_dur // 60
+        lines.append(f"Telegram   {ps_icon} Polling {ps_state} ({ps_dur_h} min)")
+        # Coral state — read from settings effective config (processing.detection.mode)
+        det_mode = (cfg.get("processing", {}).get("detection") or {}).get("mode", "none")
+        coral_icon = "🟢" if det_mode == "coral" else "⚪"
+        lines.append(f"Coral      {coral_icon} {det_mode}")
+        # Weather: last poll timestamp from runtime store
+        ws_last = None
+        if self.settings_store:
+            try:
+                ws_last = self.settings_store.runtime_get("weather_last_poll_ts")
+            except Exception:
+                ws_last = None
+        if ws_last:
+            try:
+                age_min = int((time.time() - float(ws_last)) / 60)
+                lines.append(f"Wetter     🟢 letzter Poll vor {age_min} min")
+            except Exception:
+                lines.append("Wetter     ⚪ ?")
+        else:
+            lines.append("Wetter     ⚪ kein Poll bekannt")
+        # Storage free
+        try:
+            root = str(self._storage_root())
+            free_gb = _sh.disk_usage(root).free / (1024 ** 3)
+            lines.append("────")
+            lines.append(f"Speicher frei: <b>{free_gb:.1f} GB</b>")
+        except Exception:
+            pass
+        # Mute state
+        if self.settings_store:
+            try:
+                mute_until = float(self.settings_store.runtime_get("global_mute_until") or 0)
+            except Exception:
+                mute_until = 0
+            if mute_until and time.time() < mute_until:
+                end_local = datetime.fromtimestamp(mute_until).strftime("%H:%M")
+                lines.append(f"🔇 Pushes pausiert bis {end_local}")
+        return "\n".join(lines)
+
+    async def _handle_mute_all(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Set runtime.global_mute_until = now + 1 h and reply with a confirm
+        bubble carrying two inline buttons (end-now / extend-to-4h)."""
+        log.info("[Telegram] /mute invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
+        until = time.time() + _MUTE_DEFAULT_S
+        if self.settings_store:
+            self.settings_store.runtime_set("global_mute_until", until)
+        end_local = datetime.fromtimestamp(until).strftime("%H:%M")
+        log.info("[Telegram] mute_all activated until %s (epoch=%d)", end_local, int(until))
+        markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("Sofort beenden", callback_data="mute:end"),
+             InlineKeyboardButton("Auf 4 h verlängern", callback_data="mute:ext4h")],
+        ])
+        await update.message.reply_text(
+            f"🔇 Alle Pushes pausiert bis <b>{end_local}</b>",
+            parse_mode="HTML", reply_markup=markup,
+        )
+
+    async def on_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """MessageHandler for the persistent reply-keyboard buttons. Dispatches
+        on exact-match button text; anything else gets a one-line hint that
+        also re-asserts the keyboard."""
+        if not update.message or not update.message.text:
+            return
+        txt = update.message.text.strip()
+        action_map = {
+            ACTION_LIVE: self._handle_livebild,
+            ACTION_CLIP: self._handle_clip5,
+            ACTION_STATUS: self._handle_status,
+            ACTION_MUTE: self._handle_mute_all,
+        }
+        handler = action_map.get(txt)
+        if handler:
+            await handler(update, context)
+            return
+        await update.message.reply_text(
+            "💡 Tipp: Nutze die Tasten unten oder /menu",
+            reply_markup=PERSISTENT_KEYBOARD,
+        )
 
     # ── Callback router ───────────────────────────────────────────────────
     async def on_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1140,6 +1421,10 @@ class TelegramService:
             return
         if data.startswith("hi:") or data.startswith("share:"):
             await self._handle_highlight_cb(q, data)
+            return
+        # Global mute control (set from /mute or the "Alles still 1 h" button).
+        if data.startswith("mute:"):
+            await self._handle_mute_cb(q, data)
             return
         # Timelapse: tl:send:<rel>  or  tl:save:<rel>
         if data.startswith("tl:"):
@@ -1229,6 +1514,29 @@ class TelegramService:
             return
 
         await q.answer("Unbekannte Aktion")
+
+    async def _handle_mute_cb(self, q, data: str):
+        """mute:end → clear global mute. mute:ext4h → push end-time to now+4h."""
+        if not self.settings_store:
+            await q.answer()
+            return
+        verb = data.split(":", 1)[1] if ":" in data else ""
+        if verb == "end":
+            self.settings_store.runtime_set("global_mute_until", 0)
+            log.info("[Telegram] mute_all cleared by chat=%s",
+                     q.message.chat_id if q.message else "?")
+            await self._set_badge(q, "✅ Pushes wieder aktiv")
+            await q.answer("✅ Pushes wieder aktiv")
+            return
+        if verb == "ext4h":
+            until = time.time() + _MUTE_EXTEND_S
+            self.settings_store.runtime_set("global_mute_until", until)
+            end_local = datetime.fromtimestamp(until).strftime("%H:%M")
+            log.info("[Telegram] mute_all extended to 4 h (until=%s)", end_local)
+            await self._set_badge(q, f"🔇 Stumm bis {end_local}")
+            await q.answer(f"🔇 Stumm bis {end_local}")
+            return
+        await q.answer()
 
     async def _handle_highlight_cb(self, q, data: str):
         # hi:<eid>     → original-resolution snapshot (uncompressed sendDocument)
