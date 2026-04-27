@@ -299,6 +299,14 @@ class CameraRuntime:
         # enough that the deque stays small even on a chronically flaky
         # cam (a 5-minute reconnect interval gives 288 entries / 24 h).
         self._reconnect_log: deque = deque()
+        # First-frame latency markers — set when cv2.VideoCapture opens,
+        # cleared after the first decoded frame logs an "[cam:<id>] RTSP
+        # opened — first frame in <ms> ms" line. Tells the operator
+        # whether a reconnect actually succeeded.
+        self._rtsp_opened_at: float | None = None
+        self._rtsp_first_frame_logged: bool = False
+        self._last_rtsp_success_ts: float = 0.0
+        self._open_attempt_count: int = 0
         self._stale_incidents: int = 0      # how often timelapse saw a stale frame buffer
         # Camera-wide mirror of the highest-active profile's stale streak
         # — used by /api/camera/<id>/status for the diagnostic dashboard.
@@ -465,6 +473,11 @@ class CameraRuntime:
             if not cap.isOpened():
                 raise RuntimeError(f"Kamera {self.camera_id}: RTSP konnte nicht geöffnet werden")
             self.capture = cap
+            # Mark the RTSP-open moment so the [cam:<id>] RTSP opened line
+            # can include the first-frame latency. Picked up by _loop()
+            # the next time a fresh frame is decoded.
+            self._rtsp_opened_at = time.time()
+            self._rtsp_first_frame_logged = False
 
             # ── Sub-stream: H.264 preview for dashboard (no pink) ────────────
             # Opened under _preview_cap_lock so _preview_loop sees a consistent handle.
@@ -2010,7 +2023,7 @@ class CameraRuntime:
                         # summary to keep the log volume sane.
                         if not ok and profile_name == "daily":
                             log_tl.info(
-                                "[Timelapse] %s/daily reject @ %s (attempt 1): %s",
+                                "[timelapse] %s/daily reject @ %s (attempt 1): %s",
                                 self.camera_id, now.strftime("%H:%M:%S"), reason,
                             )
                         if not ok:
@@ -2023,7 +2036,7 @@ class CameraRuntime:
                                 ok, reason = _fh_valid(cand)
                                 if not ok and profile_name == "daily":
                                     log_tl.info(
-                                        "[Timelapse] %s/daily reject @ %s (attempt %d): %s",
+                                        "[timelapse] %s/daily reject @ %s (attempt %d): %s",
                                         self.camera_id, datetime.now().strftime("%H:%M:%S"),
                                         retry + 1, reason,
                                     )
@@ -2033,7 +2046,7 @@ class CameraRuntime:
                                     break
                         if not ok:
                             stats.record_invalid()
-                            log_tl.info("[Timelapse] %s frame %s: 3 invalid grabs, leaving slot empty (%s)",
+                            log_tl.info("[timelapse] %s frame %s: 3 invalid grabs, leaving slot empty (%s)",
                                         self.camera_id, now.strftime("%H%M%S_%f")[:10], reason)
                         else:
                             ts = now.strftime("%H%M%S_%f")[:10]
@@ -2094,7 +2107,13 @@ class CameraRuntime:
             if self._force_reconnect:
                 self._force_reconnect = False
                 self._stale_streak = 0
-                log_cam.warning("[%s] Forced RTSP reconnect triggered (stale-feed recovery)", self.camera_id)
+                log_cam.warning(
+                    "[cam:%s] forced reconnect — stale-feed recovery "
+                    "(stale_streak=%d, last_frame_age=%.0fs, reconnects_24h=%d)",
+                    self.camera_id, self._stale_streak,
+                    (time.time() - self.frame_ts) if self.frame_ts > 0 else 0,
+                    self._reconnect_count_24h(),
+                )
                 try:
                     if self.capture is not None:
                         self.capture.release()
@@ -2111,10 +2130,22 @@ class CameraRuntime:
                 with self.lock:
                     self.frame = frame
                     self.frame_ts = time.time()
+                # First decoded frame after an open() — log latency so the
+                # operator can confirm a reconnect actually recovered the
+                # stream. Only fires once per open cycle.
+                if self._rtsp_opened_at and not self._rtsp_first_frame_logged:
+                    latency_ms = int((time.time() - self._rtsp_opened_at) * 1000)
+                    masked = self._masked_rtsp_url()
+                    log_cam.info("[cam:%s] RTSP opened — %s · first frame in %d ms",
+                                 self.camera_id, masked, latency_ms)
+                    self._rtsp_first_frame_logged = True
+                    self._last_rtsp_success_ts = time.time()
                 # Feed the watchdog — any successful grab resets the silence clock.
                 self._last_activity = time.time()
                 if self._error_streak > 0:
-                    log_cam.info("[%s] Stream wiederhergestellt nach %d Fehlern", self.camera_id, self._error_streak)
+                    downtime_s = int(time.time() - (self._last_rtsp_success_ts or self._rtsp_opened_at or time.time()))
+                    log_cam.info("[cam:%s] frame flow recovered after %d errors (downtime≈%ds)",
+                                 self.camera_id, self._error_streak, downtime_s)
                 self.last_error = None
                 self._error_streak = 0
                 # Apply bottom crop before processing (removes corrupt H.264 bottom strip)
@@ -2164,6 +2195,7 @@ class CameraRuntime:
                     proc_frame,
                     min_score=cam_min_score,
                     label_thresholds=label_thresholds,
+                    cam_id=self.camera_id,
                 )
                 # Track a rolling-average inference latency for the /status
                 # bubble. Cheap (one append + one slice) and gives operators
@@ -2615,6 +2647,24 @@ class CameraRuntime:
                                 if self._inference_times_ms else None,
             "reconnect_count_24h": self._reconnect_count_24h(),
         }
+
+    def _masked_rtsp_url(self) -> str:
+        """Return the configured rtsp_url with the password replaced by
+        '•••' so log lines and operator messages don't leak credentials.
+        Falls back to the bare host when the URL has no embedded creds."""
+        url = self.cfg.get("rtsp_url", "") or ""
+        if not url or "://" not in url:
+            return url
+        try:
+            scheme, rest = url.split("://", 1)
+            if "@" in rest:
+                creds, host = rest.rsplit("@", 1)
+                if ":" in creds:
+                    user, _ = creds.split(":", 1)
+                    return f"{scheme}://{user}:•••@{host}"
+        except Exception:
+            pass
+        return url
 
     def _reconnect_count_24h(self) -> int:
         """Prune reconnect log entries older than 24 h on each read, then
