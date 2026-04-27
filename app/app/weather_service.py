@@ -193,24 +193,24 @@ class WeatherService:
         try:
             self._load_history()
         except Exception as e:
-            log.warning("[Weather] history load failed (starting fresh): %s", e)
+            log.warning("[weather] history load failed (starting fresh): %s", e)
 
     # ── Lifecycle ───────────────────────────────────────────────────────────
 
     def start(self):
         if not self.cfg.get("enabled", True):
-            log.info("[Weather] Service disabled via config")
+            log.info("[weather] Service disabled via config")
             return
         loc = self.server_cfg.get("location") or {}
         if loc.get("lat") is None or loc.get("lon") is None:
-            log.warning("[Weather] No server.location set — service cannot poll. Refusing to start.")
+            log.warning("[weather] No server.location set — service cannot poll. Refusing to start.")
             return
         try:
             from apscheduler.schedulers.background import BackgroundScheduler
             self._scheduler = BackgroundScheduler(daemon=True)
             self._scheduler.start()
         except Exception as e:
-            log.error("[Weather] Scheduler start failed: %s", e)
+            log.error("[weather] Scheduler start failed: %s", e)
             return
         # Attach prebuffers to opted-in cameras so post-roll capture has
         # something to splice on.
@@ -251,9 +251,9 @@ class WeatherService:
                 max_instances=1, coalesce=True,
             )
         except Exception as e:
-            log.warning("[Sun-TL] daily recompute job failed: %s", e)
+            log.warning("[weather] daily recompute job failed: %s", e)
         cams_in = [self._cam_name(cid) for cid in self._enabled_cam_ids()]
-        log.info("[Weather] Service started · interval=%ss · cameras=%s", interval, cams_in)
+        log.info("[weather] Service started · interval=%ss · cameras=%s", interval, cams_in)
 
     def shutdown(self):
         if self._stopped:
@@ -262,9 +262,9 @@ class WeatherService:
         try:
             if self._scheduler:
                 self._scheduler.shutdown(wait=False)
-                log.info("[Weather] Service stopped")
+                log.info("[weather] Service stopped")
         except Exception as e:
-            log.warning("[Weather] shutdown failed: %s", e)
+            log.warning("[weather] shutdown failed: %s", e)
         self._scheduler = None
         # Detach prebuffers so cameras stop spending CPU on JPEG encoding.
         self._detach_prebuffers()
@@ -285,7 +285,7 @@ class WeatherService:
         self._scheduler = None
         self._detach_prebuffers()
         if not self.cfg.get("enabled", True):
-            log.info("[Weather] reloaded — disabled")
+            log.info("[weather] reloaded — disabled")
             with self._lock:
                 self._status["enabled"] = False
             return
@@ -293,9 +293,9 @@ class WeatherService:
             self._status["enabled"] = True
         self.start()
         if not was_enabled:
-            log.info("[Weather] reloaded — newly enabled")
+            log.info("[weather] reloaded — newly enabled")
         else:
-            log.info("[Weather] reload applied")
+            log.info("[weather] reload applied")
 
     # ── Camera prebuffer attach/detach ──────────────────────────────────────
 
@@ -326,7 +326,7 @@ class WeatherService:
                 continue
             if rt.weather_prebuffer is None:
                 rt.weather_prebuffer = WeatherPrebuffer(pre_roll_s=pre_s, fps=fps)
-                log.info("[Weather] Prebuffer attached to %s (pre=%ss fps=%s)",
+                log.info("[weather] Prebuffer attached to %s (pre=%ss fps=%s)",
                          self._cam_name(cam_id), pre_s, fps)
 
     def _detach_prebuffers(self):
@@ -349,7 +349,7 @@ class WeatherService:
             self._fail_streak = 0
         except Exception as e:
             self._fail_streak += 1
-            log.warning("[Weather] poll failed (#%d): %s", self._fail_streak, e)
+            log.warning("[weather] poll failed (#%d): %s", self._fail_streak, e)
             with self._lock:
                 self._status["last_api_ok"] = False
                 self._status["last_poll_at"] = datetime.now().isoformat(timespec="seconds")
@@ -364,19 +364,19 @@ class WeatherService:
             if cam_id in enabled_ids:
                 if rt.weather_prebuffer is None:
                     rt.weather_prebuffer = WeatherPrebuffer(pre_roll_s=pre_s, fps=fps)
-                    log.info("[Weather] Prebuffer attached to %s (pre=%ss fps=%s)",
+                    log.info("[weather] Prebuffer attached to %s (pre=%ss fps=%s)",
                              self._cam_name(cam_id), pre_s, fps)
             else:
                 if rt.weather_prebuffer is not None:
                     rt.weather_prebuffer = None
-                    log.info("[Weather] Prebuffer detached from %s (weather disabled)",
+                    log.info("[weather] Prebuffer detached from %s (weather disabled)",
                              self._cam_name(cam_id))
 
     def _poll_once(self):
         loc = self.server_cfg.get("location") or {}
         lat, lon = loc.get("lat"), loc.get("lon")
         if lat is None or lon is None:
-            log.warning("[Weather] no location — skipping poll")
+            log.warning("[weather] no location — skipping poll")
             return
 
         api = self.cfg.get("api") or {}
@@ -417,7 +417,7 @@ class WeatherService:
             for cam_id in self._enabled_cam_ids():
                 in_cd, mins = self._cooldown.check(cam_id, evt_type)
                 if in_cd:
-                    log.info("[Weather] Skip %s on %s: in cooldown (%d min remaining)",
+                    log.info("[weather] Skip %s on %s: in cooldown (%d min remaining)",
                              evt_type, self._cam_name(cam_id), mins)
                     continue
                 cooldown_min = int(cfg.get("cooldown_min", 30) or 30)
@@ -429,7 +429,7 @@ class WeatherService:
                     daemon=True,
                     name=f"weather-clip-{cam_id}-{evt_type}",
                 ).start()
-                log.info("[Weather] %s on %s · severity=%.2f · clip building",
+                log.info("[weather] %s on %s · severity=%.2f · clip building",
                          EVENT_LABEL_DE.get(evt_type, evt_type), self._cam_name(cam_id), severity)
 
         # Wetter-Ereignis-Timelapse — separate trigger pipeline that walks
@@ -438,7 +438,7 @@ class WeatherService:
         try:
             self._check_event_tl_triggers(payload)
         except Exception as e:
-            log.warning("[Weather-TL] trigger eval failed: %s", e)
+            log.warning("[weather] trigger eval failed: %s", e)
 
         with self._lock:
             self._status["last_poll_at"] = datetime.now().isoformat(timespec="seconds")
@@ -450,7 +450,7 @@ class WeatherService:
         try:
             self._record_sample(latest, sun)
         except Exception as e:
-            log.warning("[Weather] history record failed: %s", e)
+            log.warning("[weather] history record failed: %s", e)
         # Mirror the last-poll timestamp into the runtime store so the
         # Telegram /status command can show "letzter Poll vor N min".
         try:
@@ -504,7 +504,7 @@ class WeatherService:
                 "azimuth":  float(azimuth(obs, now_dt)),
             }
         except Exception as e:
-            log.debug("[Weather] sun position failed: %s", e)
+            log.debug("[weather] sun position failed: %s", e)
             data = {"altitude": None, "azimuth": None}
         self._sun_cache = (now, data)
         return data
@@ -633,7 +633,7 @@ class WeatherService:
                       api_data: dict, sun_data: dict):
         rt = self.runtimes.get(cam_id)
         if rt is None or rt.weather_prebuffer is None:
-            log.warning("[Weather] cam %s has no prebuffer — clip aborted", cam_id)
+            log.warning("[weather] cam %s has no prebuffer — clip aborted", cam_id)
             return
         clip_cfg = self.cfg.get("clip") or {}
         post_s = int(clip_cfg.get("post_roll_s", 5) or 5)
@@ -646,7 +646,7 @@ class WeatherService:
         post = rt.weather_prebuffer.collect_postroll(session)
         frames = pre + post
         if len(frames) < max(2, fps):
-            log.warning("[Weather] clip %s/%s: only %d frames captured — discarding",
+            log.warning("[weather] clip %s/%s: only %d frames captured — discarding",
                         cam_id, evt, len(frames))
             return
         ts_dt = datetime.now()
@@ -656,14 +656,14 @@ class WeatherService:
         mp4_path  = out_dir / f"{ts_label}.mp4"
         thumb_path = out_dir / f"{ts_label}.jpg"
         if not self._encode_clip(frames, mp4_path, fps):
-            log.warning("[Weather] clip encode failed for %s/%s", cam_id, evt)
+            log.warning("[weather] clip encode failed for %s/%s", cam_id, evt)
             return
         # Thumbnail = middle JPEG frame, written verbatim (no re-encode).
         try:
             mid = frames[len(frames) // 2][1]
             thumb_path.write_bytes(mid)
         except Exception as e:
-            log.debug("[Weather] thumb write failed: %s", e)
+            log.debug("[weather] thumb write failed: %s", e)
         # Manifest.
         manifest = {
             "id":           f"{cam_id}__{evt}__{ts_label}",
@@ -697,7 +697,7 @@ class WeatherService:
         manifest_path = out_dir / f"{ts_label}.json"
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2),
                                  encoding="utf-8")
-        log.info("[Weather] Clip written: %s · %s · %.1fs · sev=%.2f",
+        log.info("[weather] Clip written: %s · %s · %.1fs · sev=%.2f",
                  self._cam_name(cam_id), EVENT_LABEL_DE.get(evt, evt),
                  manifest["duration_s"], severity)
         # Phase 3: per-event Telegram push.
@@ -709,7 +709,7 @@ class WeatherService:
         Stream-copy would be cleanest but mjpeg→h264 transcode is essentially
         free on these clip lengths and gives us a browser-friendly mp4."""
         if not shutil.which("ffmpeg"):
-            log.warning("[Weather] ffmpeg not available — cannot encode clip")
+            log.warning("[weather] ffmpeg not available — cannot encode clip")
             return False
         cmd = [
             "ffmpeg", "-y",
@@ -741,17 +741,17 @@ class WeatherService:
                 _out, err = proc.communicate(timeout=30)
             except subprocess.TimeoutExpired:
                 proc.kill()
-                log.warning("[Weather] ffmpeg timeout — killed")
+                log.warning("[weather] ffmpeg timeout — killed")
                 return False
             if proc.returncode != 0:
-                log.warning("[Weather] ffmpeg rc=%s stderr=%s",
+                log.warning("[weather] ffmpeg rc=%s stderr=%s",
                             proc.returncode, (err or b"").decode("utf-8", "replace")[-300:])
                 return False
             if write_failed:
-                log.debug("[Weather] partial frame write — clip may be short")
+                log.debug("[weather] partial frame write — clip may be short")
             return out_path.exists() and out_path.stat().st_size > 1024
         except Exception as e:
-            log.warning("[Weather] ffmpeg pipe error: %s", e)
+            log.warning("[weather] ffmpeg pipe error: %s", e)
             return False
 
     # ── Read paths used by API endpoints ────────────────────────────────────
@@ -878,7 +878,7 @@ class WeatherService:
                 if p.exists():
                     p.unlink()
             except Exception as e:
-                log.warning("[Weather] delete %s: %s", p.name, e)
+                log.warning("[weather] delete %s: %s", p.name, e)
         return True
 
     def _manifest_path_for(self, sighting_id: str) -> Path | None:
@@ -921,11 +921,11 @@ class WeatherService:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except Exception as e:
-            log.warning("[Weather] history file unparseable, starting fresh: %s", e)
+            log.warning("[weather] history file unparseable, starting fresh: %s", e)
             return
         items = payload.get("samples") if isinstance(payload, dict) else payload
         if not isinstance(items, list):
-            log.warning("[Weather] history file has unexpected shape, starting fresh")
+            log.warning("[weather] history file has unexpected shape, starting fresh")
             return
         kept = 0
         with self._history_lock:
@@ -942,7 +942,7 @@ class WeatherService:
                 clean = {k: values.get(k) for k in HISTORY_FIELDS}
                 self._history.append({"ts": ts, "values": clean})
                 kept += 1
-        log.info("[Weather] history loaded: %d samples from %s", kept, path)
+        log.info("[weather] history loaded: %d samples from %s", kept, path)
 
     def _save_history(self):
         """Atomic write to .tmp + os.replace so a kill -9 mid-write cannot
@@ -951,7 +951,7 @@ class WeatherService:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            log.warning("[Weather] history dir mkdir failed: %s", e)
+            log.warning("[weather] history dir mkdir failed: %s", e)
             return
         with self._history_lock:
             samples = list(self._history)
@@ -971,7 +971,7 @@ class WeatherService:
                     pass
             os.replace(str(tmp), str(path))
         except Exception as e:
-            log.warning("[Weather] history write failed: %s", e)
+            log.warning("[weather] history write failed: %s", e)
 
     def _record_sample(self, latest: dict, sun: dict):
         """Append the latest poll's numeric values to the ring buffer.
@@ -1060,12 +1060,12 @@ class WeatherService:
                 return
             evt = manifest.get("event_type")
             if not (wcfg.get("events") or {}).get(evt, False):
-                log.debug("[Weather] tg push skip: %s disabled in push.weather.events", evt)
+                log.debug("[weather] tg push skip: %s disabled in push.weather.events", evt)
                 return
             min_score = float(wcfg.get("min_score", 0.4) or 0.0)
             score = float(manifest.get("score") or manifest.get("severity") or 0.0)
             if score < min_score:
-                log.info("[Weather] tg push skip: %s score=%.2f < min=%.2f",
+                log.info("[weather] tg push skip: %s score=%.2f < min=%.2f",
                          evt, score, min_score)
                 return
             cam_name = manifest.get("cam_name") or manifest.get("cam_id", "?")
@@ -1078,10 +1078,10 @@ class WeatherService:
             # Quiet hours respect — mirrors push.silent semantics from Phase 1.
             silent = bool(_is_quiet_now((push_cfg.get("quiet_hours") or {})))
             tg.send(cap, video=str(mp4_path), buttons=buttons, silent=silent)
-            log.info("[Weather] Push gesendet: %s (%s, sev=%.2f)",
+            log.info("[weather] Push gesendet: %s (%s, sev=%.2f)",
                      evt, cam_name, score)
         except Exception as e:
-            log.warning("[Weather] tg push failed: %s", e)
+            log.warning("[weather] tg push failed: %s", e)
 
     @staticmethod
     def _api_summary_line(snap: dict) -> str:
@@ -1192,9 +1192,9 @@ class WeatherService:
                 )
                 registered.append(f"{r['period_label']} → {r['run_at'].strftime('%Y-%m-%d %H:%M')}")
         if registered:
-            log.info("[Weather] Recap jobs scheduled: %s", "; ".join(registered))
+            log.info("[weather] Recap jobs scheduled: %s", "; ".join(registered))
         else:
-            log.info("[Weather] Recap jobs: keine zukünftigen Termine ausstehend")
+            log.info("[weather] Recap jobs: keine zukünftigen Termine ausstehend")
 
     def _run_recap_safe(self, r: dict):
         """Wrapper that runs the build in a daemon thread so the scheduler
@@ -1208,18 +1208,18 @@ class WeatherService:
         try:
             cands = self._collect_recap_candidates(r["period_start"], r["period_end"])
             if len(cands) < 3:
-                log.info("[Weather] Recap %s skipped — only %d candidates (need 3)",
+                log.info("[weather] Recap %s skipped — only %d candidates (need 3)",
                          r["period_label"], len(cands))
                 return
             picks = self._pick_recap_clips(cands)
             if len(picks) < 3:
-                log.info("[Weather] Recap %s: only %d picks survived", r["period_label"], len(picks))
+                log.info("[weather] Recap %s: only %d picks survived", r["period_label"], len(picks))
                 return
             self._recaps_dir().mkdir(parents=True, exist_ok=True)
             mp4_path = self._recaps_dir() / f"{r['period_id']}.mp4"
             duration = self._concat_clips([self._sightings_dir().parent / p["clip_path"] for p in picks], mp4_path)
             if not duration:
-                log.warning("[Weather] Recap %s: ffmpeg concat failed", r["period_label"])
+                log.warning("[weather] Recap %s: ffmpeg concat failed", r["period_label"])
                 return
             manifest = {
                 "id":            r["period_id"],
@@ -1234,11 +1234,11 @@ class WeatherService:
             }
             (self._recaps_dir() / f"{r['period_id']}.json").write_text(
                 json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-            log.info("[Weather] Recap built: %s · %d Clips · %ds",
+            log.info("[weather] Recap built: %s · %d Clips · %ds",
                      r["period_label"], len(picks), int(duration))
             self._maybe_push_recap(manifest, mp4_path)
         except Exception as e:
-            log.warning("[Weather] Recap %s build failed: %s", r.get("period_label"), e)
+            log.warning("[weather] Recap %s build failed: %s", r.get("period_label"), e)
 
     def _collect_recap_candidates(self, start_d: date, end_d: date) -> list[dict]:
         root = self._sightings_dir()
@@ -1301,7 +1301,7 @@ class WeatherService:
         H.264 so mixed source resolutions / fps don't trip up the demuxer.
         Returns the total duration in seconds (int) on success, 0 on failure."""
         if not shutil.which("ffmpeg"):
-            log.warning("[Weather] ffmpeg unavailable — cannot build recap")
+            log.warning("[weather] ffmpeg unavailable — cannot build recap")
             return 0
         valid = [p for p in input_paths if p.exists() and p.stat().st_size > 1024]
         if len(valid) < 2:
@@ -1325,7 +1325,7 @@ class WeatherService:
             proc = subprocess.run(cmd, capture_output=True, timeout=300)
             list_file.unlink(missing_ok=True)
             if proc.returncode != 0:
-                log.warning("[Weather] ffmpeg concat rc=%s stderr=%s",
+                log.warning("[weather] ffmpeg concat rc=%s stderr=%s",
                             proc.returncode, (proc.stderr or b"").decode("utf-8", "replace")[-300:])
                 return 0
             # Probe duration via opencv as a cheap fallback (no ffprobe dep).
@@ -1339,10 +1339,10 @@ class WeatherService:
             except Exception:
                 return 0
         except subprocess.TimeoutExpired:
-            log.warning("[Weather] ffmpeg concat timeout — killed")
+            log.warning("[weather] ffmpeg concat timeout — killed")
             return 0
         except Exception as e:
-            log.warning("[Weather] ffmpeg concat error: %s", e)
+            log.warning("[weather] ffmpeg concat error: %s", e)
             return 0
 
     def _maybe_push_recap(self, manifest: dict, mp4_path: Path):
@@ -1361,9 +1361,9 @@ class WeatherService:
                    f"{n} Sichtungen · {mm}:{ss:02d} min")
             buttons = [[("🌐 Alle Sichtungen", self._dashboard_url("#weather"))]]
             tg.send(cap, video=str(mp4_path), buttons=buttons, silent=False)
-            log.info("[Weather] Recap-Push gesendet: %s", manifest.get("period_label"))
+            log.info("[weather] Recap-Push gesendet: %s", manifest.get("period_label"))
         except Exception as e:
-            log.warning("[Weather] recap push failed: %s", e)
+            log.warning("[weather] recap push failed: %s", e)
 
     # ── Recap read helpers (used by API) ────────────────────────────────────
 
@@ -1413,7 +1413,7 @@ class WeatherService:
                 return None
             return dt.astimezone().replace(tzinfo=None)
         except Exception as e:
-            log.info("[Sun-TL] No %s for %s: %s", phase, when or date.today(), e)
+            log.info("[weather] No %s for %s: %s", phase, when or date.today(), e)
             return None
 
     def _sun_jobs_keys(self) -> list[str]:
@@ -1441,7 +1441,7 @@ class WeatherService:
                 pass
         loc = self.server_cfg.get("location") or {}
         if loc.get("lat") is None or loc.get("lon") is None:
-            log.info("[Sun-TL] Standort fehlt — keine Sun-Jobs registriert")
+            log.info("[weather] Standort fehlt — keine Sun-Jobs registriert")
             return
         from apscheduler.triggers.date import DateTrigger
         today = date.today()
@@ -1462,7 +1462,7 @@ class WeatherService:
                 window = int(pcfg.get("window_min", 30) or 30)
                 start_dt = sun_dt - timedelta(minutes=window // 2)
                 if start_dt <= datetime.now():
-                    log.info("[Sun-TL] %s %s @ %s already passed — skipping today",
+                    log.info("[weather] %s %s @ %s already passed — skipping today",
                              cam_name, phase, sun_dt.strftime("%H:%M"))
                     continue
                 key = f"sun_tl_capture_{cam_id}_{phase}_{today.isoformat()}"
@@ -1476,9 +1476,9 @@ class WeatherService:
                     f"{cam_name} {phase} {sun_dt.strftime('%H:%M')} (window {window} min)"
                 )
         if registered:
-            log.info("[Sun-TL] Jobs registered: %s", " · ".join(registered))
+            log.info("[weather] Jobs registered: %s", " · ".join(registered))
         else:
-            log.info("[Sun-TL] Keine Sun-Jobs heute (alle aus oder Fenster vorbei)")
+            log.info("[weather] Keine Sun-Jobs heute (alle aus oder Fenster vorbei)")
 
     def _cfg_cameras(self) -> list[dict]:
         # Read the live, fully-merged camera list from the SettingsStore so
@@ -1504,7 +1504,7 @@ class WeatherService:
         from .frame_helpers import grab_valid_frame, CaptureStats
         rt = self.runtimes.get(cam_id)
         if rt is None or not hasattr(rt, "snapshot_jpeg"):
-            log.warning("[Sun-TL] cam %s nicht verfügbar — capture abgebrochen", cam_id)
+            log.warning("[weather] cam %s nicht verfügbar — capture abgebrochen", cam_id)
             return
         window_min = int(pcfg.get("window_min", 30) or 30)
         interval_s = max(1, int(pcfg.get("interval_s", 3) or 3))
@@ -1524,7 +1524,7 @@ class WeatherService:
         # Wetter-Snapshot zum Trigger-Zeitpunkt (für Score + Recap-Picker).
         api_snapshot = self._latest_api_snapshot_safe()
         end_at = datetime.now() + timedelta(minutes=window_min)
-        log.info("[Sun-TL] Capture start: %s %s (Fenster %d min, %ds-Intervall, %d fps)",
+        log.info("[weather] Capture start: %s %s (Fenster %d min, %ds-Intervall, %d fps)",
                  cam_name, phase, window_min, interval_s, target_fps)
         expected_frames = int((window_min * 60) / max(1, interval_s))
         stats = CaptureStats(out_dir=frames_dir, expected_frames=expected_frames)
@@ -1547,7 +1547,7 @@ class WeatherService:
                     pass
             else:
                 stats.record_invalid()
-                log.info("[Sun-TL] %s slot %05d: 3 invalid grabs, leaving slot empty (%s)",
+                log.info("[weather] %s slot %05d: 3 invalid grabs, leaving slot empty (%s)",
                          cam_name, i, last_reason)
             stats.flush()
             i += 1
@@ -1557,9 +1557,9 @@ class WeatherService:
                 time.sleep(0.5)
                 slept += 0.5
         sun_at_end = self._sun_position()
-        log.info("[Sun-TL] Capture done: %s %s · %d Frames erfasst", cam_name, phase, n_written)
+        log.info("[weather] Capture done: %s %s · %d Frames erfasst", cam_name, phase, n_written)
         if n_written < target_fps * 2:
-            log.warning("[Sun-TL] Zu wenige Frames (%d) — Encode übersprungen", n_written)
+            log.warning("[weather] Zu wenige Frames (%d) — Encode übersprungen", n_written)
             self._cleanup_sun_scratch(frames_dir)
             return
         # Re-use the existing TimelapseBuilder._write_video logic — same
@@ -1573,11 +1573,11 @@ class WeatherService:
             target_seconds = min(target_seconds, 60)  # cap at 60s safety
             written = tb._write_video(images, mp4_path, target_seconds, target_fps)
             if not written or not mp4_path.exists():
-                log.warning("[Sun-TL] Encode failed for %s %s", cam_name, phase)
+                log.warning("[weather] Encode failed for %s %s", cam_name, phase)
                 self._cleanup_sun_scratch(frames_dir)
                 return
         except Exception as e:
-            log.warning("[Sun-TL] Encode crash %s %s: %s", cam_name, phase, e)
+            log.warning("[weather] Encode crash %s %s: %s", cam_name, phase, e)
             self._cleanup_sun_scratch(frames_dir)
             return
         # Write thumb from the middle JPEG (~halfway through the sun event).
@@ -1629,7 +1629,7 @@ class WeatherService:
             pass
         (out_dir / f"{stem}.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-        log.info("[Sun-TL] Manifest geschrieben: %s · score=%.2f", manifest["id"], score)
+        log.info("[weather] Manifest geschrieben: %s · score=%.2f", manifest["id"], score)
         self._cleanup_sun_scratch(frames_dir)
         # Per-event Telegram push reuses the existing weather pipeline —
         # _maybe_push_telegram already gates on push.weather.events[<type>].
@@ -1755,13 +1755,13 @@ class WeatherService:
                 # detectors first, then emitting one cooldown line if any.
                 fired = self._evaluate_event_tl_detectors(slices, evt_cfg)
                 if fired:
-                    log.info("[Weather-TL] Cooldown active (%dh %02dmin remaining) — %s skipped on %s",
+                    log.info("[weather] Cooldown active (%dh %02dmin remaining) — %s skipped on %s",
                              mins // 60, mins % 60, fired[0], self._cam_name(cam_id))
                 continue
             if self._event_tl_daily_cap_hit(cam_id):
                 fired = self._evaluate_event_tl_detectors(slices, evt_cfg)
                 if fired:
-                    log.info("[Weather-TL] Daily limit reached (%d/day), skipping %s on %s",
+                    log.info("[weather] Daily limit reached (%d/day), skipping %s on %s",
                              self._EVENT_TL_DAILY_CAP, fired[0], self._cam_name(cam_id))
                 continue
             triggers = self._evaluate_event_tl_detectors(slices, evt_cfg)
@@ -1773,7 +1773,7 @@ class WeatherService:
             window_min = int(evt_cfg.get("window_min", 60) or 60)
             interval_s = max(1, int(evt_cfg.get("interval_s", 6) or 6))
             fps        = max(1, int(evt_cfg.get("fps", 24) or 24))
-            log.info("[Weather-TL] %s on %s · score=%.2f · capture starting (%d min, %ds-Intervall, %d fps)",
+            log.info("[weather] %s on %s · score=%.2f · capture starting (%d min, %ds-Intervall, %d fps)",
                      trig_kind, self._cam_name(cam_id), score, window_min, interval_s, fps)
             threading.Thread(
                 target=self._run_event_tl_capture,
@@ -1904,7 +1904,7 @@ class WeatherService:
         from .frame_helpers import grab_valid_frame, CaptureStats
         rt = self.runtimes.get(cam_id)
         if rt is None or not hasattr(rt, "snapshot_jpeg"):
-            log.warning("[Weather-TL] cam %s nicht verfügbar — capture abgebrochen", cam_id)
+            log.warning("[weather] cam %s nicht verfügbar — capture abgebrochen", cam_id)
             return
         cam_name = self._cam_name(cam_id)
         out_dir = self._sightings_dir() / cam_id / "event_timelapse"
@@ -1934,7 +1934,7 @@ class WeatherService:
                     pass
             else:
                 stats.record_invalid()
-                log.info("[Weather-TL] %s slot %05d: 3 invalid grabs, leaving slot empty (%s)",
+                log.info("[weather] %s slot %05d: 3 invalid grabs, leaving slot empty (%s)",
                          cam_name, i, last_reason)
             stats.flush()
             i += 1
@@ -1942,9 +1942,9 @@ class WeatherService:
             while slept < interval_s and datetime.now() < end_at:
                 time.sleep(0.5)
                 slept += 0.5
-        log.info("[Weather-TL] Capture done: %s %s · %d Frames", cam_name, trigger, n_written)
+        log.info("[weather] Capture done: %s %s · %d Frames", cam_name, trigger, n_written)
         if n_written < fps * 2:
-            log.warning("[Weather-TL] Zu wenige Frames (%d) — Encode übersprungen", n_written)
+            log.warning("[weather] Zu wenige Frames (%d) — Encode übersprungen", n_written)
             self._cleanup_sun_scratch(frames_dir)
             return
         try:
@@ -1954,11 +1954,11 @@ class WeatherService:
             target_seconds = max(15, min(45, n_written // fps))
             written = tb._write_video(images, mp4_path, target_seconds, fps)
             if not written or not mp4_path.exists():
-                log.warning("[Weather-TL] Encode failed: %s %s", cam_name, trigger)
+                log.warning("[weather] Encode failed: %s %s", cam_name, trigger)
                 self._cleanup_sun_scratch(frames_dir)
                 return
         except Exception as e:
-            log.warning("[Weather-TL] Encode crash %s %s: %s", cam_name, trigger, e)
+            log.warning("[weather] Encode crash %s %s: %s", cam_name, trigger, e)
             self._cleanup_sun_scratch(frames_dir)
             return
         try:
@@ -1998,7 +1998,7 @@ class WeatherService:
             pass
         (out_dir / f"{stem}.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-        log.info("[Weather-TL] Manifest geschrieben: %s · score=%.2f", manifest["id"], score)
+        log.info("[weather] Manifest geschrieben: %s · score=%.2f", manifest["id"], score)
         self._cleanup_sun_scratch(frames_dir)
         # Optional Telegram push reuses the existing weather pipeline. The
         # event_type for push gating is the trigger name (matches the

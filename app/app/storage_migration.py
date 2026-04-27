@@ -116,15 +116,15 @@ def _move_file(src: Path, dst: Path):
                 src_mtime = dst_mtime = 0.0
             if src_mtime > dst_mtime:
                 src.replace(dst)
-                log.debug("[Migration] overwrite %s (newer)", dst)
+                log.debug("[migration] overwrite %s (newer)", dst)
             else:
-                log.debug("[Migration] drop older %s (kept %s)", src, dst)
+                log.debug("[migration] drop older %s (kept %s)", src, dst)
                 src.unlink()
             return
         dst.parent.mkdir(parents=True, exist_ok=True)
         src.replace(dst)
     except Exception as e:
-        log.error("[Migration] move failed: %s → %s: %s", src, dst, e)
+        log.error("[migration] move failed: %s → %s: %s", src, dst, e)
 
 
 def _merge_folder(src: Path, target: Path) -> int:
@@ -149,7 +149,7 @@ def _merge_folder(src: Path, target: Path) -> int:
     try:
         src.rmdir()
     except OSError as e:
-        log.warning("[Migration] source not empty after merge: %s (%s)", src, e)
+        log.warning("[migration] source not empty after merge: %s (%s)", src, e)
     return moved
 
 
@@ -180,7 +180,7 @@ def _rewrite_event_jsons(events_dir: Path, old_ids: list[str], new_id: str) -> i
             tmp.replace(jf)
             rewritten += 1
         except Exception as e:
-            log.error("[Migration] event JSON rewrite failed for %s: %s", jf, e)
+            log.error("[migration] event JSON rewrite failed for %s: %s", jf, e)
     return rewritten
 
 
@@ -248,7 +248,7 @@ def _backup_settings(settings_store) -> Path | None:
         shutil.copy2(str(src), str(dst))
         return dst
     except Exception as e:
-        log.warning("[Migration] settings backup failed: %s", e)
+        log.warning("[migration] settings backup failed: %s", e)
         return None
 
 
@@ -260,7 +260,7 @@ def migrate(settings_store, storage_root) -> dict:
     storage_root = Path(storage_root)
     cams = list(settings_store.data.get("cameras", []) or [])
     if not cams:
-        log.info("[Migration] no cameras configured — nothing to migrate.")
+        log.info("[migration] no cameras configured — nothing to migrate.")
         return {"cameras": 0, "merges": 0, "rewrites": 0, "noop": True}
 
     # Pass 1: analysis only, no disk writes.
@@ -279,7 +279,7 @@ def migrate(settings_store, storage_root) -> dict:
                          and not any(obj_det.iterdir()))
 
     if not needs_work and not obj_det_empty_dir:
-        log.info("[Migration] all storage paths already in canonical form — no migration needed.")
+        log.info("[migration] all storage paths already in canonical form — no migration needed.")
         return {"cameras": len(cams), "merges": 0, "rewrites": 0, "noop": True}
 
     # Pass 2: take a tagged settings backup, then execute.
@@ -299,7 +299,7 @@ def migrate(settings_store, storage_root) -> dict:
             for src in sources:
                 moved = _merge_folder(src, target)
                 if moved > 0 or not src.exists():
-                    log.info("[Migration] %s: merged %s → %s (%d files)",
+                    log.info("[migration] %s: merged %s → %s (%d files)",
                              area, src.name, new_id, moved)
                     total_merges += 1
         # Rewrite event JSONs in the target motion_detection folder so any
@@ -323,19 +323,19 @@ def migrate(settings_store, storage_root) -> dict:
             settings_store.save()
         except Exception as e:
             settings_save_ok = False
-            log.error("[Migration] settings.json save failed (%s) — restoring from %s",
+            log.error("[migration] settings.json save failed (%s) — restoring from %s",
                       e, backup_path.name if backup_path else "?")
             if backup_path and backup_path.exists():
                 try:
                     shutil.copy2(str(backup_path), str(settings_store.path))
                 except Exception as e2:
-                    log.error("[Migration] settings restore also failed: %s", e2)
+                    log.error("[migration] settings restore also failed: %s", e2)
 
     # Cleanup the orphaned object_detection placeholder.
     if obj_det.exists() and obj_det.is_dir():
         try:
             obj_det.rmdir()  # only succeeds when empty
-            log.info("[Migration] removed empty placeholder dir storage/object_detection/")
+            log.info("[migration] removed empty placeholder dir storage/object_detection/")
         except OSError:
             pass  # not empty — leave it
 
@@ -349,7 +349,7 @@ def migrate(settings_store, storage_root) -> dict:
         "noop":     False,
     }
     log.info(
-        "[Migration] processed %d cameras, %d folder merges, %d event JSONs rewritten, "
+        "[migration] processed %d cameras, %d folder merges, %d event JSONs rewritten, "
         "settings backed up to %s",
         summary["cameras"], summary["merges"], summary["rewrites"],
         backup_path.name if backup_path else "(no backup)",

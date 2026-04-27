@@ -36,7 +36,7 @@ def cleanup(storage_root: str | Path, *, dry_run: bool = False,
 
     frames_root = Path(storage_root) / "timelapse_frames"
     if not frames_root.exists():
-        log.warning("[cleanup] %s does not exist — nothing to do", frames_root)
+        log.warning("[storage] %s does not exist — nothing to do", frames_root)
         return []
 
     summaries: list[dict] = []
@@ -59,7 +59,7 @@ def cleanup(storage_root: str | Path, *, dry_run: bool = False,
                     try:
                         img = cv2.imread(str(jpg))
                     except Exception as e:
-                        log.warning("[cleanup] read failed: %s (%s)", jpg, e)
+                        log.warning("[storage] read failed: %s (%s)", jpg, e)
                         continue
                     ok, reason = is_valid_frame(img)
                     if ok:
@@ -72,7 +72,7 @@ def cleanup(storage_root: str | Path, *, dry_run: bool = False,
                         try:
                             jpg.unlink()
                         except Exception as e:
-                            log.warning("[cleanup] unlink failed: %s (%s)", jpg, e)
+                            log.warning("[storage] unlink failed: %s (%s)", jpg, e)
             if scanned:
                 summaries.append({
                     "cam_id": cam_dir.name,
@@ -84,7 +84,7 @@ def cleanup(storage_root: str | Path, *, dry_run: bool = False,
                     "dry_run": dry_run,
                 })
                 log.info(
-                    "[cleanup] %s/%s: scanned %d, kept %d, %s %d (first 5: %s)",
+                    "[storage] %s/%s: scanned %d, kept %d, %s %d (first 5: %s)",
                     cam_dir.name, prof_dir.name,
                     scanned, kept,
                     "would delete" if dry_run else "deleted",

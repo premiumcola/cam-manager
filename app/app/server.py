@@ -12,32 +12,11 @@ import cv2
 import logging
 from collections import deque
 
-class _LogBuffer(logging.Handler):
-    def __init__(self, maxlen: int = 400):
-        super().__init__()
-        self.setFormatter(logging.Formatter("%(message)s"))
-        self._records: deque = deque(maxlen=maxlen)
-
-    def emit(self, record: logging.LogRecord):
-        try:
-            self._records.append({
-                "ts": datetime.fromtimestamp(record.created).strftime("%H:%M:%S"),
-                "level": record.levelname,
-                "logger": record.name,
-                "msg": self.format(record),
-            })
-        except Exception:
-            pass
-
-    def get(self, min_level: int = logging.DEBUG) -> list:
-        return [r for r in self._records if logging.getLevelName(r["level"]) >= min_level]
-
-log_buffer = _LogBuffer()
-logging.getLogger().addHandler(log_buffer)
-logging.getLogger().setLevel(logging.DEBUG)
-# suppress noisy libraries
-for _noisy in ("urllib3", "werkzeug", "httpx", "httpcore", "telegram"):
-    logging.getLogger(_noisy).setLevel(logging.WARNING)
+# Centralised logging setup — installs the explicit StreamHandler with a
+# parseable format, the in-memory buffer for the web UI, and the WARNING+
+# rate-limit filter. Must run before any subsystem imports that emit logs.
+from .logging_setup import setup_logging, log_buffer, console_level
+setup_logging()
 
 import socket
 import ipaddress
@@ -140,6 +119,122 @@ storage_root = Path(base_cfg["storage"]["root"])
 web_root = Path(__file__).resolve().parent.parent / "web"
 app = Flask(__name__, template_folder=str(web_root / "templates"), static_folder=str(web_root / "static"))
 
+
+def _emit_boot_inventory(base_cfg: dict, storage_root: Path):
+    """One-time inventory log at process start. Every line prefixed [boot]
+    so a single grep tells the operator what got loaded. Cheap — runs once
+    and never again."""
+    import platform as _plat
+    import shutil as _sh
+    import subprocess as _sp
+    log = logging.getLogger("app.app.boot")
+    log.info("[boot] ── Tam-Spy starting ──")
+    # Git sha — best-effort. Caches on its own across calls because we
+    # only call this once.
+    git_sha = "n/a"
+    git_branch = ""
+    try:
+        repo = Path(__file__).resolve().parent.parent.parent
+        if (repo / ".git").exists():
+            git_sha = _sp.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=str(repo), stderr=_sp.DEVNULL, timeout=2,
+            ).decode().strip() or "n/a"
+            try:
+                git_branch = _sp.check_output(
+                    ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                    cwd=str(repo), stderr=_sp.DEVNULL, timeout=2,
+                ).decode().strip()
+            except Exception:
+                git_branch = ""
+    except Exception:
+        pass
+    build_tag = os.environ.get("BUILD_COMMIT") or os.environ.get("BUILD_DATE") or ""
+    log.info("[boot] git: %s%s%s", git_sha,
+             f" · branch={git_branch}" if git_branch else "",
+             f" · build={build_tag}" if build_tag else "")
+    # Versions
+    try:
+        ffmpeg_v = "n/a"
+        ffmpeg_bin = _sh.which("ffmpeg")
+        if ffmpeg_bin:
+            try:
+                head = _sp.check_output([ffmpeg_bin, "-version"],
+                                         stderr=_sp.STDOUT, timeout=3
+                                         ).decode(errors="replace").splitlines()[0]
+                # "ffmpeg version 5.1.4 Copyright …" → "5.1.4"
+                parts = head.split()
+                if len(parts) >= 3:
+                    ffmpeg_v = parts[2]
+            except Exception:
+                ffmpeg_v = "?"
+    except Exception:
+        ffmpeg_v = "?"
+    log.info("[boot] python=%s · opencv=%s · ffmpeg=%s · platform=%s",
+             _plat.python_version(), getattr(cv2, "__version__", "?"),
+             ffmpeg_v, _plat.platform(terse=True))
+    # Paths + log level
+    lvl_name = logging.getLevelName(console_level())
+    log.info("[boot] storage_root=%s · settings=%s · log_level=%s",
+             storage_root, storage_root / "settings.json", lvl_name)
+    # Camera roster — counts, ids, summary. Per-cam bind log lines come
+    # later from rebuild_runtimes().
+    cams = base_cfg.get("cameras") or settings.data.get("cameras", []) or []
+    cam_ids = [c.get("id", "?") for c in cams]
+    log.info("[boot] cameras configured: %d (ids: %s)",
+             len(cams), ", ".join(cam_ids) if cam_ids else "—")
+    # Detection / classifier setup
+    proc = base_cfg.get("processing", {}) or {}
+    det = proc.get("detection") or {}
+    det_mode = det.get("mode", "motion_only")
+    log.info("[boot] detection: mode=%s · model=%s · min_score=%s · region_filter=%s",
+             det_mode, det.get("coral_model_path") or det.get("cpu_model_path") or "—",
+             det.get("min_score", "?"),
+             "on" if det.get("region_filter", True) else "off")
+    bird = proc.get("bird_species") or {}
+    log.info("[boot] bird_classifier: %s · model=%s",
+             "enabled" if bird.get("enabled", False) else "disabled",
+             bird.get("model_path") or "—")
+    wild = proc.get("wildlife") or {}
+    log.info("[boot] wildlife_classifier: %s",
+             "enabled" if wild.get("enabled", False) else "disabled")
+    # Coral USB presence — best-effort lsusb match. Skip cleanly if lsusb
+    # missing (Windows host, etc.).
+    coral = "not found"
+    try:
+        if _sh.which("lsusb"):
+            out = _sp.check_output(["lsusb"], stderr=_sp.DEVNULL, timeout=2
+                                    ).decode(errors="replace")
+            if "Google" in out and "1a6e:089a" in out.replace(" ", ""):
+                coral = "found (USB)"
+            elif "Global Unichip" in out:
+                coral = "found (USB unichip)"
+    except Exception:
+        pass
+    log.info("[boot] coral tpu: %s", coral)
+    # Weather + Telegram + MQTT (config snapshots — runtime status comes
+    # later when each subsystem starts).
+    w = settings.data.get("weather", {}) or {}
+    loc = base_cfg.get("server", {}).get("location") or {}
+    lat, lon = loc.get("lat"), loc.get("lon")
+    log.info("[boot] weather: %s · location=%s · interval=%ss",
+             "enabled" if w.get("enabled", True) else "disabled",
+             f"{lat},{lon}" if lat is not None and lon is not None else "none",
+             w.get("poll_interval", 300))
+    tg = settings.data.get("telegram", {}) or {}
+    chat_masked = ""
+    if tg.get("chat_id"):
+        cid = str(tg["chat_id"])
+        chat_masked = (cid[:3] + "…" + cid[-3:]) if len(cid) > 6 else cid
+    log.info("[boot] telegram: %s · chat=%s",
+             "enabled" if tg.get("enabled") else "disabled",
+             chat_masked or "—")
+    mq = settings.data.get("mqtt", {}) or {}
+    log.info("[boot] mqtt: %s · host=%s",
+             "enabled" if mq.get("enabled") else "disabled",
+             mq.get("host") or "—")
+
+
 import hashlib as _hashlib
 import pathlib as _pathlib
 _static_hashes: dict[str, str] = {}
@@ -162,6 +257,14 @@ store = EventStore(str(storage_root))
 # below rmdirs it when empty; future per-classifier physical separation,
 # if we ever do it, will route by top_label at write time instead.
 settings = SettingsStore(storage_root / "settings.json", base_cfg)
+# Boot inventory — single block summarising the bootstrap state. Runs
+# right after settings load, before any subsystem starts emitting its
+# own log lines, so the inventory sits at the top of every restart's
+# `docker logs` tail.
+try:
+    _emit_boot_inventory(base_cfg, storage_root)
+except Exception as _e:
+    logging.getLogger(__name__).warning("[boot] inventory render failed: %s", _e)
 # One-shot semantic-id migration. Idempotent — on a clean boot it logs
 # a single "no migration needed" line. Must run BEFORE rebuild_runtimes()
 # so the camera threads pick up the new ids on first start, never the old.
@@ -170,7 +273,7 @@ try:
     _migrate_storage(settings, storage_root)
 except Exception as _e:
     logging.getLogger(__name__).error(
-        "[Migration] storage migration failed (continuing with existing state): %s", _e,
+        "[migration] storage migration failed (continuing with existing state): %s", _e,
         exc_info=True,
     )
 cfg = settings.export_effective_config(base_cfg)
@@ -212,7 +315,7 @@ def _reload_telegram_service():
         new_cfg = get_effective_config()
         new_tg_cfg = new_cfg.get("telegram", {}) or {}
         if telegram_service is not None and _last_telegram_cfg_snapshot == new_tg_cfg:
-            log.debug("[Telegram] Reload skipped — config unchanged")
+            log.debug("[tg] Reload skipped — config unchanged")
             return
         was_polling = False
         if telegram_service is not None:
@@ -225,7 +328,7 @@ def _reload_telegram_service():
             try:
                 telegram_service.stop(reason="settings reload")
             except Exception as e:
-                log.warning("[Telegram] Stop during reload failed: %s", e)
+                log.warning("[tg] Stop during reload failed: %s", e)
             telegram_service = None
             # Telegram's getUpdates slot can stay reserved for a couple of
             # seconds after we close it; without this pause the new bot's
@@ -233,7 +336,7 @@ def _reload_telegram_service():
             # trips the Conflict error in a tight loop.
             if was_polling:
                 time.sleep(3)
-        log.info("[Telegram] Starting fresh service after reload")
+        log.info("[tg] Starting fresh service after reload")
         telegram_service = TelegramService(
             new_tg_cfg,
             store=store,
@@ -316,10 +419,10 @@ def restart_single_camera(cam_id: str, *, reason: str = "bound"):
     _runtime_cfgs.pop(cam_id, None)
     cam_cfg = get_camera_cfg(cam_id)
     if not cam_cfg:
-        log.info("[Boot] cam %s: skipped (not in settings)", cam_id)
+        log.info("[boot] cam %s: skipped (not in settings)", cam_id)
         return
     if not cam_cfg.get("enabled", True):
-        log.info("[Boot] cam %s: skipped (disabled)", cam_id)
+        log.info("[boot] cam %s: skipped (disabled)", cam_id)
         return
     try:
         rt = CameraRuntime(cam_id, get_camera_cfg, cfg, store, telegram_service,
@@ -329,11 +432,11 @@ def restart_single_camera(cam_id: str, *, reason: str = "bound"):
         _runtime_cfgs[cam_id] = _copy.deepcopy(cam_cfg)
         rt.start()
         if reason == "bound":
-            log.info("[Boot] cam %s: bound runtime", cam_id)
+            log.info("[boot] cam %s: bound runtime", cam_id)
         else:
-            log.info("[Boot] cam %s: %s", cam_id, reason)
+            log.info("[boot] cam %s: %s", cam_id, reason)
     except Exception as e:
-        log.error("[Boot] cam %s: constructor failed: %s — will retry",
+        log.error("[boot] cam %s: constructor failed: %s — will retry",
                   cam_id, e, exc_info=True)
 
 
@@ -370,13 +473,14 @@ def rebuild_runtimes():
     expected = list(new_cam_cfgs.keys())
     running = sorted(runtimes.keys())
     missing = sorted(set(expected) - set(running))
-    log.info("[Boot] runtimes ready: %d camera(s) (ids: %s)%s",
+    log.info("[boot] runtimes ready: %d camera(s) (ids: %s)%s",
              len(running),
              ", ".join(running) if running else "—",
              f" — {len(missing)} skipped/failed: {', '.join(missing)}" if missing else "")
 
 
 rebuild_runtimes()
+logging.getLogger("app.app.boot").info("[boot] ── inventory complete ──")
 
 
 def _startup_media_scan():
@@ -389,9 +493,9 @@ def _startup_media_scan():
             public_base = (effective.get("server", {}).get("public_base_url") or "").rstrip("/")
             count = store.scan_media_files(cam_ids, public_base_url=public_base)
             if count:
-                logging.getLogger(__name__).info("[startup] MediaScan: %d orphaned files registered", count)
+                logging.getLogger(__name__).info("[boot] MediaScan: %d orphaned files registered", count)
         except Exception as e:
-            logging.getLogger(__name__).warning("[startup] MediaScan failed: %s", e)
+            logging.getLogger(__name__).warning("[boot] MediaScan failed: %s", e)
     t = threading.Thread(target=_do_scan, daemon=True)
     t.start()
 
@@ -405,15 +509,210 @@ def _run_daily_cleanup():
     try:
         removed = store.cleanup_old(retention)
         if removed:
-            logging.getLogger(__name__).info(f"[cleanup] Removed {removed} old event files (>{retention}d)")
+            logging.getLogger(__name__).info(f"[storage] Removed {removed} old event files (>{retention}d)")
     except Exception as e:
-        logging.getLogger(__name__).warning(f"[cleanup] Failed: {e}")
+        logging.getLogger(__name__).warning(f"[storage] Failed: {e}")
     t = threading.Timer(86400, _run_daily_cleanup)
     t.daemon = True
     t.start()
 
 
 _run_daily_cleanup()
+
+
+# ── Heartbeat + shutdown ─────────────────────────────────────────────────────
+_BOOT_TS = time.time()
+_DISK_FREE_CACHE: list = [0.0, 0.0]  # (last_check_ts, free_gb)
+
+
+def _disk_free_gb_cached() -> float:
+    import shutil as _sh
+    now = time.time()
+    if (now - _DISK_FREE_CACHE[0]) < 60.0 and _DISK_FREE_CACHE[1] > 0:
+        return _DISK_FREE_CACHE[1]
+    try:
+        free_gb = _sh.disk_usage(str(storage_root)).free / (1024 ** 3)
+    except Exception:
+        free_gb = 0.0
+    _DISK_FREE_CACHE[0] = now
+    _DISK_FREE_CACHE[1] = free_gb
+    return free_gb
+
+
+def _format_uptime(seconds: float) -> str:
+    secs = int(max(0, seconds))
+    h, rem = divmod(secs, 3600)
+    m = rem // 60
+    if h >= 24:
+        d, h = divmod(h, 24)
+        return f"{d}d{h}h{m:02d}m"
+    return f"{h}h{m:02d}m"
+
+
+def _heartbeat_emit():
+    """Single periodic [heartbeat] line that summarises every subsystem in
+    one row. Reuses values already exposed elsewhere (rt.status(), the
+    weather runtime poll ts, the polling status). When something is
+    unhealthy, the line escalates to WARNING so the rate-limit filter
+    coalesces repeats without losing the signal."""
+    log = logging.getLogger("app.app.heartbeat")
+    parts = [f"uptime={_format_uptime(time.time() - _BOOT_TS)}"]
+    unhealthy = False
+    # Camera roster
+    cam_bits = []
+    cams_iter = list(runtimes.items())
+    cam_bits_count = len(cams_iter)
+    for cam_id, rt in cams_iter:
+        try:
+            st = rt.status() or {}
+        except Exception:
+            st = {}
+        name = (st.get("name") or cam_id).split()[0]  # one word per cam keeps the line short
+        if st.get("status") in ("active", "starting"):
+            fps = st.get("preview_fps") or 0
+            r24 = st.get("reconnect_count_24h", 0)
+            cam_bits.append(f"{name} {fps:.0f}fps r24h={r24}")
+        else:
+            age = st.get("frame_age_s")
+            age_str = f"{int(age) // 60}m" if isinstance(age, (int, float)) else "?"
+            cam_bits.append(f"{name} OFFLINE (last frame {age_str} ago)")
+            unhealthy = True
+    parts.append(f"cams={cam_bits_count} ({', '.join(cam_bits) if cam_bits else '—'})")
+    # Weather
+    try:
+        last_iso = settings.runtime_get("weather_last_poll_ts")
+        if last_iso:
+            age_min = int((time.time() - float(last_iso)) / 60)
+            if age_min < 15:
+                wpart = f"weather=ok (last poll {age_min}m"
+            else:
+                wpart = f"weather=stale (last poll {age_min}m"
+                unhealthy = True
+            # Active events from weather_service.status()
+            active = []
+            try:
+                if weather_service:
+                    cur = (weather_service.status() or {}).get("current_state") or {}
+                    from .weather_service import EVENT_LABEL_DE as _W_LBL
+                    active = [_W_LBL.get(k, k) for k, on in cur.items() if on]
+            except Exception:
+                pass
+            wpart += f", active={', '.join(active) if active else 'keine'})"
+            parts.append(wpart)
+        else:
+            parts.append("weather=no-poll-yet")
+    except Exception:
+        pass
+    # Coral inference avg
+    coral_avgs = []
+    for _id, rt in cams_iter:
+        try:
+            v = (rt.status() or {}).get("inference_avg_ms")
+        except Exception:
+            v = None
+        if isinstance(v, (int, float)) and v > 0:
+            coral_avgs.append(v)
+    if coral_avgs:
+        parts.append(f"coral={sum(coral_avgs) / len(coral_avgs):.0f}ms")
+    # Disk
+    free_gb = _disk_free_gb_cached()
+    if free_gb < 10:
+        parts.append(f"disk={free_gb:.1f}GB free  ⚠")
+        unhealthy = True
+    elif free_gb < 25:
+        parts.append(f"disk={free_gb:.0f}GB free")
+        unhealthy = True
+    else:
+        parts.append(f"disk={free_gb:.0f}GB free")
+    # Telegram polling
+    try:
+        ps = telegram_service.get_polling_status() if telegram_service else {}
+    except Exception:
+        ps = {}
+    pstate = ps.get("state", "?")
+    if pstate == "active":
+        parts.append(f"tg=polling {ps.get('since_seconds', 0) // 60}m")
+    else:
+        parts.append(f"tg={pstate}")
+        unhealthy = True
+    # Emit
+    msg = "[heartbeat] " + " · ".join(parts)
+    if unhealthy:
+        log.warning(msg)
+    else:
+        log.info(msg)
+    # Re-arm.
+    t = threading.Timer(300.0, _heartbeat_emit)
+    t.daemon = True
+    t.start()
+
+
+# Fire the first heartbeat 60 s after boot so the inventory block + first
+# poll cycles have settled before the line lands; subsequent ticks every
+# 5 minutes inside the timer loop.
+_first_hb = threading.Timer(60.0, _heartbeat_emit)
+_first_hb.daemon = True
+_first_hb.start()
+
+
+def _emit_shutdown_bilanz(reason: str = "signal"):
+    """SIGTERM / atexit final log block. Per-cam session totals + closing
+    boot line. Best-effort: any individual rt.status() failure is logged
+    locally and we keep going."""
+    log = logging.getLogger("app.app.boot")
+    log.info("[boot] ── Tam-Spy stopping (reason=%s) ──", reason)
+    for cam_id, rt in list(runtimes.items()):
+        try:
+            st = rt.status() or {}
+        except Exception:
+            st = {}
+        try:
+            log.info(
+                "[cam:%s] session: today_events=%s reconnects=%s reconnects_24h=%s uptime=%s",
+                cam_id,
+                st.get("today_events", "?"),
+                st.get("reconnect_count", "?"),
+                st.get("reconnect_count_24h", "?"),
+                _format_uptime(time.time() - _BOOT_TS),
+            )
+        except Exception:
+            pass
+    log.info("[boot] ── stopped cleanly ──")
+
+
+def _install_shutdown_hooks():
+    """SIGTERM (docker stop), SIGINT (Ctrl-C), and atexit all funnel into
+    _emit_shutdown_bilanz. Idempotent — multiple signals only log once."""
+    import atexit
+    import signal as _signal
+    fired = [False]
+
+    def _once(reason: str):
+        if fired[0]:
+            return
+        fired[0] = True
+        try:
+            _emit_shutdown_bilanz(reason)
+        except Exception as e:
+            logging.getLogger("app.app.boot").error(
+                "[boot] shutdown bilanz failed: %s", e, exc_info=True,
+            )
+
+    def _sig_handler(signum, frame):
+        name = {15: "SIGTERM", 2: "SIGINT"}.get(signum, f"signal {signum}")
+        _once(name)
+
+    try:
+        _signal.signal(_signal.SIGTERM, _sig_handler)
+        _signal.signal(_signal.SIGINT, _sig_handler)
+    except Exception as e:
+        logging.getLogger("app.app.boot").debug(
+            "[boot] signal handler install skipped: %s", e
+        )
+    atexit.register(lambda: _once("atexit"))
+
+
+_install_shutdown_hooks()
 
 
 def _migrate_timelapse_events():
@@ -542,7 +841,7 @@ def _generate_missing_thumbnails():
                     log.debug("[thumb] failed for %s: %s", mp4.name, e)
                 import time as _time; _time.sleep(0.05)  # pace startup
         if count:
-            log.info("[startup] Generated %d missing timelapse thumbnails", count)
+            log.info("[boot] Generated %d missing timelapse thumbnails", count)
     threading.Thread(target=_do, daemon=True).start()
 
 
@@ -1957,7 +2256,7 @@ def api_telegram_status():
 @app.post('/api/telegram/test')
 def api_telegram_test():
     tg_cfg = settings.export_effective_config(base_cfg).get("telegram", {})
-    logging.getLogger(__name__).info("[Telegram] Test: enabled=%s token_set=%s chat_id=%s",
+    logging.getLogger(__name__).info("[tg] Test: enabled=%s token_set=%s chat_id=%s",
         tg_cfg.get("enabled"), bool(tg_cfg.get("token")), tg_cfg.get("chat_id"))
     if not telegram_service or not telegram_service.enabled:
         reasons = []

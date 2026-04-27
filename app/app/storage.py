@@ -352,10 +352,10 @@ class EventStore:
         cutoff = datetime.now() - timedelta(days=retention_days)
         removed = 0
         if not self.events_dir.exists():
-            log.info("[cleanup] motion_detection/ not found, nothing to clean")
+            log.info("[storage] motion_detection/ not found, nothing to clean")
             return 0
         log.info(
-            "[cleanup] autoclean: retention=%dd cutoff=%s | "
+            "[storage] autoclean: retention=%dd cutoff=%s | "
             "eligible: motion snapshots + event JSON (motion_detection/) | "
             "protected: timelapse videos (timelapse/) — separate storage, never touched by autoclean",
             retention_days, cutoff.strftime("%Y-%m-%d")
@@ -365,7 +365,7 @@ class EventStore:
                 p.unlink(missing_ok=True)
                 removed += 1
         if removed:
-            log.info("[cleanup] removed %d files (motion events + snapshots older than %dd)", removed, retention_days)
+            log.info("[storage] removed %d files (motion events + snapshots older than %dd)", removed, retention_days)
         else:
-            log.info("[cleanup] nothing removed (all motion_detection/ files within %dd retention)", retention_days)
+            log.info("[storage] nothing removed (all motion_detection/ files within %dd retention)", retention_days)
         return removed

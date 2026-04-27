@@ -223,9 +223,9 @@ class TimelapseBuilder:
             valid_paths.append(img_path)  # keep all valid frames regardless of duplicates
 
         total_input = skipped + len(valid_paths)
-        # One-line build summary in the structured "[Timelapse-Build]" prefix
+        # One-line build summary in the structured "[timelapse]" prefix
         # so log filters can pull all encode outcomes at a glance.
-        log.info("[Timelapse-Build] %s: %d frames total, %d valid, %d skipped (grey/colorbar/corrupt)",
+        log.info("[timelapse] %s: %d frames total, %d valid, %d skipped (grey/colorbar/corrupt)",
                  out_path.name, total_input, len(valid_paths), skipped)
         if skipped > 0:
             log.info("timelapse: skipped %d/%d corrupt frames for %s",

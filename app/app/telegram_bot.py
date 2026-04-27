@@ -104,9 +104,9 @@ class TelegramService:
             if not self.cfg.get("enabled"): reasons.append("enabled=false")
             if not self.cfg.get("token"): reasons.append("token leer")
             if not self.cfg.get("chat_id"): reasons.append("chat_id leer")
-            log.info("[Telegram] Deaktiviert: %s", ", ".join(reasons) if reasons else "unbekannt")
+            log.info("[tg] Deaktiviert: %s", ", ".join(reasons) if reasons else "unbekannt")
         else:
-            log.info("[Telegram] Aktiv: chat_id=%s token=%s…", self.chat_id, self.token[:8] if self.token else "")
+            log.info("[tg] Aktiv: chat_id=%s token=%s…", self.chat_id, self.token[:8] if self.token else "")
         self.store = store
         self.runtimes = runtimes or {}
         self.global_cfg = global_cfg
@@ -167,15 +167,15 @@ class TelegramService:
         Idempotent: a second call while already running is a no-op."""
         with self._lifecycle_lock:
             if self._stopped:
-                log.warning("[Telegram] Start ignored: instance already stopped")
+                log.warning("[tg] Start ignored: instance already stopped")
                 return
             if self._loop_thread and self._loop_thread.is_alive():
-                log.debug("[Telegram] Start ignored: already running")
+                log.debug("[tg] Start ignored: already running")
                 return
             if not self.enabled:
-                log.info("[Telegram] Start skipped — service disabled")
+                log.info("[tg] Start skipped — service disabled")
                 return
-            log.info("[Telegram] Starting (token=%s…)", self.token[:8] if self.token else "")
+            log.info("[tg] Starting (token=%s…)", self.token[:8] if self.token else "")
             # Send loop on dedicated thread — owned by us, not by PTB.
             self._loop = asyncio.new_event_loop()
             self._loop_thread = Thread(target=self._run_send_loop, daemon=True, name="tg-send-loop")
@@ -189,9 +189,9 @@ class TelegramService:
                 from apscheduler.schedulers.background import BackgroundScheduler
                 self._scheduler = BackgroundScheduler(daemon=True)
                 self._scheduler.start()
-                log.info("[Telegram] Scheduler started")
+                log.info("[tg] Scheduler started")
             except Exception as e:
-                log.error("[Telegram] Scheduler start failed: %s", e)
+                log.error("[tg] Scheduler start failed: %s", e)
                 self._scheduler = None
             # Default push jobs
             self.register_default_jobs()
@@ -211,7 +211,7 @@ class TelegramService:
             if self._stopped:
                 return
             self._stopped = True
-            log.info("[Telegram] Stopping (reason: %s)", reason)
+            log.info("[tg] Stopping (reason: %s)", reason)
             # 1. Polling: signal the polling loop's stop event, then join.
             if self._polling_loop is not None and self._polling_stop_event is not None:
                 try:
@@ -219,11 +219,11 @@ class TelegramService:
                     ev = self._polling_stop_event
                     loop.call_soon_threadsafe(ev.set)
                 except Exception as e:
-                    log.warning("[Telegram] polling stop signal failed: %s", e)
+                    log.warning("[tg] polling stop signal failed: %s", e)
             if self._poll_thread and self._poll_thread.is_alive():
                 self._poll_thread.join(timeout=10)
                 if self._poll_thread.is_alive():
-                    log.warning("[Telegram] Polling thread did not exit within 10s")
+                    log.warning("[tg] Polling thread did not exit within 10s")
             self._poll_thread = None
             self._polling_app = None
             self._polling_loop = None
@@ -233,21 +233,21 @@ class TelegramService:
             try:
                 if self._scheduler:
                     self._scheduler.shutdown(wait=False)
-                    log.info("[Telegram] Scheduler stopped")
+                    log.info("[tg] Scheduler stopped")
             except Exception as e:
-                log.warning("[Telegram] scheduler shutdown failed: %s", e)
+                log.warning("[tg] scheduler shutdown failed: %s", e)
             self._scheduler = None
             # 3. Send loop
             try:
                 if self._loop and self._loop.is_running():
                     self._loop.call_soon_threadsafe(self._loop.stop)
             except Exception as e:
-                log.warning("[Telegram] send loop stop failed: %s", e)
+                log.warning("[tg] send loop stop failed: %s", e)
             if self._loop_thread and self._loop_thread.is_alive():
                 self._loop_thread.join(timeout=5)
             self._loop = None
             self._loop_thread = None
-            log.info("[Telegram] Stopped")
+            log.info("[tg] Stopped")
 
     # Back-compat alias for any old callers.
     def shutdown(self):
@@ -286,7 +286,7 @@ class TelegramService:
             asyncio.set_event_loop(self._loop)
             self._loop.run_forever()
         except Exception as e:
-            log.error("[Telegram] send loop crashed: %s", e)
+            log.error("[tg] send loop crashed: %s", e)
         finally:
             try:
                 self._loop.close()
@@ -304,14 +304,14 @@ class TelegramService:
         try:
             loop.run_until_complete(self._polling_main())
         except Exception as e:
-            log.error("[Telegram] polling thread crashed: %s", e, exc_info=True)
+            log.error("[tg] polling thread crashed: %s", e, exc_info=True)
         finally:
             try:
                 loop.close()
             except Exception:
                 pass
             self._polling_active_since = None
-            log.info("[Telegram] Polling thread exited")
+            log.info("[tg] Polling thread exited")
 
     async def _polling_main(self):
         app = ApplicationBuilder().token(self.token).build()
@@ -338,34 +338,34 @@ class TelegramService:
             await app.start()
             await app.updater.start_polling(drop_pending_updates=True)
             self._polling_active_since = time.time()
-            log.info("[Telegram] Polling active")
+            log.info("[tg] Polling active")
             # Register the slash-command catalogue serverside. Idempotent —
             # Telegram dedups by command name. Failure here is non-fatal:
             # the handlers still work, the user just doesn't see auto-
             # complete in the "/" picker.
             try:
                 await app.bot.set_my_commands(BOT_COMMANDS)
-                log.info("[Telegram] Bot commands registered: %s",
+                log.info("[tg] Bot commands registered: %s",
                          ", ".join(c.command for c in BOT_COMMANDS))
             except Exception as e:
-                log.warning("[Telegram] set_my_commands failed: %s", e)
+                log.warning("[tg] set_my_commands failed: %s", e)
             await self._polling_stop_event.wait()
         finally:
-            log.info("[Telegram] Polling shutting down")
+            log.info("[tg] Polling shutting down")
             try:
                 if app.updater and app.updater.running:
                     await app.updater.stop()
             except Exception as e:
-                log.warning("[Telegram] updater.stop failed: %s", e)
+                log.warning("[tg] updater.stop failed: %s", e)
             try:
                 if app.running:
                     await app.stop()
             except Exception as e:
-                log.warning("[Telegram] app.stop failed: %s", e)
+                log.warning("[tg] app.stop failed: %s", e)
             try:
                 await app.shutdown()
             except Exception as e:
-                log.warning("[Telegram] app.shutdown failed: %s", e)
+                log.warning("[tg] app.shutdown failed: %s", e)
 
     async def _on_polling_error(self, update, context):
         """Catches polling errors and decides log severity.
@@ -380,16 +380,16 @@ class TelegramService:
         err = context.error
         if isinstance(err, Conflict):
             self._last_conflict_ts = time.time()
-            log.warning("[Telegram] Polling conflict (likely stale instance). Backing off 10 s.")
+            log.warning("[tg] Polling conflict (likely stale instance). Backing off 10 s.")
             try:
                 await asyncio.sleep(10)
             except asyncio.CancelledError:
                 return
             return
         if isinstance(err, (NetworkError, TimedOut)):
-            log.warning("[Telegram] Transient polling network error: %s", err)
+            log.warning("[tg] Transient polling network error: %s", err)
             return
-        log.error("[Telegram] Update error: %s", err, exc_info=True)
+        log.error("[tg] Update error: %s", err, exc_info=True)
 
     # ── Scheduler API ─────────────────────────────────────────────────────
     def schedule_daily(self, hh: int, mm: int, key: str, callback):
@@ -425,7 +425,7 @@ class TelegramService:
         try:
             self._scheduler.remove_all_jobs()
         except Exception as e:
-            log.warning("[Telegram] cancel_all_jobs failed: %s", e)
+            log.warning("[tg] cancel_all_jobs failed: %s", e)
 
     def register_default_jobs(self):
         """(Re-)register the standard push schedule.
@@ -440,7 +440,7 @@ class TelegramService:
         self.cancel_all_jobs()
         pcfg = self.push_cfg
         if not pcfg.get("enabled", True):
-            log.info("[Telegram] Push disabled — no default jobs registered")
+            log.info("[tg] Push disabled — no default jobs registered")
             return
         if pcfg.get("daily_report", {}).get("enabled", True):
             hh, mm = _parse_hhmm(pcfg["daily_report"].get("time", "22:00"))
@@ -452,7 +452,7 @@ class TelegramService:
             self.schedule_interval(60, "tg_watchdog", self._job_watchdog)
         try:
             jobs = [j.id for j in self._scheduler.get_jobs()]
-            log.info("[Telegram] Registered jobs: %s", jobs)
+            log.info("[tg] Registered jobs: %s", jobs)
         except Exception:
             pass
 
@@ -473,12 +473,12 @@ class TelegramService:
         Returns the concurrent.futures.Future so callers can wait if they
         care; most fire-and-forget code ignores it."""
         if not self.enabled or not self._loop:
-            log.debug("[Telegram] send skipped (enabled=%s, loop=%s)", self.enabled, bool(self._loop))
+            log.debug("[tg] send skipped (enabled=%s, loop=%s)", self.enabled, bool(self._loop))
             return None
         try:
             return asyncio.run_coroutine_threadsafe(self.send_alert(text, **kwargs), self._loop)
         except Exception as e:
-            log.error("[Telegram] send dispatch failed: %s", e)
+            log.error("[tg] send dispatch failed: %s", e)
             return None
 
     def _build_markup(self, buttons) -> InlineKeyboardMarkup | None:
@@ -534,10 +534,10 @@ class TelegramService:
         """Unified send. `photo`/`video` accept bytes or a filesystem path.
         Auto-falls-back to sendDocument when limits are exceeded."""
         if not self.enabled or not self.bot:
-            log.debug("[Telegram] send_alert skipped (enabled=%s, bot=%s)", self.enabled, self.bot is not None)
+            log.debug("[tg] send_alert skipped (enabled=%s, bot=%s)", self.enabled, self.bot is not None)
             return
         if dark:
-            log.info("[Telegram] dark/night alert")
+            log.info("[tg] dark/night alert")
         # Inline buttons win — Telegram only allows one reply_markup per
         # message, so when an alert carries Gültig/Falsch/Stumm we send those
         # and the persistent reply keyboard stays visible from the previous
@@ -557,7 +557,7 @@ class TelegramService:
                 size = self._src_size_bytes(video)
                 src = self._prepare_input(video, "video.mp4")
                 if size and size > _VIDEO_LIMIT_BYTES:
-                    log.info("[Telegram] video > 50MB, falling back to sendDocument")
+                    log.info("[tg] video > 50MB, falling back to sendDocument")
                     msg = await self.bot.send_document(document=src, caption=caption, **common)
                 else:
                     msg = await self.bot.send_video(video=src, caption=caption, **common)
@@ -565,16 +565,16 @@ class TelegramService:
                 size = self._src_size_bytes(photo)
                 src = self._prepare_input(photo, "photo.jpg")
                 if size and size > _PHOTO_LIMIT_BYTES:
-                    log.info("[Telegram] photo > 10MB, falling back to sendDocument")
+                    log.info("[tg] photo > 10MB, falling back to sendDocument")
                     msg = await self.bot.send_document(document=src, caption=caption, **common)
                 else:
                     msg = await self.bot.send_photo(photo=src, caption=caption, **common)
             else:
                 msg = await self.bot.send_message(text=text or "", **common)
-            log.info("[Telegram] send_alert ok (chat=%s silent=%s)", self.chat_id, silent)
+            log.info("[tg] send_alert ok (chat=%s silent=%s)", self.chat_id, silent)
             return msg
         except Exception as e:
-            log.error("[Telegram] send_alert failed: %s", e)
+            log.error("[tg] send_alert failed: %s", e)
             return None
 
     # Legacy sync wrapper (kept for the achievement push and the test endpoint).
@@ -639,7 +639,7 @@ class TelegramService:
             return
         pcfg = self.push_cfg or {}
         if not pcfg.get("enabled", True):
-            log.debug("[Telegram] push: disabled")
+            log.debug("[tg] push: disabled")
             return
         # Global + per-camera mute. Both gates honour the same "_until"
         # epoch contract: 0 / past = no mute, future = active. Daily
@@ -651,7 +651,7 @@ class TelegramService:
             except Exception:
                 global_mute = 0
             if global_mute and time.time() < global_mute:
-                log.info("[Telegram] skip: global mute active until epoch=%d", int(global_mute))
+                log.info("[tg] skip: global mute active until epoch=%d", int(global_mute))
                 return
             try:
                 cam_mute = float(self.settings_store.runtime_get_subkey(
@@ -659,14 +659,14 @@ class TelegramService:
             except Exception:
                 cam_mute = 0
             if cam_mute and time.time() < cam_mute:
-                log.info("[Telegram] skip: cam %s muted until epoch=%d",
+                log.info("[tg] skip: cam %s muted until epoch=%d",
                          camera_id, int(cam_mute))
                 return
         labels = meta.get("labels") or []
         primary = most_specific_label(labels)
         label_cfg = (pcfg.get("labels") or {}).get(primary, {})
         if not label_cfg.get("push", False):
-            log.warning("[Telegram] skip: %s push disabled (cam=%s)", primary, camera_id)
+            log.warning("[tg] skip: %s push disabled (cam=%s)", primary, camera_id)
             return
         # Top score for the primary label specifically — fall back to the
         # event's overall top detection if the primary isn't a CV label.
@@ -679,14 +679,14 @@ class TelegramService:
             top_score = max((float(d.get("score", 0.0)) for d in detections), default=0.0)
         threshold = float(label_cfg.get("threshold", 0.0) or 0.0)
         if top_score < threshold:
-            log.warning("[Telegram] skip: %s score=%.2f < threshold=%.2f (cam=%s)",
+            log.warning("[tg] skip: %s score=%.2f < threshold=%.2f (cam=%s)",
                         primary, top_score, threshold, camera_id)
             return
         if self._is_suppressed(camera_id, primary):
-            log.warning("[Telegram] skip: suppressed %s/%s", camera_id, primary)
+            log.warning("[tg] skip: suppressed %s/%s", camera_id, primary)
             return
         if self._is_rate_limited(camera_id):
-            log.warning("[Telegram] skip: rate-limited %s", camera_id)
+            log.warning("[tg] skip: rate-limited %s", camera_id)
             return
 
         cam_cfg = self._camera_cfg(camera_id) or {}
@@ -696,7 +696,7 @@ class TelegramService:
         # gated by this — they go through their own jobs.
         from .event_logic import schedule_action_active as _sched_act
         if not _sched_act(cam_cfg.get("schedule") or {}, "telegram"):
-            log.warning("[Telegram] skip: schedule blocks telegram (cam=%s)", camera_id)
+            log.warning("[tg] skip: schedule blocks telegram (cam=%s)", camera_id)
             return
         cam_name = cam_cfg.get("name") or camera_id
         is_armed = bool(cam_cfg.get("armed", True))
@@ -743,7 +743,7 @@ class TelegramService:
             photo = str(snapshot_path)
         self.send(caption, photo=photo, buttons=buttons, silent=silent, dark=is_night_now)
         self._record_rate_limit(camera_id)
-        log.info("[Telegram] event alert: cam=%s label=%s score=%.2f silent=%s dark=%s",
+        log.info("[tg] event alert: cam=%s label=%s score=%.2f silent=%s dark=%s",
                  camera_id, primary, top_score, silent, is_night_now)
 
     def send_timelapse_alert(self, video_path: str | Path, cam_name: str,
@@ -809,9 +809,9 @@ class TelegramService:
                 [("🎞 Tageszeitraffer", "menu:zeitraffer:today")],
             ]
             self.send("\n".join(lines), buttons=buttons, silent=True)
-            log.info("[Telegram] daily report sent")
+            log.info("[tg] daily report sent")
         except Exception as e:
-            log.error("[Telegram] daily report job failed: %s", e)
+            log.error("[tg] daily report job failed: %s", e)
 
     def _job_highlight(self):
         try:
@@ -862,7 +862,7 @@ class TelegramService:
                         "snap_rel": ev.get("snapshot_relpath"),
                     })
             if not cands:
-                log.info("[Telegram] highlight: no candidates")
+                log.info("[tg] highlight: no candidates")
                 return
             pick = max(cands, key=lambda c: c["score"])
             caption = (f"<b>✨ Highlight des Tages</b>\n"
@@ -883,10 +883,10 @@ class TelegramService:
                     "ts":    time.time(),
                 })
             self.send(caption, photo=photo, buttons=buttons, silent=True)
-            log.info("[Telegram] highlight sent: %s/%s score=%.2f",
+            log.info("[tg] highlight sent: %s/%s score=%.2f",
                      pick["cam_id"], pick["eid"], pick["score"])
         except Exception as e:
-            log.error("[Telegram] highlight job failed: %s", e)
+            log.error("[tg] highlight job failed: %s", e)
 
     def _job_watchdog(self):
         try:
@@ -944,9 +944,9 @@ class TelegramService:
                     self.send(f"<b>⚠ Speicher knapp</b>: nur noch {free_gb:.1f} GB frei")
                     ss.runtime_set("last_storage_warn_ts", now)
             except Exception as e:
-                log.debug("[Telegram] storage check failed: %s", e)
+                log.debug("[tg] storage check failed: %s", e)
         except Exception as e:
-            log.error("[Telegram] watchdog failed: %s", e)
+            log.error("[tg] watchdog failed: %s", e)
 
     def _storage_today_delta_gb(self) -> float | None:
         """Sum bytes of media files modified today (best-effort, never raises)."""
@@ -1212,7 +1212,7 @@ class TelegramService:
         try:
             await q.edit_message_text(text, reply_markup=markup, parse_mode="HTML")
         except Exception as e:
-            log.debug("[Telegram] edit failed (%s); sending new message", e)
+            log.debug("[tg] edit failed (%s); sending new message", e)
             await q.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
 
     # ── Anchor message lifecycle ──────────────────────────────────────────
@@ -1245,7 +1245,7 @@ class TelegramService:
                                             {"chat_id": int(chat_id),
                                              "message_id": int(message_id)})
         except Exception as e:
-            log.warning("[Telegram] anchor save failed: %s", e)
+            log.warning("[tg] anchor save failed: %s", e)
 
     def _drop_anchor(self):
         if not self.settings_store:
@@ -1278,7 +1278,7 @@ class TelegramService:
                 )
                 return anchor[1]
             except Exception as e:
-                log.info("[Telegram] anchor stale for chat=%s (%s) — sending fresh",
+                log.info("[tg] anchor stale for chat=%s (%s) — sending fresh",
                          chat_id, e)
                 self._drop_anchor()
         msg = await bot.send_message(
@@ -1291,7 +1291,7 @@ class TelegramService:
                 reply_markup=inline_markup,
             )
         except Exception as e:
-            log.warning("[Telegram] anchor inline-kb attach failed: %s", e)
+            log.warning("[tg] anchor inline-kb attach failed: %s", e)
         self._save_anchor(chat_id, msg.message_id)
         return msg.message_id
 
@@ -1305,7 +1305,7 @@ class TelegramService:
         try:
             await self._anchor_send_or_edit(context.bot, chat_id, self._root_view())
         except Exception as e:
-            log.warning("[Telegram] anchor open failed: %s", e)
+            log.warning("[tg] anchor open failed: %s", e)
             text, markup = self._root_view()
             await update.message.reply_text(
                 text, reply_markup=markup, parse_mode="HTML",
@@ -1443,7 +1443,7 @@ class TelegramService:
         """Send a snapshot or — when there are multiple cams — an inline
         cam picker. The picker buttons route through cam:<id>:livebild
         which the existing dispatcher already handles."""
-        log.info("[Telegram] /live invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
+        log.info("[tg] /live invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
         cams = self._active_cams()
         if not cams:
             await update.message.reply_text("Keine Kameras konfiguriert.",
@@ -1465,7 +1465,7 @@ class TelegramService:
     async def _handle_clip5(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """5-s clip cam picker. We deliberately don't offer 'all cams' —
         running 4 ad-hoc ffmpeg recordings in parallel pegs the host."""
-        log.info("[Telegram] /clip invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
+        log.info("[tg] /clip invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
         cams = self._active_cams()
         if not cams:
             await update.message.reply_text("Keine Kameras konfiguriert.",
@@ -1485,11 +1485,11 @@ class TelegramService:
 
     async def _handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Compact system overview: cams + Telegram polling + Coral + weather + storage."""
-        log.info("[Telegram] /status invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
+        log.info("[tg] /status invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
         try:
             text = self._render_system_status_text()
         except Exception as e:
-            log.warning("[Telegram] status render failed: %s", e)
+            log.warning("[tg] status render failed: %s", e)
             text = "Status nicht verfügbar."
         await update.message.reply_text(text, parse_mode="HTML",
                                         reply_markup=PERSISTENT_KEYBOARD)
@@ -1576,7 +1576,7 @@ class TelegramService:
                 lines.extend(self._render_camera_block(info))
                 lines.append("")
             except Exception as e:
-                log.warning("[Telegram] cam block render failed for %s: %s",
+                log.warning("[tg] cam block render failed for %s: %s",
                             info.get("cam_id"), e)
                 continue
             try:
@@ -1636,7 +1636,7 @@ class TelegramService:
                 age_str = f"letzter Poll vor {age_min} min" if age_min is not None else "kein Poll bekannt"
                 weather_line = f"Wetter     🟢 {age_str} · {' · '.join(ev_chips)}"
         except Exception as e:
-            log.debug("[Telegram] weather row render failed: %s", e)
+            log.debug("[tg] weather row render failed: %s", e)
         lines.append(weather_line)
         lines.append("────")
         # Storage: free disk + sum of per-cam belegt
@@ -1663,12 +1663,12 @@ class TelegramService:
     async def _handle_mute_all(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Set runtime.global_mute_until = now + 1 h and reply with a confirm
         bubble carrying two inline buttons (end-now / extend-to-4h)."""
-        log.info("[Telegram] /mute invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
+        log.info("[tg] /mute invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
         until = time.time() + _MUTE_DEFAULT_S
         if self.settings_store:
             self.settings_store.runtime_set("global_mute_until", until)
         end_local = datetime.fromtimestamp(until).strftime("%H:%M")
-        log.info("[Telegram] mute_all activated until %s (epoch=%d)", end_local, int(until))
+        log.info("[tg] mute_all activated until %s (epoch=%d)", end_local, int(until))
         markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("Sofort beenden", callback_data="mute:end"),
              InlineKeyboardButton("Auf 4 h verlängern", callback_data="mute:ext4h")],
@@ -1682,7 +1682,7 @@ class TelegramService:
         """Per-cam drilldown picker. Tapping the persistent ``📹 Kameras``
         row sends an inline keyboard with one button per camera; tapping
         a camera opens its drilldown view via cam:<id>:drilldown."""
-        log.info("[Telegram] /cameras invoked by chat=%s",
+        log.info("[tg] /cameras invoked by chat=%s",
                  update.effective_chat.id if update.effective_chat else "?")
         cams = self._active_cams()
         if not cams:
@@ -1774,7 +1774,7 @@ class TelegramService:
             mk = InlineKeyboardMarkup([[InlineKeyboardButton(label, callback_data="noop")]])
             await q.edit_message_reply_markup(reply_markup=mk)
         except Exception as e:
-            log.debug("[Telegram] badge edit failed: %s", e)
+            log.debug("[tg] badge edit failed: %s", e)
 
     async def _handle_event_cb(self, q, data: str):
         # Telegram only accepts ONE answerCallbackQuery per query, so each
@@ -1831,13 +1831,13 @@ class TelegramService:
                 try:
                     triggered = bool(rt.trigger_siren())
                 except Exception as e:
-                    log.warning("[Telegram] trigger_siren failed: %s", e)
+                    log.warning("[tg] trigger_siren failed: %s", e)
             await self._set_badge(q, "🚨 Sirene")
             if triggered:
                 await q.answer("🚨 Sirene aktiviert")
             else:
                 # Reolink siren API isn't wired yet — log + acknowledge.
-                log.info("[Telegram] siren requested for %s — not implemented", cam)
+                log.info("[tg] siren requested for %s — not implemented", cam)
                 await q.answer("🚨 Sirene angefordert (nicht unterstützt)")
             return
 
@@ -1851,7 +1851,7 @@ class TelegramService:
         verb = data.split(":", 1)[1] if ":" in data else ""
         if verb == "end":
             self.settings_store.runtime_set("global_mute_until", 0)
-            log.info("[Telegram] mute_all cleared by chat=%s",
+            log.info("[tg] mute_all cleared by chat=%s",
                      q.message.chat_id if q.message else "?")
             await self._set_badge(q, "✅ Pushes wieder aktiv")
             await q.answer("✅ Pushes wieder aktiv")
@@ -1860,7 +1860,7 @@ class TelegramService:
             until = time.time() + _MUTE_EXTEND_S
             self.settings_store.runtime_set("global_mute_until", until)
             end_local = datetime.fromtimestamp(until).strftime("%H:%M")
-            log.info("[Telegram] mute_all extended to 4 h (until=%s)", end_local)
+            log.info("[tg] mute_all extended to 4 h (until=%s)", end_local)
             await self._set_badge(q, f"🔇 Stumm bis {end_local}")
             await q.answer(f"🔇 Stumm bis {end_local}")
             return
@@ -1900,7 +1900,7 @@ class TelegramService:
                 else:
                     await q.message.reply_photo(photo=f, caption=f"📤 {snap_path.name}")
         except Exception as e:
-            log.warning("[Telegram] highlight send failed: %s", e)
+            log.warning("[tg] highlight send failed: %s", e)
 
     async def _handle_timelapse_cb(self, q, data: str, context):
         # tl:send:<cam>/<filename>  → reply with the mp4
@@ -1920,7 +1920,7 @@ class TelegramService:
                         caption=f"⏱ {rel}",
                     )
             except Exception as e:
-                log.warning("[Telegram] tl send failed: %s", e)
+                log.warning("[tg] tl send failed: %s", e)
                 await q.message.reply_text(f"Senden fehlgeschlagen: {e}")
             return
         if rest.startswith("save:"):
@@ -2559,7 +2559,7 @@ class TelegramService:
             from . import server as _srv
             _srv.restart_single_camera(cam_id)
         except Exception as e:
-            log.warning("[Telegram] restart_single_camera(%s) failed: %s", cam_id, e)
+            log.warning("[tg] restart_single_camera(%s) failed: %s", cam_id, e)
             return False
         return cam_id in (self.runtimes or {})
 
@@ -2589,9 +2589,9 @@ class TelegramService:
                 try:
                     self.settings_store.runtime_set_subkey("cam_mute_until", cam_id, until)
                 except Exception as e:
-                    log.warning("[Telegram] per-cam mute write failed: %s", e)
+                    log.warning("[tg] per-cam mute write failed: %s", e)
             end_local = datetime.fromtimestamp(until).strftime("%H:%M")
-            log.info("[Telegram] mute_cam %s activated until %s", cam_id, end_local)
+            log.info("[tg] mute_cam %s activated until %s", cam_id, end_local)
             await self._render_view(q, self._cam_drilldown_view(cam_id))
             await q.answer(f"🔇 stumm bis {end_local}")
             return
@@ -2628,7 +2628,7 @@ class TelegramService:
                 rt.stop(); time.sleep(0.5); rt.start()
                 await q.answer(f"🔄 {cam_name}: Neuverbindung gestartet")
             except Exception as e:
-                log.warning("[Telegram] reconnect failed: %s", e)
+                log.warning("[tg] reconnect failed: %s", e)
                 await q.answer("Reconnect fehlgeschlagen")
             return
         await q.answer()
@@ -2672,7 +2672,7 @@ class TelegramService:
 
     async def _cam_send_snapshot(self, q, context, cam_id, rt, cam_name):
         await q.answer("📷 Snapshot wird geholt…")
-        log.info("[Telegram] cam:%s:livebild triggered by chat=%s",
+        log.info("[tg] cam:%s:livebild triggered by chat=%s",
                  cam_id, q.message.chat_id if q.message else "?")
         jpeg = rt.snapshot_jpeg() if hasattr(rt, "snapshot_jpeg") else None
         if not jpeg:
@@ -2699,7 +2699,7 @@ class TelegramService:
                 reply_to_message_id=q.message.message_id if q.message else None,
             )
         except Exception as e:
-            log.warning("[Telegram] snapshot send failed: %s", e)
+            log.warning("[tg] snapshot send failed: %s", e)
         # Snap the anchor back to the cam drilldown view so the user
         # lands on the same control surface they just acted from. The
         # delivered photo is a separate message; the anchor is edited
@@ -2713,7 +2713,7 @@ class TelegramService:
 
     async def _cam_send_clip(self, q, context, cam_id, rt, cam_name, sec):
         await q.answer(f"🎬 {sec}-s Clip wird aufgenommen…")
-        log.info("[Telegram] cam:%s:clip:%d triggered by chat=%s",
+        log.info("[tg] cam:%s:clip:%d triggered by chat=%s",
                  cam_id, sec, q.message.chat_id if q.message else "?")
         # The blocking ffmpeg subprocess runs in a worker thread via run_in_executor
         # so it doesn't pin the asyncio loop while the recording is in progress.
@@ -2721,7 +2721,7 @@ class TelegramService:
         try:
             path = await loop.run_in_executor(None, rt.record_adhoc_clip, sec)
         except Exception as e:
-            log.warning("[Telegram] adhoc clip exception: %s", e)
+            log.warning("[tg] adhoc clip exception: %s", e)
             path = None
         if not path:
             await q.message.reply_text(
@@ -2749,7 +2749,7 @@ class TelegramService:
                     reply_to_message_id=q.message.message_id if q.message else None,
                 )
         except Exception as e:
-            log.warning("[Telegram] clip send failed: %s", e)
+            log.warning("[tg] clip send failed: %s", e)
             await q.message.reply_text(f"Senden fehlgeschlagen: {e}")
         # Anchor snaps back to the cam drilldown — same UX rule as the
         # snapshot path so the user keeps a single control surface.
@@ -2803,7 +2803,7 @@ class TelegramService:
                 with open(full, "rb") as f:
                     await q.message.reply_video(video=f, caption=f"⏱ {top['cam_id']} · heute")
             except Exception as e:
-                log.warning("[Telegram] today timelapse send failed: %s", e)
+                log.warning("[tg] today timelapse send failed: %s", e)
             await q.answer()
             return
         if data == "menu:erkennungen":
@@ -2875,7 +2875,7 @@ class TelegramService:
                 except Exception:
                     pass
             end_local = datetime.fromtimestamp(until).strftime("%H:%M")
-            log.info("[Telegram] mute_all activated until %s via menu", end_local)
+            log.info("[tg] mute_all activated until %s via menu", end_local)
             await self._render_view(q, self._root_view())
             await q.answer(f"🔇 Alle Pushes pausiert bis {end_local}")
             return

@@ -1,5 +1,8 @@
 from __future__ import annotations
 from datetime import datetime
+import logging
+
+log = logging.getLogger(__name__)
 
 
 def _parse_hhmm(s: str) -> tuple[int, int]:
@@ -135,4 +138,4 @@ if __name__ == "__main__":
     assert schedule_action_active(sch, "hard",     _at(22, 0)) is True
     # Outside window: actions never fire (record/telegram fall back to off)
     assert schedule_action_active(sch, "record",   _at(12, 0)) is False
-    print("event_logic smoke tests OK")
+    log.info("[selftest] event_logic OK")

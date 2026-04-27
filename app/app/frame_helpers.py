@@ -365,7 +365,7 @@ class CaptureStats:
             }
             path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except Exception as e:
-            log.warning("[Timelapse] could not write _stats.json in %s: %s", self.out_dir, e)
+            log.warning("[timelapse] could not write _stats.json in %s: %s", self.out_dir, e)
 
 
 def read_capture_stats(frames_dir: Path) -> dict:
