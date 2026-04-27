@@ -1125,20 +1125,26 @@ function _renderGlobalStatusRows(){
   const cam0=state.cameras?.[0];
   const coralOn=!!(proc.coral_enabled ?? (cam0?.detection_mode!=='motion_only'));
   const coralAvail=!!cam0?.coral_available;
-  let kiText, kiOn;
-  if(!coralOn){kiText='KI-Objekterkennung deaktiviert'; kiOn=false;}
-  else if(coralAvail){kiText='KI-Objekterkennung aktiv (Coral TPU)'; kiOn=true;}
-  else if(cam0?.detection_mode==='cpu'){kiText='KI-Objekterkennung aktiv (CPU)'; kiOn=true;}
-  else{kiText='KI-Objekterkennung nicht verfügbar'; kiOn=false;}
+  // Variant: 'on' (green), 'off' (grey), 'warn' (orange — CPU fallback).
+  let kiText, kiVariant;
+  if(!coralOn){kiText='KI-Objekterkennung deaktiviert'; kiVariant='off';}
+  else if(cam0?.detection_mode==='coral' && coralAvail){kiText='KI-Objekterkennung aktiv (Coral TPU)'; kiVariant='on';}
+  else if(cam0?.detection_mode==='cpu'){kiText='⚠ KI-Objekterkennung läuft im CPU-Fallback'; kiVariant='warn';}
+  else{kiText='KI-Objekterkennung nicht verfügbar'; kiVariant='off';}
 
-  const row=(on, text)=>`
-    <div class="cam-gs-row${on?'':' cam-gs-row--off'}">
+  const row=(variant, text)=>{
+    const mod = variant==='off' ? ' cam-gs-row--off'
+              : variant==='warn' ? ' cam-gs-row--warn'
+              : '';
+    return `
+    <div class="cam-gs-row${mod}">
       <span class="cam-gs-dot"></span>
       <span class="cam-gs-text">${esc(text)}</span>
       <span class="cam-gs-tag">Global-Einstellung</span>
     </div>`;
-  host.innerHTML = row(motionOn, motionOn?'Bewegungserkennung aktiv':'Bewegungserkennung deaktiviert')
-                 + row(kiOn, kiText)
+  };
+  host.innerHTML = row(motionOn?'on':'off', motionOn?'Bewegungserkennung aktiv':'Bewegungserkennung deaktiviert')
+                 + row(kiVariant, kiText)
                  + `<a href="#coral-settings" class="cam-gs-link" onclick="_scrollToCoralSettings(event)">In Coral-Settings ändern →</a>`;
 }
 window._scrollToCoralSettings=function(ev){
@@ -1871,12 +1877,19 @@ function hydrateSettings(){
   if(wildInp) wildInp.disabled = false;
   const cam0=state.cameras[0];
   const coralAvail=!!cam0?.coral_available;
+  const detMode=cam0?.detection_mode||null;
   const chip=byId('coralStatusChip');
   if(chip){
+    // Four states. CPU fallback is now orange (warn-orange) instead of
+    // the prior yellow — green/yellow/grey was visually too soft for what
+    // is in practice a degraded mode the user should notice.
     let label='aus', cls='set-status-badge--off';
     if(coralActive){
-      if(coralAvail){label='Coral TPU';cls='set-status-badge--on';}
-      else{label='CPU Fallback';cls='set-status-badge--cpu';}
+      if(detMode==='coral' && coralAvail){label='Coral TPU aktiv';cls='set-status-badge--on';}
+      else if(detMode==='cpu'){label='⚠ CPU-Fallback aktiv';cls='set-status-badge--warn-orange';}
+      else{label='✗ KI nicht verfügbar';cls='set-status-badge--off';}
+    } else {
+      label='KI-Objekterkennung aus';
     }
     chip.textContent=label;
     chip.className='set-status-badge '+cls;

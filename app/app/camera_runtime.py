@@ -2615,6 +2615,23 @@ class CameraRuntime:
         cfg = self.cfg
         now_t = time.time()
         frame_age_s = round(now_t - self.frame_ts, 1) if self.frame_ts > 0 else None
+        det_mode = getattr(self.detector, "mode", "motion_only")
+        # `detector.available` means "any detection works" (Coral OR CPU).
+        # The UI's `coral_available` field is supposed to mean "TPU is the
+        # active engine" — derive it from mode so the chip can show
+        # green/orange/grey/red without conflating "detector is up" with
+        # "TPU is up". Mismatches between mode and detector.available are
+        # logged as a defensive tripwire below.
+        det_ready = bool(getattr(self.detector, "available", False))
+        coral_avail = (det_mode == "coral")
+        prev_warned = getattr(self, "_det_state_warned", None)
+        cur_state = (det_mode, det_ready)
+        if det_mode in ("coral", "cpu") and not det_ready and prev_warned != cur_state:
+            log.warning(
+                "[det] inconsistent state: cam=%s mode=%s detector_ready=false",
+                self.camera_id, det_mode,
+            )
+            self._det_state_warned = cur_state
         return {
             "id": self.camera_id,
             "name": cfg.get("name", self.camera_id),
@@ -2626,8 +2643,8 @@ class CameraRuntime:
             "status": "error" if self._error_streak >= 10 else ("active" if self.frame is not None else "starting"),
             "today_events": self.event_counter_today,
             "timelapse_enabled": bool((cfg.get("timelapse") or {}).get("enabled")),
-            "detection_mode": getattr(self.detector, "mode", "motion_only"),
-            "coral_available": getattr(self.detector, "available", False),
+            "detection_mode": det_mode,
+            "coral_available": coral_avail,
             "coral_reason": getattr(self.detector, "reason", "disabled"),
             "bird_species_available": getattr(self.bird_classifier, "available", False),
             "bird_species_mode": getattr(self.bird_classifier, "mode", "none"),
