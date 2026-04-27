@@ -4,14 +4,20 @@ Sample images grouped by expected COCO label, used by the Coral test-batch
 endpoint to verify object-detection quality without needing live camera feeds.
 
 ```
-person/    5 — humans outdoors
-car/       5 — cars (sedans, hatchbacks)
-cat/       5 — domestic cats
-bird/     11 — Bavarian garden species:
-              Amsel · Blaumeise · Kohlmeise · Rotkehlchen · Buchfink ·
-              Grünfink · Buntspecht · Eichelhäher
-squirrel/  4 — Sciurus vulgaris
+person/    10 — humans outdoors (varied lighting + groups)
+car/       14 — cars (sedans, hatchbacks)
+cat/       10 — domestic cats
+bird/      60 — Bavarian garden species:
+               Amsel · Blaumeise · Kohlmeise · Rotkehlchen · Buchfink ·
+               Grünfink · Buntspecht · Eichelhäher · …
+squirrel/  18 — Sciurus vulgaris (varied light + colour morphs)
+fox/        5 — Vulpes vulpes
+hedgehog/   5 — Erinaceus europaeus (Igel)
 ```
+
+`fox/` and `hedgehog/` exercise the `WildlifeClassifier` second stage —
+the COCO detector itself can't name them, so the test-batch endpoint
+verifies the cascade as a whole, not just stage 1.
 
 All images are downloaded from Wikimedia Commons under their respective free
 licenses (CC-BY, CC-BY-SA, public domain). Original attribution lives at
