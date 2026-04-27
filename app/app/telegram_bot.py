@@ -1113,63 +1113,12 @@ class TelegramService:
         rows.append([self._back_btn()])
         return "\n".join(lines), InlineKeyboardMarkup(rows)
 
-    def _erkennungen_view(self, page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
-        page_size = 10
-        cutoff_dt = datetime.now() - timedelta(hours=24)
-        cutoff_iso = cutoff_dt.isoformat(timespec="seconds")
-        all_events: list[dict] = []
-        for cam in self._cfg().get("cameras", []):
-            cam_id = cam.get("id")
-            if not cam_id or not self.store:
-                continue
-            evs = self.store.list_events(cam_id, start=cutoff_iso, limit=50)
-            for e in evs:
-                e["_cam_name"] = cam.get("name", cam_id)
-                all_events.append(e)
-        all_events.sort(key=lambda e: e.get("time", ""), reverse=True)
-        slice_ = all_events[page * page_size:(page + 1) * page_size]
-        if not slice_:
-            return ("📋 <b>Keine Erkennungen in den letzten 24 h.</b>",
-                    InlineKeyboardMarkup([[self._back_btn()]]))
-        feedback = self.settings_store.runtime_get("event_feedback") if self.settings_store else {}
-        feedback = feedback or {}
-        lines = [f"📋 <b>Letzte Erkennungen</b>  (Seite {page + 1})", ""]
-        rows = []
-        for ev in slice_:
-            eid = ev.get("event_id", "")
-            labels = ev.get("labels") or []
-            primary = most_specific_label(labels)
-            time_hm = ev.get("time", "")[11:16]
-            score = max(
-                (float(d.get("score", 0)) for d in (ev.get("detections") or [])
-                 if d.get("label") == primary),
-                default=0.0,
-            )
-            score_pct = int(round(score * 100))
-            verdict = (feedback.get(eid) or {}).get("verdict")
-            badge = " ✅" if verdict == "ok" else " ❌" if verdict == "no" else ""
-            lines.append(f"<code>{time_hm}</code> · {ev['_cam_name']} · "
-                         f"<b>{LABEL_DE.get(primary, primary)}</b> · {score_pct}%{badge}")
-            if not verdict:
-                # Index for the ev:<eid>:* router (stores cam + label so the
-                # callback can resolve the event without re-walking the disk).
-                if self.settings_store and eid:
-                    self.settings_store.runtime_alert_index_set(eid, {
-                        "cam":   ev.get("camera_id") or "",
-                        "label": primary,
-                        "ts":    time.time(),
-                    })
-                rows.append([
-                    InlineKeyboardButton(f"✅ {time_hm}", callback_data=f"ev:{eid}:ok"[:64]),
-                    InlineKeyboardButton(f"❌ {time_hm}", callback_data=f"ev:{eid}:no"[:64]),
-                ])
-        nav_row = []
-        has_more = len(all_events) > (page + 1) * page_size
-        if has_more:
-            nav_row.append(InlineKeyboardButton("➕ Mehr (10)", callback_data=f"menu:erkennungen:p:{page + 1}"))
-        nav_row.append(self._back_btn())
-        rows.append(nav_row)
-        return "\n".join(lines), InlineKeyboardMarkup(rows)
+    # _erkennungen_view replaced by the phase-2 tile implementation
+    # below; the old "Letzte Erkennungen" feedback list (24-h window
+    # with ev:<eid>:ok / no buttons) was removed because the new tile
+    # spec asks for a today-only filterable log. Per-event feedback
+    # callbacks (ev:*) are still reachable from the original alert
+    # bubbles in chat — only the menu route changed.
 
     def _stats_view(self, days: int) -> tuple[str, InlineKeyboardMarkup]:
         period = "Heute" if days == 1 else ("Diese Woche" if days == 7 else "Diesen Monat")
@@ -1810,6 +1759,13 @@ class TelegramService:
         if data.startswith("menu:"):
             await self._handle_menu_cb(q, data)
             return
+        # Erkennungen tile (phase-2): pagination, filter sub-view, filter
+        # setters, apply. Routed through _handle_menu_cb because the
+        # tile renders edit-in-place via the same anchor pattern as
+        # menu:* views.
+        if data.startswith("det:"):
+            await self._handle_menu_cb(q, data)
+            return
         await q.answer()
 
     async def _set_badge(self, q, label: str):
@@ -2012,30 +1968,587 @@ class TelegramService:
         return body, InlineKeyboardMarkup(rows)
 
     # ── Stub views for phase-1 navigation (filled in phase-2) ─────────────
-    def _stub_view(self, title: str) -> tuple[str, InlineKeyboardMarkup]:
-        body = f"<b>{title}</b>\n\n…wird in Kürze ergänzt."
-        markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("« Zurück", callback_data="menu:root")],
-        ])
-        return body, markup
+    # ── Phase-2 tile helpers ──────────────────────────────────────────────
+    # Label → emoji map. Mirrors the JS `_STAT_LABEL_ICONS` in app.js so
+    # the bot and the web UI agree on iconography. Unknown labels fall
+    # through to "❓" via `_label_icon` — never crash the renderer on a
+    # new label name.
+    _LABEL_ICONS: dict[str, str] = {
+        "person":    "👤",
+        "cat":       "🐱",
+        "bird":      "🐦",
+        "dog":       "🐕",
+        "fox":       "🦊",
+        "hedgehog":  "🦔",
+        "squirrel":  "🐿️",
+        "horse":     "🐴",
+        "deer":      "🦌",
+        "car":       "🚗",
+        "motion":    "👁",
+    }
+    # Kind classifier for the Erkennungen filter. The user's filter has
+    # only 4 buckets (Vögel / Katzen / Personen / Wildtiere) plus "alle";
+    # this dict maps the granular label to the bucket.
+    _LABEL_KIND: dict[str, str] = {
+        "bird":     "vogel",
+        "cat":      "katze",
+        "person":   "person",
+        "dog":      "wildtier",
+        "fox":      "wildtier",
+        "hedgehog": "wildtier",
+        "squirrel": "wildtier",
+        "deer":     "wildtier",
+        "horse":    "wildtier",
+    }
+
+    def _label_icon(self, label: str) -> str:
+        return self._LABEL_ICONS.get((label or "").lower(), "❓")
+
+    def _event_primary_label(self, ev: dict) -> str:
+        """Pick the most informative label for a row: bird species name when
+        available, else cat name (the re-id label), else the top label."""
+        species = (ev.get("bird_species") or "").strip()
+        if species:
+            return species
+        cat_name = (ev.get("cat_name") or "").strip()
+        if cat_name:
+            return cat_name
+        top = ev.get("top_label") or ""
+        labels = ev.get("labels") or []
+        return top or (labels[0] if labels else "")
+
+    def _event_kind(self, ev: dict) -> str:
+        """Return the filter bucket for an event: vogel / katze / person /
+        wildtier / sonstiges."""
+        if (ev.get("bird_species") or "").strip():
+            return "vogel"
+        if (ev.get("cat_name") or "").strip():
+            return "katze"
+        for lbl in [ev.get("top_label")] + list(ev.get("labels") or []):
+            if not lbl:
+                continue
+            kind = self._LABEL_KIND.get(str(lbl).lower())
+            if kind:
+                return kind
+        return "sonstiges"
+
+    def _event_icon(self, ev: dict) -> str:
+        """Pick the icon: species → 🐦, cat name → 🐱, else map top_label."""
+        if (ev.get("bird_species") or "").strip():
+            return "🐦"
+        if (ev.get("cat_name") or "").strip():
+            return "🐱"
+        for lbl in [ev.get("top_label")] + list(ev.get("labels") or []):
+            if not lbl:
+                continue
+            icon = self._LABEL_ICONS.get(str(lbl).lower())
+            if icon:
+                return icon
+        return "❓"
+
+    # In-memory filter state per chat. Survives navigation, resets on
+    # bot restart — matches the user's "session-only" requirement and
+    # avoids touching the persistent settings store on every filter tap.
+    _tile_state: dict[int, dict] = {}
+
+    def _tile_state_for(self, chat_id: int | None) -> dict:
+        if chat_id is None:
+            return {}
+        return self._tile_state.setdefault(int(chat_id), {})
+
+    def _erkennungen_view(self, *, filter_cam: str | None = None,
+                          filter_kind: str | None = None,
+                          page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
+        """📋 Erkennungen — today's detection log, newest first.
+
+        Filter labels:
+          filter_cam   None / a cam id  ("alle Kameras" if None)
+          filter_kind  None / "vogel"/"katze"/"person"/"wildtier" ("alle Typen" if None)
+
+        10 entries per page; pagination via det:page:N callback. The
+        filter sub-view sits behind det:filter."""
+        from html import escape as _esc
+        today_iso = datetime.now().strftime("%Y-%m-%d")
+        cam_cfgs = {c.get("id"): c for c in (self._cfg().get("cameras", []) or [])}
+        all_events: list[dict] = []
+        cam_iter = ([filter_cam] if filter_cam else list(cam_cfgs.keys()))
+        for cam_id in cam_iter:
+            if not cam_id or not self.store:
+                continue
+            try:
+                evs = self.store.list_events(cam_id, start=today_iso, limit=500)
+            except Exception:
+                evs = []
+            for e in evs:
+                e = dict(e)
+                e["_cam_name"] = (cam_cfgs.get(cam_id) or {}).get("name") or cam_id
+                e["_kind"] = self._event_kind(e)
+                if filter_kind and e["_kind"] != filter_kind:
+                    continue
+                all_events.append(e)
+        all_events.sort(key=lambda e: e.get("time", ""), reverse=True)
+
+        page = max(0, int(page))
+        page_size = 10
+        n_total = len(all_events)
+        n_pages = max(1, (n_total + page_size - 1) // page_size)
+        if page >= n_pages:
+            page = n_pages - 1
+        slice_ = all_events[page * page_size:(page + 1) * page_size]
+
+        cam_label = (cam_cfgs.get(filter_cam) or {}).get("name", filter_cam) if filter_cam else "alle Kameras"
+        kind_label = {"vogel": "🐦 Vögel", "katze": "🐱 Katzen",
+                      "person": "👤 Personen", "wildtier": "🦌 Wildtiere"}.get(
+                      filter_kind, "alle Typen")
+        head = ["📋 <b>Erkennungen heute</b>",
+                f"Filter: {_esc(str(cam_label))} · {_esc(kind_label)}",
+                "─────────────", ""]
+
+        if not slice_:
+            head.append("Heute noch keine Erkennungen.")
+            rows = [
+                [InlineKeyboardButton("🔍 Filter", callback_data="det:filter")],
+                [InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root")],
+            ]
+            return "\n".join(head), InlineKeyboardMarkup(rows)
+
+        for ev in slice_:
+            time_hm = (ev.get("time") or "")[11:16]
+            icon = self._event_icon(ev)
+            name = self._event_primary_label(ev) or "?"
+            cam = ev.get("_cam_name") or ev.get("camera_id") or "?"
+            head.append(f"<code>{time_hm}</code>  {icon} {_esc(name):<14s} · {_esc(cam)}")
+        head.append("─────────────")
+        head.append(f"Seite {page + 1} / {n_pages}")
+
+        # Pagination row: « N (prev) and (next) ».
+        nav_row = []
+        if page > 0:
+            nav_row.append(InlineKeyboardButton(f"« {page}",
+                                                 callback_data=f"det:page:{page - 1}"))
+        if page < n_pages - 1:
+            nav_row.append(InlineKeyboardButton(f"{page + 2} »",
+                                                 callback_data=f"det:page:{page + 1}"))
+        rows: list[list[InlineKeyboardButton]] = []
+        if nav_row:
+            rows.append(nav_row)
+        rows.append([InlineKeyboardButton("🔍 Filter", callback_data="det:filter")])
+        rows.append([InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root")])
+        return "\n".join(head), InlineKeyboardMarkup(rows)
+
+    def _erkennungen_filter_view(self, chat_id: int | None) -> tuple[str, InlineKeyboardMarkup]:
+        """Sub-view: Filter pickers for the Erkennungen tile. Selections
+        update self._tile_state and the user is bounced back to the list
+        via det:apply."""
+        st = self._tile_state_for(chat_id)
+        cur_cam = st.get("det_cam")
+        cur_kind = st.get("det_kind")
+        cam_cfgs = (self._cfg().get("cameras", []) or [])
+        cam_row = []
+        for c in cam_cfgs:
+            cid = c.get("id"); name = c.get("name") or cid
+            if not cid:
+                continue
+            label = ("● " if cur_cam == cid else "") + (name[:14])
+            cam_row.append(InlineKeyboardButton(label,
+                                                 callback_data=f"det:setcam:{cid}"[:64]))
+        cam_row.append(InlineKeyboardButton(("● " if cur_cam is None else "") + "alle",
+                                             callback_data="det:setcam:_all"))
+        kind_opts = [
+            ("🐦 Vögel",      "vogel"),
+            ("🐱 Katzen",     "katze"),
+            ("👤 Personen",   "person"),
+            ("🦌 Wildtiere",  "wildtier"),
+            ("alle",          "_all"),
+        ]
+        kind_row = []
+        for lbl, val in kind_opts:
+            sel = (cur_kind == val) or (val == "_all" and cur_kind is None)
+            kind_row.append(InlineKeyboardButton(("● " if sel else "") + lbl,
+                                                  callback_data=f"det:setkind:{val}"[:64]))
+        # Buttons-per-row clamp so iPhone-narrow rows wrap.
+        def _chunk(row, n=3):
+            return [row[i:i + n] for i in range(0, len(row), n)]
+        rows = []
+        for r in _chunk(cam_row, 3):
+            rows.append(r)
+        for r in _chunk(kind_row, 3):
+            rows.append(r)
+        rows.append([InlineKeyboardButton("✓ Anwenden", callback_data="det:apply"),
+                     InlineKeyboardButton("« Zurück",   callback_data="det:apply")])
+        return ("📋 <b>Filter</b>\n\nKamera und Erkennungstyp wählen.",
+                InlineKeyboardMarkup(rows))
 
     def _tier_log_view(self) -> tuple[str, InlineKeyboardMarkup]:
-        return self._stub_view("🐦 Tier-Log")
+        """🐦 Tier-Log — top species (7 d) + cat registry sightings (today)."""
+        from html import escape as _esc
+        lines = ["🐦 <b>Tier-Log</b> · letzte 7 Tage", "─────────────"]
+        # Section A — top bird species + top cat names.
+        try:
+            summary = self.store.aggregate_summary(days=7) if self.store else {}
+        except Exception:
+            summary = {}
+        top_birds = (summary.get("top_bird_species") or [])[:5]
+        top_cats = (summary.get("top_cat_names") or [])[:5]
+        if top_birds:
+            lines.append("Vogelarten:")
+            medals = ["🥇", "🥈", "🥉", "  ", "  "]
+            for i, item in enumerate(top_birds):
+                # item may be a tuple or a {label, count} dict
+                if isinstance(item, dict):
+                    label, n = item.get("label", "?"), int(item.get("count", 0))
+                else:
+                    label, n = (item[0] if len(item) else "?"), int(item[1] if len(item) > 1 else 0)
+                medal = medals[i] if i < len(medals) else "  "
+                lines.append(f"  {medal} {_esc(str(label)):<14s} {n}×")
+            lines.append("")
+        # Section B — known cats (re-id) with today's sightings + last_seen.
+        today_iso = datetime.now().strftime("%Y-%m-%d")
+        cat_rows = []
+        try:
+            profiles = self.cat_registry.list_profiles() if hasattr(self, "cat_registry") and self.cat_registry else []
+        except Exception:
+            profiles = []
+        # Re-id registry isn't passed into TelegramService directly, so
+        # fall back to cat_name occurrences from today's events as a
+        # poor-man's roster when no explicit registry is available.
+        seen_today: dict[str, dict] = {}
+        if self.store:
+            for cam in (self._cfg().get("cameras", []) or []):
+                cid = cam.get("id")
+                if not cid:
+                    continue
+                try:
+                    evs = self.store.list_events(cid, start=today_iso, limit=500)
+                except Exception:
+                    evs = []
+                for ev in evs:
+                    cn = (ev.get("cat_name") or "").strip()
+                    if not cn:
+                        continue
+                    rec = seen_today.setdefault(cn, {"count": 0, "last_ts": ""})
+                    rec["count"] += 1
+                    t = ev.get("time") or ""
+                    if t > rec["last_ts"]:
+                        rec["last_ts"] = t
+        if profiles or seen_today:
+            lines.append("Bekannte Katzen:")
+            names = sorted(set([p.get("name", "") for p in profiles] + list(seen_today.keys())))
+            now = datetime.now()
+            for name in names:
+                if not name:
+                    continue
+                rec = seen_today.get(name, {"count": 0, "last_ts": ""})
+                count = rec["count"]
+                last_str = "—"
+                if rec["last_ts"]:
+                    try:
+                        delta_min = int((now - datetime.fromisoformat(rec["last_ts"])).total_seconds() / 60)
+                        if delta_min < 60:
+                            last_str = f"vor {delta_min} min"
+                        elif delta_min < 1440:
+                            last_str = f"vor {delta_min // 60} h"
+                        else:
+                            last_str = f"vor {delta_min // 1440} d"
+                    except Exception:
+                        last_str = "?"
+                else:
+                    last_str = "noch nicht heute"
+                lines.append(f"  🐱 {_esc(name):<10s} · {count}× heute · {last_str}")
+                cat_rows.append(name)
+            lines.append("")
+        # Empty state
+        if not top_birds and not top_cats and not cat_rows:
+            lines.append("Noch keine Tier-Aktivität in den letzten 7 Tagen.")
 
+        rows = [
+            [InlineKeyboardButton("📋 Alle Erkennungen", callback_data="menu:erkennungen"),
+             InlineKeyboardButton("🏠 Hauptmenü",       callback_data="menu:root")],
+        ]
+        return "\n".join(lines), InlineKeyboardMarkup(rows)
+
+    def _wetter_tile_view(self) -> tuple[str, InlineKeyboardMarkup]:
+        """⛅ Wetter — live snapshot from WeatherService.status() with
+        threshold-aware status icons + sun position + active-event list."""
+        from . import server as _srv
+        wsvc = getattr(_srv, "weather_service", None)
+        now = datetime.now()
+        lines = [f"⛅ <b>Wetter</b> · Stand {now.strftime('%H:%M')}", "─────────────"]
+        if wsvc is None:
+            lines.append("Wetter-Service nicht aktiv.")
+            return ("\n".join(lines),
+                    InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Hauptmenü",
+                                                                  callback_data="menu:root")]]))
+        try:
+            stat = wsvc.status() or {}
+        except Exception:
+            stat = {}
+        try:
+            hist = wsvc.history(hours=1) or {}
+        except Exception:
+            hist = {}
+        cur = stat.get("current_values") or {}
+        cur_state = stat.get("current_state") or {}
+        thresholds = hist.get("thresholds") or {}
+        units = hist.get("units") or {}
+        # Mapping from event_type → (icon, label, value-key, unit-fallback)
+        rows_def = [
+            ("heavy_rain", "🌧 Regen",     "precipitation",       "mm/h"),
+            ("thunder",    "⚡ Gewitter",  "lightning_potential", "J/kg"),
+            ("snow",       "❄ Schnee",    "snowfall",            "cm/h"),
+            ("fog",        "🌫 Sicht",    "visibility",          "m"),
+        ]
+        for evt, label, key, unit_fb in rows_def:
+            v = cur.get(key)
+            thr = thresholds.get(key)
+            unit = units.get(key, unit_fb)
+            active = bool(cur_state.get(evt))
+            if v is None:
+                vstr, pct, status_icon = "—", "—", "⚪"
+            else:
+                vstr = (f"{v:.1f}" if abs(v) < 100 else f"{v:.0f}")
+                if thr is None or thr <= 0:
+                    pct, status_icon = "—", "⚪"
+                else:
+                    # Visibility uses INVERSE thresholds (active when v < thr),
+                    # so the percentage is inverted vs the others.
+                    if evt == "fog":
+                        # below threshold → high "active-ness"
+                        pct_v = max(0, min(100, int(100 * (1 - v / max(1, thr * 2))))) if thr else 0
+                        ratio = 1 - min(1.0, v / max(1.0, thr))
+                    else:
+                        pct_v = int(100 * (v / thr))
+                        ratio = v / thr
+                    pct = f"{int(round(pct_v))} %"
+                    if active:
+                        status_icon = "🔴"
+                    elif ratio >= 0.7:
+                        status_icon = "🟡"
+                    else:
+                        status_icon = "🟢"
+            if thr is None:
+                thr_str = "—"
+            else:
+                thr_str = (f"{thr:.1f}" if abs(thr) < 100 else f"{thr:.0f}")
+            lines.append(
+                f"{label:<11s} {status_icon} {vstr} / {thr_str} {unit}  ({pct})"
+            )
+        # Wind + sun extras (no threshold concept).
+        wind = cur.get("wind_gusts_10m")
+        if wind is not None:
+            lines.append(f"💨 Wind     🟢 {wind:.0f} km/h")
+        sun_alt = cur.get("sun_altitude")
+        sun_extra = ""
+        try:
+            sun_times = wsvc.sun_times_today() if hasattr(wsvc, "sun_times_today") else {}
+            sunset_iso = (sun_times or {}).get("sunset")
+            if sunset_iso:
+                sunset_dt = datetime.fromisoformat(sunset_iso)
+                if sunset_dt > now:
+                    delta_min = int((sunset_dt - now).total_seconds() / 60)
+                    h, m = divmod(delta_min, 60)
+                    sun_extra = f" · Untergang in {h} h {m:02d} min" if h else f" · Untergang in {m} min"
+        except Exception:
+            pass
+        if sun_alt is not None:
+            lines.append(f"☀ Sonne     {sun_alt:.0f}° hoch{sun_extra}")
+        # Active events line
+        from .weather_service import EVENT_LABEL_DE
+        active_evs = [EVENT_LABEL_DE.get(e, e) for e, on in cur_state.items() if on]
+        lines.append("")
+        lines.append("Aktive Ereignisse: " + (", ".join(active_evs) if active_evs else "keine"))
+        rows = [
+            [InlineKeyboardButton("🔄 Aktualisieren", callback_data="menu:wetter"),
+             InlineKeyboardButton("🏠 Hauptmenü",     callback_data="menu:root")],
+        ]
+        return "\n".join(lines), InlineKeyboardMarkup(rows)
+
+    # Keep the old name as an alias so the existing `menu:wetter` route
+    # in _handle_menu_cb keeps resolving — phase 1 wired it up via that
+    # method name. No external callers rely on the helper name itself.
     def _wetter_view(self) -> tuple[str, InlineKeyboardMarkup]:
-        return self._stub_view("⛅ Wetter")
+        return self._wetter_tile_view()
 
     def _system_view(self) -> tuple[str, InlineKeyboardMarkup]:
-        # The /status renderer already produces a system overview — reuse
-        # it as the body so this stub is at least informative on day one.
+        """🛠 System — per-cam disk breakdown + global health checks."""
+        import shutil as _sh
+        from html import escape as _esc
+        lines = ["🛠 <b>System</b>", "─────────────"]
+        # Per-cam storage breakdown
+        cams_info = self._active_cams()
+        cam_disk_total = 0
+        if cams_info:
+            lines.append("Speicher pro Kamera:")
+            for info in cams_info:
+                cam_id = info["cam_id"]
+                name = _esc(info["name"])
+                root = self._storage_root()
+                parts = []
+                row_total = 0
+                for sub_label, sub in [("Events", "motion_detection"),
+                                        ("TL", "timelapse"),
+                                        ("Frames", "timelapse_frames")]:
+                    p = root / sub / cam_id
+                    bs = 0
+                    if p.exists():
+                        try:
+                            for f in p.rglob("*"):
+                                if f.is_file():
+                                    try:
+                                        bs += f.stat().st_size
+                                    except OSError:
+                                        pass
+                        except Exception:
+                            pass
+                    row_total += bs
+                    parts.append(f"{sub_label} {self._fmt_bytes(bs)}")
+                cam_disk_total += row_total
+                lines.append(f"  {name:<12s} {self._fmt_bytes(row_total):>8s}  ({' · '.join(parts)})")
+            lines.append("")
+        # Free disk
         try:
-            text = self._render_system_status_text()
+            usage = _sh.disk_usage(str(self._storage_root()))
+            free_gb = usage.free / (1024 ** 3)
+            total_gb = usage.total / (1024 ** 3)
+            lines.append(f"Gesamt frei: <b>{free_gb:.1f} GB</b> von {total_gb:.0f} GB")
         except Exception:
-            text = "🛠 <b>System</b>\n\n…wird in Kürze ergänzt."
-        markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("« Zurück", callback_data="menu:root")],
-        ])
-        return text, markup
+            free_gb = None
+            lines.append("Speicher: nicht ermittelbar")
+        lines.append("")
+        # Health rows
+        lines.append("Health:")
+        # Cam state
+        n_runtime = sum(1 for c in cams_info if c["source"] == "runtime")
+        n_fallback = sum(1 for c in cams_info if c["source"] == "settings")
+        if n_fallback == 0 and n_runtime > 0:
+            lines.append("  ✅ Alle Kameras online")
+        elif n_fallback > 0:
+            lines.append(f"  ⚠️ {n_fallback} im Fallback (Runtime nicht aktiv)")
+        elif n_runtime == 0:
+            lines.append("  ⚠️ Keine Kamera-Runtime aktiv")
+        # Reconnects 24h
+        for info in cams_info:
+            n24 = (info.get("status") or {}).get("reconnect_count_24h")
+            if isinstance(n24, int) and n24 > 3:
+                lines.append(f"  ⚠️ {_esc(info['name'])}: {n24} Reconnects letzte 24 h")
+        # Coral
+        cfg = self._cfg()
+        det_mode = (cfg.get("processing", {}).get("detection") or {}).get("mode", "none")
+        if det_mode == "coral":
+            avg_inferences = []
+            for info in cams_info:
+                v = (info.get("status") or {}).get("inference_avg_ms")
+                if isinstance(v, (int, float)) and v > 0:
+                    avg_inferences.append(v)
+            if avg_inferences:
+                lines.append(f"  ✅ Coral · {sum(avg_inferences) / len(avg_inferences):.0f} ms ø")
+            else:
+                lines.append("  ✅ Coral aktiv")
+        else:
+            lines.append(f"  ⚠️ Coral inaktiv (Modus: {det_mode})")
+        # Disk
+        if free_gb is not None:
+            if free_gb < 10:
+                lines.append(f"  🔴 Speicher: nur {free_gb:.1f} GB frei")
+            elif free_gb < 25:
+                lines.append(f"  ⚠️ Speicher: {free_gb:.1f} GB frei")
+            else:
+                lines.append(f"  ✅ Speicher: {free_gb:.0f} GB frei")
+        # Telegram polling
+        try:
+            ps = self.get_polling_status() if hasattr(self, "get_polling_status") else {}
+        except Exception:
+            ps = {}
+        ps_state = ps.get("state", "?")
+        if ps_state == "active":
+            lines.append("  ✅ Telegram-Polling aktiv")
+        elif ps_state in ("starting", "conflict"):
+            lines.append(f"  ⚠️ Telegram-Polling {ps_state}")
+        else:
+            lines.append(f"  🔴 Telegram-Polling {ps_state}")
+
+        rows = [
+            [InlineKeyboardButton("🔄 Aktualisieren", callback_data="menu:system"),
+             InlineKeyboardButton("🏠 Hauptmenü",     callback_data="menu:root")],
+        ]
+        return "\n".join(lines), InlineKeyboardMarkup(rows)
+
+    def _cam_deep_view(self, cam_id: str) -> tuple[str, InlineKeyboardMarkup]:
+        """📊 Mehr Status — per-cam deep view: cam header + today's
+        detections (filtered to this cam) + cam-only storage breakdown +
+        applicable health rows."""
+        from html import escape as _esc
+        info = next((c for c in self._active_cams() if c["cam_id"] == cam_id), None)
+        if info is None:
+            return ("Kamera nicht gefunden.",
+                    InlineKeyboardMarkup([[
+                        InlineKeyboardButton("« Zurück", callback_data="menu:cams"),
+                        InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root"),
+                    ]]))
+        # Header (reuse the cam block formatter from phase-1).
+        lines = list(self._render_camera_block(info))
+        lines.insert(0, f"📊 <b>Status</b>")
+        lines.append("─────────────")
+        # Today's events for this cam — first 6 entries.
+        today_iso = datetime.now().strftime("%Y-%m-%d")
+        try:
+            evs = self.store.list_events(cam_id, start=today_iso, limit=20) if self.store else []
+        except Exception:
+            evs = []
+        evs.sort(key=lambda e: e.get("time", ""), reverse=True)
+        if evs:
+            lines.append("Letzte Erkennungen heute:")
+            for ev in evs[:6]:
+                hm = (ev.get("time") or "")[11:16]
+                lines.append(f"  <code>{hm}</code> {self._event_icon(ev)} {_esc(self._event_primary_label(ev) or '?')}")
+            if len(evs) > 6:
+                lines.append(f"  … +{len(evs) - 6} weitere heute")
+        else:
+            lines.append("Heute noch keine Erkennungen.")
+        lines.append("")
+        # Per-cam storage breakdown
+        root = self._storage_root()
+        parts = []
+        row_total = 0
+        for sub_label, sub in [("Events", "motion_detection"),
+                                ("TL", "timelapse"),
+                                ("Frames", "timelapse_frames")]:
+            p = root / sub / cam_id
+            bs = 0
+            if p.exists():
+                try:
+                    for f in p.rglob("*"):
+                        if f.is_file():
+                            try:
+                                bs += f.stat().st_size
+                            except OSError:
+                                pass
+                except Exception:
+                    pass
+            row_total += bs
+            parts.append(f"{sub_label} {self._fmt_bytes(bs)}")
+        lines.append(f"Speicher: {self._fmt_bytes(row_total)}  ({' · '.join(parts)})")
+        # Health rows (per-cam subset)
+        st = info.get("status") or {}
+        n24 = st.get("reconnect_count_24h")
+        if isinstance(n24, int):
+            lines.append("")
+            if n24 > 3:
+                lines.append(f"⚠️ {n24} Reconnects letzte 24 h")
+            else:
+                lines.append(f"✅ {n24} Reconnects letzte 24 h")
+        infer = st.get("inference_avg_ms")
+        if isinstance(infer, (int, float)) and infer > 0:
+            lines.append(f"✅ Coral · {infer:.0f} ms ø")
+
+        rows = [
+            [InlineKeyboardButton("🔄 Aktualisieren",
+                                   callback_data=f"cam:{cam_id}:status"[:64])],
+            [InlineKeyboardButton("« Zurück zur Kamera",
+                                   callback_data=f"cam:{cam_id}:drilldown"[:64]),
+             InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root")],
+        ]
+        return "\n".join(lines), InlineKeyboardMarkup(rows)
 
     def _try_restart_runtime(self, cam_id: str) -> bool:
         """Lazy-import + invoke ``server.restart_single_camera`` so a cam
@@ -2064,14 +2577,10 @@ class TelegramService:
             await q.answer()
             return
         if verb == "status":
-            info = next((c for c in self._active_cams() if c["cam_id"] == cam_id), None)
-            if info is None:
-                await q.answer("Kamera nicht gefunden.")
-                return
-            body = "\n".join(["📊 " + line if i == 0 else line
-                              for i, line in enumerate(self._render_camera_block(info))])
-            rows = [[InlineKeyboardButton("◀ Zurück", callback_data=f"cam:{cam_id}:drilldown"[:64])]]
-            await self._render_view(q, (body, InlineKeyboardMarkup(rows)))
+            # Phase-2 deep view replaces the phase-1 stub: cam header +
+            # today's events + cam-only storage breakdown + applicable
+            # health rows. Renders in-place inside the same anchor.
+            await self._render_view(q, self._cam_deep_view(cam_id))
             await q.answer()
             return
         if verb == "mute1h":
@@ -2298,13 +2807,46 @@ class TelegramService:
             await q.answer()
             return
         if data == "menu:erkennungen":
-            await self._render_view(q, self._erkennungen_view(0)); await q.answer(); return
-        if data.startswith("menu:erkennungen:p:"):
+            chat_id = q.message.chat_id if q.message else None
+            st = self._tile_state_for(chat_id)
+            await self._render_view(q, self._erkennungen_view(
+                filter_cam=st.get("det_cam"), filter_kind=st.get("det_kind"), page=0))
+            await q.answer(); return
+        # Erkennungen pagination + filter sub-view + filter-state setters.
+        if data.startswith("det:page:"):
             try:
                 page = int(data.split(":")[-1])
             except ValueError:
                 page = 0
-            await self._render_view(q, self._erkennungen_view(page)); await q.answer(); return
+            chat_id = q.message.chat_id if q.message else None
+            st = self._tile_state_for(chat_id)
+            await self._render_view(q, self._erkennungen_view(
+                filter_cam=st.get("det_cam"), filter_kind=st.get("det_kind"), page=page))
+            await q.answer(); return
+        if data == "det:filter":
+            chat_id = q.message.chat_id if q.message else None
+            await self._render_view(q, self._erkennungen_filter_view(chat_id))
+            await q.answer(); return
+        if data.startswith("det:setcam:"):
+            chat_id = q.message.chat_id if q.message else None
+            st = self._tile_state_for(chat_id)
+            sel = data.split(":", 2)[2]
+            st["det_cam"] = None if sel == "_all" else sel
+            await self._render_view(q, self._erkennungen_filter_view(chat_id))
+            await q.answer(); return
+        if data.startswith("det:setkind:"):
+            chat_id = q.message.chat_id if q.message else None
+            st = self._tile_state_for(chat_id)
+            sel = data.split(":", 2)[2]
+            st["det_kind"] = None if sel == "_all" else sel
+            await self._render_view(q, self._erkennungen_filter_view(chat_id))
+            await q.answer(); return
+        if data == "det:apply":
+            chat_id = q.message.chat_id if q.message else None
+            st = self._tile_state_for(chat_id)
+            await self._render_view(q, self._erkennungen_view(
+                filter_cam=st.get("det_cam"), filter_kind=st.get("det_kind"), page=0))
+            await q.answer(); return
         if data == "menu:stats" or data == "menu:stats:today":
             await self._render_view(q, self._stats_view(days=1)); await q.answer(); return
         if data == "menu:stats:week":
