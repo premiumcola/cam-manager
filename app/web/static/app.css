@@ -282,13 +282,9 @@ select option{background:#1e1e1e;color:#c8c8c8}
 .cat-filter-btn[data-val=""].active{background:rgba(255,255,255,.18);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
 /* Special: "Bewegung" uses an inverted solid light fill with dark text —
    the wind-white motion colour is too faint against a dark surface at .15. */
-.cat-filter-btn[data-val="motion"]{background:rgba(203,213,225,.85);color:#334155}
-.cat-filter-btn[data-val="motion"]:hover{background:rgba(203,213,225,.95)}
-.cat-filter-btn[data-val="motion"].active{background:#e2e8f0;color:#0f172a;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
+/* motion / car overrides intentionally removed — see canonical
+   .media-pill.cat-filter-btn contract further down. */
 /* Special: "Auto" uses an inverted dark solid fill with light text — by spec. */
-.cat-filter-btn[data-val="car"]{background:rgba(15,23,42,.85);color:#e2e8f0}
-.cat-filter-btn[data-val="car"]:hover{background:rgba(15,23,42,.95)}
-.cat-filter-btn[data-val="car"].active{background:#0f172a;color:#fff;box-shadow:inset 0 0 0 1px rgba(248,113,113,.45)}
 .moc-body{padding:12px 14px;display:flex;flex-direction:column;gap:5px;flex:1}
 .moc-name{font-size:14px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
 .moc-desc{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.4}
@@ -1209,9 +1205,43 @@ select option{background:#1e1e1e;color:var(--text)}
 .stat-empty{color:var(--muted);font-size:13px;padding:20px 0;text-align:center}
 /* Override media-pill base styles when cat-filter-btn is also applied —
    delegate to the .cat-filter-btn flat style above so both bars look the same. */
-.media-pill.cat-filter-btn{border:none;padding:8px 14px;border-radius:10px;min-width:0;background:color-mix(in srgb,var(--cb,#8888aa) 15%,transparent);color:var(--cb,#94a3b8);font-weight:700}
-.media-pill.cat-filter-btn:hover{background:color-mix(in srgb,var(--cb,#8888aa) 24%,transparent);border-color:transparent}
-.media-pill.cat-filter-btn.active{background:color-mix(in srgb,var(--cb,#8888aa) 38%,transparent);color:#fff;border-color:transparent;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cb,#8888aa) 55%,transparent)}
+/* Filter pill state contract:
+   inactive  = transparent background, faint text in the cam's --cb tone.
+               Reads as "deselected, available". No border — depth comes
+               from the bar's row contrast.
+   active    = solid 22 % --cb tint, full-saturation --cb foreground,
+               leading ✓ glyph, inset shadow that says "pressed in".
+               At-a-glance distinction from inactive even on a glare-lit
+               iPhone screen.
+   empty     = greyed and non-interactive (.media-pill--empty rule below). */
+.media-pill.cat-filter-btn{
+  border:none;padding:6px 14px;border-radius:10px;min-width:0;min-height:36px;
+  background:transparent;color:color-mix(in srgb,var(--cb,#94a3b8) 55%,transparent);
+  font-weight:600;
+}
+.media-pill.cat-filter-btn:hover{
+  background:color-mix(in srgb,var(--cb,#94a3b8) 12%,transparent);
+  color:color-mix(in srgb,var(--cb,#94a3b8) 80%,transparent);
+}
+.media-pill.cat-filter-btn.active{
+  background:color-mix(in srgb,var(--cb,#94a3b8) 22%,transparent);
+  color:var(--cb,#94a3b8);font-weight:700;
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cb,#94a3b8) 35%,transparent),
+             inset 0 1px 2px rgba(0,0,0,0.18);
+}
+.media-pill.cat-filter-btn.active::before{
+  content:"✓";font-size:12px;font-weight:800;line-height:1;
+  color:var(--cb,#94a3b8);
+  flex-shrink:0;
+}
+/* "alle Filter aus" status hint — read-only, never tappable, lives at
+   the end of the bar so the user notices it after deselecting all chips. */
+.media-pill.media-pill--status{
+  background:rgba(255,255,255,0.04);color:var(--muted);
+  font-size:11px;font-weight:600;font-style:italic;
+  padding:4px 10px;min-height:32px;letter-spacing:0.02em;cursor:default;
+  border:1px dashed rgba(255,255,255,0.12);
+}
 .media-section-title{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%}
 .media-section-title svg{flex-shrink:0;opacity:.85}
 .media-section-title .mst-cam-icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;line-height:1}
@@ -1221,12 +1251,11 @@ select option{background:#1e1e1e;color:var(--text)}
 .media-pill.cat-filter-btn.media-pill--empty{background:rgba(255,255,255,.05)!important;color:#6b7280!important;opacity:1;pointer-events:none;cursor:default;box-shadow:none!important}
 .media-pill.cat-filter-btn.media-pill--empty .cfb-icon{filter:grayscale(1) brightness(.75) contrast(1.1)}
 .moc-filter-bar{margin-bottom:14px}
-.media-pill.cat-filter-btn[data-val="motion"]{background:rgba(203,213,225,.85);color:#334155}
-.media-pill.cat-filter-btn[data-val="motion"]:hover{background:rgba(203,213,225,.95)}
-.media-pill.cat-filter-btn[data-val="motion"].active{background:#e2e8f0;color:#0f172a;box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
-.media-pill.cat-filter-btn[data-val="car"]{background:rgba(15,23,42,.85);color:#e2e8f0}
-.media-pill.cat-filter-btn[data-val="car"]:hover{background:rgba(15,23,42,.95)}
-.media-pill.cat-filter-btn[data-val="car"].active{background:#0f172a;color:#fff;box-shadow:inset 0 0 0 1px rgba(248,113,113,.45)}
+/* motion / car / timelapse used to have hand-tuned dark/light backgrounds
+   that fought the canonical active/inactive contract — they end up almost
+   indistinguishable from the inactive state on a glare-lit phone. The
+   canonical .cat-filter-btn rule above produces clear contrast in each
+   label's --cb tone, so the per-label overrides are gone. */
 /* ── Fullscreen button ───────────────────────────────────────────────────── */
 .fake-fullscreen{position:fixed!important;inset:0!important;z-index:9999!important;width:100vw!important;height:100dvh!important;border-radius:0!important;background:#000!important;margin:0!important}
 
