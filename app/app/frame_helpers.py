@@ -66,6 +66,47 @@ _COLORBAR_ROW_SAMPLES = 9
 _COLORBAR_PER_ROW_STD = 6.0   # each sampled row must be near-uniform
 _COLORBAR_BETWEEN_ROW_STD = 35.0  # but row-to-row variance is huge
 
+# Tile-based dead-area scoring — catches three real-world corruption modes
+# that slip past the global heuristics above:
+#   (a) Frame is mostly uniform grey but a thin band at the top still
+#       contains the live OSD timestamp (decoder partial-block-loss).
+#   (b) Whole frame is grey-toned macroblock noise (lost reference frames in
+#       H.264) where per-channel std lands around 15–25 — too high for the
+#       grey-uniform rule but with no real edges anywhere.
+#   (c) Half the frame is a glitched colourful smear, the other half grey
+#       noise — neither half on its own trips the existing per-quadrant
+#       checks.
+# Tile a frame into _TILE_GRID_W × _TILE_GRID_H cells; flag a tile as "dead"
+# when it has no real spatial detail (low std AND low Laplacian variance,
+# OR mid-grey-band mean with low edge density). Reject the frame when more
+# than _TILE_DEAD_FRACTION of tiles are dead. 8×5 tiles is a good balance
+# between resolution (catches a 12.5 % strip) and CPU cost (~40 calls per
+# frame, all numpy/cv2 vectorised).
+_TILE_GRID_W = 8
+_TILE_GRID_H = 5
+# A 5×5 box blur preserves real low-frequency structure and collapses
+# pixel-level random noise. Comparing the tile's std against the *blurred*
+# tile's std separates "real imagery" (blur survives) from "white noise"
+# (blur kills it). Macroblock corruption produces tiles with high raw std
+# but low blurred std — exactly what we want to flag.
+_TILE_BLUR_KSIZE = 5
+_TILE_DEAD_BLURRED_STD_FLOOR = 3.0   # blurred std under this → no real structure
+_TILE_GREY_BAND_MIN = 100.0          # mid-grey band lower bound
+_TILE_GREY_BAND_MAX = 160.0          # mid-grey band upper bound
+_TILE_GREY_BAND_BLURRED_STD = 6.0    # mid-grey tile passes only with real low-freq detail
+_TILE_DEAD_FRACTION = 0.55           # > 55 % dead tiles → reject the frame
+
+# Frame-level "grey-toned mid-luma" gate. Catches H.264 macroblock-corruption
+# frames that escape the per-tile dead-area test because each tile has
+# variance from block-to-block randomness — but the WHOLE FRAME is grey-toned
+# (B≈G≈R) and sits at mid-luma. Real IR-night frames are also chroma-flat but
+# they're dark (luma well below 80), so the luma-band guard prevents false
+# positives. Real daytime frames have plenty of inter-channel variation and
+# easily clear the chroma threshold.
+_GREY_TONED_LUMA_MIN = 100.0
+_GREY_TONED_LUMA_MAX = 160.0
+_GREY_TONED_CHROMA_STD_MAX = 8.0
+
 
 # ── Decoding helper ──────────────────────────────────────────────────────────
 def _decode(img_or_bytes) -> "np.ndarray | None":
@@ -101,6 +142,51 @@ def is_grey_frame(img) -> tuple[bool, str]:
             and std_sum < _GREY_MIDBAND_TOTAL_STD):
         return True, f"grey_midband(brightness={mean_brightness:.0f},std_sum={std_sum:.1f})"
     return False, ""
+
+
+def dead_area_score(img) -> tuple[float, int, int]:
+    """Score a frame for "dead area" using a fixed tile grid.
+
+    Returns (dead_fraction, dead_tile_count, total_tile_count). A tile is
+    "dead" when it has no real texture (low gray std AND low Laplacian
+    variance) OR when it sits in the mid-grey band with low edge density.
+    Genuine dark/IR frames have noisy texture in every tile and stay near
+    zero; corrupted frames with a thin live strip on top score around
+    0.85 (the strip has texture, everything below is dead)."""
+    img = _decode(img)
+    if img is None or img.size == 0:
+        return 1.0, 0, 0
+    h, w = img.shape[:2]
+    if h < _TILE_GRID_H * 4 or w < _TILE_GRID_W * 4:
+        return 0.0, 0, 0  # too small to tile usefully — caller has other gates
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # Blur once across the whole frame, then crop tiles. The blur kills
+    # pixel-level noise (random or macroblock jitter) but preserves real
+    # low-frequency structure, so std on the blurred tile is the cleanest
+    # "is there real imagery in this tile" signal.
+    blurred = cv2.blur(gray, (_TILE_BLUR_KSIZE, _TILE_BLUR_KSIZE))
+    th, tw = h // _TILE_GRID_H, w // _TILE_GRID_W
+    dead = 0
+    total = 0
+    for ty in range(_TILE_GRID_H):
+        for tx in range(_TILE_GRID_W):
+            y0, y1 = ty * th, (ty + 1) * th
+            x0, x1 = tx * tw, (tx + 1) * tw
+            blurred_tile = blurred[y0:y1, x0:x1]
+            bstd = float(blurred_tile.std())
+            tmean = float(blurred_tile.mean())
+            tile_dead = False
+            if bstd < _TILE_DEAD_BLURRED_STD_FLOOR:
+                tile_dead = True
+            elif (_TILE_GREY_BAND_MIN <= tmean <= _TILE_GREY_BAND_MAX
+                  and bstd < _TILE_GREY_BAND_BLURRED_STD):
+                tile_dead = True
+            if tile_dead:
+                dead += 1
+            total += 1
+    if total == 0:
+        return 0.0, 0, 0
+    return dead / total, dead, total
 
 
 def is_colorbar(img) -> tuple[bool, str]:
@@ -181,6 +267,26 @@ def is_valid_frame(img) -> tuple[bool, str]:
     grey, grey_reason = is_grey_frame(img)
     if grey:
         return False, grey_reason
+
+    # Tile-based dead-area scoring — catches partially-corrupt frames where
+    # only a thin strip carries real imagery (the rest is mid-grey or
+    # macroblock noise).
+    dead_frac, dead_n, total_n = dead_area_score(img)
+    if total_n > 0 and dead_frac > _TILE_DEAD_FRACTION:
+        return False, f"dead_area({dead_n}/{total_n}={dead_frac:.0%})"
+
+    # Grey-toned mid-luma gate — frame-level fallback for blocky H.264
+    # macroblock corruption. Such frames have inter-channel variance ≈ 0
+    # (B=G=R from chroma drop-out) and luma stuck in the mid-grey band.
+    # IR/night passes because it's dark; daytime passes because real
+    # scenes carry chroma even under desaturated lighting.
+    luma = (b + g + r) / 3.0
+    chroma_std_bg = float(np.abs(img[:, :, 0].astype(np.int16) - img[:, :, 1]).std())
+    chroma_std_br = float(np.abs(img[:, :, 0].astype(np.int16) - img[:, :, 2]).std())
+    chroma_std = (chroma_std_bg + chroma_std_br) / 2.0
+    if (_GREY_TONED_LUMA_MIN <= luma <= _GREY_TONED_LUMA_MAX
+            and chroma_std < _GREY_TONED_CHROMA_STD_MAX):
+        return False, (f"grey_toned(luma={luma:.0f},chroma_std={chroma_std:.1f})")
 
     # Test-pattern colorbar
     bar, bar_reason = is_colorbar(img)
