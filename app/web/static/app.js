@@ -389,13 +389,14 @@ function _aggregateMediaCounts(){
 }
 
 function _seedTopMediaLabel(){
+  // Seed-all-available: pre-select every label that actually has items
+  // in the currently-aggregated counts. Tapping a pill DESELECTS it;
+  // tapping again reselects. An empty Set is a UX shortcut for "no filter
+  // active → show everything" — never an empty grid.
   const counts=_aggregateMediaCounts();
-  let top=null,topCnt=0;
-  for(const l of MEDIA_FILTER_LABELS){
-    if(counts[l]>topCnt){ top=l; topCnt=counts[l]; }
-  }
-  if(top){ state.mediaLabels=new Set([top]); return true; }
-  return false;
+  const present=MEDIA_FILTER_LABELS.filter(l=>(counts[l]||0)>0);
+  state.mediaLabels=new Set(present);
+  return present.length>0;
 }
 
 function _pruneEmptyMediaFilters(){
@@ -419,7 +420,7 @@ function renderMediaFilterPills(mode){
     return MEDIA_FILTER_LABELS.indexOf(a)-MEDIA_FILTER_LABELS.indexOf(b);
   });
   const labels=mode==='overview'?sorted:sorted.filter(l=>(counts[l]||0)>0);
-  bar.innerHTML=labels.map(l=>{
+  let html=labels.map(l=>{
     const cnt=counts[l]||0;
     const empty=cnt===0;
     const active=mode==='drilldown'&&state.mediaLabels.has(l);
@@ -428,6 +429,13 @@ function renderMediaFilterPills(mode){
     const cntChip=(mode==='drilldown'&&cnt>0)?`<span class="mp-count" style="pointer-events:none">${cnt}</span>`:'';
     return `<button type="button" class="${cls}" data-type="label" data-val="${l}" style="--cb:${cb}"${empty?' tabindex="-1" aria-disabled="true"':''}><span class="cfb-icon" style="pointer-events:none">${objIconSvg(l,18)}</span><span style="pointer-events:none">${OBJ_LABEL[l]||l}</span>${cntChip}</button>`;
   }).join('');
+  // Status hint when the user has deselected every filter — the grid then
+  // falls back to "show everything", and this pill keeps the state
+  // visible so the user knows nothing is being hidden.
+  if(mode==='drilldown' && state.mediaLabels.size===0 && labels.length>0){
+    html+=`<span class="media-pill media-pill--status" aria-disabled="true">alle Filter aus</span>`;
+  }
+  bar.innerHTML=html;
   bar.querySelectorAll('.media-pill').forEach(p=>{
     if(p.classList.contains('media-pill--empty')) return;
     const val=p.dataset.val;
@@ -6658,15 +6666,28 @@ const WEATHER_FIELD_UNIT_DE = {
 };
 
 async function loadWeatherSightings(filter){
+  // Filter migrates from single-string to Set semantics: state.weather.filter
+  // is a Set of event_type strings. Empty Set = "no filter, show everything"
+  // (matches the Mediathek pill UX). Server fetch always pulls the full list
+  // — filtering happens client-side in _renderWeatherGrid so toggling pills
+  // doesn't trigger a network round-trip. The legacy single-string call site
+  // is still tolerated: a string argument seeds a single-member Set.
   try{
-    const params = new URLSearchParams();
-    if (filter) params.set('event_type', filter);
-    const r = await fetch('/api/weather/sightings' + (params.toString() ? '?' + params : ''));
+    const r = await fetch('/api/weather/sightings');
     const data = await r.json();
     state.weather.items = data.items || [];
     state.weather.counts = data.counts || {};
     state.weather.total = data.total || 0;
-    state.weather.filter = filter || null;
+    if (filter instanceof Set) {
+      state.weather.filter = filter;
+    } else if (typeof filter === 'string' && filter) {
+      state.weather.filter = new Set([filter]);
+    } else if (!(state.weather.filter instanceof Set)) {
+      // First load → seed with every event type that has items, mirroring
+      // the Mediathek "all on by default" rule.
+      const present = Object.keys(WEATHER_TYPES).filter(t => (state.weather.counts[t]||0) > 0);
+      state.weather.filter = new Set(present);
+    }
     renderWeatherSightings();
   }catch(e){
     // silently degrade — section stays empty
@@ -6694,22 +6715,30 @@ function _renderWeatherFilterPills(){
     const d = (counts[b]||0) - (counts[a]||0);
     return d || (types.indexOf(a) - types.indexOf(b));
   });
-  const sel = state.weather.filter;
-  bar.innerHTML = sorted.map(t => {
+  const sel = state.weather.filter instanceof Set ? state.weather.filter : new Set();
+  let html = sorted.map(t => {
     const meta = WEATHER_TYPES[t];
     const cnt = counts[t] || 0;
     const empty = cnt === 0;
-    const active = sel === t;
+    const active = sel.has(t);
     const cls = `media-pill cat-filter-btn${active ? ' active' : ''}${empty ? ' media-pill--empty' : ''}`;
     const cntChip = cnt > 0 ? `<span class="mp-count" style="pointer-events:none">${cnt}</span>` : '';
     return `<button type="button" class="${cls}" data-type="weather" data-val="${esc(t)}" style="--cb:${meta.color}"${empty ? ' tabindex="-1" aria-disabled="true"' : ''}><span class="cfb-icon" style="pointer-events:none;color:${meta.color}">${meta.icon}</span><span style="pointer-events:none">${esc(meta.de)}</span>${cntChip}</button>`;
   }).join('');
+  if (sel.size === 0) {
+    html += `<span class="media-pill media-pill--status" aria-disabled="true">alle Filter aus</span>`;
+  }
+  bar.innerHTML = html;
   bar.querySelectorAll('.media-pill').forEach(p => {
     if (p.classList.contains('media-pill--empty')) return;
+    if (p.classList.contains('media-pill--status')) return;
     p.addEventListener('click', () => {
       const val = p.dataset.val;
-      const next = state.weather.filter === val ? null : val;
-      loadWeatherSightings(next);
+      if (!(state.weather.filter instanceof Set)) state.weather.filter = new Set();
+      if (state.weather.filter.has(val)) state.weather.filter.delete(val);
+      else state.weather.filter.add(val);
+      // No fetch needed — filtering is client-side now.
+      renderWeatherSightings();
     });
   });
 }
@@ -6717,7 +6746,13 @@ function _renderWeatherFilterPills(){
 function _renderWeatherGrid(){
   const grid = byId('weatherSightingsGrid'); if (!grid) return;
   const empty = byId('weatherSightingsEmpty');
-  const items = state.weather.items || [];
+  const allItems = state.weather.items || [];
+  // Client-side filter: include items whose event_type is in the active
+  // filter Set. Empty Set = "no filter active → show all" (matches the
+  // Mediathek mental model).
+  const sel = state.weather.filter instanceof Set ? state.weather.filter : new Set();
+  const items = sel.size === 0 ? allItems
+                                : allItems.filter(s => sel.has(s.event_type));
   if (!items.length) {
     grid.innerHTML = '';
     if (empty) empty.hidden = false;
