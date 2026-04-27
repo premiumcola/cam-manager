@@ -302,19 +302,33 @@ def _compute_camera_diff(
 
 
 def restart_single_camera(cam_id: str):
-    """Stop and restart one camera runtime with fresh config."""
+    """Stop and restart one camera runtime with fresh config.
+
+    Logs every outcome (added / skipped / exception) at INFO level so a
+    silent constructor crash can't make a configured camera disappear
+    from /status and the Telegram bot's cam-picker without a trace."""
+    log = logging.getLogger(__name__)
     existing = runtimes.pop(cam_id, None)
     if existing:
         existing.stop()
     _runtime_cfgs.pop(cam_id, None)
     cam_cfg = get_camera_cfg(cam_id)
-    if cam_cfg and cam_cfg.get("enabled", True):
+    if not cam_cfg:
+        log.info("[Boot] runtime %s skipped (not in settings)", cam_id)
+        return
+    if not cam_cfg.get("enabled", True):
+        log.info("[Boot] runtime %s skipped (disabled)", cam_id)
+        return
+    try:
         rt = CameraRuntime(cam_id, get_camera_cfg, cfg, store, telegram_service,
                            mqtt=mqtt_service, cat_registry=cat_registry,
                            person_registry=person_registry)
         runtimes[cam_id] = rt
         _runtime_cfgs[cam_id] = _copy.deepcopy(cam_cfg)
         rt.start()
+        log.info("[Boot] runtime %s added to runtimes", cam_id)
+    except Exception as e:
+        log.error("[Boot] runtime %s constructor failed: %s", cam_id, e, exc_info=True)
 
 
 def rebuild_runtimes():
@@ -341,6 +355,19 @@ def rebuild_runtimes():
 
     for cam_id in to_restart | to_add:
         restart_single_camera(cam_id)
+
+    # One-line boot summary so the operator can see at a glance whether
+    # all configured cameras are running. The Telegram fallback path
+    # surfaces "missing" cameras to the user; this log line surfaces them
+    # to the host shell.
+    log = logging.getLogger(__name__)
+    expected = list(new_cam_cfgs.keys())
+    running = sorted(runtimes.keys())
+    missing = sorted(set(expected) - set(running))
+    log.info("[Boot] runtimes ready: %d camera(s) (ids: %s)%s",
+             len(running),
+             ", ".join(running) if running else "—",
+             f" — {len(missing)} skipped/failed: {', '.join(missing)}" if missing else "")
 
 
 rebuild_runtimes()
