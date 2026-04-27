@@ -49,6 +49,10 @@ _VIDEO_LIMIT_BYTES = 50 * 1024 * 1024
 # so it stays visible under the input field across sessions. Every plain
 # outbound send (no inline buttons) reattaches it as reply_markup so a user
 # who installs the bot fresh sees the keyboard on the very first message.
+ACTION_MENU = "🏠 Menü"
+# Legacy text actions — no longer on the persistent keyboard but kept
+# as constants because the slash-command handlers (/live, /clip, …)
+# and the inline-button callbacks reuse the same _handle_* methods.
 ACTION_LIVE = "📷 Live-Bild"
 ACTION_CLIP = "🎬 5 s Clip"
 ACTION_STATUS = "📊 Status"
@@ -57,18 +61,20 @@ ACTION_CAMS = "📹 Kameras"
 
 PERSISTENT_KEYBOARD = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(ACTION_LIVE), KeyboardButton(ACTION_CLIP)],
-        [KeyboardButton(ACTION_STATUS), KeyboardButton(ACTION_MUTE)],
-        # Third row, full-width: per-cam drilldown picker. The four
-        # per-cam actions (Live / Clip / Status / 1 h Mute) live behind
-        # this row so the top-level keyboard stays at five visible
-        # buttons.
-        [KeyboardButton(ACTION_CAMS)],
+        # Single row, single button — every navigation step now happens via
+        # inline-button callbacks that edit the anchor message in place.
+        # The chat history only grows when the user actually requests
+        # deliverable content (snapshot, clip, mute confirm); navigation
+        # is invisible to the chat log.
+        [KeyboardButton(ACTION_MENU)],
     ],
     resize_keyboard=True,
     is_persistent=True,
     one_time_keyboard=False,
 )
+
+# Runtime store key for the per-chat anchor message (chat_id + message_id).
+ANCHOR_KEY = "telegram_anchor"
 
 # ── Slash-command catalogue (sent to Telegram via setMyCommands) ─────────────
 BOT_COMMANDS = [
@@ -968,16 +974,52 @@ class TelegramService:
         return InlineKeyboardButton("« Zurück", callback_data=target)
 
     def _root_view(self) -> tuple[str, InlineKeyboardMarkup]:
-        text = "🌳 <b>Garden Monitor</b>\nWähle eine Aktion:"
-        markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("📷 Live-Bild", callback_data="menu:livebild"),
-             InlineKeyboardButton("🎬 Clip 5/15/30 s", callback_data="menu:clip")],
-            [InlineKeyboardButton("⏱ Zeitraffer", callback_data="menu:zeitraffer"),
-             InlineKeyboardButton("📋 Letzte Erkennungen", callback_data="menu:erkennungen")],
-            [InlineKeyboardButton("📊 Statistik", callback_data="menu:stats"),
-             InlineKeyboardButton("🛠 Kamera-Status", callback_data="menu:status")],
-        ])
-        return text, markup
+        """Anchor's root view. Header carries one line per camera so the
+        operator sees liveness at a glance; the eight tile buttons cover
+        every drilldown reachable from this bubble."""
+        from html import escape as _esc
+        today_iso = datetime.now().strftime("%Y-%m-%d")
+        hh = datetime.now().strftime("%H:%M")
+        lines = [f"🌳 <b>Tam-Spy</b> · {hh}"]
+        for info in self._active_cams():
+            icon = self._cam_status_icon_for(info)
+            n_today = "?"
+            if self.store:
+                try:
+                    n_today = len(self.store.list_events(info["cam_id"],
+                                                          start=today_iso, limit=5000))
+                except Exception:
+                    n_today = "?"
+            lines.append(f"{icon} {_esc(info['name'])} · {n_today} Events heute")
+        if not self._active_cams():
+            lines.append("(keine Kameras konfiguriert)")
+        lines.append("─────────────")
+        # Mute toggle button: "off" → "Alles still 1 h"; on → "Stumm bis HH:MM".
+        mute_until = 0.0
+        if self.settings_store:
+            try:
+                mute_until = float(self.settings_store.runtime_get("global_mute_until") or 0)
+            except Exception:
+                mute_until = 0.0
+        if mute_until and time.time() < mute_until:
+            mute_label = (f"🔊 Stumm bis "
+                          f"{datetime.fromtimestamp(mute_until).strftime('%H:%M')} — wieder anschalten")
+            mute_cb = "mute:end"
+        else:
+            mute_label = "🔇 Alles still 1 h"
+            mute_cb = "menu:muteall"
+        rows = [
+            [InlineKeyboardButton("📷 Live-Bild",  callback_data="menu:livebild"),
+             InlineKeyboardButton("🎬 Clip",        callback_data="menu:clip")],
+            [InlineKeyboardButton("📋 Erkennungen", callback_data="menu:erkennungen"),
+             InlineKeyboardButton("📊 Statistik",   callback_data="menu:stats")],
+            [InlineKeyboardButton("🐦 Tier-Log",    callback_data="menu:tierlog"),
+             InlineKeyboardButton("⛅ Wetter",       callback_data="menu:wetter")],
+            [InlineKeyboardButton("📹 Kameras",     callback_data="menu:cams"),
+             InlineKeyboardButton("🛠 System",       callback_data="menu:system")],
+            [InlineKeyboardButton(mute_label,       callback_data=mute_cb)],
+        ]
+        return "\n".join(lines), InlineKeyboardMarkup(rows)
 
     def _cam_status_icon(self, st: dict) -> str:
         s = st.get("status", "")
@@ -1224,23 +1266,101 @@ class TelegramService:
             log.debug("[Telegram] edit failed (%s); sending new message", e)
             await q.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
 
-    async def cmd_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        self.log_action("menu_open")
-        text, markup = self._root_view()
-        # Reattach the persistent keyboard on /start so a new chat sees it
-        # immediately. Subsequent messages with inline buttons keep the
-        # keyboard visible because Telegram persists it server-side once
-        # registered.
-        await update.message.reply_text(
-            text, reply_markup=markup, parse_mode="HTML",
-        )
+    # ── Anchor message lifecycle ──────────────────────────────────────────
+    # The bot keeps a single "anchor" message per chat — the root menu
+    # bubble. Every navigation step is an edit_message_text on that
+    # bubble; the chat history only grows for actual deliverables
+    # (snapshot, clip, mute confirm). The (chat_id, message_id) survives
+    # bot restarts because it's persisted in settings.runtime.
+    def _get_anchor(self) -> tuple[int, int] | None:
+        if not self.settings_store:
+            return None
         try:
-            await update.message.reply_text(
-                "💡 Schnellzugriff bleibt unten.",
-                reply_markup=PERSISTENT_KEYBOARD,
-            )
+            data = self.settings_store.runtime_get(ANCHOR_KEY)
+        except Exception:
+            return None
+        if not isinstance(data, dict):
+            return None
+        cid = data.get("chat_id")
+        mid = data.get("message_id")
+        try:
+            return (int(cid), int(mid)) if cid and mid else None
+        except (TypeError, ValueError):
+            return None
+
+    def _save_anchor(self, chat_id: int, message_id: int):
+        if not self.settings_store:
+            return
+        try:
+            self.settings_store.runtime_set(ANCHOR_KEY,
+                                            {"chat_id": int(chat_id),
+                                             "message_id": int(message_id)})
+        except Exception as e:
+            log.warning("[Telegram] anchor save failed: %s", e)
+
+    def _drop_anchor(self):
+        if not self.settings_store:
+            return
+        try:
+            self.settings_store.runtime_set(ANCHOR_KEY, {})
         except Exception:
             pass
+
+    async def _anchor_send_or_edit(self, bot, chat_id: int,
+                                   view: tuple[str, InlineKeyboardMarkup]):
+        """Try to edit the persisted anchor in chat_id; on failure (anchor
+        deleted, expired, message_id from a different chat), send a fresh
+        message and persist its id. The fresh-send path attaches
+        PERSISTENT_KEYBOARD then edits the message to swap in the inline
+        keyboard — net result is one anchor with inline buttons AND the
+        '🏠 Menü' reply keyboard active under the input field. Telegram
+        persists the reply keyboard server-side after the first such
+        message, so subsequent edits don't need to reattach it.
+
+        Logs the stale-anchor transition once at INFO so a steady stream
+        of churn is easy to spot in the log tail."""
+        text, inline_markup = view
+        anchor = self._get_anchor()
+        if anchor and anchor[0] == int(chat_id):
+            try:
+                await bot.edit_message_text(
+                    chat_id=chat_id, message_id=anchor[1],
+                    text=text, reply_markup=inline_markup, parse_mode="HTML",
+                )
+                return anchor[1]
+            except Exception as e:
+                log.info("[Telegram] anchor stale for chat=%s (%s) — sending fresh",
+                         chat_id, e)
+                self._drop_anchor()
+        msg = await bot.send_message(
+            chat_id=chat_id, text=text, parse_mode="HTML",
+            reply_markup=PERSISTENT_KEYBOARD,
+        )
+        try:
+            await bot.edit_message_reply_markup(
+                chat_id=chat_id, message_id=msg.message_id,
+                reply_markup=inline_markup,
+            )
+        except Exception as e:
+            log.warning("[Telegram] anchor inline-kb attach failed: %s", e)
+        self._save_anchor(chat_id, msg.message_id)
+        return msg.message_id
+
+    async def cmd_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Open or refresh the anchor bubble. /start, /menu, and the
+        '🏠 Menü' reply-keyboard text all flow through here. No textual
+        follow-up — the persistent keyboard sticks server-side once the
+        first anchor has been sent with it attached."""
+        self.log_action("menu_open")
+        chat_id = update.effective_chat.id if update.effective_chat else self.chat_id
+        try:
+            await self._anchor_send_or_edit(context.bot, chat_id, self._root_view())
+        except Exception as e:
+            log.warning("[Telegram] anchor open failed: %s", e)
+            text, markup = self._root_view()
+            await update.message.reply_text(
+                text, reply_markup=markup, parse_mode="HTML",
+            )
 
     async def cmd_today(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         text, markup = self._stats_view(days=1)
@@ -1634,27 +1754,31 @@ class TelegramService:
         )
 
     async def on_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """MessageHandler for the persistent reply-keyboard buttons. Dispatches
-        on exact-match button text; anything else gets a one-line hint that
-        also re-asserts the keyboard."""
+        """MessageHandler for free-form text. The persistent keyboard now has
+        only one button (🏠 Menü) which routes through cmd_menu; legacy
+        button labels (still occasionally surfaced by old chat clients)
+        keep their handlers as a courtesy."""
         if not update.message or not update.message.text:
             return
         txt = update.message.text.strip()
-        action_map = {
-            ACTION_LIVE: self._handle_livebild,
-            ACTION_CLIP: self._handle_clip5,
+        if txt == ACTION_MENU:
+            await self.cmd_menu(update, context)
+            return
+        # Legacy button labels — kept reachable so old clients with the
+        # 5-button keyboard cached don't suddenly see "💡 Tipp" replies.
+        legacy_map = {
+            ACTION_LIVE:   self._handle_livebild,
+            ACTION_CLIP:   self._handle_clip5,
             ACTION_STATUS: self._handle_status,
-            ACTION_MUTE: self._handle_mute_all,
-            ACTION_CAMS: self._handle_cameras,
+            ACTION_MUTE:   self._handle_mute_all,
+            ACTION_CAMS:   self._handle_cameras,
         }
-        handler = action_map.get(txt)
+        handler = legacy_map.get(txt)
         if handler:
             await handler(update, context)
             return
-        await update.message.reply_text(
-            "💡 Tipp: Nutze die Tasten unten oder /menu",
-            reply_markup=PERSISTENT_KEYBOARD,
-        )
+        # Anything else: silent. The user explicitly didn't want a
+        # "💡 Tipp" follow-up cluttering the chat for arbitrary text.
 
     # ── Callback router ───────────────────────────────────────────────────
     async def on_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1851,28 +1975,67 @@ class TelegramService:
     def _cam_drilldown_view(self, cam_id: str) -> tuple[str, InlineKeyboardMarkup]:
         """Per-cam drilldown rendered by ``menu:cams`` → cam:<id>:drilldown.
 
-        Body: same multi-line block /status uses for this cam.
-        Buttons: Live-Bild · 5 s Clip · Per-cam Status refresh · 1 h mute ·
-        Back to picker. Each button reuses the existing cam:<id>:* dispatch."""
-        # Find the camera info — runs through _active_cams so a fallback
-        # camera still gets a (degraded) drilldown rather than "not found".
+        Layout (phase-1 spec):
+          📹 <name>
+          🟢 scharf · 14 fps · letzter Frame vor 2 s
+          Heute: 12 Events · 3,1 GB belegt
+          ─────────────
+          [ 🔄 Neues Live-Bild ]
+          [ 🎬 5 s ] [ 🎬 15 s ] [ 🎬 30 s ]
+          [ 🔇 Pause 1 h ] [ 📊 Mehr Status ]
+          [ « Andere Kamera ] [ 🏠 Hauptmenü ]
+
+        For a fallback camera (runtime not bound), the live-stats line is
+        replaced by "Runtime nicht aktiv – wird gestartet …" and the
+        action buttons are still emitted but the click-time handlers
+        attempt a runtime restart (existing _try_restart_runtime path)."""
         info = next((c for c in self._active_cams() if c["cam_id"] == cam_id), None)
         if info is None:
             return ("Kamera nicht gefunden.",
-                    InlineKeyboardMarkup([[InlineKeyboardButton("◀ Zurück zur Übersicht",
-                                                                callback_data="menu:cams")]]))
+                    InlineKeyboardMarkup([[InlineKeyboardButton("« Andere Kamera",
+                                                                 callback_data="menu:cams"),
+                                            InlineKeyboardButton("🏠 Hauptmenü",
+                                                                 callback_data="menu:root")]]))
         body = "\n".join(["📹 " + line if i == 0 else line
                           for i, line in enumerate(self._render_camera_block(info))])
-        rows = [[
-            InlineKeyboardButton("📷 Live-Bild", callback_data=f"cam:{cam_id}:livebild"[:64]),
-            InlineKeyboardButton("🎬 5 s Clip", callback_data=f"cam:{cam_id}:clip:5"[:64]),
-        ], [
-            InlineKeyboardButton("📊 Status", callback_data=f"cam:{cam_id}:status"[:64]),
-            InlineKeyboardButton("🔇 1 h still", callback_data=f"cam:{cam_id}:mute1h"[:64]),
-        ], [
-            InlineKeyboardButton("◀ Zurück zur Übersicht", callback_data="menu:cams"),
-        ]]
+        rows = [
+            [InlineKeyboardButton("🔄 Neues Live-Bild",
+                                  callback_data=f"cam:{cam_id}:livebild"[:64])],
+            [InlineKeyboardButton("🎬 5 s",  callback_data=f"cam:{cam_id}:clip:5"[:64]),
+             InlineKeyboardButton("🎬 15 s", callback_data=f"cam:{cam_id}:clip:15"[:64]),
+             InlineKeyboardButton("🎬 30 s", callback_data=f"cam:{cam_id}:clip:30"[:64])],
+            [InlineKeyboardButton("🔇 Pause 1 h",  callback_data=f"cam:{cam_id}:mute1h"[:64]),
+             InlineKeyboardButton("📊 Mehr Status", callback_data=f"cam:{cam_id}:status"[:64])],
+            [InlineKeyboardButton("« Andere Kamera", callback_data="menu:cams"),
+             InlineKeyboardButton("🏠 Hauptmenü",     callback_data="menu:root")],
+        ]
         return body, InlineKeyboardMarkup(rows)
+
+    # ── Stub views for phase-1 navigation (filled in phase-2) ─────────────
+    def _stub_view(self, title: str) -> tuple[str, InlineKeyboardMarkup]:
+        body = f"<b>{title}</b>\n\n…wird in Kürze ergänzt."
+        markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("« Zurück", callback_data="menu:root")],
+        ])
+        return body, markup
+
+    def _tier_log_view(self) -> tuple[str, InlineKeyboardMarkup]:
+        return self._stub_view("🐦 Tier-Log")
+
+    def _wetter_view(self) -> tuple[str, InlineKeyboardMarkup]:
+        return self._stub_view("⛅ Wetter")
+
+    def _system_view(self) -> tuple[str, InlineKeyboardMarkup]:
+        # The /status renderer already produces a system overview — reuse
+        # it as the body so this stub is at least informative on day one.
+        try:
+            text = self._render_system_status_text()
+        except Exception:
+            text = "🛠 <b>System</b>\n\n…wird in Kürze ergänzt."
+        markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("« Zurück", callback_data="menu:root")],
+        ])
+        return text, markup
 
     def _try_restart_runtime(self, cam_id: str) -> bool:
         """Lazy-import + invoke ``server.restart_single_camera`` so a cam
@@ -2028,6 +2191,16 @@ class TelegramService:
             )
         except Exception as e:
             log.warning("[Telegram] snapshot send failed: %s", e)
+        # Snap the anchor back to the cam drilldown view so the user
+        # lands on the same control surface they just acted from. The
+        # delivered photo is a separate message; the anchor is edited
+        # in place and stays at top of the chat-state.
+        try:
+            await self._anchor_send_or_edit(
+                context.bot, q.message.chat_id, self._cam_drilldown_view(cam_id)
+            )
+        except Exception:
+            pass
 
     async def _cam_send_clip(self, q, context, cam_id, rt, cam_name, sec):
         await q.answer(f"🎬 {sec}-s Clip wird aufgenommen…")
@@ -2069,6 +2242,14 @@ class TelegramService:
         except Exception as e:
             log.warning("[Telegram] clip send failed: %s", e)
             await q.message.reply_text(f"Senden fehlgeschlagen: {e}")
+        # Anchor snaps back to the cam drilldown — same UX rule as the
+        # snapshot path so the user keeps a single control surface.
+        try:
+            await self._anchor_send_or_edit(
+                context.bot, q.message.chat_id, self._cam_drilldown_view(cam_id)
+            )
+        except Exception:
+            pass
 
     async def _cam_toggle_armed(self, q, cam_id, cam_name):
         if not self.settings_store:
@@ -2134,6 +2315,28 @@ class TelegramService:
             await self._render_view(q, self._status_view()); await q.answer(); return
         if data == "menu:logs":
             await self._render_view(q, self._logs_view()); await q.answer(); return
+        # Phase-1 stubs: tiles routed end-to-end so the navigation feels
+        # complete even though the detail content lands in phase-2.
+        if data == "menu:tierlog":
+            await self._render_view(q, self._tier_log_view()); await q.answer(); return
+        if data == "menu:wetter":
+            await self._render_view(q, self._wetter_view()); await q.answer(); return
+        if data == "menu:system":
+            await self._render_view(q, self._system_view()); await q.answer(); return
+        if data == "menu:muteall":
+            # Same effect as the /mute command, but renders inside the
+            # anchor and snaps back to root afterwards.
+            until = time.time() + _MUTE_DEFAULT_S
+            if self.settings_store:
+                try:
+                    self.settings_store.runtime_set("global_mute_until", until)
+                except Exception:
+                    pass
+            end_local = datetime.fromtimestamp(until).strftime("%H:%M")
+            log.info("[Telegram] mute_all activated until %s via menu", end_local)
+            await self._render_view(q, self._root_view())
+            await q.answer(f"🔇 Alle Pushes pausiert bis {end_local}")
+            return
         await q.answer()
 
 
