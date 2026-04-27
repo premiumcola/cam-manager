@@ -197,6 +197,8 @@ class CoralObjectDetector:
         frame: np.ndarray,
         min_score: float | None = None,
         label_thresholds: dict[str, float] | None = None,
+        *,
+        cam_id: str | None = None,
     ) -> list[Detection]:
         """Run detection.
 
@@ -205,6 +207,9 @@ class CoralObjectDetector:
         post-filter — any detection whose label appears in the dict is
         kept only if its score >= the dict value. Lets the user crank up
         the bar for "person" without sacrificing recall on cat/bird.
+        `cam_id` is purely for diagnostic logging — when provided AND the
+        ``app.app.detectors`` logger is at INFO or below, the detector
+        emits a one-line "[det][cam:<id>] kept/dropped" trace.
         """
         if not self.available:
             return []
@@ -213,24 +218,39 @@ class CoralObjectDetector:
             dets = self._detect_cpu(frame, threshold)
         else:
             dets = self._detect_coral(frame, threshold)
-        return self._apply_label_filters(dets, frame, label_thresholds)
+        kept, drops = self._apply_label_filters_with_reasons(
+            dets, frame, label_thresholds, threshold,
+        )
+        if cam_id and log.isEnabledFor(logging.INFO):
+            try:
+                self._log_decision(cam_id, kept, drops)
+            except Exception:
+                pass
+        return kept
 
-    def _apply_label_filters(
+    def _apply_label_filters_with_reasons(
         self,
         dets: list[Detection],
         frame: np.ndarray,
         label_thresholds: dict[str, float] | None,
-    ) -> list[Detection]:
+        global_threshold: float,
+    ) -> tuple[list[Detection], list[tuple[Detection, str]]]:
+        """Same gates as _apply_label_filters but also returns a parallel
+        list of (detection, drop_reason) for the diagnostic logger. Hot
+        path: the reason-string formatting only happens for dropped
+        detections — the kept-list path is one append per kept det."""
+        out: list[Detection] = []
+        drops: list[tuple[Detection, str]] = []
         if not dets:
-            return dets
+            return out, drops
         h, w = frame.shape[:2]
         frame_area = float(max(1, h * w))
-        out: list[Detection] = []
         for d in dets:
             # Per-label confidence override.
             if label_thresholds:
                 t = label_thresholds.get(d.label)
                 if t is not None and d.score < float(t):
+                    drops.append((d, f"label_threshold({d.label})={t} (got {d.score:.2f})"))
                     continue
             # Per-label size floor (currently only "person").
             min_h_frac, min_area_frac = self._LABEL_MIN_BBOX.get(d.label, (0.0, 0.0))
@@ -239,11 +259,60 @@ class CoralObjectDetector:
                 bb_h = max(0, y2 - y1)
                 bb_area = max(0, (x2 - x1) * (y2 - y1))
                 if bb_h < min_h_frac * h:
+                    drops.append((d, f"size_floor (h_frac={bb_h / h:.2f} < {min_h_frac:.2f})"))
                     continue
                 if bb_area < min_area_frac * frame_area:
+                    drops.append((d, f"size_floor (area_frac={bb_area / frame_area:.3f} < {min_area_frac:.3f})"))
                     continue
             out.append(d)
-        return out
+        return out, drops
+
+    # Back-compat alias — anything that historically called
+    # _apply_label_filters keeps the old single-return-value semantics.
+    def _apply_label_filters(self, dets, frame, label_thresholds):
+        kept, _ = self._apply_label_filters_with_reasons(
+            dets, frame, label_thresholds,
+            self.min_score,
+        )
+        return kept
+
+    @staticmethod
+    def _fmt_dets(dets, max_n: int = 8) -> str:
+        if not dets:
+            return "—"
+        head = dets[:max_n]
+        return ", ".join(f"{d.label} {d.score:.2f}" for d in head) + (
+            f" (+{len(dets) - max_n} more)" if len(dets) > max_n else ""
+        )
+
+    @staticmethod
+    def _fmt_drops(drops, max_n: int = 8) -> str:
+        if not drops:
+            return "—"
+        head = drops[:max_n]
+        return ", ".join(f"{d.label} {d.score:.2f} ({reason.split('(')[0].strip()})"
+                          for d, reason in head) + (
+            f" (+{len(drops) - max_n} more)" if len(drops) > max_n else ""
+        )
+
+    def _log_decision(self, cam_id: str, kept: list, drops: list):
+        """Emit one INFO line per detect_frame call when there's anything
+        worth seeing. Decision tree:
+          - kept ≥ 1 → "[det][cam:…] kept: … · dropped: …"
+          - kept == 0 AND drops > 0 → "[det][cam:…] all dropped — top: …"
+          - kept == 0 AND drops == 0 → DEBUG "[det][cam:…] inference empty (raw=0)"
+        """
+        if kept:
+            log.info("[det][cam:%s] kept: %s · dropped: %s",
+                     cam_id, self._fmt_dets(kept), self._fmt_drops(drops))
+            return
+        if drops:
+            # Sort by score descending so "almost made it" labels come first.
+            ordered = sorted(drops, key=lambda x: x[0].score, reverse=True)
+            log.info("[det][cam:%s] all dropped — top: %s",
+                     cam_id, self._fmt_drops(ordered))
+            return
+        log.debug("[det][cam:%s] inference empty (raw=0)", cam_id)
 
     def _detect_coral(self, frame: np.ndarray, threshold: float | None = None) -> list[Detection]:
         """Inference via pycoral + EdgeTPU."""
