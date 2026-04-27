@@ -1,13 +1,15 @@
 """End-to-end tests for storage_migration.migrate.
 
-We build a fake on-disk layout that mirrors the user's actual situation
-(cam-192-168-178-172 + cam-Werkstatt.rechts.oben dual folders alongside
-a clean cam-192-168-178-183), point a stub SettingsStore at it, and
-verify the migration:
+We build a fake on-disk layout that mirrors the dual-folder pattern seen
+in the wild (cam-<ip-dashes> + cam-<name> for the same camera) alongside
+a single clean folder, point a stub SettingsStore at it, and verify the
+migration:
   - merges the dual folders into the new canonical id
   - rewrites event JSON paths
   - removes the empty object_detection placeholder
-  - is idempotent (second invocation is a no-op)"""
+  - is idempotent (second invocation is a no-op)
+
+IPs in fixtures are RFC 5737 documentation addresses (192.0.2.0/24)."""
 from __future__ import annotations
 import json
 import sys
@@ -37,17 +39,17 @@ class _FakeSettingsStore:
 
 
 def _make_storage(tmp_path: Path) -> Path:
-    """Build the user's real situation as a temp-dir scaffold."""
+    """Build a representative dual-folder scaffold in tmp."""
     storage = tmp_path / "storage"
     # motion_detection: Werkstatt has TWO legacy folders, Squirrel has one
     md = storage / "motion_detection"
-    (md / "cam-192-168-178-172" / "2026-04-25").mkdir(parents=True)
-    (md / "cam-192-168-178-172" / "2026-04-25" / "evt_a.jpg").write_bytes(b"a")
-    (md / "cam-192-168-178-172" / "2026-04-25" / "evt_a.json").write_text(json.dumps({
+    (md / "cam-192-0-2-172" / "2026-04-25").mkdir(parents=True)
+    (md / "cam-192-0-2-172" / "2026-04-25" / "evt_a.jpg").write_bytes(b"a")
+    (md / "cam-192-0-2-172" / "2026-04-25" / "evt_a.json").write_text(json.dumps({
         "event_id": "a",
-        "camera_id": "cam-192-168-178-172",
-        "video_relpath": "timelapse/cam-192-168-178-172/foo.mp4",
-        "snapshot_relpath": "motion_detection/cam-192-168-178-172/2026-04-25/evt_a.jpg",
+        "camera_id": "cam-192-0-2-172",
+        "video_relpath": "timelapse/cam-192-0-2-172/foo.mp4",
+        "snapshot_relpath": "motion_detection/cam-192-0-2-172/2026-04-25/evt_a.jpg",
     }), encoding="utf-8")
     (md / "cam-Werkstatt.rechts.oben" / "2026-04-26").mkdir(parents=True)
     (md / "cam-Werkstatt.rechts.oben" / "2026-04-26" / "evt_b.jpg").write_bytes(b"b")
@@ -56,17 +58,17 @@ def _make_storage(tmp_path: Path) -> Path:
         "camera_id": "cam-Werkstatt.rechts.oben",
         "snapshot_relpath": "motion_detection/cam-Werkstatt.rechts.oben/2026-04-26/evt_b.jpg",
     }), encoding="utf-8")
-    (md / "cam-192-168-178-183" / "2026-04-26").mkdir(parents=True)
-    (md / "cam-192-168-178-183" / "2026-04-26" / "evt_c.jpg").write_bytes(b"c")
+    (md / "cam-192-0-2-183" / "2026-04-26").mkdir(parents=True)
+    (md / "cam-192-0-2-183" / "2026-04-26" / "evt_c.jpg").write_bytes(b"c")
     # timelapse_frames + timelapse — only the Werkstatt-named variant exists
     tlf = storage / "timelapse_frames"
     (tlf / "cam-Werkstatt.rechts.oben" / "daily" / "2026-04-26").mkdir(parents=True)
     (tlf / "cam-Werkstatt.rechts.oben" / "daily" / "2026-04-26" / "120000.jpg").write_bytes(b"f")
-    (tlf / "cam-192-168-178-183" / "daily" / "2026-04-26").mkdir(parents=True)
+    (tlf / "cam-192-0-2-183" / "daily" / "2026-04-26").mkdir(parents=True)
     tl = storage / "timelapse"
     (tl / "cam-Werkstatt.rechts.oben").mkdir(parents=True)
     (tl / "cam-Werkstatt.rechts.oben" / "2026-04-26.mp4").write_bytes(b"v")
-    (tl / "cam-192-168-178-183").mkdir(parents=True)
+    (tl / "cam-192-0-2-183").mkdir(parents=True)
     # weather: not per-cam in the user's current state, but the migration
     # should tolerate the absence
     (storage / "weather").mkdir()
@@ -82,14 +84,14 @@ def _make_cams() -> list[dict]:
             "name": "Werkstatt",
             "manufacturer": "",
             "model": "",
-            "rtsp_url": "rtsp://admin:pw@192.168.178.172/h264Preview_01_main",
+            "rtsp_url": "rtsp://user:pass@192.0.2.172/h264Preview_01_main",
         },
         {
-            "id": "cam-192-168-178-183",
+            "id": "cam-192-0-2-183",
             "name": "Squirrel Town",
             "manufacturer": "Reolink",
             "model": "RLC-810A",
-            "rtsp_url": "rtsp://admin:pw@192.168.178.183/h264Preview_01_main",
+            "rtsp_url": "rtsp://user:pass@192.0.2.183/h264Preview_01_main",
         },
     ]
 
@@ -105,7 +107,7 @@ class TestMigrate:
         new_werk = "unknown_unknown_werkstatt_172"
         assert (storage / "motion_detection" / new_werk).is_dir()
         # Old folders gone
-        assert not (storage / "motion_detection" / "cam-192-168-178-172").exists()
+        assert not (storage / "motion_detection" / "cam-192-0-2-172").exists()
         assert not (storage / "motion_detection" / "cam-Werkstatt.rechts.oben").exists()
         # Both source-day subfolders ended up under the new id
         assert (storage / "motion_detection" / new_werk / "2026-04-25" / "evt_a.jpg").is_file()
@@ -130,7 +132,7 @@ class TestMigrate:
         new_werk = "unknown_unknown_werkstatt_172"
         evt_a = (storage / "motion_detection" / new_werk / "2026-04-25" / "evt_a.json").read_text(encoding="utf-8")
         meta = json.loads(evt_a)
-        assert "cam-192-168-178-172" not in evt_a
+        assert "cam-192-0-2-172" not in evt_a
         assert meta["video_relpath"] == f"timelapse/{new_werk}/foo.mp4"
         assert meta["snapshot_relpath"] == f"motion_detection/{new_werk}/2026-04-25/evt_a.jpg"
         evt_b = (storage / "motion_detection" / new_werk / "2026-04-26" / "evt_b.json").read_text(encoding="utf-8")
@@ -186,7 +188,7 @@ class TestMigrate:
         # Backup contains the OLD ids
         bak_content = bak.read_text(encoding="utf-8")
         assert "cam-Werkstatt.rechts.oben" in bak_content
-        assert "cam-192-168-178-183" in bak_content
+        assert "cam-192-0-2-183" in bak_content
 
     def test_no_cameras_no_op(self, tmp_path):
         storage = tmp_path / "storage"

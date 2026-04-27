@@ -17,6 +17,17 @@ storage/weather_history.json.tmp
 app/storage/weather_history.json
 app/storage/weather_history.json.tmp
 
+# Identity registries - personal data (face/fur histograms, cat names)
+storage/cat_registry.json
+storage/person_registry.json
+app/storage/cat_registry.json
+app/storage/person_registry.json
+
+# Logs - may contain RTSP URLs with credentials, IPs, timestamps
+storage/logs/
+app/storage/logs/
+*.log
+
 # Runtime storage - generated data (all binary/media output)
 storage/events/
 storage/timelapse/

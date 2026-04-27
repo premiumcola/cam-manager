@@ -8,7 +8,7 @@
 
   <!-- Header -->
   <text x="32" y="46" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="800" fill="#edf4fb">Kamera bearbeiten · Garten</text>
-  <text x="32" y="68" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#7faec9">Reolink RLC-823A · 192.168.178.183 · aktiv</text>
+  <text x="32" y="68" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#7faec9">Reolink RLC-823A · 192.0.2.83 · aktiv</text>
 
   <!-- Tab bar -->
   <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700">
@@ -30,7 +30,7 @@
       <!-- IP -->
       <rect x="0" y="28" width="500" height="44" rx="10" fill="#0f1825" stroke="#2a3a52"/>
       <text x="14" y="46" font-size="10" fill="#566378">Kamera-IP</text>
-      <text x="14" y="64" font-size="14" font-weight="600" fill="#edf4fb">192.168.178.183</text>
+      <text x="14" y="64" font-size="14" font-weight="600" fill="#edf4fb">192.0.2.83</text>
       <!-- User + Pass -->
       <rect x="0" y="84" width="240" height="44" rx="10" fill="#0f1825" stroke="#2a3a52"/>
       <text x="14" y="102" font-size="10" fill="#566378">Benutzer</text>
@@ -47,10 +47,10 @@
       <text x="414" y="176" font-size="14" font-weight="600" fill="#edf4fb">554</text>
       <!-- Generated URL -->
       <rect x="0" y="196" width="500" height="40" rx="10" fill="#0a0f1a" stroke="#1f2937"/>
-      <text x="14" y="220" font-size="11" fill="#7faec9" font-family="ui-monospace, monospace">rtsp://admin:•••@192.168.178.183/h265Preview_01_main</text>
+      <text x="14" y="220" font-size="11" fill="#7faec9" font-family="ui-monospace, monospace">rtsp://admin:•••@192.0.2.83/h265Preview_01_main</text>
       <!-- Snapshot URL -->
       <rect x="0" y="248" width="500" height="40" rx="10" fill="#0a0f1a" stroke="#1f2937"/>
-      <text x="14" y="272" font-size="11" fill="#7faec9" font-family="ui-monospace, monospace">http://admin:•••@192.168.178.183/cgi-bin/snapshot.cgi</text>
+      <text x="14" y="272" font-size="11" fill="#7faec9" font-family="ui-monospace, monospace">http://admin:•••@192.0.2.83/cgi-bin/snapshot.cgi</text>
       <!-- Diagnostic chip -->
       <g transform="translate(0,308)">
         <rect width="500" height="56" rx="10" fill="#0f1825" stroke="#22c55e" stroke-width="0.8"/>

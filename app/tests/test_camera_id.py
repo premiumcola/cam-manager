@@ -18,36 +18,36 @@ from app.camera_id import build_camera_id  # noqa: E402
 class TestBuildCameraId:
     def test_canonical_example(self):
         assert build_camera_id("Reolink", "RLC-810A", "Werkstatt rechts oben",
-                               "192.168.178.172") == "reolink_rlc810a_werkstattrechtsoben_172"
+                               "192.0.2.42") == "reolink_rlc810a_werkstattrechtsoben_42"
 
     def test_all_empty_collapses_to_unknown(self):
-        assert build_camera_id("", "", "Garten", "192.168.178.183") == \
-            "unknown_unknown_garten_183"
+        assert build_camera_id("", "", "Garten", "192.0.2.83") == \
+            "unknown_unknown_garten_83"
 
     def test_every_field_empty(self):
         assert build_camera_id("", "", "", "") == "unknown_unknown_unknown_unknown"
 
     def test_german_umlauts_transliterate(self):
         # ä ö ü ß should not collapse to "unknown" — they map to ASCII multi-letter forms
-        assert build_camera_id("", "", "Pförtnerhäuschen", "192.168.178.10") == \
+        assert build_camera_id("", "", "Pförtnerhäuschen", "192.0.2.10") == \
             "unknown_unknown_pfoertnerhaeuschen_10"
-        assert build_camera_id("", "", "größe & weiße", "10.0.0.5") == \
+        assert build_camera_id("", "", "größe & weiße", "198.51.100.5") == \
             "unknown_unknown_groesseweisse_5"
 
     def test_other_diacritics_decompose(self):
         # Non-german accented chars survive via NFKD decomposition + ASCII filter
-        assert build_camera_id("", "", "Café Été Ñoño", "172.16.0.99") == \
+        assert build_camera_id("", "", "Café Été Ñoño", "203.0.113.99") == \
             "unknown_unknown_cafeetenono_99"
 
     def test_punctuation_and_runs_collapse(self):
         # Multiple separators, mixed punctuation — all stripped, segment kept
         assert build_camera_id("Reolink-Inc.", "RLC---810A!", "  Werkbank — links  ",
-                               "192.168.1.42") == \
-            "reolinkinc_rlc810a_werkbanklinks_42"
+                               "192.0.2.142") == \
+            "reolinkinc_rlc810a_werkbanklinks_142"
 
     def test_pure_punctuation_segment_falls_back_to_unknown(self):
         # A segment that's only symbols sanitises to "" → must become "unknown"
-        assert build_camera_id("---", "@@@", "Cam", "10.0.0.1") == \
+        assert build_camera_id("---", "@@@", "Cam", "198.51.100.1") == \
             "unknown_unknown_cam_1"
 
     def test_very_long_name_passes_through(self):
@@ -55,7 +55,7 @@ class TestBuildCameraId:
         # id, so we don't need to be paranoid about width here. Just verify
         # the identity holds.
         long_name = "Eine sehr lange Kamera Bezeichnung mit vielen Wörtern"
-        out = build_camera_id("", "", long_name, "192.168.178.7")
+        out = build_camera_id("", "", long_name, "192.0.2.7")
         assert out.startswith("unknown_unknown_einesehrlange")
         assert out.endswith("_7")
         assert out.count("_") == 3  # exactly four tokens
@@ -76,21 +76,21 @@ class TestBuildCameraId:
             "reolink_x_cam_unknown"
 
     def test_id_always_four_tokens(self):
-        for ip in ("192.168.1.10", "", "garbage", "::1", "10.0.0.0"):
+        for ip in ("192.0.2.10", "", "garbage", "::1", "203.0.113.0"):
             for name in ("", "Werkstatt", "  ", "äöü"):
                 out = build_camera_id("", "", name, ip)
                 assert out.count("_") == 3, f"bad token count for ({name!r},{ip!r}): {out}"
 
     def test_lowercase_invariant(self):
-        out = build_camera_id("REOLINK", "RLC-810A", "Werkstatt", "192.168.0.1")
+        out = build_camera_id("REOLINK", "RLC-810A", "Werkstatt", "192.0.2.1")
         assert out == out.lower()
 
     def test_idempotent_when_id_already_canonical(self):
         # If we feed back the canonical id components, the function shouldn't
         # mangle them — the rebuilt id must be the same.
         first = build_camera_id("Reolink", "RLC-810A", "Werkstatt rechts oben",
-                                "192.168.178.172")
+                                "192.0.2.42")
         # Same inputs → same output.
         again = build_camera_id("Reolink", "RLC-810A", "Werkstatt rechts oben",
-                                "192.168.178.172")
+                                "192.0.2.42")
         assert first == again

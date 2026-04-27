@@ -11,18 +11,18 @@ helper is also re-implemented bit-for-bit in JS in ``app.js`` (search for
 matches what the backend will ultimately persist — keep both copies in
 lockstep.
 
-Examples::
+Examples (IPs from RFC 5737/3849 documentation ranges)::
 
     build_camera_id("Reolink", "RLC-810A",
-                    "Werkstatt rechts oben", "192.168.178.172")
-        → "reolink_rlc810a_werkstattrechtsoben_172"
+                    "Werkstatt rechts oben", "192.0.2.42")
+        → "reolink_rlc810a_werkstattrechtsoben_42"
 
-    build_camera_id("", "", "Garten", "192.168.178.183")
-        → "unknown_unknown_garten_183"
+    build_camera_id("", "", "Garten", "192.0.2.83")
+        → "unknown_unknown_garten_83"
 
     build_camera_id("Reolink", "RLC-810A",
-                    "Pförtnerhäuschen — älter", "::ffff:c0a8:b2ac")
-        → "reolink_rlc810a_pfortnerhauschenalter_b2ac"
+                    "Pförtnerhäuschen — älter", "2001:db8::042a")
+        → "reolink_rlc810a_pfortnerhauschenalter_042a"
 """
 from __future__ import annotations
 import re
