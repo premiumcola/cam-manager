@@ -86,6 +86,13 @@ def validate_and_coerce(data: dict, schema: dict) -> dict:
 CAMERA_SCHEMA: dict = {
     "id":                  (str,   REQUIRED),
     "name":                (str,   REQUIRED),
+    # Free-form identity hints that feed into build_camera_id() and the
+    # camera-edit form's live ID preview. Empty strings on legacy cameras
+    # collapse to "unknown" segments in the canonical id, which is fine
+    # because the migration runner picks up old folders by IP-octet match
+    # regardless of these fields.
+    "manufacturer":        (str,   ""),
+    "model":               (str,   ""),
     "enabled":             (bool,  True),
     "rtsp_url":            (str,   ""),
     "snapshot_url":        (str,   ""),

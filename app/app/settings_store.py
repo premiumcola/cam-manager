@@ -133,6 +133,11 @@ class SettingsStore:
         return {
             "id": cam.get("id", ""),
             "name": cam.get("name", cam.get("id", "")),
+            # Backfilled additively for legacy cameras: missing → "" so the
+            # canonical id picks up "unknown" segments; the user fills these
+            # in the camera-edit form when they want a semantic id.
+            "manufacturer": cam.get("manufacturer", ""),
+            "model": cam.get("model", ""),
             "location": cam.get("location", ""),
             "enabled": cam.get("enabled", True),
             "rtsp_url": cam.get("rtsp_url", ""),
@@ -488,14 +493,27 @@ class SettingsStore:
     def _ensure_camera_defaults(self):
         cameras = self.data.setdefault("cameras", [])
         by_id = {c.get("id"): c for c in cameras}
+        # Also index by display name so a seed cam that was renamed by the
+        # storage_migration (e.g. "cam-Werkstatt.rechts.oben" →
+        # "unknown_unknown_werkstatt_172") isn't blindly re-added under its
+        # original id on the next boot. Two cams sharing the same name is
+        # already handled elsewhere — this just stops the migration from
+        # silently un-doing itself.
+        by_name = {(c.get("name") or "").strip().lower(): c
+                   for c in cameras if c.get("name")}
         for c in self.base_config.get("cameras", []):
-            if c["id"] not in by_id:
-                cameras.append(self._default_camera(c))
+            base_name = (c.get("name") or "").strip().lower()
+            if c["id"] in by_id:
+                target = by_id[c["id"]]
+            elif base_name and base_name in by_name:
+                target = by_name[base_name]
             else:
-                # Only add missing keys; never overwrite user-saved values.
-                defaults = self._default_camera(c)
-                for key, val in defaults.items():
-                    by_id[c["id"]].setdefault(key, val)
+                cameras.append(self._default_camera(c))
+                continue
+            # Only add missing keys; never overwrite user-saved values.
+            defaults = self._default_camera(c)
+            for key, val in defaults.items():
+                target.setdefault(key, val)
 
     @staticmethod
     def _window_minutes(start: str, end: str) -> int:
