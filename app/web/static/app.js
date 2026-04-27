@@ -4713,9 +4713,34 @@ function _lbShowError(text){
 }
 function openLightbox(item){
   if(item.type==='timelapse'){openTLPlayer(item);return;}
-  _lbIndex=(state.media||[]).findIndex(x=>x.event_id===item.event_id);
-  if(_lbIndex===-1) return;
-  _lbItem=state.media[_lbIndex];
+  // Index into the GLOBAL list (state._allMedia) so prev/next can cross
+  // pagination boundaries — the page-slice (state.media) is a render
+  // optimisation, not a navigation boundary.
+  const globalList=state._allMedia||[];
+  _lbIndex=globalList.findIndex(x=>x.event_id===item.event_id);
+  if(_lbIndex===-1){
+    // Fallback: item came from somewhere outside the cached merged list
+    // (rare). Open it anyway with single-item nav so the lightbox still
+    // works — just no prev/next.
+    _lbIndex=0;
+    _lbItem=item;
+  } else {
+    _lbItem=globalList[_lbIndex];
+  }
+  // If the navigated item lives outside the current page window, jump
+  // the grid's page so the thumbnails behind the lightbox match what
+  // the user sees on the lightbox itself. Re-rendering keeps current
+  // scroll because the user is still inside the lightbox modal.
+  const ps=_cachedPageSize||calcItemsPerPage();
+  if(_cachedPageSize && globalList.length>0){
+    const targetPage=Math.floor(_lbIndex/ps);
+    if(targetPage!==state.mediaPage){
+      state.mediaPage=targetPage;
+      const offset=targetPage*ps;
+      state.media=globalList.slice(offset,offset+ps);
+      try{renderMediaGrid();renderMediaPagination();}catch(_){}
+    }
+  }
   _lbDeletePending=false;
   _lbResetToPhoto();
   const delBtn=byId('lightboxDelete');
@@ -4745,8 +4770,9 @@ function openLightbox(item){
     ${vidSrc?'<span class="badge">🎬 Video</span>':''}
     ${confirmedBadge}`;
   _renderLbLabels();
+  // Edge dim only at the GLOBAL boundaries — page edges navigate through.
   byId('lightboxPrev').style.opacity=_lbIndex>0?'1':'0.2';
-  byId('lightboxNext').style.opacity=_lbIndex<(state.media||[]).length-1?'1':'0.2';
+  byId('lightboxNext').style.opacity=_lbIndex<((state._allMedia||[]).length-1)?'1':'0.2';
   byId('lightboxModal').classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
@@ -4774,6 +4800,19 @@ function openTLPlayer(item){
   const navItems=_tlNavItems();
   _lbIndex=navItems.findIndex(x=>x.event_id===item.event_id);
   _lbItem=_lbIndex>=0?navItems[_lbIndex]:item;
+  // Jump the grid page when this item lives outside the current page
+  // window, so the thumbnails behind the lightbox match the lightbox
+  // content — same rule as openLightbox above.
+  const ps=_cachedPageSize||calcItemsPerPage();
+  if(_lbIndex>=0 && _cachedPageSize && navItems.length>0){
+    const targetPage=Math.floor(_lbIndex/ps);
+    if(targetPage!==state.mediaPage){
+      state.mediaPage=targetPage;
+      const offset=targetPage*ps;
+      state.media=navItems.slice(offset,offset+ps);
+      try{renderMediaGrid();renderMediaPagination();}catch(_){}
+    }
+  }
   _lbDeletePending=false;
   _lbClearDetections();
   const imgEl=byId('lightboxImg'); imgEl.style.display='none';
@@ -4812,7 +4851,12 @@ function closeLightbox(){
 }
 byId('lightboxClose').onclick=closeLightbox;
 byId('lightboxModal').onclick=(e)=>{if(e.target===byId('lightboxModal')) closeLightbox();};
-function _lbNavList(){return _lbItem?.type==='timelapse'?_tlNavItems():(state.media||[]);}
+// Lightbox navigation list — the merged-and-sorted global media list for
+// BOTH motion and timelapse items. EventStore unifies the two kinds, so
+// prev/next walks the global timeline regardless of the current page or
+// item type. _tlNavItems() returns the same list (kept as an alias for
+// historical reasons + the timelapse-only callers).
+function _lbNavList(){return state._allMedia||[];}
 byId('lightboxPrev').onclick=()=>{const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>0) openLightbox(nav[i-1]);};
 byId('lightboxNext').onclick=()=>{const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>=0&&i<nav.length-1) openLightbox(nav[i+1]);};
 document.addEventListener('keydown',(e)=>{
