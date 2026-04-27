@@ -819,7 +819,9 @@ function initRtspBuilder(){
       if(input.dataset.masked==='1') input.value=_maskUrlPassword(realVal);
       else input.value=realVal;
     };
-    if(!ip){setMaskable(f['rtsp_url'],'');return;}
+    if(!ip){setMaskable(f['rtsp_url'],'');
+      if (typeof _refreshIncompleteBanner === 'function') _refreshIncompleteBanner();
+      return;}
     const auth=user?(user+(pass?':'+_rtspEnc(pass):'')+'@'):'';
     const portPart=port&&port!=='554'?':'+port:'';
     setMaskable(f['rtsp_url'],`rtsp://${auth}${ip}${portPart}${path}`);
@@ -827,6 +829,9 @@ function initRtspBuilder(){
     const snapReal=f['snapshot_url']?.dataset.real||f['snapshot_url']?.value||'';
     if(!snapReal && user)
       setMaskable(f['snapshot_url'],`http://${user}:${_rtspEnc(pass)}@${ip}/cgi-bin/snapshot.cgi`);
+    // Re-evaluate the "Verbindungsdaten unvollständig" banner — the user
+    // may have just typed credentials that close the gap, no save needed.
+    if (typeof _refreshIncompleteBanner === 'function') _refreshIncompleteBanner();
   };
   ['rtsp_ip','rtsp_user','rtsp_pass','rtsp_port'].forEach(n=>f[n]?.addEventListener('input',rebuild));
   sel.addEventListener('change',rebuild);
@@ -1352,16 +1357,37 @@ function editCamera(camId){
   setTimeout(()=>wrapper.scrollIntoView({behavior:'smooth',block:'nearest'}),120);
   // Populate connection diagnostics panel
   _loadCamDiagnostics(camId);
-  // Show recovery banner when connection fields are incomplete. Threshold:
-  // a usable cam needs both an RTSP URL and a username; missing either is
-  // the "lost credentials" case the recovery flow targets.
-  const banner=byId('camRecoveryBanner');
-  if(banner){
-    const incomplete=!c.rtsp_url || !c.username;
-    banner.hidden=!incomplete;
-  }
+  // Show recovery banner only when truly nothing usable is present.
+  // Drives off the live form values rather than the persisted cam dict
+  // so the banner reacts to edits (rebuild() in setupRtspBuilder calls
+  // _refreshIncompleteBanner on every input).
+  _refreshIncompleteBanner();
   // Initial render of the live ID preview now that every input is populated.
   _refreshCamIdPreview();
+}
+
+// Banner shown at the top of the Verbindung tab when the cam has no usable
+// credentials at all. Historical bug: the check was `!rtsp_url || !username`,
+// but cameras with credentials embedded inside rtsp_url (rtsp://user:pass@…)
+// have an empty top-level username field and were falsely flagged. Now we
+// treat the cam as complete when rtsp_url is non-empty AND credentials are
+// reachable either through the dedicated field OR via the embedded form.
+function _refreshIncompleteBanner(){
+  const banner = byId('camRecoveryBanner'); if (!banner) return;
+  const f = byId('cameraForm')?.elements;
+  // Prefer the unmasked real value (set by initRtspBuilder's setMaskable)
+  // so a freshly typed credential triggers the right state immediately,
+  // not after the next blur.
+  const rtspUrl = (f?.['rtsp_url']?.dataset?.real ?? f?.['rtsp_url']?.value ?? '').trim();
+  const userField = (f?.['rtsp_user']?.value ?? '').trim();
+  let embeddedUser = '';
+  if (rtspUrl) {
+    try { embeddedUser = (parseRtspUrl(rtspUrl).user || '').trim(); }
+    catch { embeddedUser = ''; }
+  }
+  const hasCreds = !!(userField || embeddedUser);
+  const incomplete = !rtspUrl || !hasCreds;
+  banner.hidden = !incomplete;
 }
 
 // ── Connection-recovery modal (Verbindung tab "Wiederherstellen ↺") ──────────
