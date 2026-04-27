@@ -1266,7 +1266,7 @@ select option{background:#1e1e1e;color:var(--text)}
 }
 
 
-/* ── Wetter-Sichtungen (Phase 2) ────────────────────────────────────────── */
+/* ── Wetter-Ereignisse (Phase 2) ────────────────────────────────────────── */
 
 /* Top-level container inside the #weather section. The block used to live
    under the achievements grid with a margin/border-top divider; after the
@@ -1342,7 +1342,7 @@ select option{background:#1e1e1e;color:var(--text)}
   .ws-lb-meta{font-size:12px}
 }
 
-/* ── Settings: Wetter-Sichtungen ───────────────────────────────────────── */
+/* ── Settings: Wetter-Ereignisse ───────────────────────────────────────── */
 .ws-panels-wrap{border-radius:14px;background:var(--bg);padding:12px 14px;margin-top:4px}
 .ws-event-row{display:grid;grid-template-columns:auto auto 1fr auto;align-items:center;gap:10px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,0.03)}
 .ws-event-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700;white-space:nowrap;min-width:140px}
@@ -1515,7 +1515,7 @@ select option{background:#1e1e1e;color:var(--text)}
   .cam-recovery-row-actions{width:100%;justify-content:flex-end}
 }
 
-/* ── Wetterstatistik chart block (Phase 4) ────────────────────────────── */
+/* ── Wetterdaten & Prognose chart block (Phase 4) ─────────────────────── */
 /* Lives at the top of the #weather section, above the sightings grid.
    The chart itself is hand-rolled inline SVG — no external dep, matches
    the rest of the app's vanilla approach. Background/depth comes from a
@@ -1562,29 +1562,35 @@ select option{background:#1e1e1e;color:var(--text)}
   pointer-events:none
 }
 
-/* Legend chips below the chart. Mobile-first: 2 columns by default,
-   3 on wider viewports. Each chip is its own button (>=44 px tall for
-   iPhone) with a coloured dot + label + current value. */
+/* Legend chips below the chart. Compact one-line layout:
+   dot · label · value all in a row. 3 cols mobile / 4 cols desktop so
+   the 7 fields fit in 3 mobile rows / 2 desktop rows. min-height 36 px
+   stays comfortably tappable while saving the height the old two-line
+   chip wasted on a label-above-value stack. */
 .ws-stats-legend{
-  display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:10px
+  display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px
 }
-@media (min-width:640px){.ws-stats-legend{grid-template-columns:repeat(3,1fr)}}
+@media (min-width:640px){.ws-stats-legend{grid-template-columns:repeat(4,1fr)}}
 .ws-stats-chip{
-  display:flex;align-items:center;gap:8px;padding:8px 10px;
+  display:flex;align-items:center;gap:6px;padding:6px 8px;
   background:rgba(255,255,255,0.04);border:1px solid transparent;
   border-radius:10px;cursor:pointer;text-align:left;
-  min-height:44px;transition:background .15s,border-color .15s
+  min-height:36px;transition:background .15s,border-color .15s;
+  min-width:0
 }
 .ws-stats-chip:hover{background:rgba(255,255,255,0.07)}
 .ws-stats-chip.is-isolated{background:rgba(127,174,201,0.16);border-color:rgba(127,174,201,0.45)}
 .ws-stats-chip-dot{
-  width:10px;height:10px;border-radius:50%;background:var(--cb,#94a3b8);
+  width:9px;height:9px;border-radius:50%;background:var(--cb,#94a3b8);
   flex-shrink:0;box-shadow:0 0 0 2px rgba(0,0,0,0.25) inset
 }
-.ws-stats-chip-meta{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+/* Single-line layout: label takes the flex slot, value is right-aligned
+   and never gets truncated; long labels truncate with ellipsis instead. */
+.ws-stats-chip-meta{display:flex;align-items:center;gap:6px;flex:1;min-width:0}
 .ws-stats-chip-label{font-size:11px;font-weight:700;color:var(--text);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ws-stats-chip-value{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.ws-stats-chip-value{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;
+  flex-shrink:0;text-align:right}
 .ws-stats-chip.is-isolated .ws-stats-chip-value{color:#cfe1ee}
 
 /* ── Camera-edit: live id preview ─────────────────────────────────────── */
