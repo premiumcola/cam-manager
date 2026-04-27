@@ -1465,6 +1465,36 @@ def api_media_cleanup():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.post('/api/admin/timelapse/cleanup')
+def api_admin_timelapse_cleanup():
+    """Delete invalid JPEGs from storage/timelapse_frames/.
+
+    Body: {"dry_run": bool, "cam_id": str?, "profile": str?}.
+    Returns one summary entry per cam/profile pair so a UI can render
+    'scanned X, kept K, deleted D' rows. Finalised .mp4 files are never
+    touched — only the JPEG ringbuffer."""
+    from .timelapse_cleanup import cleanup as _cleanup
+    payload = request.get_json(force=True, silent=True) or {}
+    dry_run = bool(payload.get("dry_run", False))
+    cam_id = payload.get("cam_id") or None
+    profile = payload.get("profile") or None
+    storage_root = Path(get_effective_config().get("storage", {}).get("root", "/app/storage"))
+    try:
+        summaries = _cleanup(storage_root, dry_run=dry_run,
+                             cam_id=cam_id, profile=profile)
+        total_scanned = sum(s["scanned"] for s in summaries)
+        total_deleted = sum(s["deleted"] for s in summaries)
+        return jsonify({
+            "ok": True,
+            "dry_run": dry_run,
+            "summaries": summaries,
+            "total_scanned": total_scanned,
+            "total_deleted": total_deleted,
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.post('/api/reload')
 def api_reload():
     rebuild_runtimes()
