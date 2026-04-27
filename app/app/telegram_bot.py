@@ -16,7 +16,7 @@ from telegram import (
     ReplyKeyboardMarkup,
     Update,
 )
-from telegram.error import Conflict
+from telegram.error import Conflict, NetworkError, TimedOut
 from telegram.ext import (
     ApplicationBuilder,
     CallbackQueryHandler,
@@ -356,8 +356,15 @@ class TelegramService:
                 log.warning("[Telegram] app.shutdown failed: %s", e)
 
     async def _on_polling_error(self, update, context):
-        """Catches polling errors. Conflict gets a 10s backoff so a stale
-        instance doesn't spam the log; everything else is logged once."""
+        """Catches polling errors and decides log severity.
+
+        - Conflict: stale-instance race; log warn + back off 10 s.
+        - NetworkError / TimedOut (and their subclasses): transient httpx
+          drops, DNS hiccups, ``Server disconnected without sending a
+          response``. PTB retries internally — we just log a one-liner at
+          WARNING so the operator can spot a sustained outage in the log
+          tail without drowning in stack traces from ten-second blips.
+        - Anything else: keep the ERROR + stack trace (real bug)."""
         err = context.error
         if isinstance(err, Conflict):
             self._last_conflict_ts = time.time()
@@ -366,6 +373,9 @@ class TelegramService:
                 await asyncio.sleep(10)
             except asyncio.CancelledError:
                 return
+            return
+        if isinstance(err, (NetworkError, TimedOut)):
+            log.warning("[Telegram] Transient polling network error: %s", err)
             return
         log.error("[Telegram] Update error: %s", err, exc_info=True)
 
