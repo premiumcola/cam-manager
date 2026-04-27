@@ -1547,3 +1547,21 @@ select option{background:#1e1e1e;color:var(--text)}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ws-stats-chip-value{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
 .ws-stats-chip.is-isolated .ws-stats-chip-value{color:#cfe1ee}
+
+/* ── Camera-edit: live id preview ─────────────────────────────────────── */
+/* Read-only block under the manufacturer/model/name fields. Visually
+   secondary so it doesn't compete with the actual inputs, but legible so
+   the user can see exactly what id will be persisted on save. */
+.cam-id-preview{
+  display:flex;flex-direction:column;gap:3px;
+  padding:10px 12px;border-radius:10px;
+  background:rgba(127,174,201,0.06);border:1px dashed rgba(127,174,201,0.22);
+  margin-top:4px
+}
+.cam-id-preview-label{font-size:10px;font-weight:700;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.08em}
+.cam-id-preview-value{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:13px;color:#cfe1ee;word-break:break-all
+}
+.cam-id-preview-hint{font-size:10.5px;color:var(--muted);font-style:italic}

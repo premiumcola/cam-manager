@@ -5,9 +5,11 @@ storage/settings.json
 app/storage/settings.json
 storage/settings.json.bak
 storage/settings.json.bak2
+storage/settings.json.bak.*
 storage/settings.json.tmp
 app/storage/settings.json.bak
 app/storage/settings.json.bak2
+app/storage/settings.json.bak.*
 app/storage/settings.json.tmp
 storage/backups/
 storage/weather_history.json

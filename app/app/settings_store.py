@@ -617,11 +617,31 @@ class SettingsStore:
         camera = validate_and_coerce(camera, CAMERA_SCHEMA)
         merged = self._default_camera(camera)
         existing = self.get_camera(merged["id"])
+        id_relevant_changed = False
         if existing:
+            # Track whether any input that feeds build_camera_id actually
+            # changed — only then is it worth running the per-camera storage
+            # migration after the save. Unrelated edits (resolution, motion
+            # sensitivity, …) skip the analysis pass entirely.
+            for key in ("manufacturer", "model", "name", "rtsp_url"):
+                if existing.get(key) != merged.get(key):
+                    id_relevant_changed = True
+                    break
             existing.update(merged)
         else:
             self.data.setdefault("cameras", []).append(merged)
+            id_relevant_changed = True
         self.data.setdefault("ui", {})["wizard_completed"] = True
+        # Migrate FIRST (it persists if the id needs to change), then write
+        # one final save so any unrelated field updates also land. The
+        # migration is idempotent — a no-op pass costs roughly one stat()
+        # per legacy folder.
+        if id_relevant_changed:
+            try:
+                from .storage_migration import migrate as _migrate
+                _migrate(self, self.path.parent)
+            except Exception as e:
+                log.warning("[Settings] per-cam migration after save failed: %s", e)
         self.save()
 
     def delete_camera(self, cam_id: str) -> bool:

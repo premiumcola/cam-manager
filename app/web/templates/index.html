@@ -194,7 +194,18 @@
               <div class="cam-2col">
                 <div style="display:grid;gap:8px">
                   <div class="field-wrap"><input name="name" placeholder="Werkstatt" required /><span class="field-label">Anzeigename</span></div>
+                  <div class="field-wrap"><input name="manufacturer" placeholder="Reolink" autocomplete="off" /><span class="field-label">Hersteller</span></div>
+                  <div class="field-wrap"><input name="model" placeholder="RLC-810A" autocomplete="off" /><span class="field-label">Modell</span></div>
                   <div class="field-wrap"><input name="icon" placeholder="🔧" maxlength="4" /><span class="field-label">Icon (Emoji)</span></div>
+                  <!-- Live ID preview. Read-only and updated by JS on every
+                       change to manufacturer / model / name / IP. The hint
+                       below explains the rule so the user understands why
+                       it changed. -->
+                  <div class="cam-id-preview">
+                    <span class="cam-id-preview-label">Kamera-ID</span>
+                    <code class="cam-id-preview-value" id="camIdPreview" data-camid="">unknown_unknown_unknown_unknown</code>
+                    <span class="cam-id-preview-hint">wird automatisch aus Hersteller, Modell, Name und IP-Endung erzeugt</span>
+                  </div>
                 </div>
                 <div style="display:grid;gap:8px">
                   <div class="field-wrap"><input name="rtsp_ip" placeholder="192.168.X.X" /><span class="field-label">Kamera-IP</span></div>
