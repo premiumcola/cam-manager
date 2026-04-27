@@ -1670,6 +1670,9 @@ async function updateSystemPanel(){
 function hydrateTelegram(){
   const tg=state.config?.telegram||{};
   const el=byId('tg_enabled'); if(el) el.checked=!!tg.enabled;
+  // Initial badge from config — immediately overwritten by the live polling
+  // status fetch below, so the user sees the actual updater state, not just
+  // the "enabled" flag.
   const tgBadge=byId('tgStatusBadge');
   if(tgBadge){tgBadge.textContent=tg.enabled?'aktiv':'aus';tgBadge.className='set-status-badge '+(tg.enabled?'set-status-badge--on':'set-status-badge--off');}
   const tok=byId('tg_token'); if(tok) tok.value=tg.token||'';
@@ -1677,6 +1680,34 @@ function hydrateTelegram(){
   const fmt=tg.format||'photo';
   document.querySelectorAll('[name="tg_format"]').forEach(r=>r.checked=r.value===fmt);
   renderTgFormatPreview(fmt);
+  refreshTelegramPollingStatus();
+}
+
+let _tgPollStatusTimer=null;
+async function refreshTelegramPollingStatus(){
+  const badge=byId('tgStatusBadge'); if(!badge) return;
+  try{
+    const r=await fetch('/api/telegram/status');
+    const d=await r.json();
+    const s=d.state||'off';
+    if(s==='active'){
+      const mins=Math.floor((d.since_seconds||0)/60);
+      const lbl=mins>0?`aktiv (seit ${mins} min)`:'aktiv';
+      badge.textContent=lbl;
+      badge.className='set-status-badge set-status-badge--on';
+    }else if(s==='conflict'){
+      badge.textContent='Conflict (Backoff)';
+      badge.className='set-status-badge set-status-badge--warn';
+    }else if(s==='starting'){
+      badge.textContent='startet…';
+      badge.className='set-status-badge set-status-badge--warn';
+    }else{
+      badge.textContent=d.enabled?'aus':'aus';
+      badge.className='set-status-badge set-status-badge--off';
+    }
+  }catch(e){/* leave the existing badge alone on transient fetch errors */}
+  clearTimeout(_tgPollStatusTimer);
+  _tgPollStatusTimer=setTimeout(refreshTelegramPollingStatus, 10000);
 }
 
 function initCameraEditTabs(){

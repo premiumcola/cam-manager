@@ -2,6 +2,8 @@
 from __future__ import annotations
 import os
 import copy as _copy
+import threading
+import time
 from pathlib import Path
 from flask import Flask, jsonify, request, Response, send_from_directory, render_template
 from datetime import datetime, timedelta
@@ -165,6 +167,13 @@ weather_service = None
 runtimes: dict[str, CameraRuntime] = {}
 _runtime_cfgs: dict[str, dict] = {}  # cam_id → deep copy of camera cfg at runtime start
 
+# Single-flight lock + last-applied snapshot for telegram reloads. The lock
+# prevents two HTTP saves landing simultaneously from each starting a fresh
+# polling thread; the snapshot avoids a 3 s slot-wait on every camera-config
+# save when nothing telegram-related has actually changed.
+_telegram_reload_lock = threading.Lock()
+_last_telegram_cfg_snapshot: dict | None = None
+
 
 def get_effective_config():
     return settings.export_effective_config(base_cfg)
@@ -174,18 +183,43 @@ def get_camera_cfg(cam_id: str):
     return settings.get_camera(cam_id)
 
 
-def rebuild_services():
-    global cfg, mqtt_service, telegram_service
-    cfg = get_effective_config()
-    mqtt_service = MQTTService(cfg.get("mqtt", {}))
-    # Telegram: build once per process, then `reload()` on every settings
-    # change. Recreating the service would spawn a second polling thread
-    # against the same bot token — Telegram returns Conflict and both
-    # pollers spin in a retry loop. reload() swaps config + scheduler in
-    # place and leaves polling alone.
-    if telegram_service is None:
+def _reload_telegram_service():
+    """Single source of truth for swapping the TelegramService.
+
+    Stops the old instance fully (so Telegram's getUpdates slot is freed),
+    waits 3 s for the API to release the slot, then constructs and starts
+    a fresh instance. Skips entirely when the telegram config snapshot is
+    unchanged — the common case for camera-config saves."""
+    global telegram_service, _last_telegram_cfg_snapshot
+    log = logging.getLogger(__name__)
+    with _telegram_reload_lock:
+        new_cfg = get_effective_config()
+        new_tg_cfg = new_cfg.get("telegram", {}) or {}
+        if telegram_service is not None and _last_telegram_cfg_snapshot == new_tg_cfg:
+            log.debug("[Telegram] Reload skipped — config unchanged")
+            return
+        was_polling = False
+        if telegram_service is not None:
+            try:
+                was_polling = telegram_service.get_polling_status().get("state") in (
+                    "active", "starting", "conflict",
+                )
+            except Exception:
+                was_polling = False
+            try:
+                telegram_service.stop(reason="settings reload")
+            except Exception as e:
+                log.warning("[Telegram] Stop during reload failed: %s", e)
+            telegram_service = None
+            # Telegram's getUpdates slot can stay reserved for a couple of
+            # seconds after we close it; without this pause the new bot's
+            # first poll collides with the tail of the old long-poll and
+            # trips the Conflict error in a tight loop.
+            if was_polling:
+                time.sleep(3)
+        log.info("[Telegram] Starting fresh service after reload")
         telegram_service = TelegramService(
-            cfg.get("telegram", {}),
+            new_tg_cfg,
             store=store,
             runtimes=runtimes,
             global_cfg=lambda: settings.export_effective_config(base_cfg),
@@ -193,8 +227,19 @@ def rebuild_services():
             settings_store=settings,
         )
         telegram_service.start()
-    else:
-        telegram_service.reload(cfg.get("telegram", {}))
+        _last_telegram_cfg_snapshot = _copy.deepcopy(new_tg_cfg)
+        # Camera runtimes hold their own per-runtime ref to the notifier;
+        # push the new service into them so alerts don't keep flowing
+        # through the dead instance.
+        for rt in runtimes.values():
+            rt.notifier = telegram_service
+
+
+def rebuild_services():
+    global cfg, mqtt_service
+    cfg = get_effective_config()
+    mqtt_service = MQTTService(cfg.get("mqtt", {}))
+    _reload_telegram_service()
     # WeatherService: same lifecycle pattern. Builds once per process; on
     # subsequent rebuild_services calls (settings change) it reloads in place.
     global weather_service
@@ -204,9 +249,10 @@ def rebuild_services():
             runtimes=runtimes,
             settings_store=settings,
             server_cfg=cfg.get("server", {}),
-            # Pass a getter (NOT the instance) so reload() always sees the
-            # current TelegramService — Phase 1 reload swaps the underlying
-            # service in place, but other code may grab a fresh global ref.
+            # Pass a getter (NOT the instance) so each call resolves to the
+            # current TelegramService — settings reload constructs a fresh
+            # instance and rebinds the global, so a cached reference would
+            # point at a dead service.
             telegram_getter=lambda: telegram_service,
         )
         weather_service.start()
@@ -1657,6 +1703,18 @@ def api_timeline():
 @app.get('/api/telegram/actions')
 def api_telegram_actions():
     return jsonify({"items": settings.data.get("telegram_actions", [])[:40]})
+
+
+@app.get('/api/telegram/status')
+def api_telegram_status():
+    """Read-only polling status for the connection-panel badge."""
+    if not telegram_service:
+        return jsonify({"state": "off", "since_seconds": 0, "enabled": False})
+    try:
+        return jsonify(telegram_service.get_polling_status())
+    except Exception as e:
+        return jsonify({"state": "off", "since_seconds": 0, "enabled": False,
+                        "error": str(e)}), 500
 
 
 @app.post('/api/telegram/test')

@@ -8,6 +8,7 @@ import logging
 import time
 
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import Conflict
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
 from .telegram_helpers import (
@@ -52,14 +53,24 @@ class TelegramService:
         self.timelapse_builder = timelapse_builder
         self.settings_store = settings_store
         # ── Threads & loop ─────────────────────────────────────────────────
-        # Polling owns its own loop (run inside python-telegram-bot). The
-        # send-loop is ours: a single asyncio loop on a dedicated thread, so
-        # 100 sends in a row never recreate a loop and never hit
-        # "loop is closed" after the first call.
+        # Two asyncio loops live in this process for telegram:
+        #   - send-loop: ours, dedicated thread, used by self.send() so 100
+        #     sends in a row never recreate a loop nor hit "loop is closed".
+        #   - polling-loop: also ours (no longer PTB's run_polling), so we
+        #     can signal a clean shutdown cross-thread via _polling_stop_event
+        #     and tear down updater/app via the documented coroutines. This
+        #     is the only safe way to free Telegram's getUpdates slot before
+        #     a fresh instance starts polling against the same bot token.
         self._poll_thread: Thread | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._loop_thread: Thread | None = None
+        self._polling_app = None
+        self._polling_loop: asyncio.AbstractEventLoop | None = None
+        self._polling_stop_event: asyncio.Event | None = None
+        self._polling_active_since: float | None = None
+        self._last_conflict_ts: float | None = None
         self._scheduler = None
+        self._lifecycle_lock = Lock()
         self._stopped = False
         # ── Rate limit (in-memory, per-cam) ────────────────────────────────
         self._rate_lock = Lock()
@@ -83,120 +94,132 @@ class TelegramService:
         return Path(self._cfg().get("storage", {}).get("root", "/app/storage"))
 
     # ── Lifecycle ─────────────────────────────────────────────────────────
+    # Lifecycle contract: TelegramService instances are started exactly once
+    # via start(), stopped exactly once via stop(). To apply new config
+    # (token, chat, push schedule), the ONLY supported path is constructing
+    # a new instance — see server._reload_telegram_service(). There is no
+    # in-place reload(), because in-place token swaps cannot reliably free
+    # Telegram's getUpdates slot before the new poll starts, which is the
+    # source of the "Conflict: terminated by other getUpdates" loop.
     def start(self):
         """Boot polling, dedicated send-loop, scheduler, and default jobs.
 
-        Replaces the old start_polling() entry point — still callable for
-        compatibility. Idempotent: subsequent calls return without effect."""
-        if not self.enabled:
-            return
-        if self._loop_thread and self._loop_thread.is_alive():
-            return
-        # Send loop on dedicated thread
-        self._loop = asyncio.new_event_loop()
-        self._loop_thread = Thread(target=self._run_send_loop, daemon=True, name="tg-send-loop")
-        self._loop_thread.start()
-        # Polling thread (PTB owns its own loop here)
-        self._poll_thread = Thread(target=self._run_polling, daemon=True, name="tg-polling")
-        self._poll_thread.start()
-        # Scheduler
-        try:
-            from apscheduler.schedulers.background import BackgroundScheduler
-            self._scheduler = BackgroundScheduler(daemon=True)
-            self._scheduler.start()
-            log.info("[Telegram] Scheduler started")
-        except Exception as e:
-            log.error("[Telegram] Scheduler start failed: %s", e)
-            self._scheduler = None
-        # Default push jobs
-        self.register_default_jobs()
+        Idempotent: a second call while already running is a no-op."""
+        with self._lifecycle_lock:
+            if self._stopped:
+                log.warning("[Telegram] Start ignored: instance already stopped")
+                return
+            if self._loop_thread and self._loop_thread.is_alive():
+                log.debug("[Telegram] Start ignored: already running")
+                return
+            if not self.enabled:
+                log.info("[Telegram] Start skipped — service disabled")
+                return
+            log.info("[Telegram] Starting (token=%s…)", self.token[:8] if self.token else "")
+            # Send loop on dedicated thread — owned by us, not by PTB.
+            self._loop = asyncio.new_event_loop()
+            self._loop_thread = Thread(target=self._run_send_loop, daemon=True, name="tg-send-loop")
+            self._loop_thread.start()
+            # Polling thread (we drive Application's lifecycle manually so
+            # we can stop it cross-thread).
+            self._poll_thread = Thread(target=self._run_polling, daemon=True, name="tg-polling")
+            self._poll_thread.start()
+            # Scheduler
+            try:
+                from apscheduler.schedulers.background import BackgroundScheduler
+                self._scheduler = BackgroundScheduler(daemon=True)
+                self._scheduler.start()
+                log.info("[Telegram] Scheduler started")
+            except Exception as e:
+                log.error("[Telegram] Scheduler start failed: %s", e)
+                self._scheduler = None
+            # Default push jobs
+            self.register_default_jobs()
 
-    # Back-compat alias — server.py historically calls start_polling().
+    # Back-compat alias — kept for any caller that historically used it.
     def start_polling(self):
         self.start()
 
-    def shutdown(self):
-        """Stop scheduler + send loop. Polling thread is intentionally NOT
-        torn down here — Telegram only allows one getUpdates connection per
-        bot token, and PTB's polling app cannot be cleanly stopped from
-        another thread. Use reload() instead of replace-on-config-change."""
-        if self._stopped:
-            return
-        self._stopped = True
-        try:
-            if self._scheduler:
-                self._scheduler.shutdown(wait=False)
-                log.info("[Telegram] Scheduler stopped")
-        except Exception as e:
-            log.warning("[Telegram] scheduler shutdown failed: %s", e)
-        self._scheduler = None
-        try:
-            if self._loop and self._loop.is_running():
-                self._loop.call_soon_threadsafe(self._loop.stop)
-        except Exception as e:
-            log.warning("[Telegram] loop stop failed: %s", e)
+    def stop(self, *, reason: str = "manual"):
+        """Synchronous teardown. Stops polling first (so Telegram's getUpdates
+        slot is freed before any successor instance starts), then scheduler,
+        then send loop. Blocks up to ~15s total.
 
-    def reload(self, new_cfg: dict):
-        """Apply new telegram config without restarting the polling thread.
-
-        Re-cycles the send loop and scheduler so updated push settings take
-        effect immediately, but leaves the bot/polling alone — Telegram
-        rejects a second concurrent getUpdates against the same token, so
-        recreating the polling thread on every settings save would produce
-        the famous "Conflict: terminated by other getUpdates request".
-        Token changes therefore require a full container restart (logged)."""
-        new_cfg = new_cfg or {}
-        new_token = new_cfg.get("token", "")
-        if new_token and self.token and new_token != self.token:
-            log.warning("[Telegram] token changed — container restart required for new token to take effect")
-        # Refresh config snapshots
-        self.cfg = new_cfg
-        self.push_cfg = new_cfg.get("push") or {}
-        self.chat_id = str(new_cfg.get("chat_id", ""))
-        new_enabled = bool(new_cfg.get("enabled") and new_cfg.get("token") and new_cfg.get("chat_id"))
-        # Swap the send-side cleanly: stop scheduler + send loop, then start fresh
-        # so updated push schedule (e.g. new daily-report time) takes hold
-        # without ever spawning a second polling thread.
-        was_enabled = self.enabled
-        self.enabled = new_enabled
-        try:
-            if self._scheduler:
-                self._scheduler.shutdown(wait=False)
-        except Exception as e:
-            log.warning("[Telegram] scheduler shutdown (reload) failed: %s", e)
-        self._scheduler = None
-        try:
-            if self._loop and self._loop.is_running():
-                self._loop.call_soon_threadsafe(self._loop.stop)
-        except Exception as e:
-            log.warning("[Telegram] loop stop (reload) failed: %s", e)
-        self._loop = None
-        self._loop_thread = None
-        self._stopped = False
-        # Bot stays bound to the original token; nothing to do for it.
-        if not new_enabled:
-            log.info("[Telegram] reloaded — disabled (sends suspended)")
-            return
-        # Restart send loop + scheduler
-        self._loop = asyncio.new_event_loop()
-        self._loop_thread = Thread(target=self._run_send_loop, daemon=True, name="tg-send-loop")
-        self._loop_thread.start()
-        try:
-            from apscheduler.schedulers.background import BackgroundScheduler
-            self._scheduler = BackgroundScheduler(daemon=True)
-            self._scheduler.start()
-            log.info("[Telegram] Scheduler restarted (reload)")
-        except Exception as e:
-            log.error("[Telegram] Scheduler restart failed: %s", e)
+        After stop(), the instance is dead — call sites must build a fresh
+        TelegramService to resume."""
+        with self._lifecycle_lock:
+            if self._stopped:
+                return
+            self._stopped = True
+            log.info("[Telegram] Stopping (reason: %s)", reason)
+            # 1. Polling: signal the polling loop's stop event, then join.
+            if self._polling_loop is not None and self._polling_stop_event is not None:
+                try:
+                    loop = self._polling_loop
+                    ev = self._polling_stop_event
+                    loop.call_soon_threadsafe(ev.set)
+                except Exception as e:
+                    log.warning("[Telegram] polling stop signal failed: %s", e)
+            if self._poll_thread and self._poll_thread.is_alive():
+                self._poll_thread.join(timeout=10)
+                if self._poll_thread.is_alive():
+                    log.warning("[Telegram] Polling thread did not exit within 10s")
+            self._poll_thread = None
+            self._polling_app = None
+            self._polling_loop = None
+            self._polling_stop_event = None
+            self._polling_active_since = None
+            # 2. Scheduler
+            try:
+                if self._scheduler:
+                    self._scheduler.shutdown(wait=False)
+                    log.info("[Telegram] Scheduler stopped")
+            except Exception as e:
+                log.warning("[Telegram] scheduler shutdown failed: %s", e)
             self._scheduler = None
-        self.register_default_jobs()
-        if not was_enabled:
-            log.info("[Telegram] reloaded — newly enabled, polling stays from prior instance" if self._poll_thread and self._poll_thread.is_alive() else "[Telegram] reloaded — newly enabled, starting polling")
-            if not (self._poll_thread and self._poll_thread.is_alive()):
-                self._poll_thread = Thread(target=self._run_polling, daemon=True, name="tg-polling")
-                self._poll_thread.start()
-        else:
-            log.info("[Telegram] reload applied")
+            # 3. Send loop
+            try:
+                if self._loop and self._loop.is_running():
+                    self._loop.call_soon_threadsafe(self._loop.stop)
+            except Exception as e:
+                log.warning("[Telegram] send loop stop failed: %s", e)
+            if self._loop_thread and self._loop_thread.is_alive():
+                self._loop_thread.join(timeout=5)
+            self._loop = None
+            self._loop_thread = None
+            log.info("[Telegram] Stopped")
+
+    # Back-compat alias for any old callers.
+    def shutdown(self):
+        self.stop(reason="shutdown")
+
+    def get_polling_status(self) -> dict:
+        """Snapshot of the polling state for /api/telegram/status.
+
+        States:
+          off       — service disabled or polling not running
+          starting  — thread alive, getUpdates not yet confirmed
+          active    — getUpdates running, no recent conflict
+          conflict  — Telegram returned Conflict in the last 30s
+        """
+        if not self.enabled:
+            return {"state": "off", "since_seconds": 0, "enabled": False}
+        if not (self._poll_thread and self._poll_thread.is_alive()):
+            return {"state": "off", "since_seconds": 0, "enabled": True}
+        now = time.time()
+        if self._last_conflict_ts and (now - self._last_conflict_ts) < 30:
+            return {
+                "state": "conflict",
+                "since_seconds": int(now - self._last_conflict_ts),
+                "enabled": True,
+            }
+        if self._polling_active_since:
+            return {
+                "state": "active",
+                "since_seconds": int(now - self._polling_active_since),
+                "enabled": True,
+            }
+        return {"state": "starting", "since_seconds": 0, "enabled": True}
 
     def _run_send_loop(self):
         try:
@@ -211,23 +234,73 @@ class TelegramService:
                 pass
 
     def _run_polling(self):
+        """Owns its own asyncio loop and runs Application's full lifecycle
+        manually (initialize / start / updater.start_polling / wait / teardown),
+        so stop() can signal a clean shutdown cross-thread via the stop event."""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        self._polling_loop = loop
+        self._polling_stop_event = asyncio.Event()
         try:
-            # python-telegram-bot 22's ApplicationBuilder.build() expects a
-            # usable event loop bound to the current thread. Spawned daemon
-            # threads don't have one by default, so we install a fresh loop
-            # here before constructing the Application.
-            asyncio.set_event_loop(asyncio.new_event_loop())
-            app = ApplicationBuilder().token(self.token).build()
-            app.add_handler(CommandHandler("start", self.cmd_menu))
-            app.add_handler(CommandHandler("menu", self.cmd_menu))
-            app.add_handler(CommandHandler("status", self.cmd_status))
-            app.add_handler(CommandHandler("today", self.cmd_today))
-            app.add_handler(CommandHandler("week", self.cmd_week))
-            app.add_handler(CommandHandler("stats", self.cmd_today))
-            app.add_handler(CallbackQueryHandler(self.on_callback))
-            app.run_polling(drop_pending_updates=True, close_loop=False, stop_signals=None)
+            loop.run_until_complete(self._polling_main())
         except Exception as e:
-            log.error("[Telegram] polling failed: %s", e)
+            log.error("[Telegram] polling thread crashed: %s", e, exc_info=True)
+        finally:
+            try:
+                loop.close()
+            except Exception:
+                pass
+            self._polling_active_since = None
+            log.info("[Telegram] Polling thread exited")
+
+    async def _polling_main(self):
+        app = ApplicationBuilder().token(self.token).build()
+        self._polling_app = app
+        app.add_handler(CommandHandler("start", self.cmd_menu))
+        app.add_handler(CommandHandler("menu", self.cmd_menu))
+        app.add_handler(CommandHandler("status", self.cmd_status))
+        app.add_handler(CommandHandler("today", self.cmd_today))
+        app.add_handler(CommandHandler("week", self.cmd_week))
+        app.add_handler(CommandHandler("stats", self.cmd_today))
+        app.add_handler(CallbackQueryHandler(self.on_callback))
+        app.add_error_handler(self._on_polling_error)
+        try:
+            await app.initialize()
+            await app.start()
+            await app.updater.start_polling(drop_pending_updates=True)
+            self._polling_active_since = time.time()
+            log.info("[Telegram] Polling active")
+            await self._polling_stop_event.wait()
+        finally:
+            log.info("[Telegram] Polling shutting down")
+            try:
+                if app.updater and app.updater.running:
+                    await app.updater.stop()
+            except Exception as e:
+                log.warning("[Telegram] updater.stop failed: %s", e)
+            try:
+                if app.running:
+                    await app.stop()
+            except Exception as e:
+                log.warning("[Telegram] app.stop failed: %s", e)
+            try:
+                await app.shutdown()
+            except Exception as e:
+                log.warning("[Telegram] app.shutdown failed: %s", e)
+
+    async def _on_polling_error(self, update, context):
+        """Catches polling errors. Conflict gets a 10s backoff so a stale
+        instance doesn't spam the log; everything else is logged once."""
+        err = context.error
+        if isinstance(err, Conflict):
+            self._last_conflict_ts = time.time()
+            log.warning("[Telegram] Polling conflict (likely stale instance). Backing off 10 s.")
+            try:
+                await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                return
+            return
+        log.error("[Telegram] Update error: %s", err, exc_info=True)
 
     # ── Scheduler API ─────────────────────────────────────────────────────
     def schedule_daily(self, hh: int, mm: int, key: str, callback):
