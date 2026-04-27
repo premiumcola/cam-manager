@@ -53,11 +53,17 @@ ACTION_LIVE = "📷 Live-Bild"
 ACTION_CLIP = "🎬 5 s Clip"
 ACTION_STATUS = "📊 Status"
 ACTION_MUTE = "🔇 Alles still 1 h"
+ACTION_CAMS = "📹 Kameras"
 
 PERSISTENT_KEYBOARD = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(ACTION_LIVE), KeyboardButton(ACTION_CLIP)],
         [KeyboardButton(ACTION_STATUS), KeyboardButton(ACTION_MUTE)],
+        # Third row, full-width: per-cam drilldown picker. The four
+        # per-cam actions (Live / Clip / Status / 1 h Mute) live behind
+        # this row so the top-level keyboard stays at five visible
+        # buttons.
+        [KeyboardButton(ACTION_CAMS)],
     ],
     resize_keyboard=True,
     is_persistent=True,
@@ -629,16 +635,26 @@ class TelegramService:
         if not pcfg.get("enabled", True):
             log.debug("[Telegram] push: disabled")
             return
-        # Global mute (set by the "🔇 Alles still 1 h" button or /mute).
-        # Detection-style alerts honour it; daily reports/highlights/
-        # watchdog go through their own jobs and stay silent-by-design.
+        # Global + per-camera mute. Both gates honour the same "_until"
+        # epoch contract: 0 / past = no mute, future = active. Daily
+        # reports / highlights / watchdog go through their own jobs and
+        # stay silent-by-design — they bypass this gate entirely.
         if self.settings_store:
             try:
-                mute_until = float(self.settings_store.runtime_get("global_mute_until") or 0)
+                global_mute = float(self.settings_store.runtime_get("global_mute_until") or 0)
             except Exception:
-                mute_until = 0
-            if mute_until and time.time() < mute_until:
-                log.info("[Telegram] skip: global mute active until epoch=%d", int(mute_until))
+                global_mute = 0
+            if global_mute and time.time() < global_mute:
+                log.info("[Telegram] skip: global mute active until epoch=%d", int(global_mute))
+                return
+            try:
+                cam_mute = float(self.settings_store.runtime_get_subkey(
+                    "cam_mute_until", camera_id, 0) or 0)
+            except Exception:
+                cam_mute = 0
+            if cam_mute and time.time() < cam_mute:
+                log.info("[Telegram] skip: cam %s muted until epoch=%d",
+                         camera_id, int(cam_mute))
                 return
         labels = meta.get("labels") or []
         primary = most_specific_label(labels)
@@ -972,16 +988,19 @@ class TelegramService:
         return "🔴"
 
     def _cam_picker(self, action: str) -> tuple[str, InlineKeyboardMarkup]:
-        """One button per camera; clicking emits cam:<id>:<action>."""
+        """One button per camera; clicking emits cam:<id>:<action>.
+
+        Pulls from ``_active_cams()`` so cameras with a missing/failed
+        runtime still appear (with a yellow icon) and the user can drill
+        into them rather than seeing "(keine Kameras)" while a perfectly
+        configured camera is just slow to start."""
         rows = []
-        for cam_id, rt in self.runtimes.items():
-            try:
-                st = rt.status()
-            except Exception:
-                st = {}
-            name = st.get("name", cam_id)
-            icon = self._cam_status_icon(st)
-            rows.append([InlineKeyboardButton(f"{icon} {name}", callback_data=f"cam:{cam_id}:{action}")])
+        for info in self._active_cams():
+            icon = self._cam_status_icon_for(info)
+            rows.append([InlineKeyboardButton(
+                f"{icon} {info['name']}",
+                callback_data=f"cam:{info['cam_id']}:{action}"[:64],
+            )])
         if not rows:
             rows.append([InlineKeyboardButton("(keine Kameras)", callback_data="noop")])
         rows.append([self._back_btn()])
@@ -1239,15 +1258,117 @@ class TelegramService:
     # clip:5" dispatch in _handle_camera_cb so there is no second
     # implementation of snapshot / clip.
 
-    def _active_cams(self) -> list[tuple[str, str]]:
-        out: list[tuple[str, str]] = []
+    def _active_cams(self) -> list[dict]:
+        """Single source of truth for "which cameras can the user act on".
+
+        Returns a list of info dicts (one per cam):
+
+            cam_id        camera id
+            name          display name
+            source        "runtime" — backed by a live CameraRuntime
+                          "settings" — fallback, no runtime in self.runtimes
+            runtime       the rt object (None for fallback)
+            cfg           the cam dict from settings (None when source="runtime")
+            status_kind   "active" | "starting" | "error" | "fallback"
+            status        the rt.status() dict (empty for fallback)
+
+        Fallback rule: when an enabled camera has no live runtime (recent
+        boot crash, restart in progress, …), it still appears in this list
+        so the Telegram bot can show it with a yellow icon instead of
+        replying "Keine Kameras konfiguriert" — which historically led
+        users to think the camera was lost when really the runtime just
+        failed to construct."""
+        out: list[dict] = []
+        seen: set[str] = set()
         for cam_id, rt in (self.runtimes or {}).items():
             try:
                 st = rt.status() if hasattr(rt, "status") else {}
             except Exception:
                 st = {}
-            out.append((cam_id, st.get("name") or cam_id))
+            kind = st.get("status") or "starting"
+            out.append({
+                "cam_id":      cam_id,
+                "name":        st.get("name") or cam_id,
+                "source":      "runtime",
+                "runtime":     rt,
+                "cfg":         None,
+                "status_kind": kind,
+                "status":      st,
+            })
+            seen.add(cam_id)
+        for cam_cfg in (self._cfg().get("cameras", []) or []):
+            cid = cam_cfg.get("id")
+            if not cid or cid in seen:
+                continue
+            if not cam_cfg.get("enabled", True):
+                continue
+            out.append({
+                "cam_id":      cid,
+                "name":        cam_cfg.get("name") or cid,
+                "source":      "settings",
+                "runtime":     None,
+                "cfg":         cam_cfg,
+                "status_kind": "fallback",
+                "status":      {},
+            })
         return out
+
+    def _cam_status_icon_for(self, info: dict) -> str:
+        """🟢 active · 🟡 starting/fallback · 🔴 error. Used by the picker
+        and the per-cam status block."""
+        kind = info.get("status_kind") or "starting"
+        if kind == "active":
+            return "🟢"
+        if kind == "error":
+            return "🔴"
+        return "🟡"  # starting, fallback, or anything else unknown
+
+    # Per-cam disk usage cache. Walking three sub-trees per call is too
+    # expensive to do on every /status tap, so we cache for 60 s. Cleared
+    # automatically because the dict is bound to the TelegramService
+    # instance — restart_telegram_service() builds a fresh instance and
+    # the cache starts empty again.
+    _DISK_CACHE_TTL_S = 60.0
+
+    def _cam_disk_usage_bytes(self, cam_id: str) -> int:
+        cache = getattr(self, "_disk_cache", None)
+        if cache is None:
+            cache = {}
+            self._disk_cache = cache
+        ent = cache.get(cam_id)
+        now = time.time()
+        if ent and (now - ent[0]) < self._DISK_CACHE_TTL_S:
+            return int(ent[1])
+        root = self._storage_root()
+        total = 0
+        for sub in ("motion_detection", "timelapse", "timelapse_frames"):
+            p = root / sub / cam_id
+            if not p.exists():
+                continue
+            try:
+                for f in p.rglob("*"):
+                    if f.is_file():
+                        try:
+                            total += f.stat().st_size
+                        except OSError:
+                            pass
+            except Exception:
+                pass
+        cache[cam_id] = (now, total)
+        return total
+
+    @staticmethod
+    def _fmt_bytes(n: int) -> str:
+        if n is None:
+            return "—"
+        n = int(n)
+        if n >= 1024 ** 3:
+            return f"{n / 1024 ** 3:.1f} GB"
+        if n >= 1024 ** 2:
+            return f"{n / 1024 ** 2:.0f} MB"
+        if n >= 1024:
+            return f"{n / 1024:.0f} KB"
+        return f"{n} B"
 
     async def _handle_livebild(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Send a snapshot or — when there are multiple cams — an inline
@@ -1260,10 +1381,12 @@ class TelegramService:
                                             reply_markup=PERSISTENT_KEYBOARD)
             return
         if len(cams) == 1:
-            cam_id, _ = cams[0]
+            info = cams[0]
+            icon = self._cam_status_icon_for(info)
             text, markup = ("📷 Kamera wählen — livebild",
                             InlineKeyboardMarkup([
-                                [InlineKeyboardButton(cams[0][1], callback_data=f"cam:{cam_id}:livebild")],
+                                [InlineKeyboardButton(f"{icon} {info['name']}",
+                                                      callback_data=f"cam:{info['cam_id']}:livebild"[:64])],
                             ]))
             await update.message.reply_text(text, reply_markup=markup)
             return
@@ -1280,9 +1403,12 @@ class TelegramService:
                                             reply_markup=PERSISTENT_KEYBOARD)
             return
         rows = []
-        for cam_id, name in cams:
-            rows.append([InlineKeyboardButton(f"🎬 {name}",
-                                              callback_data=f"cam:{cam_id}:clip:5"[:64])])
+        for info in cams:
+            icon = self._cam_status_icon_for(info)
+            rows.append([InlineKeyboardButton(
+                f"{icon} 🎬 {info['name']}",
+                callback_data=f"cam:{info['cam_id']}:clip:5"[:64],
+            )])
         await update.message.reply_text(
             "🎬 Kamera wählen — 5 s Clip",
             reply_markup=InlineKeyboardMarkup(rows),
@@ -1299,35 +1425,98 @@ class TelegramService:
         await update.message.reply_text(text, parse_mode="HTML",
                                         reply_markup=PERSISTENT_KEYBOARD)
 
-    def _render_system_status_text(self) -> str:
-        """Build the /status bubble. Pulls from runtime cam status, the
-        polling-status snapshot, the settings runtime store and shutil
-        for storage. All defensive — any single source missing falls back
-        to a question mark instead of crashing the whole render."""
-        import shutil as _sh
+    def _render_camera_block(self, info: dict) -> list[str]:
+        """Render the per-cam multi-line block used by both the global
+        /status bubble and the per-cam drilldown. Returns a list of
+        already-formatted lines so the caller controls separators."""
         from html import escape as _esc
-        cfg = self._cfg()
         today_iso = datetime.now().strftime("%Y-%m-%d")
-        cam_cfgs = {c.get("id"): c for c in (cfg.get("cameras", []) or [])}
-        lines = ["📊 <b>System-Status</b>", ""]
-        for cam_id, rt in (self.runtimes or {}).items():
+        cam_id = info["cam_id"]
+        name = _esc(info["name"])
+        icon = self._cam_status_icon_for(info)
+        st = info.get("status") or {}
+        cam_cfg = info.get("cfg") or self._camera_cfg(cam_id) or {}
+        armed = bool(cam_cfg.get("armed", st.get("armed", True)))
+        arm_label = "scharf" if armed else "stumm"
+        out = [f"{icon} <b>{name}</b>  · {arm_label}"]
+        if info["source"] == "runtime" and st:
+            kind = info.get("status_kind") or "starting"
+            fps = st.get("preview_fps")
+            age = st.get("frame_age_s")
+            if kind == "active":
+                rtsp_label = "stabil"
+            elif kind == "starting":
+                rtsp_label = "verbindet"
+            else:
+                rtsp_label = "getrennt"
+            fps_str = f"{fps:.0f} fps" if isinstance(fps, (int, float)) and fps > 0 else "—"
+            age_str = (f"letzter Frame vor {int(age)} s"
+                       if isinstance(age, (int, float)) and age >= 0 else "kein Frame")
+            out.append(f"   RTSP: {rtsp_label} · {fps_str} · {age_str}")
+        else:
+            out.append("   Runtime nicht aktiv — wird gestartet …")
+        # Per-cam disk usage (cached) + today event count
+        n_today = "?"
+        if self.store:
             try:
-                st = rt.status() if hasattr(rt, "status") else {}
+                n_today = len(self.store.list_events(cam_id, start=today_iso, limit=5000))
             except Exception:
-                st = {}
-            name = _esc(st.get("name") or cam_id)
-            online = st.get("status") in ("active", "starting")
-            icon = "🟢" if online else "🔴"
-            armed = bool((cam_cfgs.get(cam_id) or {}).get("armed",
-                                                          st.get("armed", True)))
-            arm_label = "scharf" if armed else "stumm"
-            n_today = "?"
-            if self.store:
-                try:
-                    n_today = len(self.store.list_events(cam_id, start=today_iso, limit=5000))
-                except Exception:
-                    n_today = "?"
-            lines.append(f"{icon} <b>{name}</b> · {arm_label} · {n_today} Events heute")
+                n_today = "?"
+        try:
+            disk = self._fmt_bytes(self._cam_disk_usage_bytes(cam_id))
+        except Exception:
+            disk = "—"
+        out.append(f"   Heute: {n_today} Events · {disk} belegt")
+        # Per-cam mute hint
+        cam_mute = 0.0
+        if self.settings_store:
+            try:
+                cam_mute = float(self.settings_store.runtime_get_subkey(
+                    "cam_mute_until", cam_id, 0) or 0)
+            except Exception:
+                cam_mute = 0.0
+        if cam_mute and time.time() < cam_mute:
+            end_local = datetime.fromtimestamp(cam_mute).strftime("%H:%M")
+            out.append(f"   🔇 stumm bis {end_local}")
+        return out
+
+    def _render_system_status_text(self) -> str:
+        """Build the /status bubble. Defensive — any single source
+        missing falls back to a question mark instead of crashing the
+        whole render. Layout (from spec):
+
+            📊 System-Status
+            ━━━━━━━━━━━
+            <per-cam block>     <— from _render_camera_block
+            <per-cam block>
+            ────
+            Telegram   …
+            Coral      …
+            Wetter     …
+            ────
+            Speicher: free + sum of cam-belegt
+            🔇 Pushes pausiert bis HH:MM   (only when muted)
+        """
+        import shutil as _sh
+        cfg = self._cfg()
+        lines = ["📊 <b>System-Status</b>", "━━━━━━━━━━━━━━", ""]
+        cams_info = self._active_cams()
+        cam_disk_total = 0
+        for info in cams_info:
+            try:
+                lines.extend(self._render_camera_block(info))
+                lines.append("")
+            except Exception as e:
+                log.warning("[Telegram] cam block render failed for %s: %s",
+                            info.get("cam_id"), e)
+                continue
+            try:
+                cam_disk_total += self._cam_disk_usage_bytes(info["cam_id"])
+            except Exception:
+                pass
+        if not cams_info:
+            lines.append("(keine Kameras konfiguriert)")
+            lines.append("")
         lines.append("────")
         # Telegram polling
         try:
@@ -1337,37 +1526,61 @@ class TelegramService:
         ps_state = ps.get("state", "?")
         ps_icon = {"active": "🟢", "conflict": "🟡",
                    "starting": "🟡", "off": "⚪"}.get(ps_state, "⚪")
-        ps_dur = ps.get("since_seconds", 0)
-        ps_dur_h = ps_dur // 60
-        lines.append(f"Telegram   {ps_icon} Polling {ps_state} ({ps_dur_h} min)")
-        # Coral state — read from settings effective config (processing.detection.mode)
+        ps_dur_min = (ps.get("since_seconds", 0) or 0) // 60
+        lines.append(f"Telegram   {ps_icon} Polling {ps_dur_min} min")
+        # Coral state + rolling-average inference latency from any active cam
         det_mode = (cfg.get("processing", {}).get("detection") or {}).get("mode", "none")
         coral_icon = "🟢" if det_mode == "coral" else "⚪"
-        lines.append(f"Coral      {coral_icon} {det_mode}")
-        # Weather: last poll timestamp from runtime store
-        ws_last = None
-        if self.settings_store:
-            try:
-                ws_last = self.settings_store.runtime_get("weather_last_poll_ts")
-            except Exception:
-                ws_last = None
-        if ws_last:
-            try:
-                age_min = int((time.time() - float(ws_last)) / 60)
-                lines.append(f"Wetter     🟢 letzter Poll vor {age_min} min")
-            except Exception:
-                lines.append("Wetter     ⚪ ?")
-        else:
-            lines.append("Wetter     ⚪ kein Poll bekannt")
-        # Storage free
+        avg_inferences = []
+        for info in cams_info:
+            v = (info.get("status") or {}).get("inference_avg_ms")
+            if isinstance(v, (int, float)) and v > 0:
+                avg_inferences.append(v)
+        infer_str = (f" · {sum(avg_inferences)/len(avg_inferences):.0f} ms ø"
+                     if avg_inferences else "")
+        lines.append(f"Coral      {coral_icon} {det_mode}{infer_str}")
+        # Weather — last poll age + summary of active event triggers
+        weather_line = "Wetter     ⚪ kein Poll bekannt"
+        try:
+            from . import server as _srv
+            wsvc = getattr(_srv, "weather_service", None)
+        except Exception:
+            wsvc = None
+        try:
+            if wsvc and hasattr(wsvc, "status"):
+                wstat = wsvc.status() or {}
+                last_iso = wstat.get("last_poll_at")
+                age_min = None
+                if last_iso:
+                    try:
+                        age_min = int((datetime.now() - datetime.fromisoformat(last_iso)).total_seconds() / 60)
+                    except Exception:
+                        age_min = None
+                cur = wstat.get("current_state") or {}
+                # Compact event chip list — only the events the user has
+                # turned on (dot icon + label).
+                from .weather_service import EVENT_LABEL_DE
+                ev_chips = []
+                for evt, lbl in EVENT_LABEL_DE.items():
+                    active = bool(cur.get(evt))
+                    ev_chips.append(f"{lbl} {'🟡' if active else '⚪'}")
+                age_str = f"letzter Poll vor {age_min} min" if age_min is not None else "kein Poll bekannt"
+                weather_line = f"Wetter     🟢 {age_str} · {' · '.join(ev_chips)}"
+        except Exception as e:
+            log.debug("[Telegram] weather row render failed: %s", e)
+        lines.append(weather_line)
+        lines.append("────")
+        # Storage: free disk + sum of per-cam belegt
         try:
             root = str(self._storage_root())
             free_gb = _sh.disk_usage(root).free / (1024 ** 3)
-            lines.append("────")
-            lines.append(f"Speicher frei: <b>{free_gb:.1f} GB</b>")
+            cam_total_str = self._fmt_bytes(cam_disk_total) if cam_disk_total else "—"
+            lines.append(
+                f"Speicher:  <b>{free_gb:.1f} GB</b> frei · {cam_total_str} von Cams belegt"
+            )
         except Exception:
             pass
-        # Mute state
+        # Global mute hint
         if self.settings_store:
             try:
                 mute_until = float(self.settings_store.runtime_get("global_mute_until") or 0)
@@ -1396,6 +1609,30 @@ class TelegramService:
             parse_mode="HTML", reply_markup=markup,
         )
 
+    async def _handle_cameras(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Per-cam drilldown picker. Tapping the persistent ``📹 Kameras``
+        row sends an inline keyboard with one button per camera; tapping
+        a camera opens its drilldown view via cam:<id>:drilldown."""
+        log.info("[Telegram] /cameras invoked by chat=%s",
+                 update.effective_chat.id if update.effective_chat else "?")
+        cams = self._active_cams()
+        if not cams:
+            await update.message.reply_text(
+                "Keine Kameras konfiguriert.",
+                reply_markup=PERSISTENT_KEYBOARD,
+            )
+            return
+        rows = []
+        for info in cams:
+            icon = self._cam_status_icon_for(info)
+            rows.append([InlineKeyboardButton(
+                f"{icon} {info['name']}",
+                callback_data=f"cam:{info['cam_id']}:drilldown"[:64],
+            )])
+        await update.message.reply_text(
+            "📹 Kamera wählen", reply_markup=InlineKeyboardMarkup(rows),
+        )
+
     async def on_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """MessageHandler for the persistent reply-keyboard buttons. Dispatches
         on exact-match button text; anything else gets a one-line hint that
@@ -1408,6 +1645,7 @@ class TelegramService:
             ACTION_CLIP: self._handle_clip5,
             ACTION_STATUS: self._handle_status,
             ACTION_MUTE: self._handle_mute_all,
+            ACTION_CAMS: self._handle_cameras,
         }
         handler = action_map.get(txt)
         if handler:
@@ -1610,6 +1848,45 @@ class TelegramService:
             return
         await q.answer()
 
+    def _cam_drilldown_view(self, cam_id: str) -> tuple[str, InlineKeyboardMarkup]:
+        """Per-cam drilldown rendered by ``menu:cams`` → cam:<id>:drilldown.
+
+        Body: same multi-line block /status uses for this cam.
+        Buttons: Live-Bild · 5 s Clip · Per-cam Status refresh · 1 h mute ·
+        Back to picker. Each button reuses the existing cam:<id>:* dispatch."""
+        # Find the camera info — runs through _active_cams so a fallback
+        # camera still gets a (degraded) drilldown rather than "not found".
+        info = next((c for c in self._active_cams() if c["cam_id"] == cam_id), None)
+        if info is None:
+            return ("Kamera nicht gefunden.",
+                    InlineKeyboardMarkup([[InlineKeyboardButton("◀ Zurück zur Übersicht",
+                                                                callback_data="menu:cams")]]))
+        body = "\n".join(["📹 " + line if i == 0 else line
+                          for i, line in enumerate(self._render_camera_block(info))])
+        rows = [[
+            InlineKeyboardButton("📷 Live-Bild", callback_data=f"cam:{cam_id}:livebild"[:64]),
+            InlineKeyboardButton("🎬 5 s Clip", callback_data=f"cam:{cam_id}:clip:5"[:64]),
+        ], [
+            InlineKeyboardButton("📊 Status", callback_data=f"cam:{cam_id}:status"[:64]),
+            InlineKeyboardButton("🔇 1 h still", callback_data=f"cam:{cam_id}:mute1h"[:64]),
+        ], [
+            InlineKeyboardButton("◀ Zurück zur Übersicht", callback_data="menu:cams"),
+        ]]
+        return body, InlineKeyboardMarkup(rows)
+
+    def _try_restart_runtime(self, cam_id: str) -> bool:
+        """Lazy-import + invoke ``server.restart_single_camera`` so a cam
+        whose runtime fell out of self.runtimes can recover without the
+        user having to leave the chat. Returns True iff the runtime is
+        live afterwards."""
+        try:
+            from . import server as _srv
+            _srv.restart_single_camera(cam_id)
+        except Exception as e:
+            log.warning("[Telegram] restart_single_camera(%s) failed: %s", cam_id, e)
+            return False
+        return cam_id in (self.runtimes or {})
+
     async def _handle_camera_cb(self, q, data: str, context):
         # cam:<cid>:<verb>[:<arg>]
         parts = data.split(":")
@@ -1617,10 +1894,44 @@ class TelegramService:
             await q.answer()
             return
         cam_id, verb = parts[1], parts[2]
+        # Drilldown / status / mute1h work even when the runtime is down
+        # (they don't need to talk to the camera). Render-only verbs first.
+        if verb == "drilldown":
+            await self._render_view(q, self._cam_drilldown_view(cam_id))
+            await q.answer()
+            return
+        if verb == "status":
+            info = next((c for c in self._active_cams() if c["cam_id"] == cam_id), None)
+            if info is None:
+                await q.answer("Kamera nicht gefunden.")
+                return
+            body = "\n".join(["📊 " + line if i == 0 else line
+                              for i, line in enumerate(self._render_camera_block(info))])
+            rows = [[InlineKeyboardButton("◀ Zurück", callback_data=f"cam:{cam_id}:drilldown"[:64])]]
+            await self._render_view(q, (body, InlineKeyboardMarkup(rows)))
+            await q.answer()
+            return
+        if verb == "mute1h":
+            until = time.time() + _MUTE_DEFAULT_S
+            if self.settings_store:
+                try:
+                    self.settings_store.runtime_set_subkey("cam_mute_until", cam_id, until)
+                except Exception as e:
+                    log.warning("[Telegram] per-cam mute write failed: %s", e)
+            end_local = datetime.fromtimestamp(until).strftime("%H:%M")
+            log.info("[Telegram] mute_cam %s activated until %s", cam_id, end_local)
+            await self._render_view(q, self._cam_drilldown_view(cam_id))
+            await q.answer(f"🔇 stumm bis {end_local}")
+            return
+
+        # Verbs that DO need a live runtime — try a restart once if missing.
         rt = self.runtimes.get(cam_id)
         if not rt:
-            await q.answer("Kamera nicht verfügbar.")
-            return
+            recovered = self._try_restart_runtime(cam_id)
+            rt = self.runtimes.get(cam_id) if recovered else None
+            if not rt:
+                await q.answer("Kamera nicht erreichbar — Runtime startet noch.", show_alert=True)
+                return
         cam_name = rt.status().get("name", cam_id)
         if verb == "livebild":
             await self._cam_send_snapshot(q, context, cam_id, rt, cam_name)
@@ -1784,6 +2095,8 @@ class TelegramService:
             await self._render_view(q, self._cam_picker("livebild")); await q.answer(); return
         if data == "menu:clip":
             await self._render_view(q, self._cam_picker("clip")); await q.answer(); return
+        if data == "menu:cams":
+            await self._render_view(q, self._cam_picker("drilldown")); await q.answer(); return
         if data == "menu:zeitraffer":
             await self._render_view(q, self._zeitraffer_view()); await q.answer(); return
         if data == "menu:zeitraffer:today":
