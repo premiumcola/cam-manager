@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 540" preserveAspectRatio="xMidYMid meet" role="img" aria-label="TAM-spy app module map: Flask server in the centre, four spokes — Camera Pipeline, Services, Persistence, Infrastructure — each holding the Python modules under app/app/.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a0f1a"/>
+      <stop offset="100%" stop-color="#10182a"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a2333"/>
+      <stop offset="100%" stop-color="#141d2c"/>
+    </linearGradient>
+    <linearGradient id="hub" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2a1a2e"/>
+      <stop offset="100%" stop-color="#1c1422"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="540" fill="url(#bg)"/>
+
+  <!-- Title -->
+  <text x="600" y="38" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" font-weight="800" fill="#edf4fb" text-anchor="middle">TAM-spy · Module Map</text>
+  <text x="600" y="58" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#7faec9" text-anchor="middle">app/app/ · 22 Module · Flask-Server koordiniert vier Spokes</text>
+
+  <!-- Hub: Flask app -->
+  <g>
+    <rect x="510" y="220" width="180" height="100" rx="14" fill="url(#hub)" stroke="#5e2942" stroke-width="2"/>
+    <text x="600" y="252" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="800" fill="#f472b6" text-anchor="middle" letter-spacing="3">FLASK APP</text>
+    <text x="600" y="278" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#edf4fb" text-anchor="middle">server.py</text>
+    <text x="600" y="298" font-family="ui-sans-serif, system-ui, sans-serif" font-size="10" fill="#f9a8d4" text-anchor="middle">REST · /api/* · rebuild_runtimes()</text>
+  </g>
+
+  <!-- Spoke 1: Camera Pipeline (top-left) -->
+  <g font-family="ui-sans-serif, system-ui, sans-serif">
+    <rect x="40" y="100" width="320" height="170" rx="12" fill="url(#card)" stroke="#2a3a52"/>
+    <text x="60" y="126" font-size="11" font-weight="800" fill="#7faec9" letter-spacing="2">CAMERA PIPELINE</text>
+    <text x="60" y="148" font-size="12" font-weight="700" fill="#edf4fb">camera_runtime.py</text>
+    <text x="60" y="164" font-size="10" fill="#566378">eine RuntimeThread pro Kamera</text>
+    <text x="60" y="184" font-size="12" font-weight="700" fill="#edf4fb">detectors.py</text>
+    <text x="60" y="200" font-size="10" fill="#566378">Coral · Bird · Wildlife</text>
+    <text x="60" y="220" font-size="12" font-weight="700" fill="#edf4fb">frame_helpers.py</text>
+    <text x="60" y="236" font-size="10" fill="#566378">grey/pink/block-frame Filter</text>
+    <text x="60" y="256" font-size="11" fill="#94a3b8">event_logic · timelapse · timelapse_cleanup</text>
+  </g>
+
+  <!-- Spoke 2: Services (top-right) -->
+  <g font-family="ui-sans-serif, system-ui, sans-serif">
+    <rect x="840" y="100" width="320" height="170" rx="12" fill="url(#card)" stroke="#2a3a52"/>
+    <text x="860" y="126" font-size="11" font-weight="800" fill="#7faec9" letter-spacing="2">SERVICES</text>
+    <text x="860" y="148" font-size="12" font-weight="700" fill="#edf4fb">telegram_bot.py</text>
+    <text x="860" y="164" font-size="10" fill="#566378">Anchor-Bubble · Edit-in-Place</text>
+    <text x="860" y="184" font-size="12" font-weight="700" fill="#edf4fb">telegram_helpers.py</text>
+    <text x="860" y="200" font-size="10" fill="#566378">Labels · Scoring · Quiet-Hours</text>
+    <text x="860" y="220" font-size="12" font-weight="700" fill="#edf4fb">weather_service.py</text>
+    <text x="860" y="236" font-size="10" fill="#566378">Open-Meteo Polling + History</text>
+    <text x="860" y="256" font-size="11" fill="#94a3b8">mqtt_service · paho-mqtt Wrapper</text>
+  </g>
+
+  <!-- Spoke 3: Persistence (bottom-left) -->
+  <g font-family="ui-sans-serif, system-ui, sans-serif">
+    <rect x="40" y="320" width="320" height="180" rx="12" fill="url(#card)" stroke="#2a3a52"/>
+    <text x="60" y="346" font-size="11" font-weight="800" fill="#7faec9" letter-spacing="2">PERSISTENCE</text>
+    <text x="60" y="368" font-size="12" font-weight="700" fill="#edf4fb">settings_store.py</text>
+    <text x="60" y="384" font-size="10" fill="#566378">storage/settings.json · Source of Truth</text>
+    <text x="60" y="404" font-size="12" font-weight="700" fill="#edf4fb">storage.py</text>
+    <text x="60" y="420" font-size="10" fill="#566378">EventStore · Media-Scan</text>
+    <text x="60" y="440" font-size="12" font-weight="700" fill="#edf4fb">storage_migration.py</text>
+    <text x="60" y="456" font-size="10" fill="#566378">idempotenter Boot-Reconcile</text>
+    <text x="60" y="476" font-size="11" fill="#94a3b8">camera_id · schema · config_loader</text>
+  </g>
+
+  <!-- Spoke 4: Infrastructure (bottom-right) -->
+  <g font-family="ui-sans-serif, system-ui, sans-serif">
+    <rect x="840" y="320" width="320" height="180" rx="12" fill="url(#card)" stroke="#2a3a52"/>
+    <text x="860" y="346" font-size="11" font-weight="800" fill="#7faec9" letter-spacing="2">INFRASTRUCTURE</text>
+    <text x="860" y="368" font-size="12" font-weight="700" fill="#edf4fb">logging_setup.py</text>
+    <text x="860" y="384" font-size="10" fill="#566378">Tag-Schema · 400-Record-Ringbuffer</text>
+    <text x="860" y="404" font-size="12" font-weight="700" fill="#edf4fb">discovery.py</text>
+    <text x="860" y="420" font-size="10" fill="#566378">Subnet-Scan · Vendor-Banner</text>
+    <text x="860" y="440" font-size="12" font-weight="700" fill="#edf4fb">cat_identity.py</text>
+    <text x="860" y="456" font-size="10" fill="#566378">Histogramm-basiertes Re-ID</text>
+    <text x="860" y="476" font-size="11" fill="#94a3b8">__init__ · buildinfo</text>
+  </g>
+
+  <!-- Connecting spokes -->
+  <g stroke="#5e2942" stroke-width="1.6" fill="none" stroke-dasharray="3,4">
+    <line x1="360" y1="200" x2="510" y2="250"/>
+    <line x1="840" y1="200" x2="690" y2="250"/>
+    <line x1="360" y1="400" x2="510" y2="290"/>
+    <line x1="840" y1="400" x2="690" y2="290"/>
+  </g>
+
+  <!-- Footer -->
+  <text x="600" y="520" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#566378" text-anchor="middle">22 Module · Single-Process · Daemon-Threads pro Kamera · No external state besides Open-Meteo</text>
+</svg>
