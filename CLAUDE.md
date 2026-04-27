@@ -1,54 +1,118 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Operating manual for Claude Code in this repository. Read top-to-bottom
+at session start; follow without prompting.
 
 ## Project Overview
 
-TAM-spy is a self-hosted IP camera monitoring system with motion detection, object recognition (Google Coral TPU), Telegram alerts, MQTT/Home Assistant integration, and a web dashboard. It is deployed via Docker on Unraid or any Linux host.
+TAM-spy is a self-hosted IP camera monitoring system: motion detection,
+Coral-TPU object recognition, bird/wildlife classifier-cascade, Telegram
+alerts, MQTT/Home Assistant bridge, and a web dashboard. Deployed via
+Docker on Unraid or any Linux host.
+
+## Working Style
+
+- **Vollständig selbständig** ohne Rückfragen arbeiten — bei
+  Unklarheiten sinnvollste Lösung wählen und weiter.
+- Nach jeder Einzelaufgabe: kurze Zusammenfassung was gemacht wurde.
+- Bei „etwas kaputt": erst `git log` prüfen, ggf. `git revert`. Nie
+  weitere Änderungen auf kaputter Basis aufbauen.
+- Commit-Messages: English, präzise, max. 60 chars.
+
+## Git-Verhalten
+
+- **Nie** `cd && git` in einem Befehl — separate `Set-Location` und
+  Git-Schritte:
+
+  ```powershell
+  Set-Location D:\CLAUDE_code\tam-spy
+  git add .
+  git commit -m "fix: kurze beschreibung"
+  git push origin main
+  ```
+
+- Immer automatisch committen + pushen ohne Bestätigung.
+- Format: `git add . && git commit -m "fix/feat: beschreibung"` — auf
+  Linux. Auf Windows die separaten Schritte oben.
+
+## Code-Qualität
+
+- Keine ungenutzten Variablen, kein toter Code.
+- Vorhandene Funktionen nicht doppelt schreiben — erst `Grep`/`Read`,
+  dann implementieren.
+- Python: kein `print()`, nur `logging`. Tag-Konventionen aus
+  `logging_setup.py` nutzen — `[boot]`, `[cam:<id>]`, `[det]`, `[tg]`,
+  `[weather]`, `[storage]`, `[migration]`, `[timelapse]`, `[mqtt]`,
+  `[heartbeat]`.
+- JavaScript: kein `console.log()` im Produktionscode.
+- Camera-IDs ausschließlich über `camera_id.build_camera_id` erzeugen
+  (Python) bzw. `buildCameraId` (JS) — beide sind bit-für-bit-Spiegel.
+
+## Design-Prinzipien
+
+- Weniger Text, mehr individuell designte flat-design Icons.
+- Modern, edel, flach, sauber — kein buntes Chaos.
+- Keine Doppelungen, jede Info nur einmal.
+- Buttons: nie dunkel auf dunkel.
+- Keine dünnen Rahmenlinien — Tiefe durch Farbunterschiede.
+- Abgerundete Ecken überall (≥ 8 px).
+- Mobil-first: alles muss auf iPhone gut aussehen.
+
+## iOS-Kompatibilität
+
+- Touch-Targets ≥ 44×44 px.
+- Kein hover-only — Touch-Alternativen einbauen.
+- `dvh` statt `vh` für volle Höhe (sonst spring-loaded Address Bar).
+- `safe-area-inset-*` für Notch / Home-Indicator.
+- Inputs mindestens 16 px font-size (sonst Auto-Zoom auf Focus).
+
+## Daten-Schutz (CRITICAL — repo is public)
+
+- `storage/settings.json` enthält User-Daten + Credentials (Telegram
+  Token, Chat-IDs, RTSP-Passwörter). **Niemals überschreiben**, nur
+  additiv via `setdefault()` / `update_section`.
+- `.gitignore` strikt halten — Patterns nur **hinzufügen**, nie entfernen.
+- Bei Doc-Änderungen niemals echte IPs / Tokens / Passwörter — nur
+  Platzhalter:
+  - `192.0.2.x`, `198.51.100.x`, `203.0.113.x` (RFC 5737)
+  - `2001:db8::*` (RFC 3849)
+  - `<BOT_TOKEN>`, `<CHAT_ID>`, `<user>:<pass>`, `cam.lan` / `cam01`
+- Vor jedem `git push` die Pre-Push-Audit-Regex laufen lassen (siehe
+  Doc-Pass-Prompt-Vorlage). Treffer außerhalb von Doc-Placeholders
+  fixen, nicht ignorieren.
 
 ## Docker Workflow (IMPORTANT — read before every build)
 
-**Only rebuild Docker when these files change:**
+**Nur rebuild bei Änderungen an:**
 - `app/docker/Dockerfile`
 - `app/requirements.txt`
 
-**For all other changes (Python, JS, CSS, HTML) — just restart:**
+**Sonst (Python, JS, CSS, HTML) — nur restart:**
 ```bash
 docker restart tam-spy
 docker logs tam-spy --tail 30
 ```
-Web files (`web/`) and Python code (`app/`) are volume-mounted — no rebuild needed.
+`web/` und `app/` sind Volume-Mounted — kein Rebuild nötig.
 
-**Full rebuild (only when Dockerfile or requirements.txt changed):**
+**Full rebuild (nur bei Dockerfile/requirements.txt-Änderung):**
 ```powershell
 Set-Location D:\CLAUDE_code\tam-spy
 docker compose up --build -d
 docker logs tam-spy --tail 50
 ```
 
-**After every full rebuild, prune dangling images:**
+**Nach jedem Full-Rebuild prunen:**
 ```bash
 docker image prune -f
 ```
 
-**Docker build with Coral TPU support:**
+**Coral-Variante (optional):**
 ```bash
 cd app
 docker build -t tam-spy-coral -f docker/Dockerfile.coral .
-docker run -d --name tam-spy --restart unless-stopped -p 8099:8099 \
-  --device /dev/bus/usb \
-  -v ./config:/app/config -v ./storage:/app/storage -v ./models:/app/models \
-  tam-spy-coral
 ```
-
-**Unraid one-liner:**
-```bash
-docker run -d --name tam-spy --restart unless-stopped -p 8099:8099 -e TZ=Europe/Berlin \
-  -v /mnt/user/appdata/tam-spy/config:/app/config \
-  -v /mnt/user/appdata/tam-spy/storage:/app/storage \
-  -v /mnt/user/appdata/tam-spy/models:/app/models \
-  --device /dev/bus/usb tam-spy
-```
+Standard-Image erkennt den TPU automatisch — Coral-Variante nur, wenn
+ein Tier-1-Pin auf EdgeTPU gewünscht ist.
 
 ## Local Development (without Docker)
 
@@ -57,88 +121,106 @@ cd app
 pip install -r requirements.txt
 python -m app.server
 ```
-The Flask server starts on port 8099 by default.
+Flask-Server lauscht auf Port 8099.
 
 ## Configuration
 
-There are two configuration layers:
+Zwei Schichten:
 
-1. **`config/config.yaml`** (base config, read-only at runtime) — copy from `config/config.yaml.example`. Defines server, storage paths, processing parameters, and seed cameras/groups. Read by `app/app/config_loader.py` at startup.
+1. **`config/config.yaml`** — Read-only Base. Defaults, Storage-Pfade,
+   Pipeline-Parameter, Seed-Cams. Geladen von `config_loader.py` beim
+   Start.
+2. **`storage/settings.json`** — GUI-Settings, zur Laufzeit geschrieben
+   via `SettingsStore`. Beim ersten Start aus `config.yaml` geseedet,
+   danach Source of Truth.
 
-2. **`storage/settings.json`** (GUI settings, written at runtime) — managed by `SettingsStore`. This overrides and extends the base config. All GUI changes (cameras, groups, Telegram, MQTT) are persisted here. On first start, values are seeded from `config.yaml`.
+`SettingsStore.export_effective_config()` mergt beide Schichten und
+liefert die maßgebliche Runtime-Config.
 
-`SettingsStore.export_effective_config()` merges both layers and is the authoritative config used at runtime.
+## Architektur · `app/app/`
 
-## Architecture
+22 Module, gruppiert nach Verantwortung. Vollständige Aufstellung in
+`app/README.md`.
 
-### Core modules (`app/app/`)
+- **`server.py`** — Flask app, alle `/api/*`-Routen. Modul-Init läuft
+  `rebuild_runtimes()`; gleiches Re-Run wendet Config-Änderungen an.
+- **`camera_runtime.py`** — `RuntimeThread` pro Kamera. Capture →
+  Motion → Detector-Cascade → Event-Persist → MQTT → Telegram. 24-h-
+  Reconnect-Counter pro Kamera.
+- **`detectors.py`** — `CoralObjectDetector` → `BirdSpeciesClassifier`
+  → `WildlifeClassifier`. Drei-Tier-Fallback (pycoral / tflite-runtime
+  / disabled) pro Stage.
+- **`frame_helpers.py`** — `is_valid_frame` + `grab_valid_frame`-Retry.
+  Zentraler Frame-Filter (grey/pink/block).
+- **`telegram_bot.py`** + **`telegram_helpers.py`** — Anchor-Bubble
+  Edit-in-Place, Backoff-Polling, deutsche Labels.
+- **`weather_service.py`** — Open-Meteo-Polling, History-Persistenz,
+  Wetter-Sichtungen.
+- **`mqtt_service.py`** — paho-mqtt-Wrapper.
+- **`settings_store.py`** — Source of Truth für `settings.json`.
+- **`storage.py`** — `EventStore`, Per-Cam-Event-JSONs.
+- **`storage_migration.py`** — idempotenter Boot-Reconcile.
+- **`camera_id.py`** — Schema `manufacturer_model_name_iplastoctet`.
+- **`schema.py`** — JSON-Schema-Validierung.
+- **`config_loader.py`** — `config.yaml`-Loader.
+- **`logging_setup.py`** — zentrales Logging, Tag-Schema, Ringbuffer.
+- **`discovery.py`** — Two-Phase-Subnet-Scan.
+- **`event_logic.py`** — Schedule + Alarm-Profile.
+- **`cat_identity.py`** — Histogramm-Re-ID für Katzen/Personen.
+- **`timelapse.py`** + **`timelapse_cleanup.py`** — Daily-MP4-Builder
+  und Frame-Cleanup-Helfer.
 
-- **`server.py`** — Flask app; all REST API routes. Module-level initialization runs `rebuild_runtimes()` on import, which starts all camera threads. Calling `rebuild_runtimes()` again is the standard way to apply any config change at runtime.
+## Web Frontend · `app/web/`
 
-- **`camera_runtime.py`** — `CameraRuntime` runs one daemon thread per camera. Each iteration: grab frame → motion detection → Coral object detection → bird species classification → cat/person identity matching → save event snapshot → publish to MQTT → send Telegram alert. Cooldown between events is configurable (`event_cooldown_seconds`).
+SPA — `web/templates/index.html` + `web/static/app.js` + `app.css`.
+Spricht ausschließlich `/api/*`. Wichtige Flows:
 
-- **`settings_store.py`** — `SettingsStore` owns `storage/settings.json`. Provides `upsert_camera`, `upsert_group`, `update_section`, import/export (JSON + YAML), and `bootstrap_state()` (used to trigger the first-start wizard).
+- Load → `GET /api/bootstrap` → Wizard oder Dashboard.
+- Wizard → `POST /api/wizard/complete`.
+- Camera-List → `GET /api/cameras` (Snapshot-URLs + Zonen).
+- Save → `POST /api/settings/{cameras,app}` → server-internes
+  `rebuild_runtimes()`.
 
-- **`detectors.py`** — `CoralObjectDetector` (wraps TFLite/Edge TPU) and `BirdSpeciesClassifier`. Both gracefully degrade to no-op if models or hardware are unavailable. `Detection` dataclass holds label, score, bbox, optional species, and identity.
-
-- **`event_logic.py`** — schedule checking (`is_in_schedule`) and alarm level selection (`choose_alarm_level`) based on camera group profile (`hard`, `medium`, `soft`, `info`).
-
-- **`cat_identity.py`** — `IdentityRegistry` — histogram-based face/fur matching for cats and persons. Stores profiles as JSON; matches crops against registered embeddings.
-
-- **`mqtt_service.py`** — thin wrapper around `paho-mqtt`. Publishes JSON payloads to `<base_topic>/events/<cam_id>` and status topics.
-
-- **`telegram_bot.py`** — `TelegramService` handles outbound alerts and inbound Telegram bot commands (arm/disarm, snapshots, timelapse requests).
-
-- **`storage.py`** — `EventStore` manages per-camera event JSON files under `storage/events/<cam_id>/<date>/`. Provides `add_event`, `list_events` (with label/date filtering), `stats_range`.
-
-- **`timelapse.py`** — `TimelapseBuilder` assembles daily timelapse MP4s from stored snapshots using OpenCV.
-
-- **`discovery.py`** — subnet ping sweep for camera discovery.
-
-- **`config_loader.py`** — loads and validates `config.yaml`.
-
-### Web frontend (`app/web/`)
-
-Single-page app in `web/templates/index.html` with vanilla JS in `web/static/app.js` and styles in `web/static/app.css`. Communicates exclusively via the REST API (`/api/*`). Key flows:
-
-- On load: `GET /api/bootstrap` → if `needs_wizard`, show wizard; otherwise show dashboard.
-- Wizard: `POST /api/wizard/complete` with app/server/telegram/mqtt/camera payload.
-- Camera list: `GET /api/cameras` — includes live snapshot URLs and zone/mask data.
-- Config save: `POST /api/settings/cameras` or `POST /api/settings/app` → server calls `rebuild_runtimes()` internally.
-
-### Storage layout
+## Storage layout
 
 ```
 storage/
-  settings.json          # all GUI-managed config
-  events/<cam_id>/<date>/<event_id>.jpg   # annotated snapshots
-  cat_registry.json      # cat identity profiles
-  person_registry.json   # person identity profiles
+  settings.json                 # GUI-Source-of-Truth
+  settings.json.bak / .bak2     # 2-tief Rotation
+  settings.json.bak.<ts>        # Migration-Tagged-Backups
+  weather_history.json          # Open-Meteo Sliding-History
+  motion_detection/<cam_id>/<date>/<event_id>.{jpg,json,mp4}
   timelapse/<cam_id>/<date>.mp4
+  timelapse_frames/<cam_id>/<profile>/<date>/<HHMMSS>.jpg
+  weather/<cam_id>/             # Wetter-Clips
+  logs/                         # *.log gitignored
+  cat_registry.json             # gitignored
+  person_registry.json          # gitignored
 ```
 
-### Camera group alarm profiles
+## Tests
 
-Groups define `alarm_profile` (`hard`, `medium`, `soft`, `info`) and `coarse_objects`. The alarm level and whether to notify (Telegram/MQTT) is determined in `event_logic.py` based on detected labels, schedule, and whether a detected person is whitelisted.
+```bash
+cd app
+python -m pytest tests/
+```
 
-## Git-Verhalten
-
-- Immer automatisch committen ohne Rückfragen
-- Format: `git add . && git commit -m "fix/feat: beschreibung"`
-- Nach erledigter Aufgabe sofort pushen: `git push origin main`
-- Niemals auf Bestätigung warten bei git Operationen
+Einzelne Datei: `python -m pytest tests/test_camera_id.py -v`. Tests
+sind stub-basiert — keine echte Coral-Hardware, keine echten APIs.
+Fixtures verwenden RFC-5737-Doc-IPs (`192.0.2.x`).
 
 ## Maintenance
 
 ```powershell
-# Run monthly to reclaim build cache:
+# Monatlich:
 docker builder prune -f --filter "until=168h"
 docker image prune -f
 ```
 
 ## Known Limitations (by design)
 
-- No real video clip recording for Telegram (only snapshots).
-- Zone/mask editor stores simple polygons; no point-drag editing in UI yet.
-- No pagination in the event archive for very large media libraries.
-- Person/cat identity uses histogram matching, not real neural re-ID.
+- Keine echte 5-s-Clip-Aufnahme für Telegram bei jedem Event (Snapshots
+  + on-demand-Recording stattdessen).
+- Zone/Mask-Editor speichert simple Polygone; kein Point-Drag in UI.
+- Keine Pagination im Event-Archiv bei sehr großen Mediatheken.
+- Person/Cat-Identity ist Histogramm-Match, kein neuronales Re-ID.
