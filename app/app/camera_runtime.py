@@ -1386,29 +1386,11 @@ class CameraRuntime:
                 })
             except Exception:
                 pass
-        notify = meta.get("notify", False)
-        # Defensive: "Stumm" cameras never send Telegram, even if upstream
-        # logic slipped through.
-        if not self.cfg.get("armed", True):
-            notify = False
-        # Zone trigger flags can opt the event out of Telegram even when
-        # the alarm logic said yes (e.g. "garden background, just record").
-        if not meta.get("send_telegram", True):
-            notify = False
-        if video_url and notify and self.notifier and self.cfg.get("telegram_enabled", True):
-            try:
-                caption = (f"📷 {self.cfg.get('name', self.camera_id)}\n"
-                           f"🕒 {start_time.isoformat(timespec='seconds')}\n"
-                           f"🏷 {', '.join(meta['labels'])}")
-                threading.Thread(target=self.notifier.send_alert_sync,
-                                 kwargs={
-                                     "caption": caption,
-                                     "jpeg_bytes": meta.get("thumb_bytes"),
-                                     "snapshot_url": thumb_url,
-                                     "camera_id": self.camera_id,
-                                 }, daemon=True).start()
-            except Exception as e:
-                log.debug("[%s] telegram alert skipped: %s", self.camera_id, e)
+        # Telegram alert is fired once, by the modern push pipeline in
+        # _finalize_motion_clip via TelegramService.send_event_alert. The
+        # legacy send_alert_sync alert that used to live here was a duplicate
+        # — it produced a second bubble per detection with a different button
+        # layout and confused users. Removed.
 
     def _finalize_motion_clip(self, frames: list, meta: dict, fps: float = 10.0):
         """Save MP4 clip (H.264 via ffmpeg, mp4v fallback), verify, write event JSON, send Telegram."""

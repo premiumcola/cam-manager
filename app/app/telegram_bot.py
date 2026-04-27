@@ -482,19 +482,23 @@ class TelegramService:
             return None
 
     # Legacy sync wrapper (kept for the achievement push and the test endpoint).
+    # Footer buttons used to include "24 h Zeitraffer" and "Last detections"
+    # but those are reachable via /menu and only added clutter to event
+    # bubbles. Callback strings now match the cam:<id>:* dispatcher so the
+    # buttons actually route — the old "snapshot:<id>" / "clip:<id>" prefixes
+    # were never registered and silently no-op'd on click.
     def send_alert_sync(self, caption: str, jpeg_bytes: bytes | None = None,
                         snapshot_url: str | None = None,
                         dashboard_url: str | None = None,
                         camera_id: str | None = None):
         if not self.enabled:
             return
-        buttons = [[
-            ("📷 Live-Bild", f"snapshot:{camera_id}" if camera_id else "menu:snapshot"),
-            ("🎥 Live 5s Clip", f"clip:{camera_id}" if camera_id else "menu:clip"),
-        ], [
-            ("⏱ Letzte 24h Zeitraffer", f"timelapse:{camera_id}" if camera_id else "menu:timelapse"),
-            ("🕘 Last detections", f"detections:{camera_id}" if camera_id else "menu:detections"),
-        ]]
+        buttons = []
+        if camera_id:
+            buttons.append([
+                ("📷 Livebild", f"cam:{camera_id}:livebild"[:64]),
+                ("🎬 5 s Clip", f"cam:{camera_id}:clip:5"[:64]),
+            ])
         if dashboard_url:
             buttons.append([("🖥 Dashboard", dashboard_url)])
         self.send(caption, photo=jpeg_bytes, buttons=buttons, parse_mode=None)
@@ -602,6 +606,13 @@ class TelegramService:
         ]
         if night_wakeup and is_armed:
             buttons[1].append(("🚨 Sirene", f"ev:{eid}:siren"))
+        # Live-action row: snapshot now / 5 s clip now. Re-uses the same
+        # cam:<id>:livebild and cam:<id>:clip:5 callbacks the /menu picker
+        # already routes — single source of truth, no parallel dispatcher.
+        buttons.append([
+            ("📷 Livebild", f"cam:{camera_id}:livebild"[:64]),
+            ("🎬 5 s Clip", f"cam:{camera_id}:clip:5"[:64]),
+        ])
 
         if self.settings_store:
             self.settings_store.runtime_alert_index_set(eid, {
@@ -1322,7 +1333,9 @@ class TelegramService:
         await q.answer()
 
     async def _cam_send_snapshot(self, q, context, cam_id, rt, cam_name):
-        await q.answer("Snapshot wird geholt…")
+        await q.answer("📷 Snapshot wird geholt…")
+        log.info("[Telegram] cam:%s:livebild triggered by chat=%s",
+                 cam_id, q.message.chat_id if q.message else "?")
         jpeg = rt.snapshot_jpeg() if hasattr(rt, "snapshot_jpeg") else None
         if not jpeg:
             await q.message.reply_text(f"Kein Live-Bild für {cam_name} verfügbar.")
@@ -1332,17 +1345,24 @@ class TelegramService:
             InlineKeyboardButton("🔄 Neu", callback_data=f"cam:{cam_id}:livebild"),
             InlineKeyboardButton("🎬 5 s Clip", callback_data=f"cam:{cam_id}:clip:5"),
         ]])
+        ts_hm = datetime.now().strftime("%H:%M")
         try:
+            # reply_to_message_id threads the snapshot under the originating
+            # alert bubble in the Telegram client, so the user can scroll back
+            # and see the alert + their requested follow-ups together.
             await context.bot.send_photo(
                 chat_id=q.message.chat_id, photo=bio,
-                caption=f"📷 <b>{cam_name}</b>",
+                caption=f"📷 <b>{cam_name}</b> · {ts_hm}",
                 parse_mode="HTML", reply_markup=markup,
+                reply_to_message_id=q.message.message_id if q.message else None,
             )
         except Exception as e:
             log.warning("[Telegram] snapshot send failed: %s", e)
 
     async def _cam_send_clip(self, q, context, cam_id, rt, cam_name, sec):
-        await q.answer(f"Clip {sec}s wird aufgenommen…")
+        await q.answer(f"🎬 {sec}-s Clip wird aufgenommen…")
+        log.info("[Telegram] cam:%s:clip:%d triggered by chat=%s",
+                 cam_id, sec, q.message.chat_id if q.message else "?")
         # The blocking ffmpeg subprocess runs in a worker thread via run_in_executor
         # so it doesn't pin the asyncio loop while the recording is in progress.
         loop = asyncio.get_running_loop()
@@ -1356,12 +1376,14 @@ class TelegramService:
                 f"Clip-Aufnahme für {cam_name} fehlgeschlagen "
                 f"(ffmpeg/RTSP-Problem). Snapshot stattdessen verfügbar.")
             return
+        ts_hm = datetime.now().strftime("%H:%M")
         try:
             with open(path, "rb") as f:
                 await context.bot.send_video(
                     chat_id=q.message.chat_id, video=f,
-                    caption=f"🎬 <b>{cam_name}</b> · {sec}s",
+                    caption=f"🎬 <b>{cam_name}</b> · {sec} s · {ts_hm}",
                     parse_mode="HTML",
+                    reply_to_message_id=q.message.message_id if q.message else None,
                 )
         except Exception as e:
             log.warning("[Telegram] clip send failed: %s", e)
