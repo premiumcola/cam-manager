@@ -547,16 +547,41 @@
            im #achievements panel; rausgezogen damit Tier-Sichtungen und Wetter
            thematisch sauber getrennte Welten in der Navigation sind). -->
       <section id="weather" class="panel section" data-accent="127,174,201">
-        <!-- Wetterstatistik: persisted history of all numeric Open-Meteo
-             parameters + sun altitude, rendered as a single multi-line SVG
-             chart with per-line normalisation. Fetches /api/weather/history
-             on visibility (IntersectionObserver) and refreshes every 60 s
-             while the section is in view. -->
+        <!-- Wetter-Ereignisse: clip grid + recaps + filter pills. The user
+             opens the section primarily to look at recent events, so this
+             block sits at the top. Element ids (weatherSightingsBlock /
+             Grid / Empty) keep the legacy "sightings" naming because the
+             backend storage paths and API routes still use it — only the
+             user-facing labels were renamed. -->
+        <div class="weather-sightings-block" id="weatherSightingsBlock">
+          <div class="weather-sightings-head">
+            <span class="ws-title">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><use href="#icon-cloud-rain"/></svg>
+              Wetter-Ereignisse
+            </span>
+            <span class="ws-subtitle" id="weatherSightingsSubtitle"></span>
+          </div>
+          <div class="ws-recaps-row" id="weatherRecapsRow" hidden>
+            <div class="ws-recaps-title">Recaps</div>
+            <div class="ws-recaps-strip" id="weatherRecapsStrip"></div>
+          </div>
+          <div class="ws-filter-bar" id="weatherFilterBar"></div>
+          <div class="ws-grid" id="weatherSightingsGrid"></div>
+          <div class="ws-empty" id="weatherSightingsEmpty" hidden>
+            Noch keine Wetter-Ereignisse. Sobald eine Wetter-Kamera ein Ereignis erkennt (Gewitter, Starkregen, Nebel, Sonnenuntergang …), erscheint hier ein 10-Sekunden-Clip.
+          </div>
+        </div>
+
+        <!-- Wetterdaten & Prognose: persisted history of all numeric
+             Open-Meteo parameters + sun altitude, rendered as a single
+             multi-line SVG chart with per-line normalisation. Fetches
+             /api/weather/history on visibility (IntersectionObserver)
+             and refreshes every 60 s while the section is in view. -->
         <div class="ws-stats-block" id="weatherStatsBlock">
           <div class="ws-stats-head">
             <span class="ws-title">
               <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><use href="#icon-cloud-rain"/></svg>
-              Wetterstatistik
+              Wetterdaten &amp; Prognose
             </span>
             <div class="ws-stats-pills" id="weatherStatsPills" role="tablist" aria-label="Zeitfenster">
               <button type="button" class="ws-stats-pill" data-hours="1">1 h</button>
@@ -569,25 +594,6 @@
           </div>
           <div class="ws-stats-legend" id="weatherStatsLegend">
             <!-- populated by renderWeatherStatsLegend() -->
-          </div>
-        </div>
-
-        <div class="weather-sightings-block" id="weatherSightingsBlock">
-          <div class="weather-sightings-head">
-            <span class="ws-title">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><use href="#icon-cloud-rain"/></svg>
-              Wetter-Sichtungen
-            </span>
-            <span class="ws-subtitle" id="weatherSightingsSubtitle"></span>
-          </div>
-          <div class="ws-recaps-row" id="weatherRecapsRow" hidden>
-            <div class="ws-recaps-title">Recaps</div>
-            <div class="ws-recaps-strip" id="weatherRecapsStrip"></div>
-          </div>
-          <div class="ws-filter-bar" id="weatherFilterBar"></div>
-          <div class="ws-grid" id="weatherSightingsGrid"></div>
-          <div class="ws-empty" id="weatherSightingsEmpty" hidden>
-            Noch keine Wetter-Sichtungen. Sobald eine Wetter-Kamera ein Ereignis erkennt (Gewitter, Starkregen, Nebel, Sonnenuntergang …), erscheint hier ein 10-Sekunden-Clip.
           </div>
         </div>
       </section>
@@ -754,7 +760,7 @@
                 </label>
 
                 <div class="cam-sep"></div>
-                <div class="cam-field-label">Wetter-Sichtungen</div>
+                <div class="cam-field-label">Wetter-Ereignisse</div>
                 <label class="toggle-row" style="margin:0">
                   <span class="toggle-row-label">Wetter-Pushes aktiv
                     <span class="toggle-row-sublabel">Master-Schalter — pro Ereignistyp unten feinjustieren</span>
@@ -796,10 +802,10 @@
           </div></div>
         </div>
 
-        <!-- 4b. Wetter-Sichtungen — storm-blue accent -->
+        <!-- 4b. Wetter-Ereignisse — storm-blue accent -->
         <div class="set-section" id="set-weather" data-accent="127,174,201">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-weather')">
-            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#7faec9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 18a5 5 0 0 0 0-10 7 7 0 0 0-13.5 2.5"/><path d="M7 17l-2 4"/><path d="M11 19l-1 2"/><path d="M14 17l-2 4"/></svg></span><span>Wetter-Sichtungen</span><span id="weatherStatusBadge" class="set-status-badge set-status-badge--off">aus</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#7faec9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 18a5 5 0 0 0 0-10 7 7 0 0 0-13.5 2.5"/><path d="M7 17l-2 4"/><path d="M11 19l-1 2"/><path d="M14 17l-2 4"/></svg></span><span>Wetter-Ereignisse</span><span id="weatherStatusBadge" class="set-status-badge set-status-badge--off">aus</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
           </button>
           <div class="set-bd"><div class="set-inner">
             <div class="set-tabs ws-tab-bar" style="margin-top:10px">
@@ -811,7 +817,7 @@
               <div id="ws-panel-allgemein" class="set-tab-content">
                 <div style="display:grid;gap:12px;padding-top:8px">
                   <label class="toggle-row" style="margin:0">
-                    <span class="toggle-row-label">Wetter-Sichtungen aktiv
+                    <span class="toggle-row-label">Wetter-Ereignisse aktiv
                       <span class="toggle-row-sublabel">Master-Schalter — aus heißt: kein Polling, keine Buffer, kein RAM.</span>
                     </span>
                     <label class="switch"><input type="checkbox" id="ws_enabled" /><span class="slider"></span></label>
