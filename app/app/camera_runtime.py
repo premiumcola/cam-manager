@@ -293,6 +293,12 @@ class CameraRuntime:
         # ── Connection health / diagnostics ──────────────────────────────────
         self.frame_ts: float = 0.0          # epoch of last frame written to self.frame
         self._reconnect_count: int = 0      # how many times capture was reopened
+        # Sliding-window log of reconnect timestamps. We never bound the
+        # capacity hard because the prune-on-read step keeps only entries
+        # < 86400 s old, and the increment-on-reconnect path is rare
+        # enough that the deque stays small even on a chronically flaky
+        # cam (a 5-minute reconnect interval gives 288 entries / 24 h).
+        self._reconnect_log: deque = deque()
         self._stale_incidents: int = 0      # how often timelapse saw a stale frame buffer
         # Camera-wide mirror of the highest-active profile's stale streak
         # — used by /api/camera/<id>/status for the diagnostic dashboard.
@@ -2096,6 +2102,7 @@ class CameraRuntime:
                     pass
                 self.capture = None
                 self._reconnect_count += 1
+                self._reconnect_log.append(time.time())
                 time.sleep(2.0)
                 continue
             try:
@@ -2509,6 +2516,7 @@ class CameraRuntime:
                     pass
                 self.capture = None
                 self._reconnect_count += 1
+                self._reconnect_log.append(time.time())
                 # Short backoff for transient dropouts, longer for persistent failures
                 sleep_t = 2.0 if self._error_streak <= 3 else min(30.0, 5.0 * (self._error_streak // 5 + 1))
                 time.sleep(sleep_t)
@@ -2605,4 +2613,16 @@ class CameraRuntime:
             "supervisor_restarts": self._supervisor_restarts,
             "inference_avg_ms": (sum(self._inference_times_ms) / len(self._inference_times_ms))
                                 if self._inference_times_ms else None,
+            "reconnect_count_24h": self._reconnect_count_24h(),
         }
+
+    def _reconnect_count_24h(self) -> int:
+        """Prune reconnect log entries older than 24 h on each read, then
+        return the count. Cheap because the log only ever contains
+        reconnect events (rare on a healthy cam, capped naturally by the
+        stream-watchdog cadence on a flaky one)."""
+        cutoff = time.time() - 86400
+        log = self._reconnect_log
+        while log and log[0] < cutoff:
+            log.popleft()
+        return len(log)
