@@ -1011,18 +1011,23 @@ class WeatherService:
                     out.append(row)
             except Exception:
                 out.append(row)
-        # Thresholds from configured event settings — only for fields whose
-        # event is enabled. Diagnostic-only fields (cloud_cover, wind_gusts,
-        # sun_altitude) get null.
+        # Thresholds from configured event settings. Always emit the
+        # configured threshold value regardless of the enabled toggle —
+        # the chart needs to draw the boundary even for events that are
+        # currently off so the user can see what the trigger SHOULD fire
+        # at. The parallel `events_enabled` map lets the renderer dim
+        # disabled-event ticks instead of hiding them. Fields without an
+        # associated event (cloud_cover, wind_gusts_10m, sun_altitude)
+        # still emit thresholds[k]=None / events_enabled[k]=None.
         events_cfg = (self.cfg.get("events") or {})
         thresholds: dict[str, float | None] = {k: None for k in HISTORY_FIELDS}
+        events_enabled: dict[str, bool | None] = {k: None for k in HISTORY_FIELDS}
         for key in HISTORY_FIELDS:
             evt = HISTORY_FIELD_TO_EVENT.get(key)
             if not evt:
                 continue
             ev_cfg = events_cfg.get(evt) or {}
-            if not ev_cfg.get("enabled", False):
-                continue
+            events_enabled[key] = bool(ev_cfg.get("enabled", False))
             thr = ev_cfg.get("threshold")
             try:
                 thresholds[key] = float(thr) if thr is not None else None
@@ -1033,6 +1038,7 @@ class WeatherService:
             "hours":           hours,
             "samples":         out,
             "thresholds":      thresholds,
+            "events_enabled":  events_enabled,
             "units":           dict(HISTORY_UNITS),
             "labels_de":       dict(HISTORY_LABELS_DE),
             "fields":          list(HISTORY_FIELDS),
