@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Mockup of the TAM-spy Mediathek view: a header with filter pills, a grid of motion-event tiles labelled Bird, Squirrel, Person, Car, with timestamps and confidence percentages.">
+  <defs>
+    <linearGradient id="bg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0d141d"/><stop offset="100%" stop-color="#10182a"/></linearGradient>
+    <linearGradient id="tileBg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a2333"/><stop offset="100%" stop-color="#111827"/></linearGradient>
+    <linearGradient id="ph" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#243042"/><stop offset="100%" stop-color="#1a2333"/></linearGradient>
+  </defs>
+  <rect width="960" height="600" fill="url(#bg1)"/>
+  <!-- Header -->
+  <text x="32" y="46" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="800" fill="#edf4fb">Mediathek</text>
+  <text x="32" y="68" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#7faec9">Bewegungs-Events · 24 h · 4 Kameras</text>
+  <!-- Filter pills -->
+  <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700">
+    <g><rect x="32" y="92" width="74" height="26" rx="13" fill="#3b82f6" opacity="0.18"/><text x="69" y="110" fill="#93c5fd" text-anchor="middle">Alle · 84</text></g>
+    <g><rect x="114" y="92" width="68" height="26" rx="13" fill="#1f2937" opacity="0.7"/><text x="148" y="110" fill="#fbbf24" text-anchor="middle">🐦 Bird · 36</text></g>
+    <g><rect x="190" y="92" width="86" height="26" rx="13" fill="#1f2937" opacity="0.7"/><text x="233" y="110" fill="#c87840" text-anchor="middle">🐿️ Squirrel · 22</text></g>
+    <g><rect x="284" y="92" width="76" height="26" rx="13" fill="#1f2937" opacity="0.7"/><text x="322" y="110" fill="#a78bfa" text-anchor="middle">🧍 Person · 14</text></g>
+    <g><rect x="368" y="92" width="62" height="26" rx="13" fill="#1f2937" opacity="0.7"/><text x="399" y="110" fill="#f87171" text-anchor="middle">🚗 Car · 12</text></g>
+  </g>
+  <!-- 3×2 grid of tiles -->
+  <g font-family="ui-sans-serif, system-ui, sans-serif">
+    <!-- Tile 1 -->
+    <g transform="translate(32,140)">
+      <rect width="288" height="170" rx="10" fill="url(#tileBg)" stroke="#1f2937"/>
+      <rect x="0" y="0" width="288" height="120" rx="10" fill="url(#ph)"/>
+      <!-- bird silhouette -->
+      <path d="M 120 70 Q 140 50 165 65 Q 185 55 200 75 Q 175 85 145 80 Z" fill="#7faec9" opacity="0.85"/>
+      <rect x="8" y="8" width="78" height="20" rx="6" fill="#000" opacity="0.6"/><text x="14" y="22" font-size="11" font-weight="700" fill="#fff">🐦 Bird · 92%</text>
+      <rect x="232" y="8" width="48" height="20" rx="6" fill="#000" opacity="0.6"/><text x="237" y="22" font-size="10" font-weight="700" fill="#fff" font-family="ui-monospace, monospace">14:23</text>
+      <text x="12" y="146" font-size="13" font-weight="700" fill="#edf4fb">Garten · Amsel</text>
+      <text x="12" y="161" font-size="11" fill="#7faec9">Confidence 0.92 · 1.4 s</text>
+    </g>
+    <!-- Tile 2 -->
+    <g transform="translate(336,140)">
+      <rect width="288" height="170" rx="10" fill="url(#tileBg)" stroke="#1f2937"/>
+      <rect x="0" y="0" width="288" height="120" rx="10" fill="url(#ph)"/>
+      <ellipse cx="160" cy="76" rx="38" ry="22" fill="#c87840" opacity="0.85"/>
+      <circle cx="195" cy="62" r="13" fill="#c87840" opacity="0.9"/>
+      <path d="M 188 56 L 196 46 L 202 54 Z" fill="#c87840" opacity="0.9"/>
+      <rect x="8" y="8" width="98" height="20" rx="6" fill="#000" opacity="0.6"/><text x="14" y="22" font-size="11" font-weight="700" fill="#fff">🐿 Squirrel · 88%</text>
+      <rect x="232" y="8" width="48" height="20" rx="6" fill="#000" opacity="0.6"/><text x="237" y="22" font-size="10" font-weight="700" fill="#fff" font-family="ui-monospace, monospace">13:51</text>
+      <text x="12" y="146" font-size="13" font-weight="700" fill="#edf4fb">Werkbank</text>
+      <text x="12" y="161" font-size="11" fill="#7faec9">Confidence 0.88 · 2.1 s</text>
+    </g>
+    <!-- Tile 3 -->
+    <g transform="translate(640,140)">
+      <rect width="288" height="170" rx="10" fill="url(#tileBg)" stroke="#1f2937"/>
+      <rect x="0" y="0" width="288" height="120" rx="10" fill="url(#ph)"/>
+      <ellipse cx="160" cy="92" rx="34" ry="14" fill="#a78bfa" opacity="0.85"/>
+      <circle cx="160" cy="64" r="14" fill="#a78bfa" opacity="0.85"/>
+      <rect x="8" y="8" width="86" height="20" rx="6" fill="#000" opacity="0.6"/><text x="14" y="22" font-size="11" font-weight="700" fill="#fff">🧍 Person · 79%</text>
+      <rect x="232" y="8" width="48" height="20" rx="6" fill="#000" opacity="0.6"/><text x="237" y="22" font-size="10" font-weight="700" fill="#fff" font-family="ui-monospace, monospace">12:08</text>
+      <text x="12" y="146" font-size="13" font-weight="700" fill="#edf4fb">Eingang</text>
+      <text x="12" y="161" font-size="11" fill="#7faec9">Confidence 0.79 · 3.0 s</text>
+    </g>
+    <!-- Tile 4 -->
+    <g transform="translate(32,330)">
+      <rect width="288" height="170" rx="10" fill="url(#tileBg)" stroke="#1f2937"/>
+      <rect x="0" y="0" width="288" height="120" rx="10" fill="url(#ph)"/>
+      <path d="M 120 88 L 200 88 L 210 70 L 110 70 Z" fill="#f87171" opacity="0.85"/>
+      <rect x="118" y="86" width="84" height="14" rx="2" fill="#1c1c1c" opacity="0.85"/>
+      <rect x="8" y="8" width="68" height="20" rx="6" fill="#000" opacity="0.6"/><text x="14" y="22" font-size="11" font-weight="700" fill="#fff">🚗 Car · 95%</text>
+      <rect x="232" y="8" width="48" height="20" rx="6" fill="#000" opacity="0.6"/><text x="237" y="22" font-size="10" font-weight="700" fill="#fff" font-family="ui-monospace, monospace">11:42</text>
+      <text x="12" y="146" font-size="13" font-weight="700" fill="#edf4fb">Auffahrt</text>
+      <text x="12" y="161" font-size="11" fill="#7faec9">Confidence 0.95 · 4.2 s</text>
+    </g>
+    <!-- Tile 5 -->
+    <g transform="translate(336,330)">
+      <rect width="288" height="170" rx="10" fill="url(#tileBg)" stroke="#1f2937"/>
+      <rect x="0" y="0" width="288" height="120" rx="10" fill="url(#ph)"/>
+      <path d="M 110 75 Q 140 60 170 75 Q 185 65 200 80 Q 170 90 130 85 Z" fill="#7faec9" opacity="0.85"/>
+      <circle cx="200" cy="78" r="3" fill="#0d141d"/>
+      <rect x="8" y="8" width="82" height="20" rx="6" fill="#000" opacity="0.6"/><text x="14" y="22" font-size="11" font-weight="700" fill="#fff">🐦 Bird · 84%</text>
+      <rect x="232" y="8" width="48" height="20" rx="6" fill="#000" opacity="0.6"/><text x="237" y="22" font-size="10" font-weight="700" fill="#fff" font-family="ui-monospace, monospace">10:14</text>
+      <text x="12" y="146" font-size="13" font-weight="700" fill="#edf4fb">Garten · Blaumeise</text>
+      <text x="12" y="161" font-size="11" fill="#7faec9">Confidence 0.84 · 0.8 s</text>
+    </g>
+    <!-- Tile 6 -->
+    <g transform="translate(640,330)">
+      <rect width="288" height="170" rx="10" fill="url(#tileBg)" stroke="#1f2937"/>
+      <rect x="0" y="0" width="288" height="120" rx="10" fill="url(#ph)"/>
+      <ellipse cx="160" cy="80" rx="40" ry="20" fill="#c87840" opacity="0.85"/>
+      <circle cx="195" cy="68" r="14" fill="#c87840" opacity="0.9"/>
+      <rect x="8" y="8" width="98" height="20" rx="6" fill="#000" opacity="0.6"/><text x="14" y="22" font-size="11" font-weight="700" fill="#fff">🐿 Squirrel · 91%</text>
+      <rect x="232" y="8" width="48" height="20" rx="6" fill="#000" opacity="0.6"/><text x="237" y="22" font-size="10" font-weight="700" fill="#fff" font-family="ui-monospace, monospace">09:33</text>
+      <text x="12" y="146" font-size="13" font-weight="700" fill="#edf4fb">Werkbank</text>
+      <text x="12" y="161" font-size="11" fill="#7faec9">Confidence 0.91 · 5.5 s</text>
+    </g>
+  </g>
+  <!-- Footer hint -->
+  <text x="32" y="540" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#566378">Mockup · structural representation of the Mediathek panel</text>
+</svg>

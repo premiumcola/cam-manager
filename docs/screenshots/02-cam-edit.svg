@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Mockup of the camera detail panel: connection tab with IP, user, password, RTSP path, and a side panel showing live preview, detection profile selector, and zone editor.">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0d141d"/><stop offset="100%" stop-color="#10182a"/></linearGradient>
+    <linearGradient id="cardGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#1a2333"/><stop offset="100%" stop-color="#141d2c"/></linearGradient>
+    <linearGradient id="liveGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#243042"/><stop offset="100%" stop-color="#1a2333"/></linearGradient>
+  </defs>
+  <rect width="960" height="600" fill="url(#bg2)"/>
+
+  <!-- Header -->
+  <text x="32" y="46" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="800" fill="#edf4fb">Kamera bearbeiten · Garten</text>
+  <text x="32" y="68" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#7faec9">Reolink RLC-823A · 192.168.178.183 · aktiv</text>
+
+  <!-- Tab bar -->
+  <g font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700">
+    <rect x="32" y="92" width="896" height="36" rx="10" fill="#1a2333" stroke="#1f2937"/>
+    <text x="62" y="115" fill="#7faec9">🔗 Verbindung</text>
+    <text x="158" y="115" fill="#566378">🤖 Erkennung</text>
+    <text x="252" y="115" fill="#566378">🔔 Alerting</text>
+    <text x="338" y="115" fill="#566378">⏱ Timelapse</text>
+    <text x="430" y="115" fill="#566378">🎯 Zonen</text>
+    <line x1="32" y1="124" x2="146" y2="124" stroke="#7faec9" stroke-width="2"/>
+  </g>
+
+  <!-- Left: form -->
+  <g transform="translate(32,148)" font-family="ui-sans-serif, system-ui, sans-serif">
+    <rect width="540" height="420" rx="12" fill="url(#cardGrad)" stroke="#1f2937"/>
+    <!-- Two-col: name/icon | ip/user/pass -->
+    <g transform="translate(20,24)">
+      <text x="0" y="14" font-size="11" font-weight="700" fill="#7faec9" letter-spacing="2">VERBINDUNG</text>
+      <!-- IP -->
+      <rect x="0" y="28" width="500" height="44" rx="10" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="14" y="46" font-size="10" fill="#566378">Kamera-IP</text>
+      <text x="14" y="64" font-size="14" font-weight="600" fill="#edf4fb">192.168.178.183</text>
+      <!-- User + Pass -->
+      <rect x="0" y="84" width="240" height="44" rx="10" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="14" y="102" font-size="10" fill="#566378">Benutzer</text>
+      <text x="14" y="120" font-size="14" font-weight="600" fill="#edf4fb">admin</text>
+      <rect x="260" y="84" width="240" height="44" rx="10" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="274" y="102" font-size="10" fill="#566378">Passwort</text>
+      <text x="274" y="120" font-size="14" font-weight="600" fill="#edf4fb" font-family="ui-monospace, monospace">••••••••••</text>
+      <!-- Path + Port -->
+      <rect x="0" y="140" width="380" height="44" rx="10" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="14" y="158" font-size="10" fill="#566378">RTSP-Pfad</text>
+      <text x="14" y="176" font-size="13" font-weight="600" fill="#edf4fb" font-family="ui-monospace, monospace">/h265Preview_01_main</text>
+      <rect x="400" y="140" width="100" height="44" rx="10" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="414" y="158" font-size="10" fill="#566378">Port</text>
+      <text x="414" y="176" font-size="14" font-weight="600" fill="#edf4fb">554</text>
+      <!-- Generated URL -->
+      <rect x="0" y="196" width="500" height="40" rx="10" fill="#0a0f1a" stroke="#1f2937"/>
+      <text x="14" y="220" font-size="11" fill="#7faec9" font-family="ui-monospace, monospace">rtsp://admin:•••@192.168.178.183/h265Preview_01_main</text>
+      <!-- Snapshot URL -->
+      <rect x="0" y="248" width="500" height="40" rx="10" fill="#0a0f1a" stroke="#1f2937"/>
+      <text x="14" y="272" font-size="11" fill="#7faec9" font-family="ui-monospace, monospace">http://admin:•••@192.168.178.183/cgi-bin/snapshot.cgi</text>
+      <!-- Diagnostic chip -->
+      <g transform="translate(0,308)">
+        <rect width="500" height="56" rx="10" fill="#0f1825" stroke="#22c55e" stroke-width="0.8"/>
+        <circle cx="22" cy="28" r="6" fill="#22c55e"/>
+        <text x="40" y="24" font-size="12" font-weight="700" fill="#edf4fb">Verbindung stabil</text>
+        <text x="40" y="42" font-size="11" fill="#7faec9">Stream-Alter 0 s · 25 fps · 0 Reconnects (24 h)</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Right: live preview + profile -->
+  <g transform="translate(596,148)" font-family="ui-sans-serif, system-ui, sans-serif">
+    <rect width="332" height="420" rx="12" fill="url(#cardGrad)" stroke="#1f2937"/>
+    <text x="20" y="38" font-size="11" font-weight="700" fill="#7faec9" letter-spacing="2">LIVE-VORSCHAU</text>
+    <rect x="20" y="50" width="292" height="170" rx="10" fill="url(#liveGrad)"/>
+    <!-- Mock motion frame with bounding box -->
+    <ellipse cx="166" cy="135" rx="58" ry="32" fill="#c87840" opacity="0.85"/>
+    <circle cx="208" cy="118" r="18" fill="#c87840" opacity="0.9"/>
+    <rect x="100" y="92" width="146" height="74" rx="3" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="4 3"/>
+    <rect x="98" y="78" width="78" height="16" rx="3" fill="#22c55e"/>
+    <text x="104" y="91" font-size="11" font-weight="700" fill="#0d141d">Squirrel 91%</text>
+    <!-- Status chips -->
+    <g transform="translate(20,238)">
+      <rect width="292" height="40" rx="8" fill="#0f1825" stroke="#1f2937"/>
+      <text x="14" y="18" font-size="10" fill="#566378">Erkennungs-Profil</text>
+      <text x="14" y="32" font-size="13" font-weight="700" fill="#edf4fb">Mittel · Wildtier-Whitelist</text>
+    </g>
+    <!-- Object filter -->
+    <g transform="translate(20,290)" font-size="10" font-weight="700">
+      <text x="0" y="0" fill="#566378" letter-spacing="2">OBJEKTE</text>
+      <g transform="translate(0,8)">
+        <rect width="56" height="22" rx="11" fill="#3b82f6" opacity="0.18"/><text x="28" y="15" fill="#93c5fd" text-anchor="middle">🧍 Person</text>
+        <rect x="62" width="56" height="22" rx="11" fill="#c87840" opacity="0.2"/><text x="90" y="15" fill="#fbbf24" text-anchor="middle">🐿 Squirrel</text>
+        <rect x="124" width="44" height="22" rx="11" fill="#7faec9" opacity="0.2"/><text x="146" y="15" fill="#7faec9" text-anchor="middle">🐦 Bird</text>
+        <rect x="174" width="40" height="22" rx="11" fill="#1f2937" opacity="0.6"/><text x="194" y="15" fill="#566378" text-anchor="middle">🦊 Fox</text>
+        <rect x="220" width="40" height="22" rx="11" fill="#1f2937" opacity="0.6"/><text x="240" y="15" fill="#566378" text-anchor="middle">🚗 Car</text>
+      </g>
+    </g>
+    <!-- Schedule chip -->
+    <g transform="translate(20,348)">
+      <rect width="292" height="48" rx="8" fill="#0f1825" stroke="#1f2937"/>
+      <text x="14" y="20" font-size="11" font-weight="700" fill="#edf4fb">Zeitplan: 21:00 – 06:00</text>
+      <text x="14" y="38" font-size="11" fill="#7faec9">Aufnahme · Telegram · MQTT — alle aktiv</text>
+    </g>
+  </g>
+
+  <text x="32" y="588" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#566378">Mockup · structural representation of the camera detail panel</text>
+</svg>

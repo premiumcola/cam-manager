@@ -1,0 +1,146 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" preserveAspectRatio="xMidYMid meet" role="img" aria-label="TAM-spy architecture: cameras stream RTSP into the frame pipeline (motion → Coral → species classifier), state lands in storage, and outputs go to the web UI, Telegram bot, and MQTT/Home Assistant.">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0d141d"/>
+      <stop offset="100%" stop-color="#10182a"/>
+    </linearGradient>
+    <linearGradient id="boxGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a2333"/>
+      <stop offset="100%" stop-color="#141d2c"/>
+    </linearGradient>
+    <linearGradient id="centerGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1c2638"/>
+      <stop offset="100%" stop-color="#13192a"/>
+    </linearGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#7faec9"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="640" fill="url(#bg)"/>
+
+  <!-- Title -->
+  <text x="600" y="44" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="700" fill="#edf4fb" text-anchor="middle">TAM-spy · Data Flow</text>
+  <text x="600" y="68" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" fill="#7faec9" text-anchor="middle">RTSP in · processed locally · alerts and dashboards out</text>
+
+  <!-- Left column: Cameras -->
+  <g>
+    <text x="140" y="110" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700" fill="#94a3b8" text-anchor="middle" letter-spacing="2">CAMERAS</text>
+    <g font-family="ui-sans-serif, system-ui, sans-serif">
+      <rect x="50" y="130" width="180" height="64" rx="10" fill="url(#boxGrad)" stroke="#2a3a52" stroke-width="1.5"/>
+      <text x="140" y="158" font-size="14" font-weight="700" fill="#edf4fb" text-anchor="middle">Reolink Cam 1</text>
+      <text x="140" y="178" font-size="11" fill="#7faec9" text-anchor="middle">RTSP main + sub</text>
+
+      <rect x="50" y="220" width="180" height="64" rx="10" fill="url(#boxGrad)" stroke="#2a3a52" stroke-width="1.5"/>
+      <text x="140" y="248" font-size="14" font-weight="700" fill="#edf4fb" text-anchor="middle">Reolink Cam 2</text>
+      <text x="140" y="268" font-size="11" fill="#7faec9" text-anchor="middle">RTSP main + sub</text>
+
+      <rect x="50" y="310" width="180" height="64" rx="10" fill="url(#boxGrad)" stroke="#2a3a52" stroke-width="1.5"/>
+      <text x="140" y="338" font-size="14" font-weight="700" fill="#edf4fb" text-anchor="middle">Reolink Cam N</text>
+      <text x="140" y="358" font-size="11" fill="#7faec9" text-anchor="middle">RTSP main + sub</text>
+    </g>
+  </g>
+
+  <!-- Center: TAM-spy box (3 layers) -->
+  <g>
+    <rect x="320" y="100" width="560" height="440" rx="16" fill="url(#centerGrad)" stroke="#2a3a52" stroke-width="2"/>
+    <text x="600" y="130" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="800" fill="#f472b6" text-anchor="middle" letter-spacing="3">TAM-SPY</text>
+
+    <!-- Layer 1: Frame Pipeline -->
+    <g>
+      <rect x="345" y="155" width="510" height="100" rx="10" fill="#1a2333" stroke="#2f3f59" stroke-width="1"/>
+      <text x="360" y="178" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#94a3b8" letter-spacing="2">FRAME PIPELINE</text>
+
+      <!-- substream -->
+      <rect x="360" y="200" width="100" height="42" rx="8" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="410" y="220" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#edf4fb" text-anchor="middle">Substream</text>
+      <text x="410" y="234" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#7faec9" text-anchor="middle">decode</text>
+      <!-- motion -->
+      <rect x="475" y="200" width="100" height="42" rx="8" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="525" y="220" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#edf4fb" text-anchor="middle">Motion</text>
+      <text x="525" y="234" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#7faec9" text-anchor="middle">OpenCV diff</text>
+      <!-- coral -->
+      <rect x="590" y="200" width="100" height="42" rx="8" fill="#1c1422" stroke="#5e2942"/>
+      <text x="640" y="220" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#f472b6" text-anchor="middle">Coral TPU</text>
+      <text x="640" y="234" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#f9a8d4" text-anchor="middle">SSD MobileNet</text>
+      <!-- species -->
+      <rect x="705" y="200" width="135" height="42" rx="8" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="772" y="220" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#edf4fb" text-anchor="middle">Bird / Wildlife</text>
+      <text x="772" y="234" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" fill="#7faec9" text-anchor="middle">iNaturalist</text>
+
+      <!-- Inline arrows between pipeline stages -->
+      <line x1="460" y1="221" x2="475" y2="221" stroke="#7faec9" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="575" y1="221" x2="590" y2="221" stroke="#7faec9" stroke-width="1.5" marker-end="url(#arr)"/>
+      <line x1="690" y1="221" x2="705" y2="221" stroke="#7faec9" stroke-width="1.5" marker-end="url(#arr)"/>
+    </g>
+
+    <!-- Layer 2: Storage -->
+    <g>
+      <rect x="345" y="280" width="510" height="80" rx="10" fill="#1a2333" stroke="#2f3f59" stroke-width="1"/>
+      <text x="360" y="303" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#94a3b8" letter-spacing="2">STORAGE</text>
+      <rect x="360" y="318" width="150" height="30" rx="6" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="435" y="338" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="600" fill="#edf4fb" text-anchor="middle">Events · per cam/day</text>
+      <rect x="525" y="318" width="150" height="30" rx="6" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="600" y="338" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="600" fill="#edf4fb" text-anchor="middle">Timelapse · daily/weekly</text>
+      <rect x="690" y="318" width="150" height="30" rx="6" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="765" y="338" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="600" fill="#edf4fb" text-anchor="middle">Weather · clips/recaps</text>
+    </g>
+
+    <!-- Layer 3: UI + API -->
+    <g>
+      <rect x="345" y="385" width="510" height="135" rx="10" fill="#1a2333" stroke="#2f3f59" stroke-width="1"/>
+      <text x="360" y="408" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#94a3b8" letter-spacing="2">UI + API + INTEGRATIONS</text>
+
+      <rect x="360" y="425" width="150" height="36" rx="6" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="435" y="448" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#edf4fb" text-anchor="middle">Flask · /api/*</text>
+
+      <rect x="525" y="425" width="150" height="36" rx="6" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="600" y="448" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#edf4fb" text-anchor="middle">Web UI (SPA)</text>
+
+      <rect x="690" y="425" width="150" height="36" rx="6" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="765" y="448" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" font-weight="700" fill="#edf4fb" text-anchor="middle">Telegram Bot</text>
+
+      <rect x="360" y="475" width="225" height="32" rx="6" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="472" y="496" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="600" fill="#edf4fb" text-anchor="middle">APScheduler · daily / sun / weather</text>
+
+      <rect x="600" y="475" width="240" height="32" rx="6" fill="#0f1825" stroke="#2a3a52"/>
+      <text x="720" y="496" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="600" fill="#edf4fb" text-anchor="middle">MQTT · publish events + status</text>
+    </g>
+  </g>
+
+  <!-- Right column: Outputs -->
+  <g>
+    <text x="1060" y="110" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" font-weight="700" fill="#94a3b8" text-anchor="middle" letter-spacing="2">OUTPUTS</text>
+    <g font-family="ui-sans-serif, system-ui, sans-serif">
+      <rect x="970" y="130" width="180" height="64" rx="10" fill="url(#boxGrad)" stroke="#2a3a52" stroke-width="1.5"/>
+      <text x="1060" y="158" font-size="14" font-weight="700" fill="#edf4fb" text-anchor="middle">Web Browser</text>
+      <text x="1060" y="178" font-size="11" fill="#7faec9" text-anchor="middle">live · mediathek · stats</text>
+
+      <rect x="970" y="220" width="180" height="64" rx="10" fill="url(#boxGrad)" stroke="#2a3a52" stroke-width="1.5"/>
+      <text x="1060" y="248" font-size="14" font-weight="700" fill="#edf4fb" text-anchor="middle">Telegram Chat</text>
+      <text x="1060" y="268" font-size="11" fill="#7faec9" text-anchor="middle">push + inline buttons</text>
+
+      <rect x="970" y="310" width="180" height="64" rx="10" fill="url(#boxGrad)" stroke="#2a3a52" stroke-width="1.5"/>
+      <text x="1060" y="338" font-size="14" font-weight="700" fill="#edf4fb" text-anchor="middle">Home Assistant</text>
+      <text x="1060" y="358" font-size="11" fill="#7faec9" text-anchor="middle">via MQTT · status + events</text>
+    </g>
+  </g>
+
+  <!-- Connecting arrows: cams → pipeline (left side) -->
+  <g stroke="#7faec9" stroke-width="2" fill="none">
+    <path d="M 230 162 Q 280 162 320 220" marker-end="url(#arr)"/>
+    <path d="M 230 252 Q 280 252 320 230" marker-end="url(#arr)"/>
+    <path d="M 230 342 Q 280 342 320 240" marker-end="url(#arr)"/>
+  </g>
+  <text x="270" y="80" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#7faec9" text-anchor="middle">RTSP</text>
+
+  <!-- Pipeline → outputs (right side) -->
+  <g stroke="#7faec9" stroke-width="2" fill="none">
+    <path d="M 855 443 Q 920 443 970 162" marker-end="url(#arr)"/>
+    <path d="M 855 443 Q 920 443 970 252" marker-end="url(#arr)"/>
+    <path d="M 855 491 Q 920 380 970 342" marker-end="url(#arr)"/>
+  </g>
+
+  <!-- Footer note -->
+  <text x="600" y="600" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" fill="#566378" text-anchor="middle">All processing local · no cloud · only Open-Meteo (free, key-less) is fetched outbound for weather triggers</text>
+</svg>

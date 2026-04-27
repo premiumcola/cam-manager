@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 320" preserveAspectRatio="xMidYMid meet" role="img" aria-label="TAM-spy — self-hosted camera management with Coral TPU, Telegram alerts, and weather-aware sightings">
+  <defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d141d"/>
+      <stop offset="100%" stop-color="#111b29"/>
+    </linearGradient>
+    <linearGradient id="coralGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f472b6"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+    <linearGradient id="stormGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7faec9"/>
+      <stop offset="100%" stop-color="#5d8ba8"/>
+    </linearGradient>
+    <linearGradient id="tileGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1f2937"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1280" height="320" fill="url(#bgGrad)"/>
+  <!-- Faint dot grid for texture -->
+  <g fill="#1c2a3a" opacity="0.55">
+    <circle cx="60" cy="60" r="1"/><circle cx="120" cy="60" r="1"/><circle cx="180" cy="60" r="1"/>
+    <circle cx="60" cy="120" r="1"/><circle cx="120" cy="120" r="1"/><circle cx="180" cy="120" r="1"/>
+    <circle cx="60" cy="180" r="1"/><circle cx="120" cy="180" r="1"/><circle cx="180" cy="180" r="1"/>
+    <circle cx="60" cy="240" r="1"/><circle cx="120" cy="240" r="1"/><circle cx="180" cy="240" r="1"/>
+  </g>
+
+  <!-- Left: wordmark with squirrel above -->
+  <g transform="translate(80,90)">
+    <!-- Squirrel (stylised) -->
+    <g transform="translate(8,0) scale(0.85)">
+      <!-- Tail -->
+      <path d="M 10 45 Q -10 20 5 5 Q 25 -5 40 8 Q 50 18 45 30" fill="none" stroke="#c87840" stroke-width="6" stroke-linecap="round"/>
+      <!-- Body -->
+      <ellipse cx="55" cy="40" rx="22" ry="18" fill="#c87840"/>
+      <!-- Head -->
+      <circle cx="78" cy="28" r="13" fill="#c87840"/>
+      <!-- Ear -->
+      <path d="M 72 18 L 76 8 L 82 16 Z" fill="#c87840"/>
+      <!-- Eye -->
+      <circle cx="84" cy="26" r="2" fill="#0d141d"/>
+      <!-- Front leg -->
+      <path d="M 65 52 L 68 64" stroke="#c87840" stroke-width="5" stroke-linecap="round"/>
+      <!-- Acorn (Coral-pink, the project's accent) -->
+      <ellipse cx="93" cy="34" rx="5" ry="4" fill="url(#coralGrad)"/>
+      <path d="M 89 31 Q 93 27 97 31" stroke="#7a3e10" stroke-width="2" fill="none" stroke-linecap="round"/>
+    </g>
+
+    <!-- Wordmark -->
+    <text x="0" y="120" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="84" font-weight="800" fill="#edf4fb" letter-spacing="-2">TAM<tspan fill="url(#coralGrad)">-</tspan>spy</text>
+    <!-- Tagline -->
+    <text x="6" y="160" font-family="ui-sans-serif, system-ui, sans-serif" font-size="18" font-weight="500" fill="#7faec9" letter-spacing="0.5">self-hosted · Coral TPU · weather-aware</text>
+  </g>
+
+  <!-- Right: three offset camera tiles -->
+  <g transform="translate(720,40)" filter="url(#softShadow)">
+    <!-- Back tile -->
+    <g transform="translate(60,40)">
+      <rect width="320" height="180" rx="14" fill="url(#tileGrad)" stroke="#1f2937" stroke-width="1"/>
+      <rect x="0" y="0" width="320" height="180" rx="14" fill="#0a0e14" opacity="0.4"/>
+      <!-- Mock motion frame -->
+      <rect x="40" y="40" width="240" height="100" rx="8" fill="#16202c"/>
+      <!-- Bird shape -->
+      <path d="M 110 100 Q 130 70 160 90 Q 190 80 200 100 Q 175 115 145 110 Z" fill="#7faec9" opacity="0.85"/>
+      <!-- Label pill -->
+      <rect x="48" y="48" width="92" height="20" rx="10" fill="#000" opacity="0.55"/>
+      <text x="56" y="62" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#fff">Bird · 92%</text>
+      <!-- Score badge -->
+      <rect x="248" y="48" width="36" height="20" rx="10" fill="#000" opacity="0.55"/>
+      <text x="252" y="62" font-family="ui-monospace, SFMono-Regular, monospace" font-size="10" font-weight="700" fill="#fff">14:23</text>
+      <!-- Bottom row -->
+      <rect x="48" y="120" width="80" height="14" rx="4" fill="#000" opacity="0.55"/>
+      <text x="54" y="131" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#fff">Garten</text>
+    </g>
+    <!-- Middle tile -->
+    <g transform="translate(120,80)">
+      <rect width="320" height="180" rx="14" fill="url(#tileGrad)" stroke="#243042" stroke-width="1"/>
+      <rect x="0" y="0" width="320" height="180" rx="14" fill="#0a0e14" opacity="0.25"/>
+      <rect x="40" y="40" width="240" height="100" rx="8" fill="#1a2333"/>
+      <!-- Squirrel silhouette -->
+      <ellipse cx="160" cy="100" rx="40" ry="26" fill="#c87840" opacity="0.8"/>
+      <circle cx="195" cy="88" r="14" fill="#c87840" opacity="0.85"/>
+      <path d="M 190 80 L 198 70 L 204 78 Z" fill="#c87840" opacity="0.85"/>
+      <rect x="48" y="48" width="118" height="20" rx="10" fill="#000" opacity="0.55"/>
+      <text x="56" y="62" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#fff">Squirrel · 88%</text>
+      <rect x="48" y="120" width="92" height="14" rx="4" fill="#000" opacity="0.55"/>
+      <text x="54" y="131" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#fff">Werkbank</text>
+    </g>
+    <!-- Front tile -->
+    <g transform="translate(180,120)">
+      <rect width="320" height="180" rx="14" fill="url(#tileGrad)" stroke="#2a3a52" stroke-width="1.5"/>
+      <rect x="40" y="40" width="240" height="100" rx="8" fill="#1d2a3a"/>
+      <!-- Storm cloud + lightning -->
+      <ellipse cx="150" cy="80" rx="50" ry="20" fill="url(#stormGrad)" opacity="0.85"/>
+      <ellipse cx="180" cy="74" rx="32" ry="14" fill="url(#stormGrad)" opacity="0.7"/>
+      <path d="M 165 95 L 158 115 L 168 115 L 162 130" stroke="#facc15" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <!-- Rain -->
+      <line x1="135" y1="105" x2="130" y2="120" stroke="#7faec9" stroke-width="2" stroke-linecap="round"/>
+      <line x1="180" y1="108" x2="175" y2="123" stroke="#7faec9" stroke-width="2" stroke-linecap="round"/>
+      <line x1="200" y1="105" x2="195" y2="120" stroke="#7faec9" stroke-width="2" stroke-linecap="round"/>
+      <rect x="48" y="48" width="100" height="20" rx="10" fill="#000" opacity="0.55"/>
+      <text x="56" y="62" font-family="ui-sans-serif, system-ui, sans-serif" font-size="11" font-weight="700" fill="#fff">⛈ Gewitter</text>
+      <rect x="48" y="120" width="92" height="14" rx="4" fill="#000" opacity="0.55"/>
+      <text x="54" y="131" font-family="ui-sans-serif, system-ui, sans-serif" font-size="9" font-weight="600" fill="#fff">Wetter-Cam</text>
+    </g>
+  </g>
+</svg>
