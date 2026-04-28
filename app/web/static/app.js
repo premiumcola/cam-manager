@@ -4386,28 +4386,50 @@ byId('wizFinish').onclick=()=>finishWizard();
     setCollapsed(saved!=='0');
   }
 
+  // Open/close on mobile uses a body class for scroll-lock (CSS handles
+  // overflow + touch-action). pushState makes the browser back-button
+  // close the drawer instead of navigating away.
+  function _mobileOpen(){
+    sidebar.classList.add('mobile-open');
+    overlay.classList.add('visible');
+    document.body.classList.add('sidebar-locked');
+    if(history.state?.tspy_sidebar!==1){
+      try{history.pushState({tspy_sidebar:1},'');}catch{}
+    }
+  }
+  function _mobileClose(opts){
+    sidebar.classList.remove('mobile-open');
+    overlay.classList.remove('visible');
+    document.body.classList.remove('sidebar-locked');
+    // When the close was triggered by user action (overlay tap, nav
+    // click), pop the synthetic history entry. When it came from
+    // popstate itself, skip — popping again would navigate away.
+    if(!opts?.fromPopstate && history.state?.tspy_sidebar===1){
+      try{history.back();}catch{}
+    }
+  }
+
   if(hamburger) hamburger.onclick=()=>{
     if(window.innerWidth<=768){
-      sidebar.classList.add('mobile-open');
-      overlay.classList.add('visible');
-      document.body.style.overflow='hidden';
+      _mobileOpen();
     } else if(window.innerWidth<=1024){
       setCollapsed(!sidebar.classList.contains('collapsed'));
     }
     // Desktop: hamburger does nothing — hover handles expand/collapse
   };
 
-  if(overlay) overlay.onclick=()=>{
-    sidebar.classList.remove('mobile-open');
-    overlay.classList.remove('visible');
-    document.body.style.overflow='';
-  };
+  if(overlay) overlay.onclick=()=>_mobileClose();
+
+  // Browser back-button closes the drawer instead of navigating off.
+  window.addEventListener('popstate',()=>{
+    if(sidebar.classList.contains('mobile-open')){
+      _mobileClose({fromPopstate:true});
+    }
+  });
 
   document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',e=>{
     if(window.innerWidth<=768){
-      sidebar.classList.remove('mobile-open');
-      overlay.classList.remove('visible');
-      document.body.style.overflow='';
+      _mobileClose();
     }
     e.preventDefault();
     const target=document.querySelector(a.getAttribute('href'));
