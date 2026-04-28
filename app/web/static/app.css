@@ -68,11 +68,15 @@ select option{background:#1e1e1e;color:#c8c8c8}
 @media(max-width:640px){.hero-build{font-size:10px;padding-left:8px}}
 /* ── Camera video-grid ──────────────────────────────────────────────────────── */
 .camera-grid{display:grid;gap:12px}
-.cam-grid-1{grid-template-columns:1fr}
-.cam-grid-2{grid-template-columns:1fr 1fr}
-.cam-grid-4{grid-template-columns:1fr 1fr}
-.cam-grid-n{grid-template-columns:repeat(3,1fr)}
-@media(max-width:900px){.cam-grid-2,.cam-grid-4,.cam-grid-n{grid-template-columns:1fr}}
+/* minmax(0, 1fr) — without it Safari treats grid-child min-width as
+   auto (= content intrinsic size), and a freshly-loaded camera <img>
+   pushes the column past viewport width. That was the root cause of
+   the "page jumps to desktop layout once streams load" regression. */
+.cam-grid-1{grid-template-columns:minmax(0,1fr)}
+.cam-grid-2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.cam-grid-4{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.cam-grid-n{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:900px){.cam-grid-2,.cam-grid-4,.cam-grid-n{grid-template-columns:minmax(0,1fr)}}
 
 /* Card = just the video frame */
 .cv-card{border-radius:18px;overflow:hidden;cursor:pointer;background:#0a0a0a;transition:transform .18s,box-shadow .18s;position:relative;min-width:0;contain:paint}
@@ -1891,6 +1895,29 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   #logs .section-head{flex-direction:column;align-items:stretch;gap:8px}
   #logs .section-head > div{flex-wrap:wrap}
   #logs .log-level-select{flex:1;min-width:0}
+}
+
+/* ── Cam-card stream containment ──────────────────────────────────────────
+   Defensive cap so any <img> or <video> rendered inside a cam-card
+   (snapshot, HD preview, eventual native MJPEG/HLS stream) can't push
+   the parent column past its grid track. Safe on desktop — these are
+   already column-constrained there; max-width:100% just re-asserts
+   that bound. */
+.cv-card,.cv-card *{min-width:0}
+.cv-card img,.cv-card video,
+.cam-card img,.cam-card video,
+#cameraCards img,#cameraCards video{
+  max-width:100%;
+  height:auto;
+  display:block;
+}
+/* The .cv-img path keeps its position:absolute/inset:0 contract — the
+   above auto height shouldn't override that. Re-pin explicitly so an
+   image with intrinsic 1080p dimensions still fills its frame instead
+   of laying itself out at native size when the absolute positioning
+   loses the cascade race. */
+.cv-card .cv-img,#cameraCards .cv-img{
+  position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
 }
 
 /* ── QA pass · long-tap context-menu suppression on UI thumbnails ─────── */
