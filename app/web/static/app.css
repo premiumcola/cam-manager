@@ -1746,13 +1746,47 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
 }
 
 /* ── Dashboard / live-card mobile sizing ──────────────────────────────── */
+@media (max-width:768px){
+  /* Multi-cam layouts (.cam-grid-2/-4/-n) collapse to one column at 900 px,
+     so on phones two stacked 16/9 tiles eat ~470 px of vertical space just
+     for the live feed. Compressing them to 21/9 keeps both cameras visible
+     within roughly one viewport while object-fit:cover on .cv-img keeps the
+     surveillance-relevant region centred. Single-cam (.cam-grid-1) stays
+     16/9 — solo users have plenty of room. */
+  .cam-grid-2 .cv-frame,
+  .cam-grid-4 .cv-frame,
+  .cam-grid-n .cv-frame{aspect-ratio:21/9}
+
+  /* Placeholder geometry rescales for the ~165 px-tall frame. The 180 px
+     fixed stage and 72/48 px icons would otherwise clip; everything below
+     scales by ≈2/3 to match the new frame height. */
+  .cv-ph-stage{width:120px;height:120px}
+  .cv-ph-icon--red svg{width:52px;height:52px}
+  .cv-ph-icon:not(.cv-ph-icon--red) svg{width:36px;height:36px}
+  .cv-ph-label{font-size:12px}
+  .cv-ph-ring{width:40px;height:40px;margin:-20px 0 0 -20px}
+  .cv-ph-guides,.cv-ph-radar{width:130px;height:130px}
+  .cv-ph-radar{transform-origin:65px 65px}
+  /* Orbit dots — desktop keyframes hardcode translateX(40/52/28). Switch
+     to mobile-only keyframes with a smaller radius proportional to the
+     shrunken stage. */
+  .cv-ph-orbit--1{animation-name:orbitDotMobile1}
+  .cv-ph-orbit--2{animation-name:orbitDotMobile2}
+  .cv-ph-orbit--3{animation-name:orbitDotMobile3}
+}
+@keyframes orbitDotMobile1{from{transform:rotate(0deg) translateX(27px)}to{transform:rotate(360deg) translateX(27px)}}
+@keyframes orbitDotMobile2{from{transform:rotate(0deg) translateX(34px)}to{transform:rotate(-360deg) translateX(34px)}}
+@keyframes orbitDotMobile3{from{transform:rotate(0deg) translateX(19px)}to{transform:rotate(360deg) translateX(19px)}}
+
 @media (max-width:480px){
   .cv-name{font-size:13px}
   /* Live pill — collapsed shrinks; expanded width caps to viewport so the
      pill never overflows a 375 px card. */
   .cv-pill-live-wrap{--lp-collapsed-w:88px;--lp-expanded-w:min(210px,calc(100vw - 32px))}
-  /* Action buttons (cv-abt) — drop the label text, icon-only, 32×32. */
-  .cv-abt{padding:6px;min-width:32px;min-height:32px;font-size:0;gap:0}
+  /* Action buttons (cv-abt) — drop the label text, icon-only. 44×44 hit
+     area per iOS HIG; the icon stays 18 px so the button reads as a chip
+     rather than a giant pad. */
+  .cv-abt{padding:13px;min-width:44px;min-height:44px;font-size:0;gap:0}
   .cv-abt svg,.cv-abt > *:first-child{font-size:18px}
 }
 
