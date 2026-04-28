@@ -957,6 +957,28 @@ def api_config():
     bird_cpu_path = bird_cfg.get("cpu_model_path")
     bird_labels_path = bird_cfg.get("labels_path")
     bird_model_available = any(p and Path(p).exists() for p in (bird_model_path, bird_cpu_path))
+    # Wildlife block — must mirror the four fields surfaced by
+    # /api/settings/app, otherwise hydrateAppSettings reads
+    # proc.wildlife_enabled as undefined → false and flips the toggle
+    # back ~2 s after the user enables it (loadAll re-fetches /api/config
+    # after the POST). Same auto-discover fallback as /api/settings/app
+    # so both endpoints stay in sync on a fresh install where the user
+    # hasn't pinned a model_path yet.
+    wl_cfg = proc.get("wildlife", {}) or {}
+    wl_model_path = wl_cfg.get("model_path")
+    wl_cpu_path   = wl_cfg.get("cpu_model_path")
+    wl_labels_path = wl_cfg.get("labels_path")
+    wl_model_available = any(p and Path(p).exists() for p in (wl_model_path, wl_cpu_path))
+    wl_labels_available = bool(wl_labels_path and Path(wl_labels_path).exists())
+    if not wl_model_available:
+        from .detectors import discover_wildlife_paths
+        disc = discover_wildlife_paths()
+        if disc:
+            wl_model_path = disc.get("model_path") or wl_model_path
+            wl_model_available = True
+            if not wl_labels_available and disc.get("labels_path"):
+                wl_labels_path = disc["labels_path"]
+                wl_labels_available = True
     srv = c.get("server", {}) or {}
     return jsonify({
         "app": c.get("app", {}),
@@ -979,6 +1001,10 @@ def api_config():
             "bird_model_available": bird_model_available,
             "bird_labels_available": bool(bird_labels_path and Path(bird_labels_path).exists()),
             "bird_model_path": bird_model_path,
+            "wildlife_enabled": bool(wl_cfg.get("enabled", False)),
+            "wildlife_model_available": wl_model_available,
+            "wildlife_labels_available": wl_labels_available,
+            "wildlife_model_path": wl_model_path,
         },
         "telegram": {"enabled": bool(c.get("telegram", {}).get("enabled")), "chat_id": c.get("telegram", {}).get("chat_id", ""), "token": c.get("telegram", {}).get("token", "")},
         "mqtt": {"enabled": bool(c.get("mqtt", {}).get("enabled")), "base_topic": c.get("mqtt", {}).get("base_topic", "tam-spy"), "host": c.get("mqtt", {}).get("host", ""), "port": c.get("mqtt", {}).get("port", 1883), "username": c.get("mqtt", {}).get("username", ""), "password": c.get("mqtt", {}).get("password", "")},
