@@ -1012,26 +1012,29 @@ class TelegramService:
         return InlineKeyboardButton("« Zurück", callback_data=target)
 
     def _root_view(self) -> tuple[str, InlineKeyboardMarkup]:
-        """Anchor's root view. Header carries one line per camera so the
-        operator sees liveness at a glance; the eight tile buttons cover
-        every drilldown reachable from this bubble."""
-        from html import escape as _esc
-        today_iso = datetime.now().strftime("%Y-%m-%d")
+        """Anchor's root view. Compact menu header; per-camera detail lives
+        in 📊 Statistik (events) and 📹 Kameras / 🛠 System (status). The
+        entry point reads as a menu of actions, not a briefing."""
         hh = datetime.now().strftime("%H:%M")
-        lines = [f"🌳 <b>Tam-Spy</b> · {hh}"]
-        for info in self._active_cams():
-            icon = self._cam_status_icon_for(info)
-            n_today = "?"
-            if self.store:
+        lines = [f"🏠 <b>Menü</b> · {hh}"]
+        # Optional one-line aggregate, only shown when it stays compact.
+        cams = self._active_cams()
+        n_cams = len(cams)
+        if n_cams and self.store:
+            today_iso = datetime.now().strftime("%Y-%m-%d")
+            total = 0
+            for info in cams:
                 try:
-                    n_today = len(self.store.list_events(info["cam_id"],
-                                                          start=today_iso, limit=5000))
+                    total += len(self.store.list_events(
+                        info["cam_id"], start=today_iso, limit=5000))
                 except Exception:
-                    n_today = "?"
-            lines.append(f"{icon} {_esc(info['name'])} · {n_today} Events heute")
-        if not self._active_cams():
+                    pass
+            kam = "Kamera" if n_cams == 1 else "Kameras"
+            summary = f"{n_cams} {kam} · {total} Events heute"
+            if len(summary) <= 40:
+                lines.append(summary)
+        elif not n_cams:
             lines.append("(keine Kameras konfiguriert)")
-        lines.append("─────────────")
         # Mute toggle button: "off" → "Alles still 1 h"; on → "Stumm bis HH:MM".
         mute_until = 0.0
         if self.settings_store:
@@ -1203,6 +1206,7 @@ class TelegramService:
         lines = ["🛠 <b>Kamera-Status</b>", ""]
         rows = []
         cam_cfgs = {c["id"]: c for c in self._cfg().get("cameras", [])}
+        today_iso = datetime.now().strftime("%Y-%m-%d")
         for cam_id, rt in self.runtimes.items():
             try:
                 st = rt.status()
@@ -1219,7 +1223,15 @@ class TelegramService:
                     extra = f" · offline {int(fa // 60)} min"
                 else:
                     extra = " · offline"
-            lines.append(f"{icon} <b>{name}</b> · {arm_label}{extra}")
+            n_today = "?"
+            if self.store:
+                try:
+                    n_today = len(self.store.list_events(
+                        cam_id, start=today_iso, limit=5000))
+                except Exception:
+                    n_today = "?"
+            lines.append(
+                f"{icon} <b>{name}</b> · {arm_label}{extra} · {n_today} Events heute")
             rows.append([
                 InlineKeyboardButton(("🔇 Stumm" if armed else "🛡 Scharf") + f" {name[:10]}", callback_data=f"cam:{cam_id}:arm"),
                 InlineKeyboardButton(f"🔄 Reconnect", callback_data=f"cam:{cam_id}:reconnect"),
