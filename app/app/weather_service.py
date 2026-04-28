@@ -1420,7 +1420,10 @@ class WeatherService:
         if not self._scheduler:
             return []
         try:
-            return [j.id for j in self._scheduler.get_jobs() if j.id.startswith("sun_tl_capture_")]
+            return [
+                j.id for j in self._scheduler.get_jobs()
+                if j.id.startswith("sun_tl_capture_") or j.id.startswith("sun_tl_dnov_")
+            ]
         except Exception:
             return []
 
@@ -1475,10 +1478,85 @@ class WeatherService:
                 registered.append(
                     f"{cam_name} {phase} {sun_dt.strftime('%H:%M')} (window {window} min)"
                 )
+                # Optional day/night override: force the camera into Color
+                # mode N minutes before the capture starts so the cam's
+                # internal IR-cut decision doesn't snap-flip mid-window.
+                # Reverted to "Auto" (or "Black&White" if revert == "off")
+                # at the end of _run_sun_capture.
+                dnov = pcfg.get("daynight_override") or {}
+                if dnov.get("enabled"):
+                    lead_min = max(1, min(15, int(dnov.get("lead_min", 5) or 5)))
+                    override_at = start_dt - timedelta(minutes=lead_min)
+                    if not (cam.get("rtsp_url") or "").strip():
+                        log.warning(
+                            "[weather] %s %s: no rtsp_url, cannot infer Reolink host — daynight override skipped",
+                            cam_name, phase)
+                    elif override_at <= datetime.now():
+                        log.info(
+                            "[weather] %s %s: daynight override window already passed, capture-only",
+                            cam_name, phase)
+                    else:
+                        dn_key = f"sun_tl_dnov_{cam_id}_{phase}_{today.isoformat()}"
+                        self._scheduler.add_job(
+                            self._apply_daynight_override,
+                            DateTrigger(run_date=override_at),
+                            id=dn_key, replace_existing=True,
+                            args=[cam_id, "Color", phase, lead_min],
+                        )
+                        registered.append(
+                            f"{cam_name} {phase} daynight→Color @{override_at.strftime('%H:%M')}"
+                        )
         if registered:
             log.info("[weather] Jobs registered: %s", " · ".join(registered))
         else:
             log.info("[weather] Keine Sun-Jobs heute (alle aus oder Fenster vorbei)")
+
+    def _apply_daynight_override(self, cam_id: str, mode: str,
+                                 phase: str = "", lead_min: int = 0) -> bool:
+        """Force a camera's day/night mode via the Reolink HTTP CGI.
+
+        Called from the scheduler (lead-in: mode="Color") and from
+        _run_sun_capture's tail (revert: mode="Auto"/"Black&White"). All
+        failures are logged at WARNING and swallowed — the override must
+        never block the capture or mark a finished timelapse as failed.
+        """
+        from urllib.parse import urlparse
+        from . import reolink_api
+        cam = next((c for c in self._cfg_cameras() if c.get("id") == cam_id), None)
+        if cam is None:
+            log.warning("[weather] daynight override: cam %s not in config", cam_id)
+            return False
+        cam_name = cam.get("name") or cam_id
+        rtsp_url = (cam.get("rtsp_url") or "").strip()
+        if not rtsp_url:
+            log.warning("[weather] daynight override %s: no rtsp_url, skipped", cam_name)
+            return False
+        try:
+            host = urlparse(rtsp_url).hostname
+        except Exception:
+            host = None
+        if not host:
+            log.warning("[weather] daynight override %s: cannot parse host from rtsp_url", cam_name)
+            return False
+        user = cam.get("username") or ""
+        password = cam.get("password") or ""
+        token = reolink_api.login(host, user, password)
+        if not token:
+            log.warning("[weather] daynight override %s: login failed", cam_name)
+            return False
+        try:
+            ok = reolink_api.set_daynight(host, token, mode)
+        finally:
+            reolink_api.logout(host, token)
+        if ok:
+            if mode == "Color" and lead_min:
+                log.info("[weather] daynight override Color: %s (für %s in %d min)",
+                         cam_name, phase or "?", lead_min)
+            else:
+                log.info("[weather] daynight override %s: %s", mode, cam_name)
+        else:
+            log.warning("[weather] daynight override %s: SetIspCfg(%s) failed", cam_name, mode)
+        return ok
 
     def _cfg_cameras(self) -> list[dict]:
         # Read the live, fully-merged camera list from the SettingsStore so
@@ -1501,6 +1579,24 @@ class WeatherService:
         ).start()
 
     def _run_sun_capture(self, cam_id: str, phase: str, sun_dt: datetime, pcfg: dict):
+        """Wrapper that guarantees the optional day/night override is
+        reverted on every exit path — normal completion, early bail-out,
+        encode crash. The revert call itself is best-effort; a failed
+        revert leaves the cam in Color until the next sun_tl run or a
+        manual reset, but never fails the just-completed timelapse."""
+        try:
+            self._run_sun_capture_inner(cam_id, phase, sun_dt, pcfg)
+        finally:
+            dnov = pcfg.get("daynight_override") or {}
+            if dnov.get("enabled"):
+                revert_mode = "Black&White" if dnov.get("revert", "auto") == "off" else "Auto"
+                try:
+                    self._apply_daynight_override(cam_id, revert_mode, phase=phase)
+                except Exception as e:
+                    log.warning("[weather] daynight revert crash %s %s: %s",
+                                cam_id, phase, e)
+
+    def _run_sun_capture_inner(self, cam_id: str, phase: str, sun_dt: datetime, pcfg: dict):
         from .frame_helpers import grab_valid_frame, CaptureStats
         rt = self.runtimes.get(cam_id)
         if rt is None or not hasattr(rt, "snapshot_jpeg"):
