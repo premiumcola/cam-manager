@@ -1747,3 +1747,14 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
      like cards, not letterboxed thumbnails. */
   .media-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
 }
+
+/* ── Dashboard / live-card mobile sizing ──────────────────────────────── */
+@media (max-width:480px){
+  .cv-name{font-size:13px}
+  /* Live pill — collapsed shrinks; expanded width caps to viewport so the
+     pill never overflows a 375 px card. */
+  .cv-pill-live-wrap{--lp-collapsed-w:88px;--lp-expanded-w:min(210px,calc(100vw - 32px))}
+  /* Action buttons (cv-abt) — drop the label text, icon-only, 32×32. */
+  .cv-abt{padding:6px;min-width:32px;min-height:32px;font-size:0;gap:0}
+  .cv-abt svg,.cv-abt > *:first-child{font-size:18px}
+}
