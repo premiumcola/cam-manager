@@ -1875,4 +1875,20 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
      row total. Lock that floor explicitly so future padding tweaks
      can't shrink the tap target below the iOS HIG. */
   .toggle-row{min-height:44px}
+
+  /* Logs panel — wrap long lines instead of horizontal scrolling so the
+     terminal feel survives a 375 px viewport. Drop the fixed columns;
+     timestamp + level stack at the start of each row, body wraps. */
+  .log-output{font-size:12px;padding:10px}
+  .log-row{
+    grid-template-columns:auto auto auto 1fr;
+    overflow-wrap:anywhere;word-break:break-word;
+  }
+}
+@media (max-width:480px){
+  /* Stack the logs filter row vertically; the .section-head's inner
+     flex collapses on phone to give each select full width. */
+  #logs .section-head{flex-direction:column;align-items:stretch;gap:8px}
+  #logs .section-head > div{flex-wrap:wrap}
+  #logs .log-level-select{flex:1;min-width:0}
 }
