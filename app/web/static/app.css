@@ -1892,3 +1892,33 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   #logs .section-head > div{flex-wrap:wrap}
   #logs .log-level-select{flex:1;min-width:0}
 }
+
+/* ── QA pass · long-tap context-menu suppression on UI thumbnails ─────── */
+/* Keep the lightbox image AS-IS — long-tap "Save Image…" is a feature
+   there. Suppress only on the cards/thumbnails that are part of the app
+   chrome, where the context menu would just get in the way. */
+.media-card img,
+.mmc-img-wrap img,
+.ws-card img,
+.brand img,
+.cv-card img{
+  -webkit-touch-callout:none;
+  user-select:none;
+  -webkit-user-select:none;
+}
+
+/* Mobile perf — drop backdrop-filter on the high-density overlay pills.
+   Each blur layer costs a compositor pass; on a card-heavy dashboard this
+   adds up to dropped frames on iPhone SE. The pills stay readable as
+   solid-coloured chips on touch widths. */
+@media (max-width:768px){
+  .cv-pill,
+  .cv-hd-badge,
+  .cv-split-badge,
+  .mmc-cam-pill,
+  .media-label-bubble,
+  .ct-pill,
+  .cb-ms{
+    backdrop-filter:none;-webkit-backdrop-filter:none;
+  }
+}
