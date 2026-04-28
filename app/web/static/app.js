@@ -6776,11 +6776,16 @@ function _wsFmtVal(key, v){
 }
 
 function _wsCurrentValue(key){
+  // Walk back to the most recent non-null sample for this field. A single
+  // failed poll (sun-altitude calc miss, API hiccup) shouldn't blank the
+  // chip and strip its unit — the chip is meant to read as "this field's
+  // latest known value", not "the last sample's value".
   const samples = _wsStatsState.data?.samples || [];
-  if (!samples.length) return null;
-  const last = samples[samples.length - 1].values || {};
-  const v = last[key];
-  return typeof v === 'number' && isFinite(v) ? v : null;
+  for (let i = samples.length - 1; i >= 0; i--){
+    const v = (samples[i].values || {})[key];
+    if (typeof v === 'number' && isFinite(v)) return v;
+  }
+  return null;
 }
 
 function renderWeatherStats(){
