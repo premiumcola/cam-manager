@@ -3294,9 +3294,9 @@ def api_weather_status():
 @app.get('/api/weather/history')
 def api_weather_history():
     """Backing endpoint for the Wetterstatistik chart. `hours` clamped
-    to 1..72 by the service. Returns a sample list, per-field thresholds
-    drawn from the configured event triggers, units, German labels,
-    and the configured poll interval."""
+    to 1..720 by the service (30 d at default 5-min poll). Returns a
+    sample list, per-field thresholds drawn from the configured event
+    triggers, units, German labels, and the configured poll interval."""
     if weather_service is None:
         return jsonify({
             "hours": 24, "samples": [], "thresholds": {}, "units": {},

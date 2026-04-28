@@ -90,7 +90,7 @@ HISTORY_FIELD_TO_EVENT: dict[str, str] = {
     "visibility":          "fog",
 }
 
-HISTORY_MAXLEN = 288  # 24 h @ 5 min
+HISTORY_MAXLEN = 8640  # 30 d @ 5 min — deque truncates oldest, ~1.5 MB on disk
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
@@ -996,7 +996,7 @@ class WeatherService:
 
     def history(self, hours: int = 24) -> dict:
         """Backing call for /api/weather/history."""
-        hours = max(1, min(72, int(hours or 24)))
+        hours = max(1, min(720, int(hours or 24)))
         cutoff = datetime.now() - timedelta(hours=hours)
         with self._history_lock:
             samples = list(self._history)
