@@ -1656,3 +1656,50 @@ select option{background:#1e1e1e;color:var(--text)}
   font-size:13px;color:#cfe1ee;word-break:break-all
 }
 .cam-id-preview-hint{font-size:10.5px;color:var(--muted);font-style:italic}
+
+/* ── iOS / mobile foundation ─────────────────────────────────────────────
+   Globals first (benign on desktop), then mobile-specific overrides under
+   a single @media block. Desktop layout at ≥ 769 px is unaffected.        */
+html{-webkit-text-size-adjust:100%}
+body{overscroll-behavior-y:none}
+button,[role="button"],a,input,select,textarea{-webkit-tap-highlight-color:transparent}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Body-scroll lock when the off-canvas sidebar is open. The class is
+   toggled from JS in tandem with .sidebar.mobile-open. */
+body.sidebar-locked{overflow:hidden;touch-action:none}
+
+/* Hover-only desktop affordances — cards scale on hover, action rows
+   reveal. Re-gate these behind hover-capable pointers so touch devices
+   don't get sticky hover state after a tap. */
+@media (hover:hover) and (pointer:fine){
+  .media-card:hover .mmc-img-wrap img{transform:scale(1.03)}
+  .media-card:hover .mmc-actions{opacity:1}
+  .mmc-btn:hover{transform:scale(1.08)}
+}
+@media (hover:none) and (pointer:coarse){
+  /* Touch: keep media-card thumbnails calm (no zoom-on-press) and let
+     the action row sit at full opacity by default — the user has no
+     hover to reveal it. */
+  .media-card .mmc-img-wrap img{transform:none}
+  .mmc-actions{opacity:1}
+}
+
+@media (max-width:768px){
+  /* Bump form-input font-size to 16px to suppress Safari's auto-zoom on
+     focus. Keep desktop sizes. */
+  input,select,textarea,
+  .toolbar input,.toolbar select,
+  .form input,.form select{font-size:16px}
+
+  /* Topbar + sidebar (mobile-open) live at the viewport edges — pad them
+     into the iPhone safe-area so the notch and status bar don't overlap
+     the title or hamburger. */
+  .topbar{padding-top:calc(12px + env(safe-area-inset-top))}
+  .sidebar{padding-top:calc(12px + env(safe-area-inset-top))}
+  .topbar-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+  .hamburger-btn{min-width:44px;min-height:44px;font-size:20px}
+
+  /* Lightbox close button — sits below the notch on iPhones with one. */
+  #lightboxClose{top:calc(12px + env(safe-area-inset-top))}
+}
