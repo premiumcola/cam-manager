@@ -1779,4 +1779,13 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   .tl-container{--tl-sidebox-w:92px;--tl-label-w:88px}
   .tl-cam-name{font-size:13px}
   .tl-lane-label-text{font-size:12px}
+
+  /* Sichtungen progress bar — slim on mobile so the achievements grid
+     gets the visual weight, not the meta strip on top. */
+  .ach-progress-track{height:6px}
+}
+@media (max-width:480px){
+  /* Two columns minimum on iPhone SE — auto-fill at 90 px would yield
+     four cramped cards on a 375 px width. */
+  .ach-cards-grid{grid-template-columns:repeat(2,1fr)}
 }
