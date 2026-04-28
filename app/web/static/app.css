@@ -1789,3 +1789,29 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
      four cramped cards on a 375 px width. */
   .ach-cards-grid{grid-template-columns:repeat(2,1fr)}
 }
+
+/* ── Wetter mobile ────────────────────────────────────────────────────── */
+@media (max-width:768px){
+  /* Filter pills bar — same horizontal scroll-snap pattern as media. */
+  .ws-filter-bar{
+    flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    scrollbar-width:none;scroll-snap-type:x proximity;
+    padding:4px 12px;margin:0 -12px;
+  }
+  .ws-filter-bar::-webkit-scrollbar{display:none}
+  .ws-filter-bar > *{scroll-snap-align:start;flex-shrink:0}
+
+  /* Recap strip — let cards bleed to the screen edges so the next card
+     visibly hints at the scroll affordance. Card width 140 px on mobile. */
+  .ws-recaps-strip{padding:2px 12px 6px;margin:0 -12px}
+  .ws-recap-card{flex-basis:140px;min-width:140px}
+
+  /* Time-range pills above the chart — give them tap-friendly height. */
+  #weatherStatsPills .ws-pill,
+  #weatherStatsPills button{min-height:40px;padding:8px 14px}
+}
+@media (max-width:380px){
+  /* Two-column legend on iPhone SE so the labels don't truncate
+     unreadably tightly inside 3 cramped chips. */
+  .ws-stats-legend{grid-template-columns:repeat(2,1fr)}
+}
