@@ -3184,6 +3184,24 @@ def api_weather_sightings():
     ))
 
 
+@app.get('/api/event/<event_id>')
+def api_event_get(event_id: str):
+    """Cross-camera event lookup for Telegram deep-links. Returns enough
+    metadata for the frontend hash router to switch to the right cam +
+    open the lightbox. 404 when nothing matches."""
+    payload = store.find_event_anywhere(event_id) if store else None
+    if not payload:
+        return jsonify({"error": "not found"}), 404
+    return jsonify({
+        "event_id":         payload.get("event_id"),
+        "camera_id":        payload.get("camera_id"),
+        "top_label":        payload.get("top_label") or payload.get("primary_label"),
+        "time":             payload.get("time"),
+        "video_relpath":    payload.get("video_relpath"),
+        "snapshot_relpath": payload.get("snapshot_relpath"),
+    })
+
+
 @app.get('/api/weather/sightings/<sighting_id>')
 def api_weather_sighting_get(sighting_id: str):
     if weather_service is None:

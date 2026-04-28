@@ -150,6 +150,36 @@ class TelegramService:
     def _dashboard_url(self):
         return self._cfg().get("server", {}).get("public_base_url", "")
 
+    def _event_deep_link_url(self, event_id: str | None) -> str:
+        """Build a #/event/<id> deep-link into the web-UI lightbox.
+        Returns "" when public_base_url is unset or event_id is missing —
+        callers should drop the button silently in that case."""
+        if not event_id:
+            return ""
+        base = (self._dashboard_url() or "").rstrip("/")
+        if not base:
+            return ""
+        from urllib.parse import quote
+        return f"{base}/#/event/{quote(str(event_id), safe='')}"
+
+    def _sighting_deep_link_url(self, sighting_id: str | None) -> str:
+        if not sighting_id:
+            return ""
+        base = (self._dashboard_url() or "").rstrip("/")
+        if not base:
+            return ""
+        from urllib.parse import quote
+        return f"{base}/#/sighting/{quote(str(sighting_id), safe='')}"
+
+    def _recap_deep_link_url(self, recap_id: str | None) -> str:
+        if not recap_id:
+            return ""
+        base = (self._dashboard_url() or "").rstrip("/")
+        if not base:
+            return ""
+        from urllib.parse import quote
+        return f"{base}/#/recap/{quote(str(recap_id), safe='')}"
+
     def _storage_root(self) -> Path:
         return Path(self._cfg().get("storage", {}).get("root", "/app/storage"))
 
@@ -730,6 +760,14 @@ class TelegramService:
             ("📷 Livebild", f"cam:{camera_id}:livebild"[:64]),
             ("🎬 5 s Clip", f"cam:{camera_id}:clip:5"[:64]),
         ])
+        # Deep-link to the lightbox in the web UI — only when public_base_url
+        # is configured AND the event has a stored event_id. Lets the user
+        # jump straight to the persisted event without hunting through the
+        # mediathek. URL buttons are detected by the http(s):// prefix in
+        # _build_markup; no callback_data needed.
+        deep_link = self._event_deep_link_url(eid)
+        if deep_link:
+            buttons.append([("🌐 In App öffnen", deep_link)])
 
         if self.settings_store:
             self.settings_store.runtime_alert_index_set(eid, {

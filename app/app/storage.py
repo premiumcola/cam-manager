@@ -40,6 +40,27 @@ class EventStore:
         except Exception:
             return None
 
+    def find_event_anywhere(self, event_id: str) -> dict | None:
+        """Cross-camera lookup for deep-links from Telegram. Walks every
+        camera folder under motion_detection/ until a matching JSON is
+        found. Returns the parsed event dict (with camera_id injected
+        when missing) or None."""
+        if not event_id or not self.events_dir.exists():
+            return None
+        for cam_dir in self.events_dir.iterdir():
+            if not cam_dir.is_dir():
+                continue
+            matches = list(cam_dir.rglob(f"{event_id}.json"))
+            if not matches:
+                continue
+            try:
+                payload = json.loads(matches[0].read_text(encoding="utf-8"))
+                payload.setdefault("camera_id", cam_dir.name)
+                return payload
+            except Exception:
+                continue
+        return None
+
     def update_event(self, camera_id: str, event_id: str, payload: dict) -> bool:
         cam_dir = self._cam_dir(camera_id)
         matches = list(cam_dir.rglob(f"{event_id}.json"))
