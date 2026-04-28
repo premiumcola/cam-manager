@@ -266,10 +266,43 @@ class SettingsStore:
         self._ensure_weather_defaults()
         self._ensure_runtime_defaults()
         self._repair_snapshot_urls()
+        # One-shot cleanup of any pre-existing duplicate camera rows.
+        # Historically, a stale state.cameras array round-tripping through
+        # /api/settings/cameras or migration churn around build_camera_id
+        # could leave the same id present 2+ times. Every consumer
+        # (weather scheduler, UI render, runtime registry) wants one
+        # entry per id — collapse here so we never iterate ghosts again.
+        removed = self._dedupe_cameras_by_id()
+        if removed:
+            log.warning("[Settings] removed %d duplicate camera entries during load", removed)
         self.data.setdefault("ui", {}).setdefault("wizard_completed", bool(self.data.get("cameras")))
         # Persist additive defaults (push schema, runtime section) so the
         # UI in Phase 2 finds every key present.
         self.save()
+
+    def _dedupe_cameras_by_id(self) -> int:
+        """Collapse duplicate camera rows (same id) keeping the first
+        occurrence; returns the number of dropped duplicates. The first
+        entry wins because upsert_camera updates by first-match — any
+        later dupe is a stale older copy."""
+        cams = self.data.get("cameras") or []
+        if len(cams) < 2:
+            return 0
+        seen: set = set()
+        cleaned: list[dict] = []
+        for c in cams:
+            cid = c.get("id")
+            if not cid:
+                cleaned.append(c)
+                continue
+            if cid in seen:
+                continue
+            seen.add(cid)
+            cleaned.append(c)
+        removed = len(cams) - len(cleaned)
+        if removed:
+            self.data["cameras"] = cleaned
+        return removed
 
     def _repair_snapshot_urls(self):
         """Repair cameras whose snapshot_url was corrupted with a dashboard display URL.
@@ -648,6 +681,11 @@ class SettingsStore:
                 _migrate(self, self.path.parent)
             except Exception as e:
                 log.warning("[Settings] per-cam migration after save failed: %s", e)
+        # Migration may rename a cam id and leave a sibling entry with
+        # the new id already present (rare, but possible when a discovery
+        # re-add races with a manual rename) — dedupe before writing so
+        # the on-disk file never carries the same id twice.
+        self._dedupe_cameras_by_id()
         self.save()
         # Resolve the canonical id post-migration. The cam dict in
         # self.data was mutated in place by the migration, so we look it
