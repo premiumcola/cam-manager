@@ -1,7 +1,15 @@
 # CLAUDE.md
 
-Operating manual for Claude Code in this repository. Read top-to-bottom
-at session start; follow without prompting.
+Operating manual for Claude Code in this repository. Read
+top-to-bottom at session start; follow without prompting.
+
+Hard rules (CRITICAL — never violate):
+1. settings.json niemals überschreiben, nur additiv ergänzen.
+2. .gitignore-Patterns nur hinzufügen, niemals entfernen.
+3. Keine echten Credentials, IPs oder Tokens in tracked files.
+4. Bei kaputter Basis: stoppen + git revert, nicht weiterbauen.
+
+Alles weitere unten.
 
 ## Project Overview
 
@@ -48,6 +56,20 @@ Docker on Unraid or any Linux host.
 - Camera-IDs ausschließlich über `camera_id.build_camera_id` erzeugen
   (Python) bzw. `buildCameraId` (JS) — beide sind bit-für-bit-Spiegel.
 
+## Fehlerbehandlung
+
+- Bei Fehlern: 2× selbst zu fixen versuchen.
+- Erst nach 3 fehlgeschlagenen Versuchen stoppen und genau erklären
+  was das Problem ist — den exakten Fehlertext zeigen, nicht
+  paraphrasieren.
+- Niemals weitere Änderungen auf einer kaputten Basis aufbauen —
+  erst `git log` prüfen, ggf. `git revert`, dann weiter.
+- Bei "Daten weg"-Symptomen ZUERST diese drei Checks bevor Datenverlust
+  angenommen wird:
+    1. Browser hard-reload (Strg+Shift+R) — der häufigste Grund.
+    2. `docker volume ls` und docker-compose.yml Bind-Mounts prüfen.
+    3. `storage/settings.json.bak.*` durchsehen — Backups sind da.
+
 ## Design-Prinzipien
 
 - Weniger Text, mehr individuell designte flat-design Icons.
@@ -65,6 +87,16 @@ Docker on Unraid or any Linux host.
 - `dvh` statt `vh` für volle Höhe (sonst spring-loaded Address Bar).
 - `safe-area-inset-*` für Notch / Home-Indicator.
 - Inputs mindestens 16 px font-size (sonst Auto-Zoom auf Focus).
+- `@media (max-width: 768px)` als Pflicht-Breakpoint für jedes neue
+  Layout — desktop unverändert bleiben.
+- Swipe-Gesten wo sinnvoll: Lightbox-Navigation prev/next, Modals
+  swipe-to-dismiss.
+- Lightbox, Modals, Overlays explizit auf iPhone-Width testen — der
+  Edge-Case sind 375 px (iPhone SE) und Safe-Area-Insets bei Notch-
+  Geräten.
+- Keine `position: fixed`-Elemente, die auf iOS bei
+  Address-Bar-Collapse springen — `position: sticky` oder
+  `dvh`-basierte Layouts bevorzugen.
 
 ## Daten-Schutz (CRITICAL — repo is public)
 
@@ -77,9 +109,22 @@ Docker on Unraid or any Linux host.
   - `192.0.2.x`, `198.51.100.x`, `203.0.113.x` (RFC 5737)
   - `2001:db8::*` (RFC 3849)
   - `<BOT_TOKEN>`, `<CHAT_ID>`, `<user>:<pass>`, `cam.lan` / `cam01`
-- Vor jedem `git push` die Pre-Push-Audit-Regex laufen lassen (siehe
-  Doc-Pass-Prompt-Vorlage). Treffer außerhalb von Doc-Placeholders
-  fixen, nicht ignorieren.
+- Vor jedem `git push` läuft dieser Audit auf dem Working Tree:
+
+  ```bash
+  git ls-files | xargs grep -EnIH \
+      -e 'rtsp://[^/]*:[^@]*@' \
+      -e '\b(bot)?[0-9]{8,12}:[A-Za-z0-9_-]{30,}\b' \
+      -e '"chat_id"\s*:\s*-?[0-9]{6,}' \
+      -e '"token"\s*:\s*"[A-Za-z0-9_:-]{20,}"' \
+      -e '\b(192\.168\.[0-9]+\.[0-9]+)\b' \
+      -e '\b(10\.[0-9]+\.[0-9]+\.[0-9]+)\b' \
+      -- ':!docs/screenshots' ':!*.svg' || \
+      echo "audit OK"
+  ```
+
+  Treffer außerhalb von Doc-Placeholders fixen, nicht ignorieren.
+  Erst dann pushen.
 
 ## Docker Workflow (IMPORTANT — read before every build)
 
