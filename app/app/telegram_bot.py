@@ -75,6 +75,12 @@ PERSISTENT_KEYBOARD = ReplyKeyboardMarkup(
 
 # Runtime store key for the per-chat anchor message (chat_id + message_id).
 ANCHOR_KEY = "telegram_anchor"
+# Runtime store key for the set of chat_ids that already have the persistent
+# reply keyboard cached client-side. Telegram persists ReplyKeyboardMarkup on
+# the device after one delivery, so we attach it exactly once per chat in a
+# tiny one-shot message; every subsequent menu render carries inline markup
+# only and arrives with buttons in a single API call.
+PERSISTENT_KB_KEY = "telegram_persistent_kb_chats"
 
 # ── Slash-command catalogue (sent to Telegram via setMyCommands) ─────────────
 BOT_COMMANDS = [
@@ -1305,16 +1311,50 @@ class TelegramService:
         except Exception:
             pass
 
+    async def _ensure_persistent_kb(self, bot, chat_id: int):
+        """Attach the persistent reply keyboard to this chat exactly once.
+
+        A Telegram message can carry only one reply_markup at a time —
+        either ReplyKeyboardMarkup (the under-the-input pad) or
+        InlineKeyboardMarkup (the in-bubble buttons). The previous
+        implementation sent the anchor with the reply keyboard and then
+        round-tripped an edit_message_reply_markup to swap in inline
+        buttons; if the edit failed, the user got a button-less bubble.
+
+        We side-step that race by sending the reply keyboard once in a
+        tiny standalone message, recording the chat_id, and from then on
+        sending menu bubbles with inline markup directly — guaranteed to
+        arrive with buttons attached on the first API call."""
+        if not self.settings_store:
+            return False
+        already = self.settings_store.runtime_get_subkey(
+            PERSISTENT_KB_KEY, str(chat_id))
+        if already:
+            return True
+        try:
+            await bot.send_message(
+                chat_id=chat_id, text="🏠",
+                reply_markup=PERSISTENT_KEYBOARD,
+            )
+            self.settings_store.runtime_set_subkey(
+                PERSISTENT_KB_KEY, str(chat_id), True)
+            return True
+        except Exception as e:
+            log.warning("[tg] persistent-kb attach failed for chat=%s: %s",
+                        chat_id, e)
+            return False
+
     async def _anchor_send_or_edit(self, bot, chat_id: int,
                                    view: tuple[str, InlineKeyboardMarkup]):
-        """Try to edit the persisted anchor in chat_id; on failure (anchor
-        deleted, expired, message_id from a different chat), send a fresh
-        message and persist its id. The fresh-send path attaches
-        PERSISTENT_KEYBOARD then edits the message to swap in the inline
-        keyboard — net result is one anchor with inline buttons AND the
-        '🏠 Menü' reply keyboard active under the input field. Telegram
-        persists the reply keyboard server-side after the first such
-        message, so subsequent edits don't need to reattach it.
+        """Edit the persisted anchor in chat_id; on failure (anchor
+        deleted, expired, or owned by a different chat) send a fresh one
+        and persist its id.
+
+        Fresh-send path is a single send_message with inline_markup —
+        buttons attach atomically with the bubble, no edit round-trip
+        and no silent failure mode that yields a button-less menu. The
+        persistent reply keyboard is attached separately and idempotently
+        via _ensure_persistent_kb (one-shot per chat).
 
         Logs the stale-anchor transition once at INFO so a steady stream
         of churn is easy to spot in the log tail."""
@@ -1331,17 +1371,28 @@ class TelegramService:
                 log.info("[tg] anchor stale for chat=%s (%s) — sending fresh",
                          chat_id, e)
                 self._drop_anchor()
-        msg = await bot.send_message(
-            chat_id=chat_id, text=text, parse_mode="HTML",
-            reply_markup=PERSISTENT_KEYBOARD,
-        )
-        try:
-            await bot.edit_message_reply_markup(
-                chat_id=chat_id, message_id=msg.message_id,
+        kb_ready = await self._ensure_persistent_kb(bot, chat_id)
+        if kb_ready or self.settings_store:
+            msg = await bot.send_message(
+                chat_id=chat_id, text=text, parse_mode="HTML",
                 reply_markup=inline_markup,
             )
-        except Exception as e:
-            log.warning("[tg] anchor inline-kb attach failed: %s", e)
+        else:
+            # No settings_store → can't track the per-chat flag. Best we
+            # can do is the legacy two-call path so the user still gets
+            # the persistent keyboard. This branch is theoretical in
+            # production (settings_store is always wired up).
+            msg = await bot.send_message(
+                chat_id=chat_id, text=text, parse_mode="HTML",
+                reply_markup=PERSISTENT_KEYBOARD,
+            )
+            try:
+                await bot.edit_message_reply_markup(
+                    chat_id=chat_id, message_id=msg.message_id,
+                    reply_markup=inline_markup,
+                )
+            except Exception as e:
+                log.warning("[tg] anchor inline-kb attach failed: %s", e)
         self._save_anchor(chat_id, msg.message_id)
         return msg.message_id
 
