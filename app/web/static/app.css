@@ -1837,9 +1837,17 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   .ws-recaps-strip{padding:2px 12px 6px;margin:0 -12px}
   .ws-recap-card{flex-basis:140px;min-width:140px}
 
-  /* Time-range pills above the chart — give them tap-friendly height. */
+  /* Time-range pills above the chart — 44 px tap-targets per iOS HIG, and
+     allow horizontal scroll-snap so the 5-pill row (1h/6h/24h/7d/30d)
+     never wraps awkwardly on a 375 px viewport. */
+  #weatherStatsPills{
+    flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    scrollbar-width:none;scroll-snap-type:x proximity;max-width:100%;
+  }
+  #weatherStatsPills::-webkit-scrollbar{display:none}
+  #weatherStatsPills > *{scroll-snap-align:start;flex-shrink:0}
   #weatherStatsPills .ws-pill,
-  #weatherStatsPills button{min-height:40px;padding:8px 14px}
+  #weatherStatsPills button{min-height:44px;padding:10px 14px}
 }
 @media (max-width:380px){
   /* Two-column legend on iPhone SE so the labels don't truncate

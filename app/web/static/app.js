@@ -6743,6 +6743,26 @@ function _wsBuildLinePath(samples, key, x0, y0, w, h){
   return { path: d, lo, hi };
 }
 
+// X-axis tick formatter — adapts to the configured window so the bottom
+// of the chart communicates the actual time scale at a glance.
+//   hours ≤ 24   → "HH:MM"
+//   hours ≤ 168  → "Di. HH:MM"   (German weekday + time)
+//   hours > 168  → "DD.MM."      (date only — month-scale window)
+const _WS_WEEKDAY_DE = ['So.','Mo.','Di.','Mi.','Do.','Fr.','Sa.'];
+function _wsFmtTick(ts, hours){
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts.length >= 16 ? ts.slice(11, 16) : '';
+  const p2 = n => (n < 10 ? '0' : '') + n;
+  if (hours <= 24){
+    return p2(d.getHours()) + ':' + p2(d.getMinutes());
+  }
+  if (hours <= 168){
+    return _WS_WEEKDAY_DE[d.getDay()] + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
+  }
+  return p2(d.getDate()) + '.' + p2(d.getMonth() + 1) + '.';
+}
+
 function _wsFmtVal(key, v){
   if (v == null || !isFinite(v)) return '—';
   const u = (_wsStatsState.data?.units || {})[key] || '';
@@ -6784,15 +6804,27 @@ function renderWeatherStatsChart(){
   const ch = VB_H - pad.t - pad.b;
   const isolated = _wsStatsState.isolated;
   const fields = isolated ? [isolated] : _WS_FIELD_ORDER;
-  // X-axis tick labels: 4 evenly spaced timestamps, HH:MM.
-  const tickIdx = [0, Math.round((samples.length - 1) / 3),
-                   Math.round((samples.length - 1) * 2 / 3), samples.length - 1];
+  // X-axis ticks: 4 for ≤24 h windows, 6 for the wider 7 d / 30 d ranges
+  // so a month of data still has a legible time-axis. Label format is
+  // adaptive (HH:MM / weekday HH:MM / DD.MM.) keyed off the configured
+  // window in _wsStatsState.hours. First/last tick anchor to start/end so
+  // the label can't escape the viewBox on narrow viewports.
+  const hours = _wsStatsState.hours || 24;
+  const intervals = hours <= 24 ? 3 : 5;
+  const last = samples.length - 1;
+  const tickIdx = [];
+  for (let k = 0; k <= intervals; k++){
+    tickIdx.push(Math.round(last * k / intervals));
+  }
   let tickSvg = '';
-  for (const idx of tickIdx){
-    const t = samples[idx]?.ts || '';
-    const hhmm = t.length >= 16 ? t.slice(11, 16) : '';
-    const x = pad.l + (samples.length === 1 ? 0 : (idx / (samples.length - 1)) * cw);
-    tickSvg += `<text x="${x.toFixed(1)}" y="${VB_H - 6}" text-anchor="middle" font-size="10" fill="#7faec9" opacity="0.85">${hhmm}</text>`;
+  for (let i = 0; i < tickIdx.length; i++){
+    const idx = tickIdx[i];
+    const label = _wsFmtTick(samples[idx]?.ts, hours);
+    const x = pad.l + (samples.length === 1 ? 0 : (idx / last) * cw);
+    const anchor = i === 0 ? 'start'
+                  : i === tickIdx.length - 1 ? 'end'
+                  : 'middle';
+    tickSvg += `<text x="${x.toFixed(1)}" y="${VB_H - 6}" text-anchor="${anchor}" font-size="10" fill="#7faec9" opacity="0.85">${label}</text>`;
   }
   // Lines — collect per-field meta so the threshold pass can renormalise
   // each tick against the same {lo, hi} the line was drawn against.
