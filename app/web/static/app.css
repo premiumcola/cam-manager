@@ -1643,6 +1643,39 @@ select option{background:#1e1e1e;color:var(--text)}
   flex-shrink:0;text-align:right}
 .ws-stats-chip.is-isolated .ws-stats-chip-value{color:#cfe1ee}
 
+/* Field-detail explainer — appears beneath the legend when a chip is
+   isolated. Depth comes from a soft surface tint plus an inset accent
+   stripe in the field's palette colour (CLAUDE.md: depth from colour, no
+   thin borders). dt/dd render as a 2-col grid on desktop; on mobile they
+   stack so the long German labels don't truncate the values. */
+.ws-stats-explainer{margin-top:12px}
+.ws-explainer-card{
+  padding:14px 16px;border-radius:12px;
+  background:rgba(127,174,201,0.08);
+  box-shadow:inset 4px 0 0 var(--cb,#94a3b8)
+}
+.ws-explainer-head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.ws-explainer-dot{
+  width:10px;height:10px;border-radius:50%;flex-shrink:0;
+  box-shadow:0 0 0 2px rgba(0,0,0,0.25) inset
+}
+.ws-explainer-head h4{margin:0;font-size:14px;font-weight:700;color:var(--text)}
+.ws-explainer-summary{
+  margin:0 0 10px 0;font-size:13px;line-height:1.5;color:var(--text)
+}
+.ws-explainer-list{
+  margin:0;display:grid;grid-template-columns:max-content 1fr;
+  gap:6px 14px;font-size:12px;line-height:1.5
+}
+.ws-explainer-list dt{font-weight:700;color:var(--muted);white-space:nowrap}
+.ws-explainer-list dd{margin:0;color:var(--text)}
+@media (max-width:768px){
+  .ws-explainer-card{padding:12px 14px}
+  .ws-explainer-list{grid-template-columns:1fr;gap:0}
+  .ws-explainer-list dt{margin-top:6px}
+  .ws-explainer-list dt:first-of-type{margin-top:0}
+}
+
 /* ── Camera-edit: live id preview ─────────────────────────────────────── */
 /* Read-only block under the manufacturer/model/name fields. Visually
    secondary so it doesn't compete with the actual inputs, but legible so
