@@ -7398,6 +7398,40 @@ function hydrateWeatherSettings(){
   _refreshWeatherStatus();
 }
 
+// Loose Reolink-stream-URL detector. Only the path matters — Reolink RTSP
+// paths consistently follow /(h264|h265)?Preview_<channel>_<main|sub>. A
+// false positive just means the daynight HTTP call fails and the helper
+// logs and falls back; cost is one warning, no broken capture.
+function _isReolinkRtsp(rtspUrl){
+  if (!rtspUrl || typeof rtspUrl !== 'string') return false;
+  return /\/(h264|h265)?Preview_\d+_(main|sub)/i.test(rtspUrl);
+}
+
+// 🎨 Farbmodus erzwingen — sub-row of a sun-timelapse row. Renders the
+// toggle + lead-time slider; only meaningful on Reolink cams. The whole
+// row is dimmed and the toggle disabled for non-Reolink cams (the user
+// can still inspect what the control would do).
+function _renderSunDnovRow(camId, phase, pcfg, isReolink){
+  const dn = pcfg.daynight_override || {};
+  const dnEnabled = !!dn.enabled;
+  const lead = Math.max(1, Math.min(15, parseInt(dn.lead_min, 10) || 5));
+  const disabledAttr = isReolink ? '' : 'disabled';
+  const titleAttr = isReolink ? '' : ' title="Funktioniert nur mit Reolink-Kameras"';
+  const dimCls = isReolink ? '' : ' ws-sun-dnov--disabled';
+  return `
+    <div class="ws-sun-dnov${dimCls}" data-phase="${esc(phase)}"${titleAttr}>
+      <span class="ws-sun-dnov-label">🎨 Farbmodus erzwingen</span>
+      <label class="switch ws-sun-dnov-toggle"><input type="checkbox" data-sun-dnov="${esc(phase)}" ${dnEnabled ? 'checked' : ''} ${disabledAttr}/><span class="slider"></span></label>
+      <div class="ws-sun-dnov-detail" ${dnEnabled ? '' : 'hidden'}>
+        <input type="range" min="1" max="15" step="1" value="${lead}" data-sun-dnov-lead="${esc(phase)}" ${disabledAttr}/>
+        <span><span class="ws-sun-dnov-lead-num">${lead}</span> min vorher</span>
+      </div>
+      <div class="ws-sun-dnov-help">${isReolink
+        ? 'Schaltet die Reolink-Kamera per API kurz vor Aufnahme auf Farbe und nach Ende zurück auf Auto.'
+        : 'Funktioniert nur mit Reolink-Kameras (h264/h265Preview-RTSP-Pfade).'}</div>
+    </div>`;
+}
+
 function _renderWeatherCamList(){
   const wrap = byId('weatherCamList'); if (!wrap) return;
   const cams = state.cameras || [];
@@ -7438,6 +7472,7 @@ function _renderWeatherCamList(){
             <input type="range" class="ws-sun-slider" min="10" max="60" step="5" value="${sr.window_min || 30}" data-sun-window="sunrise"/>
             <span class="ws-sun-window"><span class="ws-sun-window-num">${sr.window_min || 30}</span> min</span>
             ${previewLine('sunrise', sr)}
+            ${sr.enabled ? _renderSunDnovRow(c.id, 'sunrise', sr, _isReolinkRtsp(c.rtsp_url)) : ''}
           </div>
           <div class="ws-sun-row" data-phase="sunset">
             <span class="ws-sun-icon" style="color:#d4823a">${WEATHER_TYPES.sun_timelapse_set.icon}</span>
@@ -7446,6 +7481,7 @@ function _renderWeatherCamList(){
             <input type="range" class="ws-sun-slider" min="10" max="60" step="5" value="${ss.window_min || 30}" data-sun-window="sunset"/>
             <span class="ws-sun-window"><span class="ws-sun-window-num">${ss.window_min || 30}</span> min</span>
             ${previewLine('sunset', ss)}
+            ${ss.enabled ? _renderSunDnovRow(c.id, 'sunset', ss, _isReolinkRtsp(c.rtsp_url)) : ''}
           </div>
           ${_renderEventTLBlock(c, sun)}
         </div>
@@ -7464,18 +7500,44 @@ function _renderWeatherCamList(){
       sl.addEventListener('input', () => { if (numEl) numEl.textContent = sl.value; });
       sl.addEventListener('change', () => _saveSunPhase(camId, sl.dataset.sunWindow, { window_min: parseInt(sl.value, 10) }));
     });
+    // Day/night override toggles + lead-time sliders. _saveSunPhase
+    // deep-merges the daynight_override sub-object so toggling enabled
+    // doesn't wipe the lead_min the user dialled in (and vice versa).
+    block.querySelectorAll('[data-sun-dnov]').forEach(cb => {
+      cb.addEventListener('change', () => _saveSunPhase(camId, cb.dataset.sunDnov, {
+        daynight_override: { enabled: cb.checked, revert: 'auto' },
+      }));
+    });
+    block.querySelectorAll('[data-sun-dnov-lead]').forEach(sl => {
+      const numEl = sl.parentElement.querySelector('.ws-sun-dnov-lead-num');
+      sl.addEventListener('input', () => { if (numEl) numEl.textContent = sl.value; });
+      sl.addEventListener('change', () => _saveSunPhase(camId, sl.dataset.sunDnovLead, {
+        daynight_override: { lead_min: parseInt(sl.value, 10) },
+      }));
+    });
   });
 }
 
 async function _saveSunPhase(camId, phase, partial){
   const cam = (state.cameras || []).find(c => c.id === camId);
   if (!cam) return;
+  // Phase block is a 1-level merge by default. The daynight_override
+  // sub-object needs an explicit 2nd-level merge so toggling `enabled`
+  // doesn't wipe `lead_min` (and vice versa).
+  const prevPhase = (((cam.weather || {}).sun_timelapse || {})[phase] || {});
+  const mergedPhase = { ...prevPhase, ...partial };
+  if (partial && partial.daynight_override){
+    mergedPhase.daynight_override = {
+      ...(prevPhase.daynight_override || {}),
+      ...partial.daynight_override,
+    };
+  }
   const updated = { ...cam,
     weather: {
       ...(cam.weather || { enabled: false }),
       sun_timelapse: {
         ...((cam.weather && cam.weather.sun_timelapse) || {}),
-        [phase]: { ...(((cam.weather || {}).sun_timelapse || {})[phase] || {}), ...partial },
+        [phase]: mergedPhase,
       },
     },
   };

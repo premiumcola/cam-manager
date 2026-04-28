@@ -1452,6 +1452,34 @@ select option{background:#1e1e1e;color:var(--text)}
 .ws-sun-window-num{color:#fff}
 .ws-sun-preview{grid-column:1/-1;font-size:11px;color:var(--muted);font-style:italic;padding-left:28px}
 .ws-sun-preview--err{color:#ef4444;font-style:normal}
+
+/* Day/night override sub-row — sits under each sun row when the master
+   toggle is on. Spans full width inside the parent .ws-sun-row grid;
+   visual depth comes from the indent + soft accent colour, no thin
+   borders. Disabled state (non-Reolink cam) dims the whole block. */
+.ws-sun-dnov{
+  grid-column:1/-1;
+  display:grid;grid-template-columns:auto auto 1fr;
+  align-items:center;column-gap:10px;row-gap:4px;
+  padding:6px 4px 0 28px
+}
+.ws-sun-dnov--disabled{opacity:.55}
+.ws-sun-dnov-label{
+  font-size:12px;color:var(--text);font-weight:600;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap
+}
+.ws-sun-dnov-detail{
+  display:flex;align-items:center;gap:8px;
+  color:var(--muted);font-size:11px;font-weight:600
+}
+.ws-sun-dnov-detail[hidden]{display:none}
+.ws-sun-dnov-detail input[type="range"]{width:100px;min-height:44px}
+.ws-sun-dnov-lead-num{color:#7faec9;font-variant-numeric:tabular-nums;min-width:18px;text-align:right;display:inline-block}
+.ws-sun-dnov-help{
+  grid-column:1/-1;font-size:10px;color:var(--muted);font-style:italic;
+  padding:2px 0 4px 0;line-height:1.4
+}
+
 @media (max-width:768px){
   .ws-sun-rows{margin-left:8px;padding:4px 6px 2px}
   .ws-sun-row{grid-template-columns:auto 1fr auto;column-gap:8px}
@@ -1459,6 +1487,11 @@ select option{background:#1e1e1e;color:var(--text)}
   .ws-sun-toggle{grid-column:3;grid-row:1}
   .ws-sun-slider{grid-column:1/3;grid-row:2;width:100%}
   .ws-sun-window{grid-column:3;grid-row:2;text-align:right}
+  /* Dnov sub-row stacks vertically on phone so toggle + slider + label
+     each get a full row's width and remain tappable. */
+  .ws-sun-dnov{grid-template-columns:1fr;row-gap:6px;padding:6px 4px 0 8px}
+  .ws-sun-dnov-detail{flex-wrap:wrap}
+  .ws-sun-dnov-help{padding-left:0}
 }
 
 /* ── Event-Timelapse: per-camera Settings block ──────────────────────────── */
