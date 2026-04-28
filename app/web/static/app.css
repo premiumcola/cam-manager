@@ -1707,6 +1707,18 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   .topbar-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
   .hamburger-btn{min-width:44px;min-height:44px;font-size:20px}
 
-  /* Lightbox close button — sits below the notch on iPhones with one. */
+  /* Lightbox button placement on mobile —
+       Close             top-right (notch-safe)
+       Confirm + Delete  bottom row, above prev/next
+       Prev + Next       bottom row, home-indicator-safe       */
   #lightboxClose{top:calc(12px + env(safe-area-inset-top))}
+  #lightboxConfirm{top:auto;right:18px;bottom:calc(86px + env(safe-area-inset-bottom));left:auto}
+  #lightboxDelete{top:auto;right:auto;left:18px;bottom:calc(86px + env(safe-area-inset-bottom))}
+  #lightboxPrev,#lightboxNext{bottom:calc(20px + env(safe-area-inset-bottom));top:auto;transform:none}
+
+  /* Pinch-zoom on the lightbox image. The surrounding wrap consumes
+     horizontal swipes for prev/next; pinch is a two-finger gesture and
+     coexists. The image still respects max-height: 100dvh. */
+  #lightboxImg{touch-action:pinch-zoom}
+  #lightboxVideo{touch-action:manipulation}
 }
