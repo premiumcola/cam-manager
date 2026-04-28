@@ -1721,4 +1721,29 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
      coexists. The image still respects max-height: 100dvh. */
   #lightboxImg{touch-action:pinch-zoom}
   #lightboxVideo{touch-action:manipulation}
+
+  /* Mediathek filter pill bar — single horizontal-scroll row with
+     scroll-snap on mobile. Avoids the 3-line stack on a busy day. */
+  .media-filter-bar{
+    flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    scrollbar-width:none;scroll-snap-type:x proximity;
+    padding:4px 12px;margin:0 -12px;
+  }
+  .media-filter-bar::-webkit-scrollbar{display:none}
+  .media-pill{scroll-snap-align:start;flex-shrink:0}
+
+  /* Pagination pills bumped from 32×32 to 40×40 with more gap so
+     they're tappable in a horizontal row. */
+  .media-pagination{gap:8px}
+  .page-pill{width:40px;height:40px;font-size:14px}
+
+  /* Drilldown header on mobile — back-button + counter on row 1, the
+     filter bar (which already scrolls horizontally) on row 2. */
+  .media-drill-head{flex-direction:column;align-items:stretch;gap:8px}
+  .media-drill-head .media-filter-bar{flex:initial;width:100%}
+}
+@media (max-width:400px){
+  /* Tighter grid on iPhone SE-class widths so two columns still feel
+     like cards, not letterboxed thumbnails. */
+  .media-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
 }
