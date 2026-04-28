@@ -877,8 +877,9 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 /* When a section uses .section-head--with-icon, the SVG sits left of the H3
    and inherits the panel's --acc (set via data-accent on the section root).
    No fixed colour here — accent is the single source of truth. */
-.section-head--with-icon{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.section-head--with-icon{display:flex;justify-content:flex-start;align-items:center;gap:10px;flex-wrap:wrap}
 .section-head--with-icon h3{margin:0}
+.section-head--with-icon .section-subtitle{margin-left:auto}
 .section-head-icon{display:inline-flex;align-items:center;color:rgb(var(--acc, 143,158,181))}
 .section-head-icon svg{display:block}
 
