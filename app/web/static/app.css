@@ -1815,3 +1815,50 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
      unreadably tightly inside 3 cramped chips. */
   .ws-stats-legend{grid-template-columns:repeat(2,1fr)}
 }
+
+/* ── Geräte / cam-edit mobile ─────────────────────────────────────────── */
+@media (max-width:768px){
+  /* Object-filter pill bar inside cam-edit — same horizontal-scroll
+     pattern as the global media filter. */
+  .cam-objfilter-bar{
+    flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
+    scrollbar-width:none;scroll-snap-type:x proximity;
+    padding:4px 0;margin:0;
+  }
+  .cam-objfilter-bar::-webkit-scrollbar{display:none}
+  .cam-objfilter-bar > *{scroll-snap-align:start;flex-shrink:0}
+
+  /* Field rows inside the form: bump min-height so values aren't cramped
+     when the floating label sits inside the input. */
+  .field-wrap{min-height:56px}
+
+  /* Mask canvas: allow pinch-zoom on top of single-finger draw — the
+     desktop rule (touch-action: manipulation) suppressed pinch in
+     Safari, which we want back on mobile so the user can zoom into the
+     drawing area. */
+  #maskCanvas{touch-action:pinch-zoom}
+
+  /* Native range inputs are tiny on iOS — give them a bigger thumb. */
+  input[type="range"]{
+    height:6px;-webkit-appearance:none;appearance:none;
+    background:rgba(255,255,255,.08);border-radius:3px;outline:none;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;
+    width:26px;height:26px;border-radius:50%;
+    background:var(--accent);border:2px solid #0a0a0a;cursor:pointer;
+  }
+  input[type="range"]::-moz-range-thumb{
+    width:26px;height:26px;border-radius:50%;
+    background:var(--accent);border:2px solid #0a0a0a;cursor:pointer;
+  }
+
+  /* Save & Reload — sticky to the bottom of the cam-edit panel so the
+     user doesn't have to scroll to the end of a long form to save.
+     z-index sits below modals (1100) but above all form chrome. */
+  .cam-save-btn{
+    position:sticky;
+    bottom:calc(env(safe-area-inset-bottom));
+    z-index:5;box-shadow:0 -8px 16px rgba(0,0,0,.45);
+  }
+}
