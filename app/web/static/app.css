@@ -1758,3 +1758,25 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   .cv-abt{padding:6px;min-width:32px;min-height:32px;font-size:0;gap:0}
   .cv-abt svg,.cv-abt > *:first-child{font-size:18px}
 }
+
+/* ── Statistik · timeline tap-tooltip ─────────────────────────────────── */
+.tl-bar-tooltip{
+  position:fixed;z-index:1200;
+  width:220px;padding:8px 12px;border-radius:10px;
+  background:rgba(15,24,37,.96);color:#e2e8f0;
+  font-size:12px;line-height:1.35;font-weight:600;
+  box-shadow:0 10px 30px rgba(0,0,0,.45);
+  pointer-events:none;opacity:0;transition:opacity .15s ease;
+}
+.tl-bar-tooltip.visible{opacity:1}
+.tl-bar--tip-shown{outline:2px solid rgba(255,255,255,.35);outline-offset:1px}
+
+@media (max-width:768px){
+  /* Compress the timeline metrics so cam-name + label + lanes fit a 375 px
+     viewport without horizontal scrolling. The existing 628 px-line block
+     already shrinks these; this widens the rule to also cover desktop-
+     mobile transition cases (short tablets). Values mirror the spec. */
+  .tl-container{--tl-sidebox-w:92px;--tl-label-w:88px}
+  .tl-cam-name{font-size:13px}
+  .tl-lane-label-text{font-size:12px}
+}

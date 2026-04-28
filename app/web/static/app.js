@@ -736,15 +736,60 @@ function renderTimeline(){
   html+=`</div>`;
   container.innerHTML=html;
 
-  // Bar click → navigate to Mediathek
+  // Bar click → navigate to Mediathek. On touch devices, the first tap
+  // shows a small inline tooltip with the bar's title content (camera +
+  // window + count); a second tap before the tooltip's 2.5 s dismiss
+  // navigates. Desktop click navigates immediately as before.
+  const _isCoarsePtr=()=>window.matchMedia('(hover:none) and (pointer:coarse)').matches;
   container.querySelectorAll('.tl-bar').forEach(bar=>{
-    bar.onclick=()=>{
+    bar.onclick=(ev)=>{
+      if(_isCoarsePtr() && !bar.classList.contains('tl-bar--tip-shown')){
+        ev.preventDefault();
+        _tlShowBarTooltip(bar);
+        return;
+      }
       state.mediaCamera=bar.dataset.camid;
       state.mediaLabels=bar.dataset.label?new Set([bar.dataset.label]):new Set();
       document.querySelector('#media').scrollIntoView({behavior:'smooth',block:'start'});
       loadMedia().then(()=>renderMediaGrid());
     };
   });
+}
+
+// Tap-tooltip for .tl-bar on touch devices. The bar carries its native
+// title attribute — we read it, position a body-attached toast above the
+// bar, mark the bar as tip-shown, and auto-dismiss after 2.5 s. Tapping
+// elsewhere dismisses too.
+let _tlTipEl=null,_tlTipTimer=0;
+function _tlShowBarTooltip(bar){
+  const text=bar.getAttribute('title')||'';
+  if(!text) return;
+  if(!_tlTipEl){
+    _tlTipEl=document.createElement('div');
+    _tlTipEl.className='tl-bar-tooltip';
+    document.body.appendChild(_tlTipEl);
+  }
+  _tlTipEl.textContent=text;
+  const r=bar.getBoundingClientRect();
+  _tlTipEl.style.left=Math.max(8,Math.min(window.innerWidth-220,r.left+r.width/2-110))+'px';
+  _tlTipEl.style.top=Math.max(8,r.top-44)+'px';
+  _tlTipEl.classList.add('visible');
+  bar.classList.add('tl-bar--tip-shown');
+  clearTimeout(_tlTipTimer);
+  _tlTipTimer=setTimeout(()=>_tlHideBarTooltip(),2500);
+  // First outside tap dismisses; capture phase so it fires before the
+  // bar's own click handler if user moves to a different bar.
+  document.addEventListener('click',_tlOutsideTipHandler,{capture:true,once:true});
+}
+function _tlHideBarTooltip(){
+  if(_tlTipEl) _tlTipEl.classList.remove('visible');
+  document.querySelectorAll('.tl-bar--tip-shown').forEach(b=>b.classList.remove('tl-bar--tip-shown'));
+}
+function _tlOutsideTipHandler(e){
+  // Don't dismiss when the tap landed on a bar — that bar's click
+  // handler will run next and decide (show-tip OR navigate).
+  if(e.target?.closest?.('.tl-bar')) return;
+  _tlHideBarTooltip();
 }
 
 // ── RTSP path options (shared with discovery) ────────────────────────────────
