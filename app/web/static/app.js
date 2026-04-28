@@ -7432,89 +7432,191 @@ function _renderSunDnovRow(camId, phase, pcfg, isReolink){
     </div>`;
 }
 
+// Sun-timelapse video-length helpers. fps is fixed at 25 here — the user
+// picks a target duration in seconds; we derive the capture interval from
+// the configured window so the resulting video lands close to the target.
+const _WS_LENGTH_OPTIONS = [10, 15, 20, 30, 45];
+const _WS_DEFAULT_LENGTH_S = 20;
+const _WS_FPS = 25;
+
+function _wsLengthPlan(window_min, target_duration_s){
+  const fps = _WS_FPS;
+  const target = parseInt(target_duration_s, 10) || _WS_DEFAULT_LENGTH_S;
+  const window_s = (parseInt(window_min, 10) || 30) * 60;
+  const frames_target = Math.max(1, target * fps);
+  const interval_s = Math.max(1, Math.round(window_s / frames_target));
+  const actual_frames = Math.floor(window_s / interval_s);
+  const actual_duration_s = Math.round((actual_frames / fps) * 10) / 10;
+  return {
+    target, fps, frames_target, interval_s,
+    actual_frames, actual_duration_s,
+    was_clamped: actual_duration_s + 0.05 < target,
+  };
+}
+
+function _wsRenderLengthPreview(plan){
+  const main = `→ <b>${plan.actual_frames}</b> Frames · 1 Bild alle <b>${plan.interval_s}</b> s · <b>${plan.fps}</b> fps`;
+  const warn = plan.was_clamped
+    ? ` <span class="ws-sun-length-warn">Fenster zu kurz für ${plan.target} s — wird ~${plan.actual_duration_s} s</span>`
+    : '';
+  return main + warn;
+}
+
+function _wsRenderLengthRow(phase, pcfg){
+  const window_min = parseInt(pcfg.window_min, 10) || 30;
+  const target = parseInt(pcfg.target_duration_s, 10) || _WS_DEFAULT_LENGTH_S;
+  const plan = _wsLengthPlan(window_min, target);
+  const opts = _WS_LENGTH_OPTIONS.map(s =>
+    `<option value="${s}"${s === plan.target ? ' selected' : ''}>${s} s</option>`
+  ).join('');
+  return `
+    <div class="ws-sun-length" data-phase="${esc(phase)}">
+      <span class="ws-sun-length-label">Video-Länge</span>
+      <select data-sun-length="${esc(phase)}">${opts}</select>
+      <span class="ws-sun-length-preview" data-sun-length-preview="${esc(phase)}">${_wsRenderLengthPreview(plan)}</span>
+    </div>`;
+}
+
+// Picker selection persists across renders within a session. Falls back
+// to the first weather-enabled camera (or first overall) when the cached
+// id is no longer in the camera list (e.g. after a delete).
+let _wsSelectedCam = null;
+
 function _renderWeatherCamList(){
   const wrap = byId('weatherCamList'); if (!wrap) return;
   const cams = state.cameras || [];
   if (!cams.length) { wrap.innerHTML = '<div class="field-help">Keine Kameras konfiguriert.</div>'; return; }
-  // Per camera: master toggle + (when on) the two sun-timelapse rows. The
-  // sun rows are hidden until the master toggle is on so the section
-  // doesn't drown the user with controls for cameras that aren't even
-  // weather-enabled. Live preview rows pull from /api/weather/sun-times
-  // which is loaded by hydrateWeatherSettings() before this render.
+  if (!cams.find(c => c.id === _wsSelectedCam)){
+    const firstEnabled = cams.find(c => c.weather && c.weather.enabled);
+    _wsSelectedCam = (firstEnabled || cams[0]).id;
+  }
+  const tabsHtml = cams.length > 1
+    ? `<div class="set-tabs ws-cam-tabs">${cams.map(c => `
+        <button type="button" class="set-tab${c.id === _wsSelectedCam ? ' active' : ''}" data-ws-cam-tab="${esc(c.id)}">
+          ${getCameraIcon(c.name)} ${esc(c.name || c.id)}
+        </button>`).join('')}</div>`
+    : '';
+  const sel = cams.find(c => c.id === _wsSelectedCam);
+  wrap.innerHTML = `${tabsHtml}<div class="ws-cam-tab-content">${_renderWeatherCamPanel(sel)}</div>`;
+  wrap.querySelectorAll('[data-ws-cam-tab]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _wsSelectedCam = btn.dataset.wsCamTab;
+      _renderWeatherCamList();
+    });
+  });
+  _bindWeatherCamPanel(wrap, sel);
+}
+
+function _renderWeatherCamPanel(c){
+  if (!c) return '';
+  const wEnabled = !!(c.weather && c.weather.enabled);
+  const sun = (c.weather && c.weather.sun_timelapse) || {};
+  const sr = sun.sunrise || {}, ss = sun.sunset || {};
   const sunPreview = state.weather._sunTimes || { cameras: [] };
-  const previewByCam = {};
-  for (const e of (sunPreview.cameras || [])) previewByCam[e.id] = e;
-  wrap.innerHTML = cams.map(c => {
-    const wEnabled = !!(c.weather && c.weather.enabled);
-    const sun = (c.weather && c.weather.sun_timelapse) || {};
-    const sr = sun.sunrise || {}, ss = sun.sunset || {};
-    const pre = previewByCam[c.id] || {};
-    const previewLine = (phase, p) => {
-      if (!p.enabled) return '';
-      if (!sunPreview.location_set) return '<span class="ws-sun-preview ws-sun-preview--err">Standort fehlt</span>';
-      const ev = (pre[phase] || {});
-      if (!ev.window_start) return '<span class="ws-sun-preview">Polartag — kein ' + (phase === 'sunrise' ? 'Aufgang' : 'Untergang') + ' heute</span>';
-      return `<span class="ws-sun-preview">Heute: ${esc(ev.sun_event)} · Fenster ${esc(ev.window_start)} – ${esc(ev.window_end)}</span>`;
-    };
-    return `
-      <div class="ws-cam-block" data-cam="${esc(c.id)}">
-        <label class="toggle-row" style="margin:0">
-          <span class="toggle-row-label">📷 ${esc(c.name || c.id)}
-            <span class="toggle-row-sublabel">RAM-Buffer ~12 MB · Polling pro 5 min · idle wenn aus</span>
-          </span>
-          <label class="switch"><input type="checkbox" data-ws-cam="${esc(c.id)}" ${wEnabled ? 'checked' : ''}/><span class="slider"></span></label>
-        </label>
-        <div class="ws-sun-rows" ${wEnabled ? '' : 'hidden'}>
-          <div class="ws-sun-row" data-phase="sunrise">
-            <span class="ws-sun-icon" style="color:#e89540">${WEATHER_TYPES.sun_timelapse_rise.icon}</span>
-            <span class="ws-sun-name">Sonnenaufgang</span>
-            <label class="switch ws-sun-toggle"><input type="checkbox" data-sun-toggle="sunrise" ${sr.enabled ? 'checked' : ''}/><span class="slider"></span></label>
-            <input type="range" class="ws-sun-slider" min="10" max="60" step="5" value="${sr.window_min || 30}" data-sun-window="sunrise"/>
-            <span class="ws-sun-window"><span class="ws-sun-window-num">${sr.window_min || 30}</span> min</span>
-            ${previewLine('sunrise', sr)}
-            ${sr.enabled ? _renderSunDnovRow(c.id, 'sunrise', sr, _isReolinkRtsp(c.rtsp_url)) : ''}
-          </div>
-          <div class="ws-sun-row" data-phase="sunset">
-            <span class="ws-sun-icon" style="color:#d4823a">${WEATHER_TYPES.sun_timelapse_set.icon}</span>
-            <span class="ws-sun-name">Sonnenuntergang</span>
-            <label class="switch ws-sun-toggle"><input type="checkbox" data-sun-toggle="sunset" ${ss.enabled ? 'checked' : ''}/><span class="slider"></span></label>
-            <input type="range" class="ws-sun-slider" min="10" max="60" step="5" value="${ss.window_min || 30}" data-sun-window="sunset"/>
-            <span class="ws-sun-window"><span class="ws-sun-window-num">${ss.window_min || 30}</span> min</span>
-            ${previewLine('sunset', ss)}
-            ${ss.enabled ? _renderSunDnovRow(c.id, 'sunset', ss, _isReolinkRtsp(c.rtsp_url)) : ''}
-          </div>
-          ${_renderEventTLBlock(c, sun)}
+  const pre = (sunPreview.cameras || []).find(e => e.id === c.id) || {};
+  const previewLine = (phase, p) => {
+    if (!p.enabled) return '';
+    if (!sunPreview.location_set) return '<span class="ws-sun-preview ws-sun-preview--err">Standort fehlt</span>';
+    const ev = pre[phase] || {};
+    if (!ev.window_start) return '<span class="ws-sun-preview">Polartag — kein ' + (phase === 'sunrise' ? 'Aufgang' : 'Untergang') + ' heute</span>';
+    return `<span class="ws-sun-preview">Heute: ${esc(ev.sun_event)} · Fenster ${esc(ev.window_start)} – ${esc(ev.window_end)}</span>`;
+  };
+  const isReolink = _isReolinkRtsp(c.rtsp_url);
+  return `
+    <div class="ws-cam-block" data-cam="${esc(c.id)}">
+      <label class="toggle-row" style="margin:0">
+        <span class="toggle-row-label">📷 ${esc(c.name || c.id)}</span>
+        <label class="switch"><input type="checkbox" data-ws-cam="${esc(c.id)}" ${wEnabled ? 'checked' : ''}/><span class="slider"></span></label>
+      </label>
+      <div class="ws-sun-rows" ${wEnabled ? '' : 'hidden'}>
+        <div class="ws-sun-row" data-phase="sunrise">
+          <span class="ws-sun-icon" style="color:#e89540">${WEATHER_TYPES.sun_timelapse_rise.icon}</span>
+          <span class="ws-sun-name">Sonnenaufgang</span>
+          <label class="switch ws-sun-toggle"><input type="checkbox" data-sun-toggle="sunrise" ${sr.enabled ? 'checked' : ''}/><span class="slider"></span></label>
+          <input type="range" class="ws-sun-slider" min="10" max="60" step="5" value="${sr.window_min || 30}" data-sun-window="sunrise"/>
+          <span class="ws-sun-window"><span class="ws-sun-window-num">${sr.window_min || 30}</span> min</span>
+          ${previewLine('sunrise', sr)}
+          ${sr.enabled ? _wsRenderLengthRow('sunrise', sr) : ''}
+          ${sr.enabled ? _renderSunDnovRow(c.id, 'sunrise', sr, isReolink) : ''}
         </div>
-      </div>`;
-  }).join('');
-  // Bind sun toggles + window sliders. Both persist via /api/settings/cameras
-  // with the FULL camera dict (the upsert_camera default-merge is destructive
-  // for missing fields).
-  wrap.querySelectorAll('.ws-cam-block').forEach(block => {
-    const camId = block.dataset.cam;
-    block.querySelectorAll('[data-sun-toggle]').forEach(cb => {
-      cb.addEventListener('change', () => _saveSunPhase(camId, cb.dataset.sunToggle, { enabled: cb.checked }));
+        <div class="ws-sun-row" data-phase="sunset">
+          <span class="ws-sun-icon" style="color:#d4823a">${WEATHER_TYPES.sun_timelapse_set.icon}</span>
+          <span class="ws-sun-name">Sonnenuntergang</span>
+          <label class="switch ws-sun-toggle"><input type="checkbox" data-sun-toggle="sunset" ${ss.enabled ? 'checked' : ''}/><span class="slider"></span></label>
+          <input type="range" class="ws-sun-slider" min="10" max="60" step="5" value="${ss.window_min || 30}" data-sun-window="sunset"/>
+          <span class="ws-sun-window"><span class="ws-sun-window-num">${ss.window_min || 30}</span> min</span>
+          ${previewLine('sunset', ss)}
+          ${ss.enabled ? _wsRenderLengthRow('sunset', ss) : ''}
+          ${ss.enabled ? _renderSunDnovRow(c.id, 'sunset', ss, isReolink) : ''}
+        </div>
+        ${_renderEventTLBlock(c)}
+      </div>
+    </div>`;
+}
+
+function _bindWeatherCamPanel(wrap, c){
+  if (!c) return;
+  const block = wrap.querySelector('.ws-cam-block'); if (!block) return;
+  const camId = c.id;
+  // Helper: read the current target_duration_s for a phase from the
+  // in-memory state — fall back to the default if unset.
+  const targetFor = (phase) => {
+    const p = (((c.weather || {}).sun_timelapse || {})[phase] || {});
+    return parseInt(p.target_duration_s, 10) || _WS_DEFAULT_LENGTH_S;
+  };
+  // Phase enable toggle.
+  block.querySelectorAll('[data-sun-toggle]').forEach(cb => {
+    cb.addEventListener('change', () => _saveSunPhase(camId, cb.dataset.sunToggle, { enabled: cb.checked }));
+  });
+  // Window slider — saving also recomputes interval_s so the backend sees
+  // the new pacing without us round-tripping the formula on Python side.
+  block.querySelectorAll('[data-sun-window]').forEach(sl => {
+    const phase = sl.dataset.sunWindow;
+    const numEl = sl.parentElement.querySelector('.ws-sun-window-num');
+    const previewEl = block.querySelector(`[data-sun-length-preview="${phase}"]`);
+    const refreshPreview = () => {
+      if (!previewEl) return;
+      const plan = _wsLengthPlan(parseInt(sl.value, 10), targetFor(phase));
+      previewEl.innerHTML = _wsRenderLengthPreview(plan);
+    };
+    sl.addEventListener('input', () => {
+      if (numEl) numEl.textContent = sl.value;
+      refreshPreview();
     });
-    block.querySelectorAll('[data-sun-window]').forEach(sl => {
-      const numEl = sl.parentElement.querySelector('.ws-sun-window-num');
-      sl.addEventListener('input', () => { if (numEl) numEl.textContent = sl.value; });
-      sl.addEventListener('change', () => _saveSunPhase(camId, sl.dataset.sunWindow, { window_min: parseInt(sl.value, 10) }));
+    sl.addEventListener('change', () => {
+      const window_min = parseInt(sl.value, 10);
+      const plan = _wsLengthPlan(window_min, targetFor(phase));
+      _saveSunPhase(camId, phase, { window_min, interval_s: plan.interval_s });
     });
-    // Day/night override toggles + lead-time sliders. _saveSunPhase
-    // deep-merges the daynight_override sub-object so toggling enabled
-    // doesn't wipe the lead_min the user dialled in (and vice versa).
-    block.querySelectorAll('[data-sun-dnov]').forEach(cb => {
-      cb.addEventListener('change', () => _saveSunPhase(camId, cb.dataset.sunDnov, {
-        daynight_override: { enabled: cb.checked, revert: 'auto' },
-      }));
+  });
+  // Video-length select — persists the user's TARGET; backend uses the
+  // recomputed interval_s for actual capture pacing.
+  block.querySelectorAll('[data-sun-length]').forEach(sel => {
+    const phase = sel.dataset.sunLength;
+    const previewEl = block.querySelector(`[data-sun-length-preview="${phase}"]`);
+    sel.addEventListener('change', () => {
+      const target_duration_s = parseInt(sel.value, 10) || _WS_DEFAULT_LENGTH_S;
+      const sliderEl = block.querySelector(`[data-sun-window="${phase}"]`);
+      const window_min = sliderEl ? parseInt(sliderEl.value, 10) : 30;
+      const plan = _wsLengthPlan(window_min, target_duration_s);
+      if (previewEl) previewEl.innerHTML = _wsRenderLengthPreview(plan);
+      _saveSunPhase(camId, phase, { target_duration_s, interval_s: plan.interval_s });
     });
-    block.querySelectorAll('[data-sun-dnov-lead]').forEach(sl => {
-      const numEl = sl.parentElement.querySelector('.ws-sun-dnov-lead-num');
-      sl.addEventListener('input', () => { if (numEl) numEl.textContent = sl.value; });
-      sl.addEventListener('change', () => _saveSunPhase(camId, sl.dataset.sunDnovLead, {
-        daynight_override: { lead_min: parseInt(sl.value, 10) },
-      }));
-    });
+  });
+  // Day/night override toggles + lead-time sliders. _saveSunPhase
+  // deep-merges the daynight_override sub-object so toggling enabled
+  // doesn't wipe the lead_min the user dialled in (and vice versa).
+  block.querySelectorAll('[data-sun-dnov]').forEach(cb => {
+    cb.addEventListener('change', () => _saveSunPhase(camId, cb.dataset.sunDnov, {
+      daynight_override: { enabled: cb.checked, revert: 'auto' },
+    }));
+  });
+  block.querySelectorAll('[data-sun-dnov-lead]').forEach(sl => {
+    const numEl = sl.parentElement.querySelector('.ws-sun-dnov-lead-num');
+    sl.addEventListener('input', () => { if (numEl) numEl.textContent = sl.value; });
+    sl.addEventListener('change', () => _saveSunPhase(camId, sl.dataset.sunDnovLead, {
+      daynight_override: { lead_min: parseInt(sl.value, 10) },
+    }));
   });
 }
 

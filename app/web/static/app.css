@@ -1438,6 +1438,11 @@ select option{background:#1e1e1e;color:var(--text)}
 }
 
 /* ── Wetter-Settings: per-cam sun-timelapse rows ─────────────────────────── */
+/* Camera picker row above the sun-TL panel. Mirrors the main timelapse
+   settings tabs (.set-tabs / .set-tab) so users see one consistent
+   pattern across the settings panels. */
+.ws-cam-tabs{margin-top:0;margin-bottom:10px}
+.ws-cam-tab-content{display:block}
 .ws-cam-block{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,0.03)}
 .ws-sun-rows{display:flex;flex-direction:column;gap:6px;padding:6px 8px 2px;border-left:2px solid rgba(127,174,201,0.25);margin-left:18px}
 .ws-sun-row{display:grid;grid-template-columns:auto 1fr auto auto auto;align-items:center;column-gap:10px;row-gap:4px;padding:6px 4px}
@@ -1452,6 +1457,24 @@ select option{background:#1e1e1e;color:var(--text)}
 .ws-sun-window-num{color:#fff}
 .ws-sun-preview{grid-column:1/-1;font-size:11px;color:var(--muted);font-style:italic;padding-left:28px}
 .ws-sun-preview--err{color:#ef4444;font-style:normal}
+
+/* Per-phase Video-Länge picker — sits between the window slider and the
+   daynight override sub-row when the phase is on. Span full width inside
+   the parent .ws-sun-row grid. */
+.ws-sun-length{
+  grid-column:1/-1;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:4px 4px 0 28px;font-size:12px
+}
+.ws-sun-length-label{font-weight:600;color:var(--text);white-space:nowrap}
+.ws-sun-length select{
+  background:rgba(255,255,255,0.06);color:var(--text);
+  border:none;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:600;
+  min-height:36px;cursor:pointer;font-variant-numeric:tabular-nums
+}
+.ws-sun-length-preview{color:var(--muted);font-size:11px;line-height:1.5}
+.ws-sun-length-preview b{color:#7faec9;font-variant-numeric:tabular-nums}
+.ws-sun-length-warn{color:#f59e0b;font-style:italic;margin-left:6px}
 
 /* Day/night override sub-row — sits under each sun row when the master
    toggle is on. Spans full width inside the parent .ws-sun-row grid;
@@ -1492,6 +1515,11 @@ select option{background:#1e1e1e;color:var(--text)}
   .ws-sun-dnov{grid-template-columns:1fr;row-gap:6px;padding:6px 4px 0 8px}
   .ws-sun-dnov-detail{flex-wrap:wrap}
   .ws-sun-dnov-help{padding-left:0}
+  /* Video-Länge: select stretches to full width so 44 px tap target
+     stays comfortable; label+select on row 1, preview wraps to row 2. */
+  .ws-sun-length{padding-left:8px}
+  .ws-sun-length select{min-height:44px;flex:1;min-width:120px}
+  .ws-sun-length-preview{flex-basis:100%}
 }
 
 /* ── Event-Timelapse: per-camera Settings block ──────────────────────────── */
