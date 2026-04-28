@@ -1861,4 +1861,18 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
     bottom:calc(env(safe-area-inset-bottom));
     z-index:5;box-shadow:0 -8px 16px rgba(0,0,0,.45);
   }
+
+  /* Settings accordion chevron — keep it in view at narrow widths. */
+  .set-chevron{margin-left:auto;flex-shrink:0}
+
+  /* Coral / settings inner tabs — already overflow-x:auto upstream;
+     add scroll-snap for a tighter UX on touch devices. */
+  .set-tabs,.coral-tabs{scroll-snap-type:x proximity;scrollbar-width:none}
+  .set-tabs::-webkit-scrollbar,.coral-tabs::-webkit-scrollbar{display:none}
+  .set-tab,.coral-tab{scroll-snap-align:start;flex-shrink:0;min-height:44px}
+
+  /* Toggle row hit area — switch is 24 px tall, padding 10 px ⇒ 44 px
+     row total. Lock that floor explicitly so future padding tweaks
+     can't shrink the tap target below the iOS HIG. */
+  .toggle-row{min-height:44px}
 }
