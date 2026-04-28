@@ -4974,20 +4974,68 @@ function _lbShowSeekOverlay(text){
 _updateLbConfirmBtn(false);
 byId('lightboxDelete').innerHTML=_LB_TRASH_HTML;
 _initFsBtn('liveViewFsBtn',byId('liveViewWrap'),()=>byId('liveViewWrap'));
-// Swipe navigation on the lightbox media area (mobile)
+// Native video FS takeover — when iOS Safari plays the lightbox video
+// in its native fullscreen player, hide the surrounding lightbox shell
+// so the doubled chrome (our prev/next/close + the OS controls) doesn't
+// appear during playback. Also wire a tap-anywhere-on-mobile-video
+// handler that requests FS so the user doesn't have to find the tiny
+// iOS FS icon.
+(function initLightboxFs(){
+  const modal=byId('lightboxModal');
+  const videoEl=byId('lightboxVideo');
+  if(!modal||!videoEl) return;
+  const _hideShell=()=>modal.classList.add('lb-native-fs-active');
+  const _showShell=()=>modal.classList.remove('lb-native-fs-active');
+  // iOS-only events. Older iOS Safari only fires these — newer iPad
+  // also fires the standard fullscreenchange below.
+  videoEl.addEventListener('webkitbeginfullscreen',_hideShell);
+  videoEl.addEventListener('webkitendfullscreen',_showShell);
+  // HTML5 fullscreen API (iPad + desktop + Android Chrome).
+  const _fsChange=()=>{
+    const fsEl=document.fullscreenElement||document.webkitFullscreenElement;
+    if(fsEl===videoEl) _hideShell(); else _showShell();
+  };
+  document.addEventListener('fullscreenchange',_fsChange);
+  document.addEventListener('webkitfullscreenchange',_fsChange);
+  // Tap on the video itself (not the controls) → request FS. iOS uses
+  // webkitEnterFullscreen on the video; everywhere else, requestFullscreen.
+  // Gated on the mobile media query — desktop click on the player should
+  // play/pause via the native controls, not request fullscreen.
+  const _isMobile=()=>window.matchMedia('(max-width:768px)').matches;
+  videoEl.addEventListener('click',()=>{
+    if(!_isMobile()) return;
+    if(document.fullscreenElement||document.webkitFullscreenElement) return;
+    const enter=videoEl.webkitEnterFullscreen||videoEl.requestFullscreen||videoEl.webkitRequestFullscreen;
+    if(enter){ try{ const r=enter.call(videoEl); if(r&&r.catch) r.catch(()=>{}); }catch{} }
+  });
+})();
+// Swipe navigation on the lightbox media area (mobile). Horizontal
+// swipe = prev/next, vertical swipe ≥ 80 px down = dismiss.
 (function initLightboxSwipe(){
   const wrap=byId('lightboxMediaWrap');
-  if(!wrap) return;
-  let _tx=0,_dragging=false;
+  const modal=byId('lightboxModal');
+  if(!wrap||!modal) return;
+  let _tx=0,_ty=0,_dragging=false;
   wrap.addEventListener('touchstart',e=>{
+    // Skip while the iOS native FS is in front of the shell — those
+    // touches belong to the OS player, not us.
+    if(modal.classList.contains('lb-native-fs-active')) return;
     if(e.touches.length!==1) return;
     _tx=e.touches[0].clientX;
+    _ty=e.touches[0].clientY;
     _dragging=true;
   },{passive:true});
   wrap.addEventListener('touchend',e=>{
     if(!_dragging) return;
     _dragging=false;
     const dx=e.changedTouches[0].clientX-_tx;
+    const dy=e.changedTouches[0].clientY-_ty;
+    // Vertical wins when its magnitude exceeds horizontal — protects
+    // pinch-zoom-finished and pure scroll gestures from triggering nav.
+    if(Math.abs(dy)>Math.abs(dx)){
+      if(dy>=80) closeLightbox();
+      return;
+    }
     if(Math.abs(dx)<40) return;
     if(dx<0) byId('lightboxNext')?.click();
     else byId('lightboxPrev')?.click();

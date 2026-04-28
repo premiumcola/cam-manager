@@ -1657,6 +1657,13 @@ select option{background:#1e1e1e;color:var(--text)}
 }
 .cam-id-preview-hint{font-size:10.5px;color:var(--muted);font-style:italic}
 
+/* While the iOS / standard native video FS is active, hide the surrounding
+   lightbox shell so the chrome doesn't double-render through the OS player.
+   Toggled from initLightboxFs in app.js. visibility (not display) so the
+   <video> stays attached and keeps playing through the FS transition. */
+#lightboxModal.lb-native-fs-active{visibility:hidden}
+#lightboxModal.lb-native-fs-active video{visibility:visible}
+
 /* ── iOS / mobile foundation ─────────────────────────────────────────────
    Globals first (benign on desktop), then mobile-specific overrides under
    a single @media block. Desktop layout at ≥ 769 px is unaffected.        */
