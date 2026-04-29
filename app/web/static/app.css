@@ -2092,6 +2092,15 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
      used to read as merged. Add a small clean gap so they're
      visually separated without floating apart. */
   .ws-stats-block{margin-top:14px}
+
+  /* Stat chips on mobile: tighten padding + drop label/value font
+     to 10.5 px so full German labels (Niederschlag, Blitz-Energie,
+     Sonnenhöhe, Bewölkung) fit in a 3-column grid on iPhone widths
+     without ellipsis truncation. */
+  .ws-stats-chip{padding:6px 6px;gap:5px}
+  .ws-stats-chip-meta{gap:5px}
+  .ws-stats-chip-label{font-size:10.5px}
+  .ws-stats-chip-value{font-size:10.5px}
 }
 @media (max-width:380px){
   /* Two-column legend on iPhone SE so the labels don't truncate
