@@ -516,6 +516,50 @@ function _camGridCols(n){
   return 'cam-grid-n';
 }
 
+// Surveillance mode for the live-tile bottom-overlay. Four states drive
+// the colour + label + animation of the new .cv-surveil block:
+//   off     cam disarmed                          → grey, eye crossed-out
+//   watch   armed, no Telegram, no active window  → storm-blue, passive
+//   notify  armed + Telegram on                   → amber, eye blinks
+//   alarm   armed + currently inside a schedule
+//           window with telegram or hard action   → red, head pulses
+const SURVEIL_ACC = {
+  off:    '80,80,90',
+  watch:  '127,174,201',
+  notify: '251,146,60',
+  alarm:  '220,38,38',
+};
+const SURVEIL_LABEL = {
+  off:    'Stumm',
+  watch:  'Beobachtung',
+  notify: 'Benachrichtigung',
+  alarm:  'Wachmodus',
+};
+function _isInScheduleWindow(from, to){
+  if (!from || !to) return false;
+  const now = new Date();
+  const m = now.getHours()*60 + now.getMinutes();
+  const [fh, fm] = from.split(':').map(Number);
+  const [th, tm] = to.split(':').map(Number);
+  const f = fh*60 + fm, t = th*60 + tm;
+  return f <= t ? (m >= f && m < t) : (m >= f || m < t);
+}
+function _surveilMode(c){
+  if (!c.armed) return 'off';
+  const sch = c.schedule || {};
+  if (sch.enabled && _isInScheduleWindow(sch.from, sch.to)){
+    const acts = sch.actions || {};
+    if (acts.telegram !== false || acts.hard !== false) return 'alarm';
+  }
+  return c.telegram_enabled ? 'notify' : 'watch';
+}
+function _surveilEyeSvg(mode){
+  if (mode === 'off') {
+    return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>';
+  }
+  return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/></svg>';
+}
+
 function renderDashboard(){
   const cams=state.cameras;
   const gridCls=_camGridCols(cams.length);
@@ -528,36 +572,14 @@ function renderDashboard(){
       ? `/api/camera/${esc(c.id)}/stream_hd.mjpg`
       : `/api/camera/${esc(c.id)}/snapshot.jpg?t=${Date.now()}`;
     const isActive=c.status==='active';
-    const motionActive=isActive;
-    const coralActive=!!(c.coral_available && c.detection_mode && c.detection_mode!=='motion_only');
     const tlOn=!!(c.timelapse&&c.timelapse.enabled);
     const fps=c.frame_interval_ms?Math.round(1000/c.frame_interval_ms):null;
     const previewFps=(c.preview_fps||0)>0?c.preview_fps:null;
     const streamMode=c.stream_mode||'baseline';
-
-    // Object detection box SVG (13×13) — corner-bracket bounding box, amber when Coral active
-    const boxCol=c.coral_available?'#f59e0b':'rgba(255,255,255,.25)';
-    const boxCls=c.coral_available?' class="cv-obj-unfold"':'';
-    const brainSVG=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="${boxCol}" stroke-width="2.2" stroke-linecap="round"${boxCls} aria-hidden="true"><path d="M6 10V6h4"/><path d="M14 6h4v4"/><path d="M6 14v4h4"/><path d="M20 14v4h-4"/></svg>`;
-
-    // Motion running-person SVG (13×13) — stride silhouette, blue when active
-    const motCol=isActive?'#93c5fd':'rgba(255,255,255,.25)';
-    const motCls=isActive?' class="cv-runner-stride"':'';
-    const motSVG=`<svg viewBox="0 0 24 24" width="13" height="13" fill="none"${motCls} aria-hidden="true"><circle cx="15" cy="4.5" r="2.5" fill="${motCol}"/><path d="M14 7L11 13.5" stroke="${motCol}" stroke-width="2" stroke-linecap="round" fill="none"/><path d="M12 10L8.5 8.5" stroke="${motCol}" stroke-width="1.8" stroke-linecap="round"/><path d="M12 10L15.5 9" stroke="${motCol}" stroke-width="1.8" stroke-linecap="round"/><path d="M11 13.5L8.5 19.5" stroke="${motCol}" stroke-width="2" stroke-linecap="round"/><path d="M11 13.5L14.5 19" stroke="${motCol}" stroke-width="2" stroke-linecap="round"/></svg>`;
-
-    const bellOn=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2.2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`;
-    const bellOff=`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="2.2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
-
-    // Per-camera detection mode drives pill visibility / dim state
-    const motionEnabled=(c.motion_enabled!==false);
-    const trigMode=c.detection_trigger||'motion_and_objects';
-    // Motion pill hidden entirely when the kill-switch is off
-    const motionPillHidden=!motionEnabled;
-    // When in objects_only mode, motion pill is dimmed (still visible so
-    // users understand motion is IGNORED as a trigger even if sensed)
-    const motionPillDim=motionEnabled && trigMode==='objects_only';
-    // When in motion_only mode, object pill is dimmed
-    const objectPillDim=trigMode==='motion_only';
+    const mode=_surveilMode(c);
+    const acc=SURVEIL_ACC[mode];
+    const label=SURVEIL_LABEL[mode];
+    const sch=c.schedule||{};
     return `<article class="cv-card${c.armed?'':' cv-card--muted'}" data-camid="${esc(c.id)}" data-cam-name="${esc(c.name||c.id)}" onclick="_cvCardClick(event,'${esc(c.id)}')">
   <div class="cv-frame">
     <div class="cv-img-wrap">
@@ -569,8 +591,8 @@ function renderDashboard(){
     <div class="cv-grad-top"></div>
     <div class="cv-grad-bot"></div>
 
-    <!-- top-left: thematic icon + name. Mute state lives in the right-column
-         "Stumm/Benachrichtigung" pill — no duplicate indicator here. -->
+    <!-- top-left: thematic icon + name. Surveillance mode lives in the
+         bottom-left .cv-surveil block; no duplicate indicator here. -->
     <div class="cv-title-wrap">
       <div class="cv-name-row">
         <span class="cv-title-icon" aria-hidden="true">${getCameraIcon(c.name)}</span>
@@ -579,7 +601,8 @@ function renderDashboard(){
       ${c.location?`<div class="cv-loc">${esc(c.location)}</div>`:''}
     </div>
 ${isActive?`
-    <!-- top-right: [Live + HD] row, then alarm pill below -->
+    <!-- top-right: [Live + HD] row + optional Timelapse pill. The old
+         alarm/notification pill moved into .cv-surveil below. -->
     <div class="cv-tr">
       <div class="cv-tr-row">
         <div class="cv-pill-live-wrap cv-live-active">
@@ -602,17 +625,24 @@ ${isActive?`
         </div>
         ${c.rtsp_url?`<button class="cv-hd-badge${hdOn?' active':''}" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau">HD</button>`:''}
       </div>
-      <div class="cv-pill ${c.armed?'cv-pill-alarm-on':'cv-pill-alarm-off'}" onclick="event.stopPropagation();toggleArm('${esc(c.id)}',${!c.armed})" style="cursor:pointer">${c.armed?objIconSvg('notification',14):bellOff}${c.armed?'Benachrichtigung':'Stumm'}</div>
       ${tlOn?`<div class="cv-pill cv-pill-tl" title="Timelapse aktiv">${objIconSvg('timelapse',14)}Timelapse</div>`:''}
     </div>
-
-    <!-- bottom-right: Motion + Objekte pills (horizontal). Visibility +
-         dimming mirror the per-camera detection_trigger mode. -->
-    <div class="cv-br">
-      ${motionPillHidden?'':`<div class="cv-pill ${motionActive?'cv-pill-motion-on':'cv-pill-motion-off'}${motionPillDim?' cv-pill-dim':''}" title="${motionPillDim?'Motion wird erkannt, löst aber KEIN Event aus (Nur Objekte)':'Motion-Erkennung'}">${objIconSvg('motion',14)} Motion</div>`}
-      ${c.coral_available?`<div class="cv-pill ${coralActive?'cv-pill-coral-on':'cv-pill-coral-off'}${objectPillDim?' cv-pill-dim':''}" title="${objectPillDim?'Objekte werden erkannt, lösen aber KEIN Event aus (Nur Motion)':'Objekt-Erkennung'}">${objIconSvg('motion_objects',14)} Objekte</div>`:''}
-    </div>
 `:''}
+    <!-- bottom-left: surveillance stack — mode pill + targets row +
+         optional schedule window time. Always rendered (mode='off'
+         shows for disarmed cams too); targets+time hidden when off. -->
+    <div class="cv-surveil" data-mode="${mode}" style="--surveil-acc:${acc}">
+      <div class="cv-surveil-head">
+        <span class="cv-surveil-eye">${_surveilEyeSvg(mode)}</span>
+        <span class="cv-surveil-label">${esc(label)}</span>
+      </div>
+      ${mode==='off'?'':`
+        <div class="cv-surveil-targets">
+          ${(c.object_filter||[]).map(cls=>`<div class="cv-surveil-tgt" data-cls="${esc(cls)}" title="${esc(OBJ_LABEL[cls]||cls)}">${objIconSvg(cls,16)}</div>`).join('')}
+        </div>
+        ${sch.enabled?`<div class="cv-surveil-time">${esc(sch.from||'')} – ${esc(sch.to||'')}</div>`:''}
+      `}
+    </div>
     <!-- bottom: hover action button -->
     <div class="cv-actions">
       <button class="cv-abt cv-abt-edit" onclick="event.stopPropagation();editCamera('${esc(c.id)}')">${pencil}<span>Einstellungen</span></button>

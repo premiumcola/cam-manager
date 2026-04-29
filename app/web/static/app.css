@@ -200,21 +200,97 @@ select option{background:#1e1e1e;color:#c8c8c8}
 .cv-lp-row span{color:rgba(220,252,231,.75);line-height:1.4}
 .cv-lp-row small{font-size:9px;color:rgba(220,252,231,.5);display:block}
 .cv-lp-row strong{color:#fff;font-weight:700;white-space:nowrap}
-/* Bell notification pill */
-.cv-pill-alarm-on{background:rgba(251,146,60,.15);border:1.5px solid rgba(251,146,60,.4);color:#fb923c}
-.cv-pill-alarm-off{background:rgba(120,120,140,.2);border:1.5px solid rgba(120,120,140,.3);color:#9ca3af}
-
-/* ── Bottom: status chips + always-visible icon strip ──────────────────────── */
-.cv-br{position:absolute;bottom:44px;right:12px;display:flex;flex-direction:row;gap:6px;align-items:center;z-index:3;pointer-events:none}
+/* HD badge — primary control next to the Live pill. */
 .cv-hd-badge{display:inline-flex;align-items:center;justify-content:center;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:800;letter-spacing:.04em;cursor:pointer;border:none;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.35);backdrop-filter:blur(4px);transition:all .2s;pointer-events:auto;min-height:28px;line-height:1.1;box-sizing:border-box}
 .cv-hd-badge.active{background:rgba(255,255,255,0.85);color:#0a0a0a}
-.cv-pill-motion-on{background:rgba(147,197,253,.18);border:1.5px solid rgba(147,197,253,.5);color:#bfdbfe}
-.cv-pill-motion-off{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);color:rgba(255,255,255,.3)}
-.cv-pill-coral-on{background:rgba(129,140,248,.18);border:1.5px solid rgba(129,140,248,.5);color:#c7d2fe}
-.cv-pill-coral-off{background:rgba(255,255,255,.06);border:1.5px solid rgba(255,255,255,.12);color:rgba(255,255,255,.3)}
-/* Dimmed pill state — the detection mode *senses* this modality but it's
-   not wired up as a trigger (objects_only or motion_only per camera). */
-.cv-pill-dim{opacity:.42;text-decoration:line-through;text-decoration-thickness:1px}
+
+/* ── Bottom-left surveillance stack ────────────────────────────────────────
+   Replaces the old Motion + Objekte pills (cv-br) and the alarm pill
+   in cv-tr. Single source of truth for "what's this cam currently doing":
+   mode label + active class targets + optional schedule window time.
+   Flat design — depth via background tint and opacity, no border lines. */
+.cv-surveil{
+  position:absolute;left:10px;bottom:8px;
+  display:flex;flex-direction:column;gap:5px;
+  align-items:flex-start;
+  z-index:3;
+  max-width:calc(100% - 56px); /* leave room for cv-cog right of bottom */
+  pointer-events:none;
+}
+.cv-surveil > *{pointer-events:auto}
+.cv-surveil-head{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 10px 4px 6px;
+  border-radius:999px;
+  font-size:10.5px;font-weight:700;letter-spacing:.01em;
+  background:rgba(var(--surveil-acc),.22);
+  color:rgb(var(--surveil-acc));
+}
+.cv-surveil-eye{
+  width:18px;height:18px;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+}
+.cv-surveil[data-mode="notify"] .cv-surveil-eye{
+  animation:cvEyeBlink 2.4s ease-in-out infinite;
+}
+.cv-surveil[data-mode="alarm"] .cv-surveil-head{
+  animation:cvAlarmPulse 1.8s ease-out infinite;
+}
+.cv-surveil[data-mode="alarm"] .cv-surveil-eye{
+  background:rgba(252,165,165,.22);
+  animation:cvEyeBlink 1.4s ease-in-out infinite;
+}
+@keyframes cvEyeBlink{
+  0%,90%,100%{transform:scaleY(1);opacity:1}
+  93%{transform:scaleY(.1);opacity:.85}
+}
+@keyframes cvAlarmPulse{
+  0%   {box-shadow:0 0 0 0 rgba(220,38,38,.55)}
+  70%  {box-shadow:0 0 0 8px rgba(220,38,38,0)}
+  100% {box-shadow:0 0 0 0 rgba(220,38,38,0)}
+}
+@media (prefers-reduced-motion: reduce){
+  .cv-surveil-eye,.cv-surveil-head{animation:none!important}
+}
+.cv-surveil-targets{
+  display:flex;gap:3px;
+  background:rgba(0,0,0,.45);
+  padding:4px 5px;
+  border-radius:10px;
+}
+.cv-surveil-tgt{
+  width:24px;height:24px;
+  border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  background:transparent;
+  transition:background .25s ease;
+}
+/* Live-detection 3-second flash hook. The .is-detecting class is added
+   by _flashDetection(camId, cls) — JS hookup pending the backend pipe. */
+.cv-surveil-tgt.is-detecting{
+  background:rgba(var(--surveil-acc),.42);
+  animation:cvDetectFlash 3s ease-out;
+}
+@keyframes cvDetectFlash{
+  0%   {background:rgba(var(--surveil-acc),.65)}
+  100% {background:transparent}
+}
+@media (prefers-reduced-motion: reduce){
+  .cv-surveil-tgt.is-detecting{
+    animation:none;
+    background:rgba(var(--surveil-acc),.35);
+  }
+}
+.cv-surveil-time{
+  font-size:9.5px;
+  color:rgba(255,255,255,.6);
+  background:rgba(0,0,0,.45);
+  padding:2px 7px;border-radius:5px;
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  font-weight:600;letter-spacing:.03em;
+  white-space:nowrap;
+}
 /* "Stumm" card — muted across the board: card dim, small bell-off icon next
    to the name. Recording continues, only Telegram is suppressed. */
 .cv-card--muted{opacity:.85}
