@@ -666,6 +666,31 @@ ${isActive?`
   });
 }
 
+// Live-detection 3 s flash on the .cv-surveil-tgt of a class. CSS already
+// supports the .is-detecting class (animation gated by prefers-reduced-
+// motion). Per-(cam,cls) throttle so a sustained detection stream doesn't
+// spam: minimum 2 s between flashes for the same target. Exposed on
+// window so the backend pipeline (when it lands — currently detections
+// live in container logs only, no SSE / WebSocket on the frontend) can
+// trigger it via window._flashDetection(camId, cls).
+const _flashThrottle = new Map();
+window._flashDetection = function(camId, cls){
+  if (!camId || !cls) return;
+  const key = camId + '|' + cls;
+  const now = Date.now();
+  const last = _flashThrottle.get(key) || 0;
+  if (now - last < 2000) return;
+  _flashThrottle.set(key, now);
+  const tile = document.querySelector(`.cv-card[data-camid="${CSS.escape(camId)}"]`);
+  if (!tile) return;
+  const tgt = tile.querySelector(`.cv-surveil-tgt[data-cls="${CSS.escape(cls)}"]`);
+  if (!tgt) return;
+  tgt.classList.remove('is-detecting');
+  void tgt.offsetWidth;     // force reflow so animation restarts
+  tgt.classList.add('is-detecting');
+  setTimeout(() => tgt.classList.remove('is-detecting'), 3000);
+};
+
 // ── Timeline ─────────────────────────────────────────────────────────────────
 const CAT_COLORS={alle:'#8888aa',motion:'#cbd5e1',person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',dog:'#7c2d12',squirrel:'#7c4a1f',timelapse:'#a855f7'};
 // Lane order, top-down. Lanes auto-filter by content presence: any lane
