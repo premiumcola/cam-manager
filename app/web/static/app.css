@@ -813,11 +813,27 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
    field-label below). */
 .pw-input-row{position:relative;width:100%}
 .pw-wrap,.url-wrap{position:relative}
-.pw-wrap input,.url-wrap input{padding-right:46px!important}
-.pw-eye,.url-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:36px;height:36px;border:none;border-radius:8px;background:rgba(255,255,255,.04);color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;transition:background .15s,color .15s;-webkit-tap-highlight-color:transparent;z-index:2}
-.pw-eye:hover,.url-eye:hover{background:rgba(255,255,255,.10);color:var(--text)}
-.pw-eye.revealed,.url-eye.revealed{color:var(--text)}
-.pw-eye svg,.url-eye svg{display:block;width:18px;height:18px;flex-shrink:0}
+.pw-wrap input,.url-wrap input{padding-right:54px!important}
+/* Icon-only at rest — no ghost box. Hover gets a very faint surface
+   tint + colour brighten so the affordance is still visible. 44 × 44
+   hit area to clear the iOS tap-target floor; SVG itself is 20 × 20
+   so the icon reads clearly on both URL rows + the password row. */
+.pw-eye,.url-eye{
+  position:absolute;right:5px;top:50%;transform:translateY(-50%);
+  width:44px;height:44px;
+  border:none;border-radius:8px;
+  background:transparent;
+  color:rgba(255,255,255,.55);
+  cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:0;
+  transition:background .15s,color .15s;
+  -webkit-tap-highlight-color:transparent;
+  z-index:2;
+}
+.pw-eye:hover,.url-eye:hover{background:rgba(255,255,255,.06);color:#fff}
+.pw-eye.revealed,.url-eye.revealed{color:#fff}
+.pw-eye svg,.url-eye svg{display:block;width:20px;height:20px;flex-shrink:0}
 /* URL-field eye toggle — masks the password portion of an rtsp://… or
    http://user:pass@… URL while keeping the real value stored in
    data-real. Clicking reveals; clicking again re-masks. */
