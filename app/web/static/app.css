@@ -2110,3 +2110,14 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
 .ws-map-pin-hit svg{
   filter:drop-shadow(0 2px 4px rgba(0,0,0,.4));
 }
+
+/* Weather "zuletzt gespeichert" footer hint — quiet auto-save signal.
+   No top border line: depth comes from the muted color contrast. */
+.ws-saved-hint{
+  margin-top:14px;
+  padding-top:10px;
+  font-size:12px;
+  font-style:italic;
+  color:var(--muted, #8a8a8a);
+  text-align:right;
+}

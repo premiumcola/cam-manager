@@ -7350,6 +7350,43 @@ function initWeatherTabs(){
   });
 }
 
+// ── Weather "zuletzt gespeichert" hint ─────────────────────────────────────
+// Quiet auto-save signal that replaces the per-input toast spam. Tick only
+// runs while #set-weather is open — driven by a MutationObserver on the
+// section's class list, so toggleSetSection stays untouched.
+let _wsHintTimer = null;
+
+function _wsBumpSavedHint(){
+  state.weather = state.weather || {};
+  state.weather._lastSavedAt = Date.now();
+  _wsRenderSavedHint();
+}
+
+function _wsRenderSavedHint(){
+  const el = byId('weatherSavedHint');
+  if (!el) return;
+  const ts = state.weather && state.weather._lastSavedAt;
+  if (!ts) { el.textContent = 'noch nicht gespeichert'; return; }
+  const t = new Date(ts).toLocaleTimeString('de-DE', { hour12: false });
+  el.textContent = 'zuletzt gespeichert · ' + t;
+}
+
+function _initWsSavedHintLifecycle(){
+  const sec = byId('set-weather');
+  if (!sec || sec.dataset.wsHintObs === '1') return;
+  sec.dataset.wsHintObs = '1';
+  const start = () => {
+    _wsRenderSavedHint();
+    if (!_wsHintTimer) _wsHintTimer = setInterval(_wsRenderSavedHint, 30000);
+  };
+  const stop = () => {
+    if (_wsHintTimer) { clearInterval(_wsHintTimer); _wsHintTimer = null; }
+  };
+  const sync = () => sec.classList.contains('open') ? start() : stop();
+  new MutationObserver(sync).observe(sec, { attributes: true, attributeFilter: ['class'] });
+  sync();
+}
+
 let _weatherSaveTimer = null;
 async function _saveWeatherCfg(partial){
   try {
@@ -7359,6 +7396,7 @@ async function _saveWeatherCfg(partial){
     });
     state.config.weather = state.config.weather || {};
     _wsMergeDeep(state.config.weather, partial);
+    _wsBumpSavedHint();
   } catch (e) {
     showToast('Speichern fehlgeschlagen.', 'error');
   }
@@ -7397,6 +7435,7 @@ function hydrateWeatherSettings(){
   _renderWeatherEventsList(w.events || {});
   _bindWeatherHandlers();
   _refreshWeatherStatus();
+  _initWsSavedHintLifecycle();
 }
 
 // Loose Reolink-stream-URL detector. Only the path matters — Reolink RTSP
@@ -7870,7 +7909,7 @@ async function _saveWeatherLocation(){
     if (!r.ok) throw new Error('save_failed');
     state.config.server = state.config.server || {};
     state.config.server.location = partial.server.location;
-    showToast('Standort gespeichert.', 'success');
+    _wsBumpSavedHint();
     if (Number.isFinite(lat) && Number.isFinite(lon) && elevRaw === '') {
       _wsAutoFetchElevation(lat, lon);
     }
@@ -7945,7 +7984,7 @@ function _bindWeatherHandlers(){
       });
       if (r.ok) {
         cam.weather = updated.weather;
-        showToast(`${cam.name || cam.id}: Wetter-Kamera ${cb.checked ? 'an' : 'aus'}`, 'success');
+        _wsBumpSavedHint();
         // Re-render so the sun-timelapse rows reveal/collapse with the
         // master toggle (sun rows live inside .ws-sun-rows[hidden]).
         _renderWeatherCamList();
