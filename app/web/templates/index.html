@@ -275,24 +275,35 @@
                  the right-aligned ↺ indicator in the tab bar above and the
                  .cam-field-warn highlight on the specific missing fields. -->
             <div class="cam-tab-panel" id="cam-tab-verbindung">
-              <div class="cam-2col">
-                <div style="display:grid;gap:8px">
-                  <div class="row" style="grid-template-columns:1fr 70px;gap:8px">
-                    <div class="field-wrap"><input name="rtsp_ip" placeholder="192.168.X.X" /><span class="field-label">Kamera-IP</span></div>
-                    <div class="field-wrap"><input name="rtsp_port" placeholder="554" value="554" /><span class="field-label">Port</span></div>
-                  </div>
-                  <div class="cam-userpass">
-                    <div class="field-wrap"><input name="rtsp_user" placeholder="admin" /><span class="field-label">Benutzer</span></div>
-                    <div class="field-wrap pw-wrap">
-                      <div class="pw-input-row">
-                        <input name="rtsp_pass" type="password" placeholder="Passwort" autocomplete="off" />
-                        <button type="button" class="pw-eye" onclick="togglePwField(this,'rtsp_pass')" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-                      </div>
-                      <span class="field-label">Passwort</span>
+              <div style="display:grid;gap:8px">
+                <div class="row" style="grid-template-columns:1fr 70px;gap:8px">
+                  <div class="field-wrap"><input name="rtsp_ip" placeholder="192.168.X.X" /><span class="field-label">Kamera-IP</span></div>
+                  <div class="field-wrap"><input name="rtsp_port" placeholder="554" value="554" /><span class="field-label">Port</span></div>
+                </div>
+                <div class="cam-userpass">
+                  <div class="field-wrap"><input name="rtsp_user" placeholder="admin" /><span class="field-label">Benutzer</span></div>
+                  <div class="field-wrap pw-wrap">
+                    <div class="pw-input-row">
+                      <input name="rtsp_pass" type="password" placeholder="Passwort" autocomplete="off" />
+                      <button type="button" class="pw-eye" onclick="togglePwField(this,'rtsp_pass')" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
                     </div>
+                    <span class="field-label">Passwort</span>
                   </div>
                 </div>
-                <div style="display:grid;gap:8px">
+              </div>
+              <!-- Erweitert: RTSP-Pfad picker, auto-built RTSP-URL, optional
+                   Snapshot-URL. All debug/optional fields most users never
+                   touch — auto-defaults from manufacturer + credentials. -->
+              <div class="cam-rtsp-erw">
+                <button type="button" class="cam-rtsp-erw-btn" id="camRtspErwBtn"
+                        onclick="_toggleCamRtspErw()" aria-expanded="false">
+                  <svg class="cam-rtsp-erw-chev" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+                  <span>Erweitert · RTSP-Pfad &amp; URLs</span>
+                  <span class="cam-rtsp-erw-pill" id="rtspPathCustomPill" hidden>manuell überschrieben</span>
+                </button>
+                <div class="cam-rtsp-erw-body" id="rtspPathErwBody" hidden>
+                  <div class="field-help">Nur ändern wenn die Standard-Pfade des Herstellers nicht funktionieren (z. B. ältere Reolink mit H.264 statt H.265).</div>
+                  <div class="field-wrap"><select name="rtsp_path" id="rtspPathSelect"></select><span class="field-label">RTSP-Pfad</span></div>
                   <div class="field-wrap url-wrap">
                     <div class="pw-input-row">
                       <input name="rtsp_url" readonly style="color:var(--muted);font-size:11px" data-mask-url="1" />
@@ -307,21 +318,6 @@
                     </div>
                     <span class="field-label">Snapshot-URL – optional</span>
                   </div>
-                </div>
-              </div>
-              <!-- Erweitert: RTSP-Pfad picker. Auto-defaults from the
-                   manufacturer field; only relevant when the standard
-                   path doesn't work (older firmware, custom routes). -->
-              <div class="cam-rtsp-erw">
-                <button type="button" class="cam-rtsp-erw-btn" id="camRtspErwBtn"
-                        onclick="_toggleCamRtspErw()" aria-expanded="false">
-                  <svg class="cam-rtsp-erw-chev" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
-                  <span>Erweitert · RTSP-Pfad</span>
-                  <span class="cam-rtsp-erw-pill" id="rtspPathCustomPill" hidden>manuell überschrieben</span>
-                </button>
-                <div class="cam-rtsp-erw-body" id="rtspPathErwBody" hidden>
-                  <div class="field-help">Nur ändern wenn die Standard-Pfade des Herstellers nicht funktionieren (z. B. ältere Reolink mit H.264 statt H.265).</div>
-                  <div class="field-wrap"><select name="rtsp_path" id="rtspPathSelect"></select><span class="field-label">RTSP-Pfad</span></div>
                 </div>
               </div>
               <input type="hidden" name="object_filter" />
