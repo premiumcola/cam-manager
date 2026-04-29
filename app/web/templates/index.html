@@ -12,6 +12,14 @@
   <title>TAM-spy</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐿️</text></svg>">
   <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="anonymous" />
+  <script defer
+          src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin="anonymous"></script>
   <link rel="stylesheet" href="/static/app.css?v={{ static_v('app.css') }}" />
 </head>
 <body>
@@ -891,12 +899,13 @@
                 <div style="display:grid;gap:12px;padding-top:8px">
                   <div>
                     <div class="cam-field-label">Standort</div>
-                    <div class="row" style="grid-template-columns:1fr 1fr 1fr;margin-top:6px">
+                    <div id="weatherMap" class="ws-map" aria-label="Standort-Karte" style="margin-top:6px"></div>
+                    <div class="row" style="grid-template-columns:1fr 1fr 1fr;margin-top:10px">
                       <div class="field-wrap"><input type="number" step="0.0001" id="ws_lat" placeholder="49.4521" /><span class="field-label">Latitude</span></div>
                       <div class="field-wrap"><input type="number" step="0.0001" id="ws_lon" placeholder="11.0767" /><span class="field-label">Longitude</span></div>
                       <div class="field-wrap"><input type="number" step="1" id="ws_elev" placeholder="—" /><span class="field-label">Höhe m (opt.)</span></div>
                     </div>
-                    <div class="field-help" style="margin-top:6px">Wird vom Wetter-Service für Sonnenstand-Berechnung (Sonnenuntergang) und vom Telegram-Push-System für Nacht-Erkennung verwendet.</div>
+                    <div class="field-help" style="margin-top:6px">Wird vom Wetter-Service für Sonnenstand-Berechnung (Sonnenuntergang) und vom Telegram-Push-System für Nacht-Erkennung verwendet. Klicke oder ziehe den Pin auf der Karte — Höhe wird automatisch ergänzt.</div>
                   </div>
                 </div>
               </div>
