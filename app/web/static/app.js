@@ -3071,8 +3071,20 @@ byId('cameraForm').onsubmit=async(e)=>{
     snapshot_interval_s:parseInt(f['snapshot_interval_s']?.value||3),
     zones:JSON.parse(f['zones_json'].value||'[]'),masks:JSON.parse(f['masks_json'].value||'[]')};
   const _savedId=payload.id; _restoreEditWrapper();
-  await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  await loadAll(); editCamera(_savedId);
+  // Backend rebuilds the canonical id when manufacturer/model/name/rtsp_url
+  // change (storage_migration). Read the response so we re-open the panel
+  // under the NEW id rather than the stale one we sent.
+  let _newId=_savedId, _renamed=false;
+  try{
+    const r=await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(r.ok){
+      const d=await r.json();
+      if(d&&d.id){ _newId=d.id; _renamed=!!d.id_renamed_from; }
+    }
+  }catch(_){/* fall back to old id */}
+  await loadAll();
+  if(_renamed) showToast('Kamera-ID aktualisiert · '+_newId,'success');
+  editCamera(_newId);
 };
 byId('closeCameraEdit')?.addEventListener('click',()=>_closeEditPanel());
 // ── Section-level save functions ──────────────────────────────────────────────
