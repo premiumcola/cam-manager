@@ -2121,3 +2121,8 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   color:var(--muted, #8a8a8a);
   text-align:right;
 }
+@keyframes ws-saved-pulse{0%{opacity:.5}50%{opacity:1}100%{opacity:.7}}
+.ws-saved-hint.is-pulsing{animation:ws-saved-pulse .6s ease}
+@media (prefers-reduced-motion: reduce){
+  .ws-saved-hint.is-pulsing{animation:none}
+}

@@ -7372,6 +7372,14 @@ function _wsBumpSavedHint(){
   state.weather = state.weather || {};
   state.weather._lastSavedAt = Date.now();
   _wsRenderSavedHint();
+  const el = byId('weatherSavedHint');
+  if (!el) return;
+  // Restart the pulse animation on every save, even back-to-back ones.
+  // The reflow read between remove/add forces the browser to retrigger.
+  el.classList.remove('is-pulsing');
+  void el.offsetWidth;
+  el.classList.add('is-pulsing');
+  setTimeout(() => el.classList.remove('is-pulsing'), 600);
 }
 
 function _wsRenderSavedHint(){
@@ -7379,8 +7387,12 @@ function _wsRenderSavedHint(){
   if (!el) return;
   const ts = state.weather && state.weather._lastSavedAt;
   if (!ts) { el.textContent = 'noch nicht gespeichert'; return; }
-  const t = new Date(ts).toLocaleTimeString('de-DE', { hour12: false });
-  el.textContent = 'zuletzt gespeichert · ' + t;
+  const ageS = Math.max(0, (Date.now() - ts) / 1000);
+  let label;
+  if (ageS < 60)        label = 'gerade eben';
+  else if (ageS < 300)  label = 'vor ' + Math.floor(ageS / 60) + ' min';
+  else                  label = new Date(ts).toLocaleTimeString('de-DE', { hour12: false });
+  el.textContent = 'zuletzt gespeichert · ' + label;
 }
 
 function _initWsSavedHintLifecycle(){
@@ -7389,7 +7401,7 @@ function _initWsSavedHintLifecycle(){
   sec.dataset.wsHintObs = '1';
   const start = () => {
     _wsRenderSavedHint();
-    if (!_wsHintTimer) _wsHintTimer = setInterval(_wsRenderSavedHint, 30000);
+    if (!_wsHintTimer) _wsHintTimer = setInterval(_wsRenderSavedHint, 15000);
   };
   const stop = () => {
     if (_wsHintTimer) { clearInterval(_wsHintTimer); _wsHintTimer = null; }
@@ -7400,17 +7412,35 @@ function _initWsSavedHintLifecycle(){
 }
 
 let _weatherSaveTimer = null;
-async function _saveWeatherCfg(partial){
+
+// Single chokepoint for every save inside the weather panel. Routes
+// through one helper so new handlers can't forget to bump the
+// "zuletzt gespeichert" hint — the prior sprinkle pattern silently
+// missed the Farbmodus and Ereignis-Timelapse sliders. Returns the
+// raw Response (or null on network error) so callers can still
+// r.json() and guard state mutations on r.ok.
+async function _weatherPanelSave(url, payload){
+  let r;
   try {
-    await fetch('/api/settings/app', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ weather: partial }),
+    r = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
     });
+  } catch (_) {
+    showToast('Speichern fehlgeschlagen.', 'error');
+    return null;
+  }
+  if (r.ok) _wsBumpSavedHint();
+  else      showToast('Speichern fehlgeschlagen.', 'error');
+  return r;
+}
+
+async function _saveWeatherCfg(partial){
+  const r = await _weatherPanelSave('/api/settings/app', { weather: partial });
+  if (r && r.ok) {
     state.config.weather = state.config.weather || {};
     _wsMergeDeep(state.config.weather, partial);
-    _wsBumpSavedHint();
-  } catch (e) {
-    showToast('Speichern fehlgeschlagen.', 'error');
   }
 }
 function _wsMergeDeep(t, s){
@@ -7695,20 +7725,13 @@ async function _saveSunPhase(camId, phase, partial){
       },
     },
   };
-  try {
-    const r = await fetch('/api/settings/cameras', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated),
-    });
-    if (r.ok) {
-      cam.weather = updated.weather;
-      // Refresh the preview line for this camera by re-fetching sun-times.
-      const st = await fetch('/api/weather/sun-times').then(x => x.json()).catch(() => null);
-      if (st) state.weather._sunTimes = st;
-      _renderWeatherCamList();
-    }
-  } catch (e) {
-    showToast('Speichern fehlgeschlagen.', 'error');
+  const r = await _weatherPanelSave('/api/settings/cameras', updated);
+  if (r && r.ok) {
+    cam.weather = updated.weather;
+    // Refresh the preview line for this camera by re-fetching sun-times.
+    const st = await fetch('/api/weather/sun-times').then(x => x.json()).catch(() => null);
+    if (st) state.weather._sunTimes = st;
+    _renderWeatherCamList();
   }
 }
 
@@ -7764,17 +7787,10 @@ async function _saveEventTL(camId, partial){
       event_timelapse: merged,
     },
   };
-  try {
-    const r = await fetch('/api/settings/cameras', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updated),
-    });
-    if (r.ok) {
-      cam.weather = updated.weather;
-      _renderWeatherCamList();
-    }
-  } catch (e) {
-    showToast('Speichern fehlgeschlagen.', 'error');
+  const r = await _weatherPanelSave('/api/settings/cameras', updated);
+  if (r && r.ok) {
+    cam.weather = updated.weather;
+    _renderWeatherCamList();
   }
 }
 
@@ -7913,20 +7929,13 @@ async function _saveWeatherLocation(){
     lon: Number.isFinite(lon) ? lon : null,
     elevation: Number.isFinite(elev) ? elev : null,
   } } };
-  try {
-    const r = await fetch('/api/settings/app', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(partial),
-    });
-    if (!r.ok) throw new Error('save_failed');
+  const r = await _weatherPanelSave('/api/settings/app', partial);
+  if (r && r.ok) {
     state.config.server = state.config.server || {};
     state.config.server.location = partial.server.location;
-    _wsBumpSavedHint();
     if (Number.isFinite(lat) && Number.isFinite(lon) && elevRaw === '') {
       _wsAutoFetchElevation(lat, lon);
     }
-  } catch (e) {
-    showToast('Speichern fehlgeschlagen.', 'error');
   }
 }
 
@@ -7989,20 +7998,12 @@ function _bindWeatherHandlers(){
     const cam = (state.cameras || []).find(c => c.id === camId);
     if (!cam) return;
     const updated = { ...cam, weather: { ...(cam.weather || {}), enabled: !!cb.checked } };
-    try {
-      const r = await fetch('/api/settings/cameras', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updated),
-      });
-      if (r.ok) {
-        cam.weather = updated.weather;
-        _wsBumpSavedHint();
-        // Re-render so the sun-timelapse rows reveal/collapse with the
-        // master toggle (sun rows live inside .ws-sun-rows[hidden]).
-        _renderWeatherCamList();
-      }
-    } catch (err) {
-      showToast('Speichern fehlgeschlagen.', 'error');
+    const r = await _weatherPanelSave('/api/settings/cameras', updated);
+    if (r && r.ok) {
+      cam.weather = updated.weather;
+      // Re-render so the sun-timelapse rows reveal/collapse with the
+      // master toggle (sun rows live inside .ws-sun-rows[hidden]).
+      _renderWeatherCamList();
     }
   });
   byId('weatherEventsList')?.addEventListener('change', (e) => {
