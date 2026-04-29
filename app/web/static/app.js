@@ -5173,12 +5173,10 @@ let _iosCurrentVideo=null;     // the transient <video> currently playing
 let _iosCurrentItem=null;      // the media item bound to that video
 function _iosNativeVideoOpen(item){
   if(!item) return;
-  // Tear down any previous transient first — defensive in case the user
-  // tapped a new clip while the action sheet from a prior one is up.
+  // Tear down any previous transient first.
   _iosTeardownVideo();
-  _iosHideActionSheet();
-  // Keep _lbItem / _lbIndex in sync with state._allMedia so prev/next
-  // and the action sheet can compute neighbours via the shared list.
+  // Keep _lbItem / _lbIndex in sync with state._allMedia for the
+  // inline ✓/✗ buttons on each card to operate on the right entry.
   const globalList=state._allMedia||[];
   const idx=globalList.findIndex(x=>x.event_id===item.event_id);
   _lbIndex=idx>=0?idx:0;
@@ -5197,9 +5195,11 @@ function _iosNativeVideoOpen(item){
   document.body.appendChild(v);
   _iosCurrentVideo=v;
   const _onEnd=()=>{
+    // Closing the iOS native player just returns the user to the grid.
+    // The inline ✓/✗ on each card handle confirm/delete; the old
+    // floating action sheet (Behalten/Tags/Löschen/prev/next) was a
+    // desktop-era leftover that briefly appeared then faded out.
     _iosTeardownVideo();
-    // Show the action sheet anchored to the now-visible underlying section.
-    _iosShowActionSheet(_iosCurrentItem);
   };
   v.addEventListener('webkitendfullscreen',_onEnd);
   v.addEventListener('ended',_onEnd);
@@ -5228,125 +5228,6 @@ function _iosTeardownVideo(){
   if(v.parentNode) v.parentNode.removeChild(v);
   _iosCurrentVideo=null;
 }
-// Inline action sheet shown after the iOS native player closes. Anchors
-// above the home-indicator safe-area; auto-dismisses after 5 s or on
-// tap outside. All buttons reuse the existing API endpoints used by
-// the lightbox shell on desktop.
-let _iosSheetEl=null,_iosSheetTimer=0,_iosSheetOutsideHandler=null;
-function _iosShowActionSheet(item){
-  _iosHideActionSheet();
-  if(!item) return;
-  const sheet=document.createElement('div');
-  sheet.id='_iosActionSheet';
-  sheet.style.cssText=[
-    'position:fixed','left:50%','transform:translateX(-50%)',
-    'bottom:calc(16px + env(safe-area-inset-bottom))',
-    'z-index:1300',
-    'background:rgba(15,24,37,.96)','color:#e2e8f0',
-    'padding:10px 12px','border-radius:18px',
-    'box-shadow:0 14px 40px rgba(0,0,0,.55)',
-    'display:flex','flex-wrap:wrap','gap:8px','justify-content:center',
-    'max-width:calc(100vw - 24px)','backdrop-filter:blur(10px)'
-  ].join(';');
-  const BTN='padding:10px 14px;min-height:44px;border:none;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;-webkit-tap-highlight-color:transparent';
-  const globalList=state._allMedia||[];
-  const idx=globalList.findIndex(x=>x.event_id===item.event_id);
-  const hasPrev=idx>0, hasNext=idx>=0&&idx<globalList.length-1;
-  sheet.innerHTML=`
-    <button data-act="prev"  ${hasPrev?'':'disabled'} style="${BTN};background:rgba(255,255,255,.08);color:#cbd5e1;${hasPrev?'':'opacity:.35'}">◀</button>
-    <button data-act="confirm" style="${BTN};background:rgba(34,197,94,.18);color:#4ade80">✓ Behalten</button>
-    <button data-act="tags"    style="${BTN};background:rgba(59,130,246,.18);color:#93c5fd">🏷 Tags</button>
-    <button data-act="delete"  style="${BTN};background:rgba(239,68,68,.18);color:#f87171">🗑 Löschen</button>
-    <button data-act="next"  ${hasNext?'':'disabled'} style="${BTN};background:rgba(255,255,255,.08);color:#cbd5e1;${hasNext?'':'opacity:.35'}">▶</button>
-  `;
-  document.body.appendChild(sheet);
-  _iosSheetEl=sheet;
-  sheet.addEventListener('click',ev=>{
-    const btn=ev.target.closest('[data-act]'); if(!btn) return;
-    ev.stopPropagation();
-    const act=btn.dataset.act;
-    if(act==='prev' && hasPrev){ _iosHideActionSheet(); _iosNativeVideoOpen(globalList[idx-1]); return; }
-    if(act==='next' && hasNext){ _iosHideActionSheet(); _iosNativeVideoOpen(globalList[idx+1]); return; }
-    if(act==='confirm'){ _iosHideActionSheet(); _iosConfirmCurrent(item); return; }
-    if(act==='delete') { _iosHideActionSheet(); _iosDeleteCurrent(item); return; }
-    if(act==='tags')   { _iosHideActionSheet(); _iosOpenTagChooser(item); return; }
-  });
-  // Auto-dismiss after 5 s of no interaction.
-  _iosSheetTimer=setTimeout(_iosHideActionSheet,5000);
-  // Tap outside the sheet also dismisses (capture-phase so a tap on a
-  // different control fires its own action AFTER our cleanup).
-  _iosSheetOutsideHandler=(e)=>{ if(!sheet.contains(e.target)) _iosHideActionSheet(); };
-  setTimeout(()=>document.addEventListener('click',_iosSheetOutsideHandler,{capture:true}),0);
-}
-function _iosHideActionSheet(){
-  if(_iosSheetEl){ try{ _iosSheetEl.remove(); }catch{} _iosSheetEl=null; }
-  if(_iosSheetTimer){ clearTimeout(_iosSheetTimer); _iosSheetTimer=0; }
-  if(_iosSheetOutsideHandler){
-    document.removeEventListener('click',_iosSheetOutsideHandler,{capture:true});
-    _iosSheetOutsideHandler=null;
-  }
-}
-async function _iosConfirmCurrent(item){
-  if(!item?.camera_id || !item?.event_id) return;
-  try{
-    await j(`/api/camera/${encodeURIComponent(item.camera_id)}/events/${encodeURIComponent(item.event_id)}/confirm`,{method:'POST'});
-    item.confirmed=true;
-    const aIdx=(state._allMedia||[]).findIndex(x=>x.event_id===item.event_id);
-    if(aIdx>=0) state._allMedia[aIdx].confirmed=true;
-    const sIdx=(state.media||[]).findIndex(x=>x.event_id===item.event_id);
-    if(sIdx>=0) state.media[sIdx].confirmed=true;
-    try{ renderMediaGrid(); }catch{}
-    showToast('✓ Behalten','success');
-  }catch(e){ showToast('Bestätigen fehlgeschlagen: '+e.message,'error'); }
-}
-async function _iosDeleteCurrent(item){
-  if(!item?.camera_id || !item?.event_id) return;
-  try{
-    await j(`/api/camera/${encodeURIComponent(item.camera_id)}/events/${encodeURIComponent(item.event_id)}`,{method:'DELETE'});
-    state._allMedia=(state._allMedia||[]).filter(x=>x.event_id!==item.event_id);
-    const ps=calcItemsPerPage();
-    state.mediaTotalPages=Math.max(1,Math.ceil((state._allMedia||[]).length/ps));
-    state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
-    state.media=(state._allMedia||[]).slice(state.mediaPage*ps,(state.mediaPage+1)*ps);
-    try{ renderMediaGrid(); renderMediaPagination(); }catch{}
-    showToast('Gelöscht','success');
-    refreshTimelineAndStats?.();
-  }catch(e){ showToast('Löschen fehlgeschlagen: '+e.message,'error'); }
-}
-function _iosOpenTagChooser(item){
-  // Reuse the existing _renderLbLabels chooser — render its bubbles into
-  // a small modal, point _lbItem at the current item, and wire close-on-
-  // tap-outside. The toggle endpoint inside _renderLbLabels updates state
-  // in-place; nothing else is needed.
-  _lbItem=item;
-  const modal=document.createElement('div');
-  modal.id='_iosTagModal';
-  modal.style.cssText='position:fixed;inset:0;z-index:1400;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center;padding:0 0 calc(20px + env(safe-area-inset-bottom))';
-  modal.innerHTML=`
-    <div style="background:#0d141d;border-radius:24px 24px 0 0;padding:18px 14px calc(18px + env(safe-area-inset-bottom));width:100%;max-width:520px;box-shadow:0 -10px 40px rgba(0,0,0,.6)">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <div style="font-size:13px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em">Tags</div>
-        <button id="_iosTagClose" style="background:transparent;border:none;color:#cbd5e1;font-size:22px;line-height:1;cursor:pointer">×</button>
-      </div>
-      <div id="lightboxLabelsTmp" style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center"></div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-  // Temporarily swap lightboxLabels target so the existing renderer
-  // writes into our sheet without us having to fork its 50 lines.
-  const realLabels=byId('lightboxLabels');
-  const tmp=modal.querySelector('#lightboxLabelsTmp');
-  if(realLabels){ tmp.id='lightboxLabels'; realLabels.id='lightboxLabelsReal'; }
-  try{ _renderLbLabels(); }catch{}
-  // Close paths.
-  const _close=()=>{
-    if(realLabels){ tmp.id='lightboxLabelsTmp'; realLabels.id='lightboxLabels'; }
-    try{ modal.remove(); }catch{}
-  };
-  modal.addEventListener('click',e=>{ if(e.target===modal) _close(); });
-  modal.querySelector('#_iosTagClose').addEventListener('click',_close);
-}
-
 // Swipe navigation on the lightbox media area (mobile). Horizontal
 // swipe = prev/next, vertical swipe ≥ 80 px down = dismiss.
 (function initLightboxSwipe(){
