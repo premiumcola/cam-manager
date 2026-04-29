@@ -4491,8 +4491,6 @@ byId('wizFinish').onclick=()=>finishWizard();
 // ── Sidebar ───────────────────────────────────────────────────���───────────────
 (function initSidebar(){
   const sidebar=byId('sidebar');
-  const hamburger=byId('hamburgerBtn');
-  const overlay=byId('sidebarOverlay');
   const STORAGE_KEY='tspy_sidebar_collapsed';
 
   function setCollapsed(yes){
@@ -4500,9 +4498,10 @@ byId('wizFinish').onclick=()=>finishWizard();
     try{localStorage.setItem(STORAGE_KEY,yes?'1':'0');}catch{}
   }
 
-  // Desktop (>1024px): always collapsed; CSS hover expands — no localStorage interaction
-  // Tablet (768-1024px): collapsed by default, hamburger toggles + saves to localStorage
-  // Mobile (≤768px): hidden, hamburger slides in as overlay
+  // Desktop (>1024px): always collapsed; CSS hover expands.
+  // Tablet  (768-1024px): collapsed by default, persisted via localStorage.
+  // Mobile  (≤768px): hidden — navigation lives in the bottom dock now,
+  // so the drawer + hamburger + edge-swipe machinery is gone.
   if(window.innerWidth>1024){
     sidebar.classList.add('collapsed');
   } else if(window.innerWidth>768){
@@ -4510,74 +4509,7 @@ byId('wizFinish').onclick=()=>finishWizard();
     setCollapsed(saved!=='0');
   }
 
-  // Open/close on mobile uses a body class for scroll-lock (CSS handles
-  // overflow + touch-action). pushState makes the browser back-button
-  // close the drawer instead of navigating away.
-  function _mobileOpen(){
-    sidebar.classList.add('mobile-open');
-    overlay.classList.add('visible');
-    document.body.classList.add('sidebar-locked');
-    if(history.state?.tspy_sidebar!==1){
-      try{history.pushState({tspy_sidebar:1},'');}catch{}
-    }
-  }
-  function _mobileClose(opts){
-    sidebar.classList.remove('mobile-open');
-    overlay.classList.remove('visible');
-    document.body.classList.remove('sidebar-locked');
-    // When the close was triggered by user action (overlay tap, nav
-    // click), pop the synthetic history entry. When it came from
-    // popstate itself, skip — popping again would navigate away.
-    if(!opts?.fromPopstate && history.state?.tspy_sidebar===1){
-      try{history.back();}catch{}
-    }
-  }
-
-  if(hamburger) hamburger.onclick=()=>{
-    if(window.innerWidth<=768){
-      _mobileOpen();
-    } else if(window.innerWidth<=1024){
-      setCollapsed(!sidebar.classList.contains('collapsed'));
-    }
-    // Desktop: hamburger does nothing — hover handles expand/collapse
-  };
-
-  if(overlay) overlay.onclick=()=>_mobileClose();
-
-  // Browser back-button closes the drawer instead of navigating off.
-  window.addEventListener('popstate',()=>{
-    if(sidebar.classList.contains('mobile-open')){
-      _mobileClose({fromPopstate:true});
-    }
-  });
-
-  // Edge-swipe to open the drawer on mobile. Touch must start within
-  // the leftmost 20 px so iOS-native back-swipe + intentional gestures
-  // farther in still work. preventDefault is held back until the swipe
-  // is confirmed-horizontal in touchmove — otherwise vertical scrolling
-  // that happens to start near the edge would jam.
-  let _swStartX=0,_swStartY=0,_swActive=false;
-  document.body.addEventListener('touchstart',(e)=>{
-    if(window.innerWidth>768) return;
-    if(sidebar.classList.contains('mobile-open')) return;
-    const t=e.changedTouches[0];
-    if(!t||t.clientX>20) return;
-    _swStartX=t.clientX;_swStartY=t.clientY;_swActive=true;
-  },{passive:true});
-  document.body.addEventListener('touchmove',(e)=>{
-    if(!_swActive) return;
-    const t=e.changedTouches[0];
-    const dx=t.clientX-_swStartX;
-    const dy=Math.abs(t.clientY-_swStartY);
-    if(dy>40){_swActive=false;return;}
-    if(dx>=60){_swActive=false;e.preventDefault();_mobileOpen();}
-  },{passive:false});
-  document.body.addEventListener('touchend',()=>{_swActive=false;},{passive:true});
-
   document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',e=>{
-    if(window.innerWidth<=768){
-      _mobileClose();
-    }
     e.preventDefault();
     const target=document.querySelector(a.getAttribute('href'));
     if(!target) return;
