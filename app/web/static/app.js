@@ -328,6 +328,7 @@ async function loadAll(){
   state.bootstrap=await j('/api/bootstrap');
   state.config=await j('/api/config');
   state.cameras=(await j('/api/cameras')).cameras||[];
+  if(typeof window._updateMobileDockLiveDot==='function') window._updateMobileDockLiveDot();
   state.timeline=await j(`/api/timeline?hours=${state.tlHours||168}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`);
   await loadMediaStorageStats();
   renderShell();
@@ -4593,6 +4594,75 @@ byId('wizFinish').onclick=()=>finishWizard();
     },420);
   }));
 })();
+
+// ── Mobile bottom dock ───────────────────────────────────────────────────────
+// 5-tab nav that replaces the old mobile topbar. Click → smooth-scroll;
+// scroll-spy auto-activates the tab whose section is centered. Sections
+// without a matching dock entry (cameras, media, logs) ride along with a
+// related tab via the data-dock-section attribute.
+function _initMobileDock(){
+  const dock=document.getElementById('mobileDock');
+  if(!dock) return;
+  const btns=Array.from(dock.querySelectorAll('.m-dock-btn'));
+  btns.forEach(btn=>{btn.style.setProperty('--m-acc',btn.dataset.accentRgb);});
+
+  function setActiveByDockTarget(target){
+    btns.forEach(b=>b.classList.toggle('is-active',b.dataset.target===target));
+  }
+
+  // Section-id → dock-target. data-dock-section overrides the default
+  // self-mapping so #cameras rides Live, #media rides Statistik, #logs
+  // rides Setup.
+  const sectionIds=['dashboard','cameras','statistik','media','achievements','weather','settings','logs'];
+  const targetById={};
+  for(const id of sectionIds){
+    const el=document.getElementById(id);
+    if(!el) continue;
+    targetById[id]=el.dataset.dockSection||id;
+  }
+
+  btns.forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const targetId=btn.dataset.target;
+      const el=document.getElementById(targetId);
+      if(!el) return;
+      const wasActive=btn.classList.contains('is-active');
+      setActiveByDockTarget(targetId);
+      if(wasActive){
+        window.scrollTo({top:el.offsetTop-12,behavior:'smooth'});
+      } else {
+        el.scrollIntoView({behavior:'smooth',block:'start'});
+      }
+      if(location.hash!=='#'+targetId){
+        try{history.replaceState(null,'','#'+targetId);}catch{}
+      }
+    });
+  });
+
+  const tracked=Object.keys(targetById).map(id=>document.getElementById(id)).filter(Boolean);
+  if(tracked.length){
+    const io=new IntersectionObserver((entries)=>{
+      let best=null;
+      for(const e of entries){
+        if(!best||e.intersectionRatio>best.intersectionRatio) best=e;
+      }
+      if(best&&best.intersectionRatio>0.25){
+        const target=targetById[best.target.id];
+        if(target) setActiveByDockTarget(target);
+      }
+    },{rootMargin:'-30% 0px -55% 0px',threshold:[0,0.25,0.5,0.75,1]});
+    tracked.forEach(el=>io.observe(el));
+  }
+
+  window._updateMobileDockLiveDot=function(){
+    const dot=dock.querySelector('.m-dock-btn[data-target="dashboard"] .m-dock-livedot');
+    if(!dot) return;
+    const anyLive=(state.cameras||[]).some(c=>c.enabled&&c.armed);
+    dot.hidden=!anyLive;
+  };
+  _updateMobileDockLiveDot();
+}
+_initMobileDock();
 
 // ── Logs ─────────────────────────────────────────────────────────────────────
 function _logSubsystemShort(logger){

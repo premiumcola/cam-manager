@@ -206,7 +206,7 @@
         <div id="cameraCards" class="camera-grid"></div>
       </section>
 
-      <section id="cameras" class="panel section">
+      <section id="cameras" class="panel section" data-dock-section="dashboard">
         <div class="section-head section-head--with-icon">
           <span class="section-head-icon" aria-hidden="true"><svg width="24" height="24"><use href="#icon-cameras"/></svg></span>
           <h3>Geräte</h3>
@@ -554,7 +554,7 @@
         <div id="statHeatmapBlock"></div>
       </section>
 
-      <section id="media" class="panel section">
+      <section id="media" class="panel section" data-dock-section="statistik">
         <div class="section-head">
           <h3 id="mediaSectionTitle" class="media-section-title"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M7 6V4h10v2"/><circle cx="12" cy="13" r="3"/></svg><span class="mst-text">Mediathek</span></h3>
           <div style="display:flex;gap:8px;margin-left:auto;align-items:center;flex-wrap:wrap">
@@ -1084,7 +1084,7 @@
 
       </section>
 
-      <section id="logs" class="panel section">
+      <section id="logs" class="panel section" data-dock-section="settings">
         <div class="section-head">
           <h3>System-Logs</h3>
           <div style="display:flex;gap:8px;align-items:center">
@@ -1251,6 +1251,29 @@
     </div>
   </div>
 
+  <nav id="mobileDock" class="m-dock" role="navigation" aria-label="Hauptnavigation">
+    <button type="button" class="m-dock-btn" data-target="dashboard"    data-accent-rgb="59,130,246">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-livefeed"/></svg>
+      <span class="m-dock-lbl">Live</span>
+      <span class="m-dock-livedot" hidden></span>
+    </button>
+    <button type="button" class="m-dock-btn" data-target="statistik"    data-accent-rgb="34,197,94">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-statistik"/></svg>
+      <span class="m-dock-lbl">Statistik</span>
+    </button>
+    <button type="button" class="m-dock-btn" data-target="achievements" data-accent-rgb="200,120,64">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-paw"/></svg>
+      <span class="m-dock-lbl">Sichtungen</span>
+    </button>
+    <button type="button" class="m-dock-btn" data-target="weather"      data-accent-rgb="127,174,201">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-cloud-rain"/></svg>
+      <span class="m-dock-lbl">Wetter</span>
+    </button>
+    <button type="button" class="m-dock-btn" data-target="settings"     data-accent-rgb="143,158,181">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-settings"/></svg>
+      <span class="m-dock-lbl">Setup</span>
+    </button>
+  </nav>
   <script src="/static/app.js?v={{ static_v('app.js') }}"></script>
 </body>
 </html>
