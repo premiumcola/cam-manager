@@ -2063,6 +2063,41 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   -webkit-user-select:none;
 }
 
+/* ── iOS mobile width-cap safety net ─────────────────────────────────────
+   Belt-and-braces against the "intrinsic image width pushes a flex/grid
+   ancestor past viewport" bug on iPhone when a live-tile snapshot
+   finishes loading. The .cv-card itself was already protected
+   (min-width:0, contain:paint, .cv-img absolute-positioned); the leak
+   was higher up the ancestor chain — .panel.section had no min-width:0
+   override, so a grid item with intrinsic-width content could push past
+   its track and drag the whole page along. */
+.main > .panel,
+.main > .section,
+.main > .panel.section,
+#dashboard,
+#dashboard .section-head,
+#cameraCards{min-width:0}
+#dashboard,
+#cameraCards{max-width:100%}
+
+/* Strengthen the .cv-img cap with !important on max-width so a future
+   stylesheet, an inline width attr from some refactor, or a Safari
+   cascade quirk cannot bypass it. The absolute positioning from the
+   earlier rule stays untouched — only the cap gains priority. */
+#cameraCards img,
+#cameraCards video,
+.cv-card .cv-img{max-width:100%!important;max-height:100%}
+
+/* Final viewport-level guard. Even if a new element ships without proper
+   sizing, mobile layout cannot scale out. The img/video catch-all here
+   is overridden by the more specific .cv-img rule above for live tiles,
+   so absolute positioning there is untouched. */
+@media (max-width:768px){
+  html,body{overflow-x:hidden;max-width:100vw}
+  .main,.panel,.section{max-width:100%;min-width:0}
+  img,video{max-width:100%;height:auto}
+}
+
 /* Mobile perf — drop backdrop-filter on the high-density overlay pills.
    Each blur layer costs a compositor pass; on a card-heavy dashboard this
    adds up to dropped frames on iPhone SE. The pills stay readable as
