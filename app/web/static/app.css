@@ -69,6 +69,37 @@ select option{background:#1e1e1e;color:#c8c8c8}
 .hero-build .hero-build-date{color:rgba(255,255,255,.55);font-size:10.5px}
 .hero-build .hero-build-sep{color:rgba(255,255,255,.25)}
 @media(max-width:640px){.hero-build{font-size:10px;padding-left:8px}}
+
+/* Mobile-compact hero panel — desktop layout untouched (>768 px).
+   Switches to a stacked column so the build-info row drops to the
+   bottom instead of fighting the wrapped h2 for horizontal space. */
+@media (max-width:768px){
+  .hero{
+    flex-direction:column;
+    align-items:stretch;
+    padding:14px 16px;
+    gap:10px;
+  }
+  /* Override the inline gap:16px on the logo+text flex row. */
+  .hero > div:first-child{gap:10px!important}
+  .hero-logo{width:56px;height:56px;flex-shrink:0}
+  .hero-logo svg{width:100%;height:100%;display:block}
+  .hero h2{font-size:17px;line-height:1.25}
+  .hero p.muted{
+    font-size:12px;line-height:1.35;
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+  }
+  /* Build-info row: bottom of the column, full-width, single line. */
+  .hero-build{
+    margin-left:0;width:100%;padding-left:0;
+    justify-content:flex-start;flex-wrap:nowrap;
+    font-size:10px;overflow:hidden;
+  }
+  .hero-build > *{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+}
 /* ── Camera video-grid ──────────────────────────────────────────────────────── */
 .camera-grid{display:grid;gap:12px}
 /* minmax(0, 1fr) — without it Safari treats grid-child min-width as
