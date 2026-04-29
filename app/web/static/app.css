@@ -1093,6 +1093,9 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
     width:100%;
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   }
+  /* XL medal base label was 13 px desktop — at 88 px medal width that
+     reads heavy. Drop to match the variant line. */
+  .ach-card--xl .medal-name-base{font-size:11px}
   .ach-card--xl .medal-variant{font-size:10px}
 }
 
@@ -2046,11 +2049,6 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   /* Sichtungen progress bar — slim on mobile so the achievements grid
      gets the visual weight, not the meta strip on top. */
   .ach-progress-track{height:6px}
-}
-@media (max-width:480px){
-  /* Two columns minimum on iPhone SE — auto-fill at 90 px would yield
-     four cramped cards on a 375 px width. */
-  .ach-cards-grid{grid-template-columns:repeat(2,1fr)}
 }
 
 /* ── Wetter mobile ────────────────────────────────────────────────────── */
