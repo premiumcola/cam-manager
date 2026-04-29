@@ -991,6 +991,24 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .ach-drill-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;padding:12px 14px 14px 14px}
 .ach-drill-more{display:flex;justify-content:center;padding:0 14px 14px}
 
+/* Mobile-dense Sichtungen grid: 6 base tracks, regular tiles span 2
+   (3 per row), XL squirrel medals span 3 (2 per row). Fixed columns
+   instead of auto-fill so we don't get half-empty rows. Desktop's
+   auto-fill layout above stays as-is. */
+@media (max-width:768px){
+  .ach-cards-grid{grid-template-columns:repeat(6,1fr);gap:6px}
+  .ach-card{grid-column:span 2;padding:6px 2px 4px}
+  .ach-card--xl{grid-column:span 3}
+  .medal-wrap{width:64px;height:64px;margin-top:6px}
+  .ach-card--xl .medal-wrap{width:88px;height:88px}
+  .medal-name{
+    font-size:11px;
+    width:100%;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .ach-card--xl .medal-variant{font-size:10px}
+}
+
 /* Discovery add-camera form */
 .disc-add-form{background:#1a1a1a;border-radius:12px;padding:12px;margin-top:8px}
 .sq-hop-anim{animation:sq-hop-logo 1.8s ease-in-out infinite}
