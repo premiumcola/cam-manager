@@ -564,8 +564,6 @@ function renderDashboard(){
   const cams=state.cameras;
   const gridCls=_camGridCols(cams.length);
   byId('cameraCards').className=`camera-grid ${gridCls}`;
-  // shared SVGs
-  const pencil=`<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>`;
   byId('cameraCards').innerHTML=cams.map(c=>{
     const hdOn=_hdCards.has(c.id);
     const snapUrl=hdOn
@@ -643,10 +641,14 @@ ${isActive?`
         ${sch.enabled?`<div class="cv-surveil-time">${esc(sch.from||'')} – ${esc(sch.to||'')}</div>`:''}
       `}
     </div>
-    <!-- bottom: hover action button -->
-    <div class="cv-actions">
-      <button class="cv-abt cv-abt-edit" onclick="event.stopPropagation();editCamera('${esc(c.id)}')">${pencil}<span>Einstellungen</span></button>
-    </div>
+    <!-- bottom-right: settings cog. Flat dark surface matches the
+         mobile-dock chrome; tap → camera-edit form. -->
+    <button class="cv-cog" type="button" onclick="event.stopPropagation();editCamera('${esc(c.id)}')" title="Einstellungen" aria-label="Einstellungen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+      </svg>
+    </button>
   </div>
 </article>`;
   }).join('');

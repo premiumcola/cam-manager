@@ -316,21 +316,26 @@ select option{background:#1e1e1e;color:#c8c8c8}
 .cv-runner-stride{animation:cv-runner-stride 1.1s ease-in-out infinite;transform-origin:50% 60%}
 @keyframes cv-runner-stride{0%,100%{transform:translateY(0) translateX(0)}30%{transform:translateY(-1.5px) translateX(1.5px)}70%{transform:translateY(0) translateX(-.5px)}}
 
-/* ── Bottom action buttons (hover, icon + label) ─────────────────────────── */
-.cv-actions{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:flex-start;align-items:center;gap:8px;padding:10px 14px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:3}
-.cv-card:hover .cv-actions{opacity:1;pointer-events:auto}
+/* ── Settings cog (bottom-right of each tile) ────────────────────────────
+   Replaces the old hover-revealed .cv-actions panel. Flat dark surface
+   in the same #1c1c20 tone as the mobile bottom-dock so the dashboard
+   chrome reads as one family. */
 .cv-card:hover .cv-grad-bot{opacity:1}
-.cv-abt{display:flex;flex-direction:column;align-items:center;gap:3px;background:rgba(0,0,0,.6);border:1.5px solid rgba(255,255,255,.28);border-radius:12px;padding:8px 12px;cursor:pointer;color:#fff;font-size:11px;font-weight:600;min-width:62px;transition:background .15s,transform .1s}
-.cv-abt svg{opacity:.85}
-.cv-abt span{display:block;text-align:center;white-space:nowrap}
-.cv-abt:hover{transform:scale(1.05)}
-.cv-abt-live{background:rgba(34,197,94,.18);border-color:rgba(34,197,94,.4);color:#4ade80}
-.cv-abt-live:hover{background:rgba(34,197,94,.32);border-color:rgba(34,197,94,.7)}
-.cv-abt-edit:hover{background:rgba(59,130,246,.4);border-color:rgba(59,130,246,.6)}
-.cv-abt-arm-on{background:rgba(239,68,68,.28);border-color:rgba(239,68,68,.7);color:#fff}
-.cv-abt-arm-on svg{color:#fca5a5;opacity:1}
-.cv-abt-arm-on:hover{background:rgba(239,68,68,.4)}
-.cv-tl-view-link{font-size:9px;color:#d8b4fe;text-decoration:none;margin-top:1px;display:block;text-align:center}
+.cv-cog{
+  position:absolute;bottom:8px;right:8px;
+  width:34px;height:34px;border-radius:11px;
+  background:#1c1c20;
+  color:rgba(255,255,255,.7);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  border:0;outline:0;
+  -webkit-tap-highlight-color:transparent;
+  z-index:6;
+  transition:background .15s,color .15s,transform .12s;
+}
+.cv-cog:hover{background:#26262a;color:#fff}
+.cv-cog:active{transform:scale(.94)}
+.cv-cog svg{width:18px;height:18px}
 
 /* Legacy badge (used in camera settings list, not in grid) */
 .badge{padding:7px 10px;border-radius:999px;background:var(--surface);font-size:12px}
@@ -2127,11 +2132,6 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   /* Live pill — collapsed shrinks; expanded width caps to viewport so the
      pill never overflows a 375 px card. */
   .cv-pill-live-wrap{--lp-collapsed-w:88px;--lp-expanded-w:min(210px,calc(100vw - 32px))}
-  /* Action buttons (cv-abt) — drop the label text, icon-only. 44×44 hit
-     area per iOS HIG; the icon stays 18 px so the button reads as a chip
-     rather than a giant pad. */
-  .cv-abt{padding:13px;min-width:44px;min-height:44px;font-size:0;gap:0}
-  .cv-abt svg,.cv-abt > *:first-child{font-size:18px}
 }
 
 /* ── Statistik · timeline tap-tooltip ─────────────────────────────────── */
