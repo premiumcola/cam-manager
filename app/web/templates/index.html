@@ -277,7 +277,11 @@
             <div class="cam-tab-panel" id="cam-tab-verbindung">
               <div style="display:grid;gap:8px">
                 <div class="row" style="grid-template-columns:1fr 70px;gap:8px">
-                  <div class="field-wrap"><input name="rtsp_ip" placeholder="192.168.X.X" /><span class="field-label">Kamera-IP</span></div>
+                  <div class="field-wrap">
+                    <input name="rtsp_ip" placeholder="192.168.X.X" readonly class="cam-readonly-input" />
+                    <span class="field-label">Kamera-IP</span>
+                    <span class="cam-readonly-hint">Zum Ändern: Kamera neu einrichten.</span>
+                  </div>
                   <div class="field-wrap"><input name="rtsp_port" placeholder="554" value="554" /><span class="field-label">Port</span></div>
                 </div>
                 <div class="cam-userpass">
@@ -306,7 +310,7 @@
                   <div class="field-wrap"><select name="rtsp_path" id="rtspPathSelect"></select><span class="field-label">RTSP-Pfad</span></div>
                   <div class="field-wrap url-wrap">
                     <div class="pw-input-row">
-                      <input name="rtsp_url" readonly style="color:var(--muted);font-size:11px" data-mask-url="1" />
+                      <input name="rtsp_url" readonly class="cam-readonly-input" data-mask-url="1" />
                       <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
                     </div>
                     <span class="field-label">RTSP-URL (automatisch)</span>
