@@ -2084,6 +2084,14 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   #weatherStatsPills > *{scroll-snap-align:start;flex-shrink:0}
   #weatherStatsPills .ws-pill,
   #weatherStatsPills button{min-height:44px;padding:10px 14px}
+
+  /* Tighten the gap above the filter pills row — the head's 12 px
+     margin-bottom was wasting top-left space on iPhone widths. */
+  .weather-sightings-head{margin-bottom:6px}
+  /* The empty-state box and the Wetterdaten-block underneath it
+     used to read as merged. Add a small clean gap so they're
+     visually separated without floating apart. */
+  .ws-stats-block{margin-top:14px}
 }
 @media (max-width:380px){
   /* Two-column legend on iPhone SE so the labels don't truncate
