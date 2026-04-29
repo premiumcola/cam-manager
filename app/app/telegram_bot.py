@@ -114,7 +114,13 @@ class TelegramService:
         else:
             log.info("[tg] Aktiv: chat_id=%s token=%s…", self.chat_id, self.token[:8] if self.token else "")
         self.store = store
-        self.runtimes = runtimes or {}
+        # Preserve identity of the caller's runtimes dict — `runtimes or {}`
+        # would replace an empty-but-non-None dict (which is falsy) with a
+        # fresh local {}, severing the live reference. The bot was then
+        # stuck with a permanently empty registry while the server kept
+        # populating its own dict, causing every cam:*:livebild callback
+        # to fall through to "Kamera nicht erreichbar — Runtime startet noch."
+        self.runtimes = runtimes if runtimes is not None else {}
         self.global_cfg = global_cfg
         self.timelapse_builder = timelapse_builder
         self.settings_store = settings_store
