@@ -7368,6 +7368,8 @@ function initWeatherTabs(){
 // section's class list, so toggleSetSection stays untouched.
 let _wsHintTimer = null;
 
+let _wsPulseTimer = null;
+
 function _wsBumpSavedHint(){
   state.weather = state.weather || {};
   state.weather._lastSavedAt = Date.now();
@@ -7376,10 +7378,13 @@ function _wsBumpSavedHint(){
   if (!el) return;
   // Restart the pulse animation on every save, even back-to-back ones.
   // The reflow read between remove/add forces the browser to retrigger.
+  // Cancel the prior cleanup timer so a fast second save can't drop the
+  // class mid-animation of the third.
   el.classList.remove('is-pulsing');
   void el.offsetWidth;
   el.classList.add('is-pulsing');
-  setTimeout(() => el.classList.remove('is-pulsing'), 600);
+  if (_wsPulseTimer) clearTimeout(_wsPulseTimer);
+  _wsPulseTimer = setTimeout(() => el.classList.remove('is-pulsing'), 2400);
 }
 
 function _wsRenderSavedHint(){
@@ -7388,10 +7393,9 @@ function _wsRenderSavedHint(){
   const ts = state.weather && state.weather._lastSavedAt;
   if (!ts) { el.textContent = 'noch nicht gespeichert'; return; }
   const ageS = Math.max(0, (Date.now() - ts) / 1000);
-  let label;
-  if (ageS < 60)        label = 'gerade eben';
-  else if (ageS < 300)  label = 'vor ' + Math.floor(ageS / 60) + ' min';
-  else                  label = new Date(ts).toLocaleTimeString('de-DE', { hour12: false });
+  const label = ageS < 60
+    ? 'gerade eben'
+    : new Date(ts).toLocaleTimeString('de-DE', { hour12: false });
   el.textContent = 'zuletzt gespeichert · ' + label;
 }
 

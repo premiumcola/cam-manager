@@ -2121,8 +2121,16 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   color:var(--muted, #8a8a8a);
   text-align:right;
 }
-@keyframes ws-saved-pulse{0%{opacity:.5}50%{opacity:1}100%{opacity:.7}}
-.ws-saved-hint.is-pulsing{animation:ws-saved-pulse .6s ease}
+/* Green save-confirmation pulse: same green as .btn-save (#4ade80).
+   Holds the colour for ~1 s, then fades back to the muted resting tone
+   over the remaining 1.4 s — long enough for the user to register
+   "saved" without lingering. */
+@keyframes ws-saved-pulse{
+  0%   {color:#4ade80;opacity:1}
+  40%  {color:#4ade80;opacity:1}
+  100% {color:var(--muted,#8a8a8a);opacity:1}
+}
+.ws-saved-hint.is-pulsing{animation:ws-saved-pulse 2.4s ease-out}
 @media (prefers-reduced-motion: reduce){
   .ws-saved-hint.is-pulsing{animation:none}
 }
