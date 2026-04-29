@@ -231,7 +231,8 @@
 
             <!-- Tab bar — 4 tabs: Verbindung / Erkennung / Alerting / Zonen -->
             <div class="cam-tab-bar">
-              <button type="button" class="cam-tab-btn active" data-tab="cam-tab-verbindung"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6"/><path d="M15 2v6"/><rect x="7" y="8" width="10" height="6" rx="1.2"/><path d="M12 14v4a3 3 0 0 0 3 3h1"/></svg><span>Verbindung</span></button>
+              <button type="button" class="cam-tab-btn active" data-tab="cam-tab-allgemein"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M13 10h4"/><path d="M13 13h4"/></svg><span>Allgemein</span></button>
+              <button type="button" class="cam-tab-btn" data-tab="cam-tab-verbindung"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6"/><path d="M15 2v6"/><rect x="7" y="8" width="10" height="6" rx="1.2"/><path d="M12 14v4a3 3 0 0 0 3 3h1"/></svg><span>Verbindung</span></button>
               <button type="button" class="cam-tab-btn" data-tab="cam-tab-erkennung"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span>Erkennung</span></button>
               <button type="button" class="cam-tab-btn" data-tab="cam-tab-alerting"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Alerting</span></button>
               <button type="button" class="cam-tab-btn" data-tab="cam-tab-zonen"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg><span>Zonen</span></button>
@@ -255,29 +256,36 @@
               </button>
             </div>
 
-            <!-- Panel: Verbindung. The old full-width "Verbindungsdaten
+            <!-- Panel: Allgemein — identity (name, manufacturer, model,
+                 icon, canonical id preview). Set once, rarely edited; the
+                 connection-troubleshooting fields live in the next tab. -->
+            <div class="cam-tab-panel active" id="cam-tab-allgemein">
+              <div style="display:grid;gap:8px">
+                <div class="field-wrap"><input name="name" placeholder="Werkstatt" required /><span class="field-label">Anzeigename</span></div>
+                <div class="field-wrap"><input name="manufacturer" placeholder="Reolink" autocomplete="off" /><span class="field-label">Hersteller</span></div>
+                <div class="field-wrap"><input name="model" placeholder="RLC-810A" autocomplete="off" /><span class="field-label">Modell</span></div>
+                <div class="field-wrap"><input name="icon" placeholder="🔧" maxlength="4" /><span class="field-label">Icon (Emoji)</span></div>
+                <!-- Live ID preview. Read-only and updated by JS on every
+                     change to manufacturer / model / name / IP. -->
+                <div class="cam-id-preview">
+                  <span class="cam-id-preview-label">Kamera-ID</span>
+                  <code class="cam-id-preview-value" id="camIdPreview" data-camid="">unknown_unknown_unknown_unknown</code>
+                  <span class="cam-id-preview-hint">wird automatisch aus Hersteller, Modell, Name und IP-Endung erzeugt</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel: Verbindung — access fields only. The "Verbindungsdaten
                  unvollständig" banner that lived here has been replaced by
                  the right-aligned ↺ indicator in the tab bar above and the
                  .cam-field-warn highlight on the specific missing fields. -->
-            <div class="cam-tab-panel active" id="cam-tab-verbindung">
+            <div class="cam-tab-panel" id="cam-tab-verbindung">
               <div class="cam-2col">
                 <div style="display:grid;gap:8px">
-                  <div class="field-wrap"><input name="name" placeholder="Werkstatt" required /><span class="field-label">Anzeigename</span></div>
-                  <div class="field-wrap"><input name="manufacturer" placeholder="Reolink" autocomplete="off" /><span class="field-label">Hersteller</span></div>
-                  <div class="field-wrap"><input name="model" placeholder="RLC-810A" autocomplete="off" /><span class="field-label">Modell</span></div>
-                  <div class="field-wrap"><input name="icon" placeholder="🔧" maxlength="4" /><span class="field-label">Icon (Emoji)</span></div>
-                  <!-- Live ID preview. Read-only and updated by JS on every
-                       change to manufacturer / model / name / IP. The hint
-                       below explains the rule so the user understands why
-                       it changed. -->
-                  <div class="cam-id-preview">
-                    <span class="cam-id-preview-label">Kamera-ID</span>
-                    <code class="cam-id-preview-value" id="camIdPreview" data-camid="">unknown_unknown_unknown_unknown</code>
-                    <span class="cam-id-preview-hint">wird automatisch aus Hersteller, Modell, Name und IP-Endung erzeugt</span>
+                  <div class="row" style="grid-template-columns:1fr 70px;gap:8px">
+                    <div class="field-wrap"><input name="rtsp_ip" placeholder="192.168.X.X" /><span class="field-label">Kamera-IP</span></div>
+                    <div class="field-wrap"><input name="rtsp_port" placeholder="554" value="554" /><span class="field-label">Port</span></div>
                   </div>
-                </div>
-                <div style="display:grid;gap:8px">
-                  <div class="field-wrap"><input name="rtsp_ip" placeholder="192.168.X.X" /><span class="field-label">Kamera-IP</span></div>
                   <div class="cam-userpass">
                     <div class="field-wrap"><input name="rtsp_user" placeholder="admin" /><span class="field-label">Benutzer</span></div>
                     <div class="field-wrap pw-wrap">
@@ -289,24 +297,28 @@
                     </div>
                   </div>
                 </div>
-              </div>
-              <div class="row" style="grid-template-columns:1fr 70px">
-                <div class="field-wrap"><select name="rtsp_path" id="rtspPathSelect"></select><span class="field-label">RTSP-Pfad</span></div>
-                <div class="field-wrap"><input name="rtsp_port" placeholder="554" value="554" /><span class="field-label">Port</span></div>
-              </div>
-              <div class="field-wrap url-wrap">
-                <div class="pw-input-row">
-                  <input name="rtsp_url" readonly style="color:var(--muted);font-size:11px" data-mask-url="1" />
-                  <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                <div style="display:grid;gap:8px">
+                  <div class="field-wrap url-wrap">
+                    <div class="pw-input-row">
+                      <input name="rtsp_url" readonly style="color:var(--muted);font-size:11px" data-mask-url="1" />
+                      <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                    </div>
+                    <span class="field-label">RTSP-URL (automatisch)</span>
+                  </div>
+                  <div class="field-wrap url-wrap">
+                    <div class="pw-input-row">
+                      <input name="snapshot_url" placeholder="http://…" data-mask-url="1" />
+                      <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                    </div>
+                    <span class="field-label">Snapshot-URL – optional</span>
+                  </div>
                 </div>
-                <span class="field-label">RTSP-URL (automatisch)</span>
               </div>
-              <div class="field-wrap url-wrap">
-                <div class="pw-input-row">
-                  <input name="snapshot_url" placeholder="http://…" data-mask-url="1" />
-                  <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
-                </div>
-                <span class="field-label">Snapshot-URL – optional</span>
+              <!-- RTSP-Pfad picker — moved into an "Erweitert" disclosure in
+                   the next commit. Kept full-width here for now. -->
+              <div class="field-wrap" style="margin-top:8px">
+                <select name="rtsp_path" id="rtspPathSelect"></select>
+                <span class="field-label">RTSP-Pfad</span>
               </div>
               <input type="hidden" name="object_filter" />
               <!-- Connection health diagnostics — collapsible; shows a one-line

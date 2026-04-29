@@ -2093,9 +2093,9 @@ function initCameraEditTabs(){
   // Reset to first tab
   bar.querySelectorAll('.cam-tab-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.cam-tab-panel').forEach(p=>p.classList.remove('active'));
-  const first=bar.querySelector('.cam-tab-btn[data-tab="cam-tab-verbindung"]');
+  const first=bar.querySelector('.cam-tab-btn[data-tab="cam-tab-allgemein"]');
   if(first) first.classList.add('active');
-  const firstPanel=byId('cam-tab-verbindung'); if(firstPanel) firstPanel.classList.add('active');
+  const firstPanel=byId('cam-tab-allgemein'); if(firstPanel) firstPanel.classList.add('active');
   bar.querySelectorAll('.cam-tab-btn').forEach(btn=>{
     btn.addEventListener('click',()=>{
       bar.querySelectorAll('.cam-tab-btn').forEach(b=>b.classList.remove('active'));
