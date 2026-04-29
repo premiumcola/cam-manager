@@ -861,6 +861,43 @@ function _unmaskUrlsForSubmit(form){
   });
 }
 
+// Maps the manufacturer field to the vendor's RTSP "Main" stream path.
+// Used as the auto-default in the camera-edit form so the user never has
+// to know vendor-specific path strings. Discovery results have their
+// own _defaultRtspPath() (different — H.264 fallback, kept for legacy).
+function _defaultRtspPathForManufacturer(mfg){
+  const m = (mfg || '').toLowerCase().trim();
+  if (m.startsWith('reolink')) return '/h265Preview_01_main';
+  if (m.startsWith('hikvision')) return '/Streaming/Channels/101';
+  if (m.startsWith('dahua') || m.startsWith('amcrest')) return '/cam/realmonitor?channel=1&subtype=0';
+  return '/stream0';
+}
+
+window._toggleCamRtspErw = function(){
+  const body = byId('rtspPathErwBody');
+  const btn  = byId('camRtspErwBtn');
+  if (!body || !btn) return;
+  const wasOpen = !body.hidden;
+  body.hidden = wasOpen;
+  btn.setAttribute('aria-expanded', wasOpen ? 'false' : 'true');
+};
+
+// Drive the "manuell überschrieben" pill + auto-open the Erweitert
+// disclosure when the path doesn't match the manufacturer default.
+function _updateRtspErweitertVisuals(){
+  const sel = byId('rtspPathSelect');
+  if (!sel) return;
+  const isManual = sel.dataset.manual === '1';
+  const pill = byId('rtspPathCustomPill');
+  if (pill) pill.hidden = !isManual;
+  if (isManual) {
+    const body = byId('rtspPathErwBody');
+    const btn  = byId('camRtspErwBtn');
+    if (body) body.hidden = false;
+    if (btn)  btn.setAttribute('aria-expanded', 'true');
+  }
+}
+
 function initRtspBuilder(){
   const sel=byId('rtspPathSelect');
   if(!sel.options.length) RTSP_PATH_OPTS.forEach(p=>{const o=document.createElement('option');o.value=p.value;o.textContent=p.label;sel.appendChild(o);});
@@ -894,7 +931,24 @@ function initRtspBuilder(){
     if (typeof _refreshConnectionWarn === 'function') _refreshConnectionWarn();
   };
   ['rtsp_ip','rtsp_user','rtsp_pass','rtsp_port'].forEach(n=>f[n]?.addEventListener('input',rebuild));
-  sel.addEventListener('change',rebuild);
+  sel.addEventListener('change',()=>{
+    // Flag manual mode unless the user happened to pick the current
+    // manufacturer's default (i.e. they reset themselves to auto).
+    const def=_defaultRtspPathForManufacturer(f['manufacturer']?.value);
+    sel.dataset.manual = (sel.value !== def) ? '1' : '0';
+    _updateRtspErweitertVisuals();
+    rebuild();
+  });
+  // Manufacturer typing propagates to the path picker unless the user
+  // has explicitly overridden it via the dropdown.
+  f['manufacturer']?.addEventListener('input',()=>{
+    if (sel.dataset.manual === '1') return;
+    const def=_defaultRtspPathForManufacturer(f['manufacturer'].value);
+    if (sel.value !== def) {
+      sel.value = def;
+      rebuild();
+    }
+  });
 }
 
 function parseRtspUrl(url){
@@ -1315,7 +1369,15 @@ function editCamera(camId){
   const p=parseRtspUrl(c.rtsp_url||'');
   f['rtsp_ip'].value=p.host||''; f['rtsp_user'].value=p.user||''; f['rtsp_pass'].value=p.pass||''; f['rtsp_port'].value=p.port||'554';
   const matchedPath=RTSP_PATH_OPTS.find(o=>o.value===p.path);
-  if(f['rtsp_path']) f['rtsp_path'].value=matchedPath?matchedPath.value:RTSP_PATH_OPTS[0].value;
+  if(f['rtsp_path']) {
+    const def=_defaultRtspPathForManufacturer(c.manufacturer||'');
+    // Existing cam with a path → use it; fresh cam with no path → fall
+    // back to the manufacturer-derived default so manual='0' from the
+    // start instead of flagging the legacy RTSP_PATH_OPTS[0] as custom.
+    f['rtsp_path'].value = matchedPath ? matchedPath.value : def;
+    f['rtsp_path'].dataset.manual = (f['rtsp_path'].value !== def) ? '1' : '0';
+    _updateRtspErweitertVisuals();
+  }
   f['rtsp_url'].value=c.rtsp_url||'';
   f['snapshot_url'].value=c.snapshot_url||'';
   // Apply password masking to the URL display fields. Eye toggle reveals.

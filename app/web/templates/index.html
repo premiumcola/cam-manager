@@ -314,11 +314,20 @@
                   </div>
                 </div>
               </div>
-              <!-- RTSP-Pfad picker — moved into an "Erweitert" disclosure in
-                   the next commit. Kept full-width here for now. -->
-              <div class="field-wrap" style="margin-top:8px">
-                <select name="rtsp_path" id="rtspPathSelect"></select>
-                <span class="field-label">RTSP-Pfad</span>
+              <!-- Erweitert: RTSP-Pfad picker. Auto-defaults from the
+                   manufacturer field; only relevant when the standard
+                   path doesn't work (older firmware, custom routes). -->
+              <div class="cam-rtsp-erw">
+                <button type="button" class="cam-rtsp-erw-btn" id="camRtspErwBtn"
+                        onclick="_toggleCamRtspErw()" aria-expanded="false">
+                  <svg class="cam-rtsp-erw-chev" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+                  <span>Erweitert · RTSP-Pfad</span>
+                  <span class="cam-rtsp-erw-pill" id="rtspPathCustomPill" hidden>manuell überschrieben</span>
+                </button>
+                <div class="cam-rtsp-erw-body" id="rtspPathErwBody" hidden>
+                  <div class="field-help">Nur ändern wenn die Standard-Pfade des Herstellers nicht funktionieren (z. B. ältere Reolink mit H.264 statt H.265).</div>
+                  <div class="field-wrap"><select name="rtsp_path" id="rtspPathSelect"></select><span class="field-label">RTSP-Pfad</span></div>
+                </div>
               </div>
               <input type="hidden" name="object_filter" />
               <!-- Connection health diagnostics — collapsible; shows a one-line

@@ -2134,3 +2134,35 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
 @media (prefers-reduced-motion: reduce){
   .ws-saved-hint.is-pulsing{animation:none}
 }
+
+/* Camera-edit › Verbindung › Erweitert disclosure for the RTSP-Pfad
+   picker. Most users never need it — auto-defaults from manufacturer.
+   Depth via background contrast (no thin border lines per project rules). */
+.cam-rtsp-erw{margin-top:10px}
+.cam-rtsp-erw-btn{
+  display:flex;align-items:center;gap:8px;
+  width:100%;min-height:44px;padding:10px 14px;
+  border:none;border-radius:10px;
+  background:rgba(255,255,255,.04);
+  color:var(--text);
+  font:inherit;font-size:13px;font-weight:600;
+  text-align:left;cursor:pointer;
+  transition:background .15s;
+  -webkit-tap-highlight-color:transparent;
+}
+.cam-rtsp-erw-btn:hover{background:rgba(255,255,255,.07)}
+.cam-rtsp-erw-chev{flex-shrink:0;transition:transform .2s}
+.cam-rtsp-erw-btn[aria-expanded="true"] .cam-rtsp-erw-chev{transform:rotate(90deg)}
+.cam-rtsp-erw-pill{
+  margin-left:auto;
+  padding:3px 10px;border-radius:999px;
+  background:rgba(251,191,36,.15);color:#fcd34d;
+  font-size:11px;font-weight:700;font-style:italic;
+  white-space:nowrap;
+}
+.cam-rtsp-erw-body{
+  margin-top:8px;padding:10px;
+  border-radius:10px;
+  background:rgba(255,255,255,.025);
+  display:grid;gap:8px;
+}
