@@ -321,7 +321,6 @@ function startLiveUpdate(){
       }
     }catch{/* silent */}
   },3000);
-  ['liveIndicator'].forEach(id=>{const el=byId(id);if(el)el.classList.remove('hidden');});
 }
 
 async function loadAll(){
@@ -499,7 +498,6 @@ async function loadMedia(){
 function renderShell(){
   byId('appName').textContent=state.config.app.name||'TAM-spy';
   const _sideAppName=byId('sideAppName'); if(_sideAppName) _sideAppName.textContent=state.config.app.name||'TAM-spy';
-  const tb=byId('topbarTitle'); if(tb) tb.textContent=state.config.app.name||'TAM-spy';
   byId('appTagline').textContent=state.config.app.tagline||'Motion · Objekte · Timelapse';
   const subEl=byId('appSubtitle');
   if(subEl) subEl.textContent=state.config.app.subtitle||'RTSP-Streams · KI-Erkennung · Vogelarten · Telegram-Alerts';
@@ -4551,6 +4549,29 @@ byId('wizFinish').onclick=()=>finishWizard();
       _mobileClose({fromPopstate:true});
     }
   });
+
+  // Edge-swipe to open the drawer on mobile. Touch must start within
+  // the leftmost 20 px so iOS-native back-swipe + intentional gestures
+  // farther in still work. preventDefault is held back until the swipe
+  // is confirmed-horizontal in touchmove — otherwise vertical scrolling
+  // that happens to start near the edge would jam.
+  let _swStartX=0,_swStartY=0,_swActive=false;
+  document.body.addEventListener('touchstart',(e)=>{
+    if(window.innerWidth>768) return;
+    if(sidebar.classList.contains('mobile-open')) return;
+    const t=e.changedTouches[0];
+    if(!t||t.clientX>20) return;
+    _swStartX=t.clientX;_swStartY=t.clientY;_swActive=true;
+  },{passive:true});
+  document.body.addEventListener('touchmove',(e)=>{
+    if(!_swActive) return;
+    const t=e.changedTouches[0];
+    const dx=t.clientX-_swStartX;
+    const dy=Math.abs(t.clientY-_swStartY);
+    if(dy>40){_swActive=false;return;}
+    if(dx>=60){_swActive=false;e.preventDefault();_mobileOpen();}
+  },{passive:false});
+  document.body.addEventListener('touchend',()=>{_swActive=false;},{passive:true});
 
   document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',e=>{
     if(window.innerWidth<=768){
