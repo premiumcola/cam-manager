@@ -360,7 +360,7 @@ select option{background:#1e1e1e;color:#c8c8c8}
 .m-dock{display:none}
 @media (max-width:768px){
   .m-dock{
-    --m-dock-gap:8px;
+    --m-dock-gap:12px;
     --m-dock-radius:47px;
     display:grid;
     grid-template-columns:repeat(5,1fr);
@@ -368,15 +368,21 @@ select option{background:#1e1e1e;color:#c8c8c8}
     position:fixed;
     left:var(--m-dock-gap);
     right:var(--m-dock-gap);
-    bottom:calc(var(--m-dock-gap) + env(safe-area-inset-bottom,0px));
+    /* Sit closer to the home-indicator: at most --m-dock-gap from the
+       bottom, but if the safe-area inset is bigger than 20 px (Pro
+       models) trim it back so the dock isn't floating high. */
+    bottom:max(var(--m-dock-gap),calc(env(safe-area-inset-bottom,0px) - 8px));
     padding:10px 8px;
     border-radius:var(--m-dock-radius);
-    background:#1c1c20;
+    background:rgba(38,40,48,.78);
+    backdrop-filter:blur(22px) saturate(1.4);
+    -webkit-backdrop-filter:blur(22px) saturate(1.4);
+    border:1px solid rgba(255,255,255,.08);
     box-shadow:
-      0 -1px 0 rgba(255,255,255,.03) inset,
-      0 8px 24px rgba(0,0,0,.35);
+      0 12px 32px rgba(0,0,0,.55),
+      0 4px 10px rgba(0,0,0,.32);
     z-index:90;
-    border:0;outline:0;
+    outline:0;
   }
   .m-dock-btn{
     border:0;outline:0;

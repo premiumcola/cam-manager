@@ -4544,14 +4544,24 @@ function _initMobileDock(){
 
   // Section-id → dock-target. data-dock-section overrides the default
   // self-mapping so #cameras rides Live, #media rides Statistik, #logs
-  // rides Setup.
+  // rides Setup. trackedSections is in DOM/scroll order so the spy
+  // loop can early-break once it crosses the probe.
   const sectionIds=['dashboard','cameras','statistik','media','achievements','weather','settings','logs'];
   const targetById={};
+  const trackedSections=[];
   for(const id of sectionIds){
     const el=document.getElementById(id);
     if(!el) continue;
     targetById[id]=el.dataset.dockSection||id;
+    trackedSections.push(el);
   }
+
+  // Click-lock keeps the tapped tab pinned for ~900 ms while the smooth-
+  // scroll settles, so scroll-spy can't flip-flop and force the user to
+  // tap twice.
+  let clickLockTarget=null;
+  let clickLockTimer=0;
+  let scrollRaf=0;
 
   btns.forEach(btn=>{
     btn.addEventListener('click',()=>{
@@ -4559,6 +4569,9 @@ function _initMobileDock(){
       const el=document.getElementById(targetId);
       if(!el) return;
       const wasActive=btn.classList.contains('is-active');
+      clickLockTarget=targetId;
+      if(clickLockTimer) clearTimeout(clickLockTimer);
+      clickLockTimer=setTimeout(()=>{clickLockTarget=null;updateActiveFromScroll();},900);
       setActiveByDockTarget(targetId);
       if(wasActive){
         window.scrollTo({top:el.offsetTop-12,behavior:'smooth'});
@@ -4571,20 +4584,40 @@ function _initMobileDock(){
     });
   });
 
-  const tracked=Object.keys(targetById).map(id=>document.getElementById(id)).filter(Boolean);
-  if(tracked.length){
-    const io=new IntersectionObserver((entries)=>{
-      let best=null;
-      for(const e of entries){
-        if(!best||e.intersectionRatio>best.intersectionRatio) best=e;
-      }
-      if(best&&best.intersectionRatio>0.25){
-        const target=targetById[best.target.id];
-        if(target) setActiveByDockTarget(target);
-      }
-    },{rootMargin:'-30% 0px -55% 0px',threshold:[0,0.25,0.5,0.75,1]});
-    tracked.forEach(el=>io.observe(el));
+  // Position-based scroll-spy. The previous IntersectionObserver band
+  // (rootMargin -30%/-55%) was too narrow — short sections and the last
+  // section on the page never reached it, so their tabs never lit up.
+  // New rule: activate the last section whose top has crossed a probe
+  // line at vh*0.30. Bottom-of-page snaps to the last section regardless
+  // so settings/logs always lights Setup at the page foot.
+  function updateActiveFromScroll(){
+    scrollRaf=0;
+    if(clickLockTarget){setActiveByDockTarget(clickLockTarget);return;}
+    if(!trackedSections.length) return;
+    const vh=window.innerHeight;
+    const sy=window.scrollY;
+    const docH=document.documentElement.scrollHeight;
+    if(sy+vh>=docH-4){
+      const last=trackedSections[trackedSections.length-1];
+      setActiveByDockTarget(targetById[last.id]);
+      return;
+    }
+    const probe=sy+vh*0.30;
+    let bestId=null;
+    for(const el of trackedSections){
+      const top=el.getBoundingClientRect().top+sy;
+      if(top<=probe) bestId=targetById[el.id];
+      else break;
+    }
+    if(bestId) setActiveByDockTarget(bestId);
   }
+  function scheduleScrollUpdate(){
+    if(scrollRaf) return;
+    scrollRaf=requestAnimationFrame(updateActiveFromScroll);
+  }
+  window.addEventListener('scroll',scheduleScrollUpdate,{passive:true});
+  window.addEventListener('resize',scheduleScrollUpdate);
+  updateActiveFromScroll();
 
   window._updateMobileDockLiveDot=function(){
     const dot=dock.querySelector('.m-dock-btn[data-target="dashboard"] .m-dock-livedot');
