@@ -445,6 +445,11 @@ function renderMediaFilterPills(mode){
   bar.querySelectorAll('.media-pill').forEach(p=>{
     if(p.classList.contains('media-pill--empty')) return;
     const val=p.dataset.val;
+    // Belt-and-braces: re-set --cb via setProperty in addition to the
+    // inline style attribute. The tinted-pill CSS reads var(--cb) for
+    // the bg/text color-mix, and the drilldown bar inside .media-drill-
+    // head was rendering as if --cb were missing on some browsers.
+    if(val && CAT_COLORS[val]) p.style.setProperty('--cb',CAT_COLORS[val]);
     p.addEventListener('click',()=>{
       if(mode==='overview'){
         openAllMediaDrilldown(val);
