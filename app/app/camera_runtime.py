@@ -2088,16 +2088,14 @@ class CameraRuntime:
                 if not self.running:
                     return
                 if self.cfg.get("rtsp_url") and (time.time() - self._last_activity) > 20:
-                    log_cam.warning("[%s] watchdog: capture silent >20s, forcing release",
+                    log_cam.warning("[%s] watchdog: capture silent >20s, requesting reconnect",
                                     self.camera_id)
-                    try:
-                        if self.capture is not None:
-                            self.capture.release()
-                    except Exception:
-                        pass
-                    self.capture = None
-                    # Bump the activity marker so we don't fire again on the
-                    # very next tick before the reconnect attempt completes.
+                    # Hand off to the main loop — calling release() from
+                    # this thread races against the main-loop's read()
+                    # and segfaults libav on corrupt HEVC streams (exit
+                    # 139). The main loop already handles _force_reconnect
+                    # at the top of every iteration.
+                    self._force_reconnect = True
                     self._last_activity = time.time()
         threading.Thread(target=_watchdog, daemon=True,
                          name=f"cam-wd-{self.camera_id}").start()
