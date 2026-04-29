@@ -7337,7 +7337,7 @@ function _renderWsLbMeta(s){
 
 function initWeatherTabs(){
   const bar = document.querySelector('.ws-tab-bar'); if (!bar) return;
-  const allPanels = ['ws-panel-allgemein', 'ws-panel-events', 'ws-panel-status'];
+  const allPanels = ['ws-panel-cams', 'ws-panel-location', 'ws-panel-events', 'ws-panel-status'];
   bar.querySelectorAll('.set-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       bar.querySelectorAll('.set-tab').forEach(b => b.classList.remove('active'));

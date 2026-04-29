@@ -865,24 +865,30 @@
             <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#7faec9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 18a5 5 0 0 0 0-10 7 7 0 0 0-13.5 2.5"/><path d="M7 17l-2 4"/><path d="M11 19l-1 2"/><path d="M14 17l-2 4"/></svg></span><span>Wetter-Ereignisse</span><span id="weatherStatusBadge" class="set-status-badge set-status-badge--off">aus</span><svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
           </button>
           <div class="set-bd"><div class="set-inner">
-            <div class="set-tabs ws-tab-bar" style="margin-top:10px">
-              <button type="button" class="set-tab active" data-tab="ws-panel-allgemein">⚙️ Allgemein</button>
+            <label class="toggle-row ws-master-toggle" style="margin:0 0 14px 0">
+              <span class="toggle-row-label">Wetter-Ereignisse aktiv
+                <span class="toggle-row-sublabel">Master-Schalter — aus heißt: kein Polling, keine Buffer, kein RAM.</span>
+              </span>
+              <label class="switch"><input type="checkbox" id="ws_enabled" /><span class="slider"></span></label>
+            </label>
+            <div class="set-tabs ws-tab-bar">
+              <button type="button" class="set-tab active" data-tab="ws-panel-cams">📷 Kameras</button>
+              <button type="button" class="set-tab" data-tab="ws-panel-location">📍 Standort</button>
               <button type="button" class="set-tab" data-tab="ws-panel-events">🎚 Ereignistypen</button>
               <button type="button" class="set-tab" data-tab="ws-panel-status">📡 Status</button>
             </div>
             <div class="ws-panels-wrap">
-              <div id="ws-panel-allgemein" class="set-tab-content">
+              <div id="ws-panel-cams" class="set-tab-content">
                 <div style="display:grid;gap:12px;padding-top:8px">
-                  <label class="toggle-row" style="margin:0">
-                    <span class="toggle-row-label">Wetter-Ereignisse aktiv
-                      <span class="toggle-row-sublabel">Master-Schalter — aus heißt: kein Polling, keine Buffer, kein RAM.</span>
-                    </span>
-                    <label class="switch"><input type="checkbox" id="ws_enabled" /><span class="slider"></span></label>
-                  </label>
                   <div>
                     <div class="cam-field-label">Wetter-Kameras</div>
                     <div id="weatherCamList" class="ws-cam-list" style="display:grid;gap:6px"></div>
                   </div>
+                </div>
+              </div>
+
+              <div id="ws-panel-location" class="set-tab-content" hidden>
+                <div style="display:grid;gap:12px;padding-top:8px">
                   <div>
                     <div class="cam-field-label">Standort</div>
                     <div class="row" style="grid-template-columns:1fr 1fr 1fr;margin-top:6px">
