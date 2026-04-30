@@ -9657,3 +9657,23 @@ async function _routeFromHash(){
 }
 window.addEventListener('hashchange',_routeFromHash);
 window.addEventListener('load',()=>{ setTimeout(_routeFromHash,1500); });
+
+// ─── Module-bridge exports (stage-1 of the ES-modules refactor) ────────────
+// As a regular <script> top-level function declarations attached themselves
+// to window automatically, which is how the inline onclick handlers in
+// templates and innerHTML strings find their callbacks. As a module we
+// lose that implicit bridge — these explicit assignments restore the
+// names the inline handlers reference. The 70-or-so explicit window.X = X
+// statements scattered through this file already covered most callbacks;
+// the names below were the gaps the static-grep audit surfaced.
+//
+// Future per-domain modules will move each function out of this legacy
+// file into js/<domain>.js with its own export-to-window line at the
+// module's bottom; this block shrinks accordingly.
+window._goToPage          = _goToPage;
+window._setLiveViewStream = _setLiveViewStream;
+window._statOpenMedia     = _statOpenMedia;
+window.byId               = byId;
+window.closeMediaDrilldown = closeMediaDrilldown;
+window.openMediaDrilldown = openMediaDrilldown;
+window._openMediaItem     = _openMediaItem;
