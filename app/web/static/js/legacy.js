@@ -2134,6 +2134,10 @@ function editCamera(camId){
   const c=(state.config?.cameras||[]).find(x=>x.id===camId)||(state.cameras||[]).find(x=>x.id===camId);
   if(!c){
     _erkDebugSet(`editCamera ABORTED: cam ${camId} not in state`);  // DIAG:cam-edit-lock
+    // Camera not in current state → drop any half-set lock so the user
+    // can retry once loadAll() refreshes state. Without this the lock
+    // would stick if a stale camId (post-rename) raced through here.
+    _currentEditCamId=null;
     console.error('editCamera: not found',camId); return;
   }
   // Toggle: clicking same camera closes the panel
@@ -2141,6 +2145,12 @@ function editCamera(camId){
     _erkDebugSet(`editCamera TOGGLE-CLOSE same camId`);  // DIAG:cam-edit-lock
     _closeEditPanel(); return;
   }
+  // From here on, ANY exception in the hydration helpers below would
+  // historically leave _currentEditCamId stale and the wrapper detached
+  // from #cameras — every future click then matched the stale lock and
+  // bailed via the toggle-close branch. The try/catch resets state to a
+  // known-good baseline so the next click can re-open cleanly.
+  try {
   // Switch camera: restore immediately then open new
   _restoreEditWrapper();
   _initCameraFormListeners();
@@ -2357,6 +2367,18 @@ function editCamera(camId){
   _refreshConnectionWarn();
   // Initial render of the live ID preview now that every input is populated.
   _refreshCamIdPreview();
+  } catch(e) {
+    // Any hydration helper threw — restore the lock to a clean state
+    // so the next click can re-attempt without the toggle-close branch
+    // mistakenly firing on the stale _currentEditCamId. Surface the
+    // failure to the user via toast so they know to retry; rethrow so
+    // the original stack remains visible in DevTools for diagnosis.
+    _erkDebugSet(`editCamera THREW: ${e?.message||e}`);  // DIAG:cam-edit-lock
+    _currentEditCamId=null;
+    _restoreEditWrapper();
+    showToast('Kamera-Bearbeitung konnte nicht öffnen — bitte erneut versuchen','warn');
+    throw e;
+  }
 }
 
 // Compute the "connection warn" state from the live form and reflect it
