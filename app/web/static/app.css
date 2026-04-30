@@ -2561,3 +2561,49 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
     font-size:11px;color:var(--muted);font-style:italic;
   }
 }
+
+/* Weather chart hover tooltip — flat surface, no border, depth via
+   bg + shadow + blur. Tooltip lives inside .ws-stats-chart-wrap and
+   gets absolute-positioned by the JS handler, clamped to the wrap. */
+.ws-chart-tooltip{
+  position:absolute;
+  background:rgba(15,15,18,.92);
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  border-radius:10px;
+  padding:8px 10px;
+  font-size:11px;
+  color:#edf4fb;
+  pointer-events:none;
+  z-index:10;
+  box-shadow:0 6px 18px rgba(0,0,0,.5);
+  min-width:140px;
+  max-width:220px;
+}
+.ws-chart-tooltip[hidden]{display:none}
+.ws-tt-time{
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  font-size:10.5px;font-weight:700;letter-spacing:.04em;
+  color:rgba(255,255,255,.8);
+  margin-bottom:6px;
+  text-rendering:geometricPrecision;
+}
+.ws-tt-row{
+  display:grid;
+  grid-template-columns:8px 1fr auto;
+  align-items:center;gap:6px;
+  font-size:11px;line-height:1.35;
+}
+.ws-tt-row + .ws-tt-row{margin-top:2px}
+.ws-tt-dot{
+  width:8px;height:8px;border-radius:50%;
+}
+.ws-tt-lbl{
+  color:rgba(255,255,255,.85);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.ws-tt-val{
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  color:#fff;font-weight:600;
+  text-rendering:geometricPrecision;
+}
