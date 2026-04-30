@@ -1027,10 +1027,16 @@ window.toggleCameraEnabled=async function(camId,enabled){
 };
 function renderCameraSettings(){
   byId('cameraSettingsList').innerHTML=state.cameras.map(c=>{
-    // Merge is offered when the camera isn't actively streaming — replacement
-    // hardware always lives behind a different cam_id, so a healthy camera is
-    // never a merge source.
-    const canMerge=c.status!=='active';
+    // Merge is offered only for cameras that have been offline for ≥ 10 min
+    // straight (frame_age_s is the seconds-since-last-good-frame counter the
+    // runtime maintains; null = camera never produced a frame and is also
+    // not "abandoned" in the merge sense). Brief disconnects (network blip,
+    // camera reboot) keep the button hidden; the moment a camera reconnects
+    // and frame_age_s drops back under the threshold, the next render hides
+    // the button automatically — no manual dismiss needed.
+    const MERGE_OFFLINE_THRESHOLD_S = 600;
+    const canMerge = typeof c.frame_age_s === 'number'
+                  && c.frame_age_s >= MERGE_OFFLINE_THRESHOLD_S;
     return `
     <div class="cam-item" data-camid="${esc(c.id)}">
       <div class="cam-item-head" style="cursor:pointer" onclick="editCamera('${esc(c.id)}')">
