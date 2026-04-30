@@ -944,8 +944,16 @@ function _updateRtspErweitertVisuals(){
 
 function initRtspBuilder(){
   const sel=byId('rtspPathSelect');
+  // Defensive: editCamera can fire from a setTimeout race after the
+  // recovery / restart flow before the cam-edit form has been
+  // re-rendered into the DOM. Without this guard, sel is null and
+  // .options throws TypeError mid-init — leaving _currentEditCamId
+  // stale and locking every future cam-edit click until F5.
+  if(!sel) return;
+  const form=byId('cameraForm');
+  if(!form) return;
   if(!sel.options.length) RTSP_PATH_OPTS.forEach(p=>{const o=document.createElement('option');o.value=p.value;o.textContent=p.label;sel.appendChild(o);});
-  const f=byId('cameraForm').elements;
+  const f=form.elements;
   const rebuild=()=>{
     const ip=(f['rtsp_ip']?.value||'').trim();
     const user=(f['rtsp_user']?.value||'').trim();
