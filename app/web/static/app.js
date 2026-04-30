@@ -6851,10 +6851,41 @@ async function loadWeatherStats(){
   }
 }
 
+// Catmull-Rom-to-Bezier converter. Returns an SVG path string for the
+// run of points, smoothed via cubic Beziers whose control points come
+// from the slope between each point's neighbours (uniform Catmull-Rom,
+// scaled by `tension` to dampen overshoots — 0.5 keeps the curve close
+// to the data without introducing wild bumps). Endpoints duplicate
+// themselves as virtual "p0/p3" so the first and last segments don't
+// flatten or kink. The caller is responsible for ensuring points come
+// from a contiguous run (no nulls) — gaps must be split into separate
+// runs by the caller.
+function _wsCatmullRomPath(pts, tension){
+  if (!pts || pts.length < 2) return '';
+  const k = tension / 6;
+  let d = `M${pts[0][0].toFixed(1)},${pts[0][1].toFixed(1)}`;
+  for (let i = 0; i < pts.length - 1; i++){
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || pts[i + 1];
+    const c1x = p1[0] + (p2[0] - p0[0]) * k;
+    const c1y = p1[1] + (p2[1] - p0[1]) * k;
+    const c2x = p2[0] - (p3[0] - p1[0]) * k;
+    const c2y = p2[1] - (p3[1] - p1[1]) * k;
+    d += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  return d;
+}
+
 function _wsBuildLinePath(samples, key, x0, y0, w, h){
   // Per-line normalisation: each parameter gets its own min/max so a 30
   // mm/h precipitation peak doesn't flatten the 0.5 cm/h snow line.
-  // Skip null values — connect only consecutive defined points.
+  // Null values split the trace into independent runs — Catmull-Rom is
+  // applied per-run so a single missing sample doesn't smear an
+  // interpolated curve across the gap. Runs of <6 points fall back to
+  // straight L-segments because a 3- or 4-point spline tends to
+  // overshoot wildly on sparse data.
   const vals = [];
   for (const s of samples){
     const v = (s.values || {})[key];
@@ -6865,16 +6896,31 @@ function _wsBuildLinePath(samples, key, x0, y0, w, h){
   let lo = Math.min(...def), hi = Math.max(...def);
   if (hi - lo < 1e-9){ lo -= 0.5; hi += 0.5; } // flat line: pin to mid-band
   const N = vals.length;
-  let d = '';
-  let pen = false;
+  // Group into contiguous runs of [x, y] points.
+  const runs = [];
+  let cur = [];
   for (let i = 0; i < N; i++){
     const v = vals[i];
-    if (v == null){ pen = false; continue; }
+    if (v == null){
+      if (cur.length){ runs.push(cur); cur = []; }
+      continue;
+    }
     const x = x0 + (N === 1 ? 0 : (i / (N - 1)) * w);
     const norm = (v - lo) / (hi - lo);
     const y = y0 + h - norm * h;
-    d += (pen ? ' L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
-    pen = true;
+    cur.push([x, y]);
+  }
+  if (cur.length) runs.push(cur);
+  let d = '';
+  for (const run of runs){
+    if (run.length >= 6){
+      d += (d ? ' ' : '') + _wsCatmullRomPath(run, 0.5);
+    } else {
+      d += (d ? ' M' : 'M') + run[0][0].toFixed(1) + ',' + run[0][1].toFixed(1);
+      for (let j = 1; j < run.length; j++){
+        d += ' L' + run[j][0].toFixed(1) + ',' + run[j][1].toFixed(1);
+      }
+    }
   }
   return { path: d, lo, hi };
 }
@@ -7113,7 +7159,7 @@ function renderWeatherStatsChart(){
   let gridSvg = '';
   for (let g = 0; g <= 4; g++){
     const y = pad.t + (g / 4) * ch;
-    gridSvg += `<line x1="${pad.l}" y1="${y.toFixed(1)}" x2="${(pad.l + cw).toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,.06)" stroke-width="1"/>`;
+    gridSvg += `<line x1="${pad.l}" y1="${y.toFixed(1)}" x2="${(pad.l + cw).toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,.06)" stroke-width="1" vector-effect="non-scaling-stroke" shape-rendering="geometricPrecision"/>`;
   }
   // Lines — collect per-field meta so the threshold pass can renormalise
   // each tick against the same {lo, hi} the line was drawn against.
@@ -7125,7 +7171,7 @@ function renderWeatherStatsChart(){
     lineMetas[key] = meta;
     const colour = WEATHER_STATS_PALETTE[key] || '#94a3b8';
     const opacity = isolated && isolated !== key ? 0.15 : 1;
-    linesSvg += `<path d="${meta.path}" fill="none" stroke="${colour}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}" />`;
+    linesSvg += `<path d="${meta.path}" fill="none" stroke="${colour}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="${opacity}" vector-effect="non-scaling-stroke" shape-rendering="geometricPrecision" />`;
   }
   // Threshold overlay.
   //
@@ -7210,10 +7256,11 @@ function renderWeatherStatsChart(){
       const aria = `Schwelle ${thr}${u ? ' ' + u : ''}${clampNote}`;
       thresholdSvg += `
         <line x1="${tickX1.toFixed(1)}" y1="${tickY.toFixed(1)}" x2="${tickX2.toFixed(1)}" y2="${tickY.toFixed(1)}"
-              stroke="${colour}" stroke-width="2" stroke-linecap="round" opacity="${opacity}">
+              stroke="${colour}" stroke-width="2" stroke-linecap="round" opacity="${opacity}"
+              vector-effect="non-scaling-stroke" shape-rendering="geometricPrecision">
           <title>${aria}</title>
         </line>
-        <text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" font-size="9" fill="${colour}" opacity="${opacity}">${labelText}</text>
+        <text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" font-size="9" fill="${colour}" opacity="${opacity}" text-rendering="geometricPrecision">${labelText}</text>
       `;
     }
   }
@@ -7256,7 +7303,7 @@ function renderWeatherStatsChart(){
       ${tickSvg}
       ${linesSvg}
       ${thresholdSvg}
-      <line class="ws-chart-guide" x1="0" y1="${pad.t}" x2="0" y2="${pad.t + ch}" stroke="rgba(255,255,255,.35)" stroke-width="1" stroke-dasharray="3 3" style="display:none;pointer-events:none"/>
+      <line class="ws-chart-guide" x1="0" y1="${pad.t}" x2="0" y2="${pad.t + ch}" stroke="rgba(255,255,255,.35)" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" shape-rendering="geometricPrecision" style="display:none;pointer-events:none"/>
       <rect class="ws-chart-hover-area" x="${pad.l}" y="${pad.t}" width="${cw}" height="${ch}" fill="transparent" style="pointer-events:all;cursor:crosshair"/>
     </svg>
     ${noThresholdHint}
