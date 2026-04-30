@@ -2538,11 +2538,33 @@ window.applyCamRecoveryBackup=async function(filename){
     // Refresh state + re-open the edit panel so the user sees the restored fields.
     await loadAll();
     if(_currentEditCamId===camId){_closeEditPanel();}
-    setTimeout(()=>editCamera(camId),250);
+    // Was: setTimeout(()=>editCamera(camId),250); — 250 ms was a guess
+    // and sometimes fired before the cam-edit form had rendered into
+    // the DOM. _whenFormReady polls until #rtspPathSelect appears (or
+    // gives up after 1 s) so editCamera never races with the post-
+    // loadAll render cycle. This is the TimerOut path that previously
+    // triggered the lock cascade via initRtspBuilder's TypeError.
+    _whenFormReady(()=>editCamera(camId));
   }catch(e){
     showToast(`Wiederherstellen fehlgeschlagen: ${String(e)}`,'error');
   }
 };
+
+// Defer a callback until the cam-edit form is rendered into the DOM —
+// detected by the presence of #rtspPathSelect, which is the deepest
+// element editCamera's hydration touches first. Caps at 20 attempts ×
+// 50 ms = 1 s so a stuck render never leaves the recovery flow
+// silently waiting forever; the next manual click retries.
+function _whenFormReady(callback, attempts = 20){
+  if (byId('rtspPathSelect')) {
+    callback();
+    return;
+  }
+  if (attempts <= 0) return;
+  requestAnimationFrame(() => {
+    setTimeout(() => _whenFormReady(callback, attempts - 1), 50);
+  });
+}
 window.loadCamRecoveryDiscovery=async function(){
   const wrap=byId('camRecoveryDiscoveryList');
   const status=byId('camRecoveryDiscoverStatus');
