@@ -1354,6 +1354,90 @@ def api_settings_cameras_save():
     })
 
 
+@app.post('/api/cameras/<cam_id>/test-detection')
+def api_test_detection(cam_id: str):
+    """Run Coral inference on the camera's most-recent frame and return
+    each raw detection alongside a verdict — pass / belowthresh /
+    filtered — computed against the camera's current configuration
+    (detection_min_score, label_thresholds, object_filter). The cam-
+    edit "Erkennung jetzt simulieren" button hits this and renders the
+    snapshot inline with coloured bounding boxes so the user can see
+    exactly what Coral found and which filter dropped what.
+
+    No fresh capture: we read the runtime's last cached frame
+    (rt.frame). That frame is at most one frame_interval_ms old and
+    avoids the cost / racing of a second RTSP open. Inference runs at
+    a low 0.20 threshold so even almost-rejected hits surface in the
+    visualisation; the user's actual thresholds are applied afterwards
+    to compute the per-detection verdict.
+    """
+    cam = settings.get_camera(cam_id)
+    if not cam:
+        return jsonify({"error": "camera not found"}), 404
+    rt = runtimes.get(cam_id)
+    if rt is None:
+        return jsonify({"error": "Kamera-Runtime nicht aktiv (deaktiviert?)"}), 503
+    frame = rt.frame.copy() if rt.frame is not None else None
+    if frame is None:
+        return jsonify({"error": "Noch kein Frame vorhanden — Kamera startet?"}), 503
+    detector = getattr(rt, "detector", None)
+    if not detector or not getattr(detector, "available", False):
+        return jsonify({"error": "Coral nicht verfügbar (motion-only?)"}), 503
+    try:
+        raw = detector.detect_frame_raw(frame, threshold=0.20)
+    except Exception as e:
+        log.warning("[test-detection] %s inference failed: %s", cam_id, e)
+        return jsonify({"error": f"Inference fehlgeschlagen: {e}"}), 500
+    # Resolve the global confidence floor — empty/zero on the camera
+    # means "use the global processing.detection.min_score". This must
+    # match what camera_runtime actually applies at runtime so the
+    # simulation result reflects what would happen in production.
+    global_floor = float(cam.get("detection_min_score") or 0.0)
+    if global_floor <= 0:
+        proc = (get_effective_config().get("processing") or {})
+        global_floor = float((proc.get("detection") or {}).get("min_score") or 0.55)
+    per_class = cam.get("label_thresholds") or {}
+    obj_filter = set(cam.get("object_filter") or [])
+    out = []
+    for d in raw:
+        cls_thresh = float(per_class.get(d.label, global_floor))
+        if obj_filter and d.label not in obj_filter:
+            verdict = "filtered"
+            reason = f"Klasse '{d.label}' nicht im Filter"
+        elif d.score < cls_thresh:
+            verdict = "belowthresh"
+            reason = f"unter Schwelle {int(round(cls_thresh * 100))} %"
+        else:
+            verdict = "pass"
+            reason = ""
+        x1, y1, x2, y2 = d.bbox
+        out.append({
+            "label":   d.label,
+            "score":   round(float(d.score), 4),
+            "bbox":    [int(x1), int(y1), int(max(0, x2 - x1)), int(max(0, y2 - y1))],
+            "verdict": verdict,
+            "reason":  reason,
+        })
+    out.sort(key=lambda r: r["score"], reverse=True)
+    # Encode the frame as a base64 data URL so the frontend can display
+    # it inline without a separate snapshot fetch (and so the snapshot
+    # is the same frame the boxes were computed against).
+    try:
+        import base64, cv2
+        ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+        snapshot = f"data:image/jpeg;base64,{base64.b64encode(jpg.tobytes()).decode()}" if ok else None
+    except Exception as e:
+        log.warning("[test-detection] %s encode failed: %s", cam_id, e)
+        snapshot = None
+    h, w = frame.shape[:2]
+    return jsonify({
+        "ok":         True,
+        "snapshot":   snapshot,
+        "frame_size": {"w": int(w), "h": int(h)},
+        "detections": out,
+    })
+
+
 @app.post('/api/cameras/<cam_id>/probe-device-info')
 def api_camera_probe_device_info(cam_id: str):
     """Manual rescan endpoint behind the cam-edit "jetzt erneut erkennen"

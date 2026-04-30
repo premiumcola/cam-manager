@@ -349,6 +349,23 @@ class CoralObjectDetector:
             return
         log.debug("[det][cam:%s] inference empty (raw=0)", cam_id)
 
+    def detect_frame_raw(self, frame: np.ndarray, threshold: float = 0.20) -> list[Detection]:
+        """Run inference and return the raw model output BEFORE label
+        filters / size floors / per-label thresholds. Used by the
+        cam-edit "Erkennung jetzt simulieren" endpoint so the user can
+        see what Coral actually found before filters narrow it down —
+        each detection then gets a verdict (pass / below threshold /
+        filtered by class) computed against the camera's current config.
+        Threshold is intentionally low (0.20 default) so even
+        almost-rejected hits show up in the simulation; the caller
+        applies the user's actual thresholds afterwards.
+        """
+        if not self.available:
+            return []
+        if self._cpu_mode:
+            return self._detect_cpu(frame, threshold)
+        return self._detect_coral(frame, threshold)
+
     def _detect_coral(self, frame: np.ndarray, threshold: float | None = None) -> list[Detection]:
         """Inference via pycoral + EdgeTPU."""
         score_threshold = threshold if threshold is not None else self.min_score
