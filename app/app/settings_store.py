@@ -131,6 +131,15 @@ class SettingsStore:
         "bird":     0.45,
         "squirrel": 0.45,
     }
+    # N-of-M sliding-window defaults per class. Bird + squirrel run with
+    # smaller windows (they cross the frame in seconds; 3-of-5 would
+    # often miss them); person/cat get the conservative 3-of-5 floor.
+    _CONFIRMATION_WINDOW_DEFAULTS = {
+        "person":   {"n": 3, "seconds": 5.0},
+        "cat":      {"n": 3, "seconds": 5.0},
+        "bird":     {"n": 2, "seconds": 4.0},
+        "squirrel": {"n": 2, "seconds": 3.0},
+    }
 
     def _default_camera(self, cam: dict | None = None) -> dict:
         cam = cam or {}
@@ -176,6 +185,12 @@ class SettingsStore:
             "label_thresholds": (dict(self._LABEL_THRESHOLD_DEFAULTS)
                                   if cam.get("label_thresholds", None) in (None, {"person": 0.72})
                                   else cam.get("label_thresholds")),
+            # N-of-M confirmation window. Falsy / missing → fresh defaults
+            # so existing cams pick up the gate on the next config reload.
+            # User-customised dicts pass through untouched.
+            "confirmation_window": (cam.get("confirmation_window")
+                                     if cam.get("confirmation_window")
+                                     else dict(self._CONFIRMATION_WINDOW_DEFAULTS)),
             "timelapse": {
                 "enabled": _tl.get("enabled", False),
                 "fps": _tl.get("fps", 30),

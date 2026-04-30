@@ -12,6 +12,7 @@ from pathlib import Path
 import requests
 import numpy as np
 from .detectors import CoralObjectDetector, BirdSpeciesClassifier, WildlifeClassifier, Detection, draw_detections
+from .detection_confirmer import DetectionConfirmer
 from .event_logic import is_in_schedule, choose_alarm_level, schedule_action_active
 
 # Does this container have an ffmpeg binary? If so, motion recording uses the
@@ -257,6 +258,9 @@ class CameraRuntime:
         self._main_fps_window_start: float = time.time()
         proc = self.global_cfg.get("processing", {})
         self.detector = CoralObjectDetector(proc.get("detection", {}))
+        # N-of-M confirmation gate — per-runtime instance so its state
+        # (per-(cam,label) deque) dies cleanly when the runtime restarts.
+        self._confirmer = DetectionConfirmer()
         self.bird_classifier = BirdSpeciesClassifier(proc.get("bird_species", {}))
         # Second-stage wildlife classifier — maps ImageNet top-1 to our
         # fox/squirrel/hedgehog labels so motion on a fox or hedgehog
@@ -2325,6 +2329,43 @@ class CameraRuntime:
                     continue
                 self._prev_good_frame = proc_frame  # no copy — proc_frame is already a new array
 
+                # N-of-M confirmation gate. Dedupe by label per frame so a
+                # frame with three concurrent persons counts as ONE hit
+                # for "person" — the window measures temporal persistence,
+                # not per-frame multiplicity. Detections still appear in
+                # the live preview overlay (drawn already paints them);
+                # only the trigger pipeline downstream filters on the
+                # confirmed labels.
+                cw_cfg = self.cfg.get("confirmation_window") or {}
+                confirmed_object_labels: list[str] = []
+                _seen_this_frame: set[str] = set()
+                for d in detections:
+                    if d.label in _seen_this_frame:
+                        if self._confirmer.is_confirmed(self.camera_id, d.label):
+                            confirmed_object_labels.append(d.label)
+                        continue
+                    _seen_this_frame.add(d.label)
+                    cw = cw_cfg.get(d.label) or {}
+                    n = max(1, int(cw.get("n", 3)))
+                    secs = max(0.5, float(cw.get("seconds", 5.0)))
+                    fired = self._confirmer.check(self.camera_id, d.label, n, secs)
+                    if fired:
+                        cur = self._confirmer.current_count(self.camera_id, d.label)
+                        log.info(
+                            "[det][cam:%s] ✅ BESTÄTIGT: %s — %d Treffer in %.1fs → Alert ausgelöst",
+                            self.camera_id, d.label, cur, secs,
+                        )
+                        confirmed_object_labels.append(d.label)
+                    elif self._confirmer.is_confirmed(self.camera_id, d.label):
+                        confirmed_object_labels.append(d.label)
+                    else:
+                        cur = self._confirmer.current_count(self.camera_id, d.label)
+                        log.info(
+                            "[det][cam:%s] ⏳ wartend: %s %d%% (Bestätigung %d/%d in %.1fs)",
+                            self.camera_id, d.label, int(round(d.score * 100)),
+                            cur, n, secs,
+                        )
+
                 now_dt = datetime.now()
                 # Per-camera trigger mode:
                 #   motion_and_objects (default) — motion OR object fires event
@@ -2333,7 +2374,12 @@ class CameraRuntime:
                 #   motion_only                  — only motion fires; objects
                 #                                  are still labelled for metadata
                 trigger_mode = self.cfg.get("detection_trigger", "motion_and_objects")
-                object_labels = [d.label for d in detections]
+                # Trigger logic uses CONFIRMED labels only — unconfirmed
+                # detections still appear in the preview overlay but do
+                # not propagate to event recording / Telegram. The full
+                # detections list is still written into the event meta
+                # below so the saved JSON keeps the complete frame info.
+                object_labels = list(confirmed_object_labels)
                 if trigger_mode == "objects_only":
                     has_motion = bool(object_labels)
                     labels = sorted(set(effective_motion + object_labels)) if has_motion else []
@@ -2341,7 +2387,9 @@ class CameraRuntime:
                     has_motion = bool(effective_motion)
                     labels = sorted(set(effective_motion + object_labels)) if has_motion else []
                 else:
-                    has_motion = bool(labels)
+                    # motion_and_objects: motion alone OR confirmed object fires
+                    has_motion = bool(effective_motion) or bool(object_labels)
+                    labels = sorted(set(effective_motion + object_labels)) if has_motion else []
 
                 # Per-camera unified schedule — record action gate. Outside
                 # the configured window (or when actions.record is off) we

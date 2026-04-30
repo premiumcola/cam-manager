@@ -123,6 +123,10 @@ CAMERA_SCHEMA: dict = {
     "alarm_profile":       (str,   ""),
     "object_filter":       (list,  []),
     "label_thresholds":    (dict,  {}),
+    # Per-class N-of-M confirmation window. Schema default {} means "use
+    # DetectionConfirmer's per-class fallbacks" so legacy settings.json
+    # files load without crashing on the missing field.
+    "confirmation_window": (dict,  {}),
     "zones":               (list,  []),
     "masks":               (list,  []),
     "whitelist_names":     (list,  []),
