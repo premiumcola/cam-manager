@@ -442,11 +442,32 @@
               </div>
               <div class="cam-confirm-grid" id="camConfirmGrid"></div>
 
+              <div class="cam-sep"></div>
+
+              <!-- Analyse-Geschwindigkeit — wie oft Coral pro Sekunde
+                   ein Bild zur Inferenz bekommt. Schema-Feld
+                   frame_interval_ms existiert seit jeher; war bisher
+                   nur als hidden-input persistiert. Slider in ms
+                   (intuitiver als reziprok-fps), Label rechnet beides. -->
+              <div class="cam-section-head">
+                <h4 style="margin:0 0 4px;font-size:13px;font-weight:700;color:var(--text)">Analyse-Geschwindigkeit</h4>
+                <p class="cam-section-hint" style="margin:0;font-size:12px;color:var(--muted);line-height:1.45">
+                  Wie oft soll TAM-spy ein Bild zur Erkennung an Coral
+                  schicken? Höher = schneller reagiert, aber mehr CPU-
+                  und Coral-Last. Empfohlen: 3 fps (350 ms).
+                </p>
+              </div>
+              <div class="field-wrap">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <input type="range" name="frame_interval_ms" min="100" max="2000" step="50" value="350" id="frameIntervalSlider" style="flex:1" />
+                  <span class="field-label" id="frameIntervalLabel" style="margin:0;padding:0;min-width:110px;text-align:right;white-space:nowrap">350 ms · 3 fps</span>
+                </div>
+              </div>
+
               <!-- Hidden: field still saved, controlled by global setting. -->
               <input type="hidden" name="motion_enabled" value="true" />
               <!-- Legacy fields kept hidden so save payload shape stays stable. -->
               <input type="hidden" name="resolution" value="auto" />
-              <input type="hidden" name="frame_interval_ms" value="350" />
               <input type="hidden" name="snapshot_interval_s" value="3" />
               <input type="hidden" name="bottom_crop_px" value="0" />
             </div>

@@ -1229,7 +1229,11 @@ function _initCameraFormListeners(){
   f['detection_min_score']?.addEventListener('input',()=>{ const v=parseFloat(f['detection_min_score'].value); const el=byId('detectionMinScoreLabel'); if(el) el.textContent=v.toFixed(2); });
   f['wildlife_motion_sensitivity']?.addEventListener('input',()=>{ const v=parseFloat(f['wildlife_motion_sensitivity'].value); const el=byId('wildlifeMotionLabel'); if(el) el.textContent=Math.round(v*100)+'%'; });
   f['label_threshold_person']?.addEventListener('input',()=>{ const v=parseFloat(f['label_threshold_person'].value); const el=byId('labelThresholdPersonLabel'); if(el) el.textContent=v.toFixed(2); });
-  f['frame_interval_ms']?.addEventListener('input',()=>{ const el=byId('frameIntervalLabel'); if(el) el.textContent=f['frame_interval_ms'].value+'ms'; });
+  f['frame_interval_ms']?.addEventListener('input',()=>{
+    const v=parseInt(f['frame_interval_ms'].value,10)||350;
+    const el=byId('frameIntervalLabel');
+    if(el) el.textContent=v+' ms · '+Math.round(1000/v)+' fps';
+  });
   f['snapshot_interval_s']?.addEventListener('input',()=>{ const el=byId('snapshotIntervalLabel'); if(el) el.textContent=f['snapshot_interval_s'].value+'s'; });
   // Motion toggle → grey out the trigger dropdown + show hint
   f['motion_enabled']?.addEventListener('change',_updateMotionOffState);
@@ -1557,14 +1561,13 @@ function editCamera(camId){
     f['post_motion_tail_s'].value=presets.includes(String(tail))?String(tail):'0';
   }
   if(f['resolution']) f['resolution'].value=c.resolution||'auto';
-  // frame_interval_ms / snapshot_interval_s are hidden inputs since the
-  // Qualität tab was removed; their visible labels (#frameIntervalLabel /
-  // #snapshotIntervalLabel) no longer exist. Guard the textContent write
-  // so a null byId() lookup doesn't throw and abort the whole expand.
+  // frame_interval_ms is a visible slider in the Erkennung tab —
+  // its label (#frameIntervalLabel) renders ms + derived fps.
+  // snapshot_interval_s remains a hidden input (no UI yet).
   if(f['frame_interval_ms']){
     const fi=c.frame_interval_ms||350;
     f['frame_interval_ms'].value=fi;
-    const el=byId('frameIntervalLabel'); if(el) el.textContent=fi+'ms';
+    const el=byId('frameIntervalLabel'); if(el) el.textContent=fi+' ms · '+Math.round(1000/fi)+' fps';
   }
   if(f['snapshot_interval_s']){
     const si=c.snapshot_interval_s||3;
