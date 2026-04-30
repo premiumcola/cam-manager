@@ -443,7 +443,13 @@ def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
     diagnostics see why we gave up.
 
     grab_fn() may return either a decoded BGR ndarray or JPEG bytes
-    — both are handled transparently by ``is_valid_frame``."""
+    — both are handled transparently by ``is_valid_frame``.
+
+    The function intentionally stays stats-agnostic — callers fold
+    the returned ``last_reason`` into a CaptureStats via
+    ``stats.record_invalid(reason)`` so per-reason breakdowns
+    bookkeep through a single path regardless of whether the caller
+    uses this retry helper or its own loop."""
     t0 = time.monotonic()
     last_reason = ""
     attempt = 0
@@ -474,6 +480,20 @@ def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
 
 
 # ── Per-session capture stats ────────────────────────────────────────────────
+def _normalise_rejection_reason(reason: str | None) -> str:
+    """Strip the diagnostic detail from a is_valid_frame / grab_valid_frame
+    reason string so a per-reason tally stays readable. Reasons come back
+    as "grey_uniform(std_sum=4.2)" or "split_left_dead(...)|budget_exceeded(5.0s)";
+    we want bare keys like "grey_uniform" / "split_left_dead" for the
+    breakdown.
+    """
+    if not reason:
+        return "unknown"
+    head = reason.split("|", 1)[0]
+    head = head.split("(", 1)[0]
+    return head.strip() or "unknown"
+
+
 @dataclass
 class CaptureStats:
     """Per-session frame-capture stats. One instance per timelapse window
@@ -488,6 +508,14 @@ class CaptureStats:
     captured_frames: int = 0
     invalid_frames: int = 0
     retry_recoveries: int = 0
+    # Per-reason rejection tally. Keys are the bare reason heads
+    # (grey_uniform / dead_area / split_left_dead / grey_toned /
+    # no_detail / pink_artifact / colorbar / too_dark / too_bright /
+    # budget_exceeded / grab_exception / grab_returned_none) — no
+    # parenthesised detail. Lets per-timelapse logs answer "which
+    # cluster dominated this window?" without re-parsing the raw
+    # log lines.
+    rejected_by_reason: dict = field(default_factory=dict)
 
     def record_capture(self, attempt_used: int = 0):
         """attempt_used==0 means first try succeeded; >0 means a retry saved it."""
@@ -495,8 +523,14 @@ class CaptureStats:
         if attempt_used > 0:
             self.retry_recoveries += 1
 
-    def record_invalid(self):
+    def record_invalid(self, reason: str | None = None):
+        """Record a frame the capture loop gave up on. Optionally pass
+        the last is_valid_frame reason so it aggregates into the
+        per-reason breakdown."""
         self.invalid_frames += 1
+        if reason:
+            key = _normalise_rejection_reason(reason)
+            self.rejected_by_reason[key] = self.rejected_by_reason.get(key, 0) + 1
 
     def flush(self):
         try:
@@ -508,10 +542,23 @@ class CaptureStats:
                 "captured_frames": int(self.captured_frames),
                 "invalid_frames": int(self.invalid_frames),
                 "retry_recoveries": int(self.retry_recoveries),
+                "rejected_by_reason": dict(self.rejected_by_reason),
             }
             path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except Exception as e:
             log.warning("[timelapse] could not write _stats.json in %s: %s", self.out_dir, e)
+        # Per-flush log line so docker logs surface which cluster is
+        # dominating an in-progress capture without waiting for the
+        # window to close. Compact format keeps it grep-friendly.
+        try:
+            log.info(
+                "[capture-stats] %s · captured=%d retries=%d invalid=%d rejected=%s",
+                Path(self.out_dir).name,
+                self.captured_frames, self.retry_recoveries,
+                self.invalid_frames, dict(self.rejected_by_reason),
+            )
+        except Exception:
+            pass
 
 
 def read_capture_stats(frames_dir: Path) -> dict:

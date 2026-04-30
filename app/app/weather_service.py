@@ -1644,7 +1644,7 @@ class WeatherService:
                 except Exception:
                     pass
             else:
-                stats.record_invalid()
+                stats.record_invalid(last_reason)
                 log.info("[weather] %s slot %05d: invalid grabs, leaving slot empty (%s)",
                          cam_name, i, last_reason)
             stats.flush()
@@ -2030,7 +2030,7 @@ class WeatherService:
                 except Exception:
                     pass
             else:
-                stats.record_invalid()
+                stats.record_invalid(last_reason)
                 log.info("[weather] %s slot %05d: invalid grabs, leaving slot empty (%s)",
                          cam_name, i, last_reason)
             stats.flush()

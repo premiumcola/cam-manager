@@ -2092,8 +2092,8 @@ class CameraRuntime:
                                     attempt_used = retry
                                     break
                         if not ok:
-                            stats.record_invalid()
-                            log_tl.info("[timelapse] %s frame %s: 3 invalid grabs, leaving slot empty (%s)",
+                            stats.record_invalid(reason)
+                            log_tl.info("[timelapse] %s frame %s: invalid grabs, leaving slot empty (%s)",
                                         self.camera_id, now.strftime("%H%M%S_%f")[:10], reason)
                         else:
                             ts = now.strftime("%H%M%S_%f")[:10]
