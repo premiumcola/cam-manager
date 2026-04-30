@@ -510,11 +510,20 @@ async function loadMedia(){
 }
 
 function renderShell(){
-  byId('appName').textContent=state.config.app.name||'TAM-spy';
-  const _sideAppName=byId('sideAppName'); if(_sideAppName) _sideAppName.textContent=state.config.app.name||'TAM-spy';
-  byId('appTagline').textContent=state.config.app.tagline||'Motion · Objekte · Timelapse';
-  const subEl=byId('appSubtitle');
-  if(subEl) subEl.textContent=state.config.app.subtitle||'RTSP-Streams · KI-Erkennung · Vogelarten · Telegram-Alerts';
+  // Hero title is now a static "TAM-spy" lockup with the squirrel-on-
+  // hyphen ornament — no longer driven by config.app.{name,tagline,
+  // subtitle}. Side-nav app-name still hydrates if present so users
+  // who renamed the app via Settings keep their custom label there.
+  const _sideAppName=byId('sideAppName');
+  if (_sideAppName) _sideAppName.textContent = state.config.app.name || 'TAM-spy';
+  // Null-guard the legacy hero IDs so a config still containing
+  // tagline/subtitle doesn't crash renderShell — they just no-op.
+  const nameEl = byId('appName');
+  if (nameEl) nameEl.textContent = state.config.app.name || 'TAM-spy';
+  const tagEl = byId('appTagline');
+  if (tagEl) tagEl.textContent = state.config.app.tagline || 'Motion · Objekte · Timelapse';
+  const subEl = byId('appSubtitle');
+  if (subEl) subEl.textContent = state.config.app.subtitle || 'RTSP-Streams · KI-Erkennung · Vogelarten · Telegram-Alerts';
 }
 
 function _camGridCols(n){
@@ -7346,8 +7355,11 @@ byId('confirmOk')?.addEventListener('click',()=>_resolveConfirm(true));
 byId('confirmCancel')?.addEventListener('click',()=>_resolveConfirm(false));
 byId('confirmModal')?.addEventListener('click',e=>{if(e.target===byId('confirmModal'))_resolveConfirm(false);});
 
-// Inject random squirrel into hero on page load
-(()=>{const sq=SQUIRREL_CHARS[Math.floor(Math.random()*SQUIRREL_CHARS.length)];const el=byId('heroSquirrel');if(el)el.innerHTML=sq;})();
+// Legacy hero squirrel ASCII-injector — the hero now uses a static
+// inline SVG ornament on the hyphen of "TAM-spy" so the random
+// SQUIRREL_CHARS pick is no longer wired. Kept null-safe in case a
+// stale template still has the #heroSquirrel element.
+(()=>{const el=byId('heroSquirrel');if(el)el.innerHTML='';})();
 
 // ── Statistics dashboard ──────────────────────────────────────────────────
 const _STAT_LABEL_ICONS={motion:'👁',person:'🧍',cat:'🐈',bird:'🐦',car:'🚗',dog:'🐕',fox:'🦊',hedgehog:'🦔',squirrel:'🐿️',horse:'🐴'};

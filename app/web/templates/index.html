@@ -196,13 +196,11 @@
     </aside>
     <main class="main">
       <section class="hero panel">
-        <div style="display:flex;align-items:center;gap:16px;flex:1;min-width:0">
-          <div class="hero-logo" id="heroSquirrel" style="flex-shrink:0"></div>
-          <div>
-            <div class="eyebrow" id="appName">TAM-spy</div>
-            <h2 id="appTagline">Motion · Objekte · Timelapse</h2>
-            <p class="muted" id="appSubtitle" style="margin-top:4px">RTSP-Streams · KI-Erkennung · Vogelarten · Telegram-Alerts</p>
-          </div>
+        <div class="hero-title-wrap">
+          <h1 class="hero-title" aria-label="TAM-spy">
+            <span class="hero-tam">TAM</span><span class="hero-hyphen" aria-hidden="true">-<span class="hero-squirrel-mini" id="heroSquirrelMini"></span></span><span class="hero-spy">spy</span>
+          </h1>
+          <p class="hero-subtitle">self-hosted · Coral TPU · weather-aware</p>
         </div>
         <div id="heroBuildInfo" class="hero-build" aria-label="Build-Info"></div>
         <button id="openWizardBtn" class="btn-action ghost hidden">⚙️ Setup-Wizard</button>
