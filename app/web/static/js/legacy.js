@@ -4917,7 +4917,14 @@ window.selectTlCam=function(camId){
   const content=byId('tlCamContent');
   if(cam&&content) content.innerHTML=_renderTlModesGrid(cam);
 };
-function _tlPeriodLabel(s){
+// Renamed from _tlPeriodLabel — the original name collided with the
+// item-shaped _tlPeriodLabel below at line ~5966. As a regular
+// <script> the duplicate function declaration silently overrode this
+// one, leaving "Timelapse" as the period label everywhere this was
+// called; in module mode the duplicate is a SyntaxError. Restoring
+// the original numeric→German-duration intent fixes a long-latent UI
+// bug as a side effect of the rename.
+function _tlDurationLabel(s){
   const n=parseInt(s)||0;
   if(n>=31536000) return Math.round(n/31536000)+' Jahr'+(Math.round(n/31536000)!==1?'e':'');
   if(n>=2592000) return Math.round(n/2592000)+' Monat'+( Math.round(n/2592000)!==1?'e':'');
@@ -4930,7 +4937,7 @@ function _tlResultDesc(periodS,targetS,fps){
   const pN=parseInt(periodS)||86400, tN=parseInt(targetS)||60, fN=parseInt(fps)||25;
   const totalFrames=Math.max(1, Math.round(tN*fN));
   const intervalS=pN/totalFrames;
-  const periodLabel=_tlPeriodLabel(pN);
+  const periodLabel=_tlDurationLabel(pN);
   const intervalLabel=_tlFmtInterval(intervalS);
   const compression=Math.round(pN/Math.max(1,tN));
   // ~40 KB per JPEG at q≈72; sub-1s interval drops to q=50 ≈ 26 KB.
