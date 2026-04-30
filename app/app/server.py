@@ -1354,6 +1354,51 @@ def api_settings_cameras_save():
     })
 
 
+@app.get('/api/system/telegram')
+def api_system_telegram():
+    """Health snapshot for the cam-edit Alerting-tab status strip.
+    Returns the bot's connected/disconnected state plus the
+    timestamp of the most recent successful send_alert. Connected
+    means: the TelegramService instance exists, has bot+token+chat_id
+    configured, and is currently in the polling-active state.
+
+    Returned shape:
+      {
+        "enabled":       bool,    # service has token + chat_id
+        "connected":     bool,    # polling thread is currently running
+        "last_send_iso": str|null, # ISO timestamp of last successful push
+        "last_send_age_s": float|null,  # seconds since last_send
+      }
+    Frontend maps:
+      enabled=False                            → grey dot, "deaktiviert"
+      enabled=True && connected=True           → green dot, "verbunden"
+      enabled=True && connected=False          → red dot, "getrennt"
+    """
+    out = {
+        "enabled":         False,
+        "connected":       False,
+        "last_send_iso":   None,
+        "last_send_age_s": None,
+    }
+    if telegram_service is None:
+        return jsonify(out)
+    out["enabled"] = bool(getattr(telegram_service, "enabled", False))
+    try:
+        poll_status = telegram_service.get_polling_status() or {}
+        state = (poll_status.get("state") or "").lower()
+        out["connected"] = state in ("polling", "running", "active")
+    except Exception:
+        out["connected"] = False
+    last_push = getattr(telegram_service, "_last_push_ts", None)
+    if last_push:
+        try:
+            out["last_send_iso"] = datetime.fromtimestamp(float(last_push)).isoformat(timespec="seconds")
+            out["last_send_age_s"] = round(time.time() - float(last_push), 1)
+        except Exception:
+            pass
+    return jsonify(out)
+
+
 @app.post('/api/cameras/<cam_id>/test-detection')
 def api_test_detection(cam_id: str):
     """Run Coral inference on the camera's most-recent frame and return

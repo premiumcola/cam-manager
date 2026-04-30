@@ -141,6 +141,11 @@ class TelegramService:
         self._polling_stop_event: asyncio.Event | None = None
         self._polling_active_since: float | None = None
         self._last_conflict_ts: float | None = None
+        # Most-recent successful send_alert timestamp (epoch seconds).
+        # Set by send() on a successful Telegram API response; read by
+        # the /api/system/telegram health endpoint to drive the
+        # cam-edit Alerting-tab status strip "letzte Push vor X" line.
+        self._last_push_ts: float | None = None
         self._scheduler = None
         self._lifecycle_lock = Lock()
         self._stopped = False
@@ -613,6 +618,10 @@ class TelegramService:
                     msg = await self.bot.send_photo(photo=src, caption=caption, **common)
             else:
                 msg = await self.bot.send_message(text=text or "", **common)
+            # Stash timestamp of the most recent successful push so the
+            # /api/system/telegram health endpoint can surface "letzte
+            # Push vor X Min" without scraping the polling state.
+            self._last_push_ts = time.time()
             log.info("[tg] send_alert ok (chat=%s silent=%s)", self.chat_id, silent)
             return msg
         except Exception as e:

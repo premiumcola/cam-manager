@@ -324,6 +324,9 @@ function startLiveUpdate(){
       // sync with reality. The function reads the form's current cam id
       // and is a no-op when no cam-edit form is open.
       _renderGlobalStatusRows();
+      // Same for the Alerting-tab status strip (Telegram bot
+      // connection state). Fire-and-forget; bails silently on errors.
+      _renderAlertStatusStrip();
     }catch{/* silent */}
   },3000);
 }
@@ -1601,6 +1604,49 @@ function _checkAlertingConflicts(form){
   }
 }
 
+// Hydrate the Alerting-tab status strip from /api/system/telegram.
+// Mutates the existing static markup rather than re-rendering so the
+// dot's CSS animation isn't restarted on every poll. Three pieces:
+//   - Dot variant: is-ok (green) when bot is enabled+connected, is-cpu
+//     (orange-pulse) when enabled but disconnected, is-off (grey) when
+//     disabled entirely.
+//   - alertStatusBot: "verbunden" / "getrennt" / "deaktiviert".
+//   - alertStatusLast: relative "vor X Min." since last push (uses the
+//     existing _fmtRelativeAgeS helper from the Erkennung-tab strip).
+// Errors during fetch leave the strip showing whatever it had — a
+// transient flake shouldn't blank the UI.
+async function _renderAlertStatusStrip(){
+  const host = byId('alertStatusStrip'); if (!host) return;
+  let data = null;
+  try {
+    const r = await fetch('/api/system/telegram');
+    if (r.ok) data = await r.json();
+  } catch(_){}
+  const dot = byId('alertStatusDot');
+  const txt = byId('alertStatusBot');
+  const last = byId('alertStatusLast');
+  if (!data){
+    if (dot){ dot.classList.remove('is-ok','is-cpu','is-off'); dot.classList.add('is-off'); }
+    if (txt) txt.textContent = '—';
+    if (last) last.textContent = '—';
+    return;
+  }
+  let variant, label;
+  if (!data.enabled){
+    variant = 'is-off'; label = 'deaktiviert';
+  } else if (data.connected){
+    variant = 'is-ok'; label = 'verbunden';
+  } else {
+    variant = 'is-cpu'; label = 'getrennt';
+  }
+  if (dot){
+    dot.classList.remove('is-ok','is-cpu','is-off');
+    dot.classList.add(variant);
+  }
+  if (txt) txt.textContent = label;
+  if (last) last.textContent = _fmtRelativeAgeS(data.last_send_age_s);
+}
+
 // Wire the conflict banner to react to channel/master switches in the
 // Alerting tab. Idempotent via dataset.wired so re-opening cam-edit
 // doesn't double-bind. The matrix click handler in
@@ -2030,6 +2076,9 @@ function editCamera(camId){
   _renderSeverityMatrix(byId('cameraForm'), c);
   _bindAlertingConflictWatch(byId('cameraForm'));
   _checkAlertingConflicts(byId('cameraForm'));
+  // Telegram bot health strip — fire-and-forget; the function handles
+  // its own error states and never throws.
+  _renderAlertStatusStrip();
   if(f['enabled']) f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed;
   // Two independent schedules — schedule_notify for Telegram/MQTT,
   // schedule_record for the on-disk archive. Either can be enabled or
