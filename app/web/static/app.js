@@ -1469,6 +1469,11 @@ function editCamera(camId){
   if(f['icon']) f['icon'].value=c.icon||getCameraIcon(c.name||c.id);
   // Live preview of the canonical id derived from manufacturer/model/name/IP.
   _bindCamIdPreviewListeners();
+  // Reolink GetDevInfo rescan button — wires once per session.
+  _bindCamProbeDeviceInfo();
+  // Reset the auto-detected hints — a fresh open should not retain a
+  // hint left over from a previous session's save.
+  byId('cameraForm')?.querySelectorAll('.cam-autodetected-hint').forEach(el=>{el.hidden=true});
   byId('cameraEditTitle').textContent=`Kamera bearbeiten · ${c.name||c.id}`;
   const p=parseRtspUrl(c.rtsp_url||'');
   f['rtsp_ip'].value=p.host||''; f['rtsp_user'].value=p.user||''; f['rtsp_pass'].value=p.pass||''; f['rtsp_port'].value=p.port||'554';
@@ -3260,18 +3265,79 @@ byId('cameraForm').onsubmit=async(e)=>{
   // Backend rebuilds the canonical id when manufacturer/model/name/rtsp_url
   // change (storage_migration). Read the response so we re-open the panel
   // under the NEW id rather than the stale one we sent.
-  let _newId=_savedId, _renamed=false;
+  let _newId=_savedId, _renamed=false, _autoDetected=[];
   try{
     const r=await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     if(r.ok){
       const d=await r.json();
       if(d&&d.id){ _newId=d.id; _renamed=!!d.id_renamed_from; }
+      if(Array.isArray(d?.auto_detected)) _autoDetected=d.auto_detected;
     }
   }catch(_){/* fall back to old id */}
   await loadAll();
   if(_renamed) showToast('Kamera-ID aktualisiert · '+_newId,'success');
   editCamera(_newId);
+  // After editCamera re-renders the form, surface "automatisch erkannt"
+  // hints for the fields the backend filled via Reolink GetDevInfo on
+  // this save. Hint hides itself on the next manual input.
+  if(_autoDetected.length) _markAutoDetectedFields(_autoDetected);
 };
+
+// Show the "automatisch erkannt" hint under each named field, then wire
+// it to clear on the next user edit. Called by the cam-edit save flow
+// when /api/settings/cameras returns auto_detected: ['manufacturer', …].
+function _markAutoDetectedFields(fields){
+  const form=byId('cameraForm'); if(!form) return;
+  for(const name of fields){
+    const hint=form.querySelector(`.cam-autodetected-hint[data-for="${name}"]`);
+    if(!hint) continue;
+    hint.hidden=false;
+    const input=form.elements[name];
+    if(!input) continue;
+    const clear=()=>{ hint.hidden=true; input.removeEventListener('input',clear); };
+    input.addEventListener('input',clear);
+  }
+}
+
+// Manual rescan via Reolink GetDevInfo. Confirms before overwriting
+// existing manuf/model values; updates the form fields in place when
+// confirmed. Touch target stays at 44 px even during the busy state.
+function _bindCamProbeDeviceInfo(){
+  const btn=byId('camProbeDeviceInfo'); if(!btn || btn.dataset.wired) return;
+  btn.dataset.wired='1';
+  btn.addEventListener('click', async ()=>{
+    const f=byId('cameraForm')?.elements; if(!f) return;
+    const camId=f['id']?.value; if(!camId) return;
+    btn.classList.add('is-busy');
+    let d=null, ok=false;
+    try{
+      const r=await fetch(`/api/cameras/${encodeURIComponent(camId)}/probe-device-info`,{method:'POST'});
+      d=await r.json().catch(()=>null);
+      ok=r.ok && d && d.ok;
+    }catch(_){ /* network — handled below */ }
+    btn.classList.remove('is-busy');
+    if(!ok){
+      const msg=(d&&d.error)?d.error:'Erkennung fehlgeschlagen';
+      showToast('Erkennung fehlgeschlagen · '+msg,'error');
+      return;
+    }
+    const cur=d.current||{};
+    const same=(cur.manufacturer===d.manufacturer)&&(cur.model===d.model);
+    if(same){
+      showToast(`Bereits aktuell: ${d.manufacturer} ${d.model}`,'info');
+      return;
+    }
+    if(cur.manufacturer || cur.model){
+      const msg=`Mit erkanntem Wert überschreiben?\n\n`+
+                `Aktuell: '${cur.manufacturer||'—'}' / '${cur.model||'—'}'\n`+
+                `Neu: '${d.manufacturer}' / '${d.model}'`;
+      if(!confirm(msg)) return;
+    }
+    if(f['manufacturer']){ f['manufacturer'].value=d.manufacturer; f['manufacturer'].dispatchEvent(new Event('input',{bubbles:true})); }
+    if(f['model']){ f['model'].value=d.model; f['model'].dispatchEvent(new Event('input',{bubbles:true})); }
+    showToast(`Erkannt: ${d.manufacturer} ${d.model}`,'success');
+  });
+}
 byId('closeCameraEdit')?.addEventListener('click',()=>_closeEditPanel());
 // ── Section-level save functions ──────────────────────────────────────────────
 window.saveMqttSettings=async function(){

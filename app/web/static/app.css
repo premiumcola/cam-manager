@@ -2059,6 +2059,55 @@ select option{background:#1e1e1e;color:var(--text)}
 }
 .cam-id-preview-hint{font-size:10.5px;color:var(--muted);font-style:italic}
 
+/* Manuf + model + rescan-icon row. Two flex inputs and a 44 px square
+   icon button (iOS touch-target floor). The button stays visually
+   secondary to the inputs — flat icon, transparent bg, accent on hover
+   so it never distracts from the primary form fields. */
+.cam-id-row{
+  display:grid;grid-template-columns:1fr 1fr 44px;gap:8px;align-items:end
+}
+.cam-probe-btn{
+  width:44px;height:44px;flex-shrink:0;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:rgba(127,174,201,0.08);
+  border:0;border-radius:10px;
+  color:rgba(127,174,201,.85);
+  cursor:pointer;
+  transition:background .15s,color .15s
+}
+.cam-probe-btn:hover{background:rgba(127,174,201,0.18);color:#cfe1ee}
+.cam-probe-btn:active{background:rgba(127,174,201,0.28)}
+.cam-probe-btn.is-busy{opacity:.55;pointer-events:none}
+.cam-probe-btn.is-busy svg{animation:cam-probe-spin .9s linear infinite}
+@keyframes cam-probe-spin{
+  from{transform:rotate(0deg)} to{transform:rotate(360deg)}
+}
+@media (prefers-reduced-motion: reduce){
+  .cam-probe-btn.is-busy svg{animation:none}
+}
+
+/* "automatisch erkannt" hint — small italic muted text under the
+   manuf/model inputs when the most recent save filled them by Reolink
+   GetDevInfo. Spec: ≤ 11 px italic, no pill background. Disappears on
+   the next manual edit (JS toggles the [hidden] attribute). */
+.cam-autodetected-hint{
+  display:block;
+  font-size:10.5px;
+  font-style:italic;
+  color:rgba(127,174,201,.65);
+  margin-top:2px;letter-spacing:.01em
+}
+.cam-autodetected-hint[hidden]{display:none}
+
+@media (max-width:520px){
+  /* On narrow phones the rescan button drops to a full-width row
+     beneath the inputs so the inputs don't squeeze to unusable widths. */
+  .cam-id-row{grid-template-columns:1fr 1fr;grid-template-areas:'a b' 'c c';gap:6px}
+  .cam-id-row .field-wrap:first-of-type{grid-area:a}
+  .cam-id-row .field-wrap:nth-of-type(2){grid-area:b}
+  .cam-id-row .cam-probe-btn{grid-area:c;width:100%;height:36px}
+}
+
 /* ── iOS / mobile foundation ─────────────────────────────────────────────
    Globals first (benign on desktop), then mobile-specific overrides under
    a single @media block. Desktop layout at ≥ 769 px is unaffected.        */

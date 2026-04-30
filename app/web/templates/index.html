@@ -268,8 +268,30 @@
             <div class="cam-tab-panel active" id="cam-tab-allgemein">
               <div style="display:grid;gap:8px">
                 <div class="field-wrap"><input name="name" placeholder="Werkstatt" required /><span class="field-label">Anzeigename</span></div>
-                <div class="field-wrap"><input name="manufacturer" placeholder="Reolink" autocomplete="off" /><span class="field-label">Hersteller</span></div>
-                <div class="field-wrap"><input name="model" placeholder="RLC-810A" autocomplete="off" /><span class="field-label">Modell</span></div>
+                <!-- Manuf + Model row plus a tiny rescan icon. Backend
+                     auto-detects via Reolink GetDevInfo on save when
+                     these are blank; rescan triggers a fresh probe even
+                     when filled (firmware update / device replaced at
+                     same IP). The "automatisch erkannt" hint surfaces
+                     when the most recent save filled the field by
+                     auto-detect — disappears on the next manual edit. -->
+                <div class="cam-id-row">
+                  <div class="field-wrap">
+                    <input name="manufacturer" placeholder="Reolink" autocomplete="off" />
+                    <span class="field-label">Hersteller</span>
+                    <span class="cam-autodetected-hint" data-for="manufacturer" hidden>automatisch erkannt</span>
+                  </div>
+                  <div class="field-wrap">
+                    <input name="model" placeholder="RLC-810A" autocomplete="off" />
+                    <span class="field-label">Modell</span>
+                    <span class="cam-autodetected-hint" data-for="model" hidden>automatisch erkannt</span>
+                  </div>
+                  <button type="button" id="camProbeDeviceInfo" class="cam-probe-btn"
+                          title="Vom Gerät erkennen (Reolink GetDevInfo)"
+                          aria-label="Vom Gerät erkennen">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  </button>
+                </div>
                 <div class="field-wrap"><input name="icon" placeholder="🔧" maxlength="4" /><span class="field-label">Icon (Emoji)</span></div>
                 <!-- Live ID preview. Read-only and updated by JS on every
                      change to manufacturer / model / name / IP. -->
