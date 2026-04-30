@@ -122,6 +122,16 @@ class SettingsStore:
         "custom":  {"enabled": False, "target_seconds": 30,  "period_seconds": 600},
     }
 
+    # Per-class detection-score floor. Snapshot constant so reads from
+    # _default_camera don't accidentally mutate the source dict if a
+    # caller pokes at it.
+    _LABEL_THRESHOLD_DEFAULTS = {
+        "person":   0.65,
+        "cat":      0.55,
+        "bird":     0.45,
+        "squirrel": 0.45,
+    }
+
     def _default_camera(self, cam: dict | None = None) -> dict:
         cam = cam or {}
         _tl = cam.get("timelapse") or {}
@@ -150,10 +160,22 @@ class SettingsStore:
             # without forcing the user to set both sliders.
             "wildlife_motion_sensitivity": cam.get("wildlife_motion_sensitivity", 0.0),
             "wildlife_min_score": cam.get("wildlife_min_score", 0.0),
-            # Per-label confidence overrides — defaults push the bar high
-            # for "person" because COCO SSD is prone to false positives on
-            # human-shaped wood/shadow patterns at fixed surveillance angles.
-            "label_thresholds": cam.get("label_thresholds", {"person": 0.72}),
+            # Per-label confidence overrides. Defaults are tuned to be
+            # forgiving — false positives are caught by the N-of-M
+            # confirmation window (see schedule_action_active +
+            # DetectionConfirmer), so we no longer need a hard 0.72 floor
+            # on person to suppress single-frame artefacts.
+            #   - person:   0.65  (was 0.72)
+            #   - cat:      0.55
+            #   - bird:     0.45  (smaller subjects, lower COCO confidence)
+            #   - squirrel: 0.45  (wildlife stage is the second guard)
+            # Migration: cams that still hold the old singleton
+            # {"person": 0.72} are upgraded to the 4-class default. Cams
+            # with anything else (custom person value, extra labels)
+            # keep their config — never stomp user-tuned settings.
+            "label_thresholds": (dict(self._LABEL_THRESHOLD_DEFAULTS)
+                                  if cam.get("label_thresholds", None) in (None, {"person": 0.72})
+                                  else cam.get("label_thresholds")),
             "timelapse": {
                 "enabled": _tl.get("enabled", False),
                 "fps": _tl.get("fps", 30),
