@@ -9737,4 +9737,10 @@ window._statOpenMedia     = _statOpenMedia;
 window.byId               = byId;
 window.closeMediaDrilldown = closeMediaDrilldown;
 window.openMediaDrilldown = openMediaDrilldown;
-window._openMediaItem     = _openMediaItem;
+// _openMediaItem is intentionally NOT bridged here. It has no
+// top-level binding — the only definition is `window._openMediaItem =
+// id => {...}` inside the media-grid render function (renderMedia),
+// which runs every time the gallery is populated. Bridging from a
+// module-level binding would throw ReferenceError because none
+// exists; the inline onclicks ("window._openMediaItem(...)") look
+// up the property directly and work as soon as the gallery renders.
