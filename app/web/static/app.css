@@ -2545,19 +2545,28 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
 .cam-rtsp-erw-btn:hover{background:rgba(255,255,255,.07)}
 .cam-rtsp-erw-chev{flex-shrink:0;transition:transform .2s}
 .cam-rtsp-erw-btn[aria-expanded="true"] .cam-rtsp-erw-chev{transform:rotate(90deg)}
+/* "manuell" hint — used to be a coloured pill that visually competed
+   with the form's own value pills. Toned down to small italic muted
+   text per CLAUDE.md (no per-item pill chrome that doesn't carry
+   meaningful semantics). */
 .cam-rtsp-erw-pill{
-  margin-left:auto;
-  padding:3px 10px;border-radius:999px;
-  background:rgba(251,191,36,.15);color:#fcd34d;
-  font-size:11px;font-weight:700;font-style:italic;
-  white-space:nowrap;
+  margin-left:auto;padding:0;background:transparent;
+  font-size:10px;font-style:italic;font-weight:400;
+  color:rgba(127,174,201,.65);
+  white-space:nowrap;letter-spacing:.02em;
 }
+.cam-rtsp-erw-pill[hidden]{display:none}
 .cam-rtsp-erw-body{
   margin-top:8px;padding:10px;
   border-radius:10px;
   background:rgba(255,255,255,.025);
   display:grid;gap:8px;
 }
+/* Class display:grid otherwise wins over the user-agent
+   [hidden]{display:none} (same specificity, class is later in the
+   cascade), so without this explicit rule the disclosure body would
+   stay visually open even when the toggle button reports collapsed. */
+.cam-rtsp-erw-body[hidden]{display:none}
 
 /* Readonly display fields (Kamera-IP, RTSP-URL) — rendered as <input>
    so form.elements[name] still works, but styled as inline text:
