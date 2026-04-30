@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import logging
+import re
 import cv2
 import numpy as np
 
@@ -281,35 +282,69 @@ class CoralObjectDetector:
         if not dets:
             return "—"
         head = dets[:max_n]
-        return ", ".join(f"{d.label} {d.score:.2f}" for d in head) + (
-            f" (+{len(dets) - max_n} more)" if len(dets) > max_n else ""
+        return ", ".join(f"{d.label} {int(round(d.score * 100))}%" for d in head) + (
+            f" (+{len(dets) - max_n} weitere)" if len(dets) > max_n else ""
         )
 
     @staticmethod
-    def _fmt_drops(drops, max_n: int = 8) -> str:
+    def _humanize_drop_reason(reason: str) -> str:
+        """Translate the raw drop-reason emitted by _apply_label_filters
+        into a German sentence the operator can read at a glance. Three
+        shapes are produced upstream:
+
+            label_threshold(person)=0.72 (got 0.67)
+            size_floor (h_frac=0.12 < 0.18)
+            size_floor (area_frac=0.005 < 0.012)
+
+        Unknown shapes fall back to the raw string so we never silently
+        lose information."""
+        m = re.match(r"label_threshold\([^)]+\)=([\d.]+)\s*\(got\s+([\d.]+)\)", reason)
+        if m:
+            thr = float(m.group(1)) * 100
+            got = float(m.group(2)) * 100
+            return f"Schwellwert {thr:.0f}% nicht erreicht (war {got:.0f}%)"
+        m = re.match(r"size_floor\s*\(h_frac=([\d.]+)\s*<\s*([\d.]+)\)", reason)
+        if m:
+            got = float(m.group(1)) * 100
+            need = float(m.group(2)) * 100
+            return f"zu klein im Bild: {got:.0f}% Höhe < {need:.0f}% nötig"
+        m = re.match(r"size_floor\s*\(area_frac=([\d.]+)\s*<\s*([\d.]+)\)", reason)
+        if m:
+            got = float(m.group(1)) * 100
+            need = float(m.group(2)) * 100
+            return f"zu klein im Bild: {got:.1f}% Fläche < {need:.1f}% nötig"
+        return reason
+
+    @classmethod
+    def _fmt_drops(cls, drops, max_n: int = 8) -> str:
         if not drops:
             return "—"
         head = drops[:max_n]
-        return ", ".join(f"{d.label} {d.score:.2f} ({reason.split('(')[0].strip()})"
-                          for d, reason in head) + (
-            f" (+{len(drops) - max_n} more)" if len(drops) > max_n else ""
-        )
+        return ", ".join(
+            f"{d.label} {int(round(d.score * 100))}% ({cls._humanize_drop_reason(reason)})"
+            for d, reason in head
+        ) + (f" (+{len(drops) - max_n} weitere)" if len(drops) > max_n else "")
 
     def _log_decision(self, cam_id: str, kept: list, drops: list):
         """Emit one INFO line per detect_frame call when there's anything
         worth seeing. Decision tree:
-          - kept ≥ 1 → "[det][cam:…] kept: … · dropped: …"
-          - kept == 0 AND drops > 0 → "[det][cam:…] all dropped — top: …"
+          - kept ≥ 1 → "[det][cam:…] ✓ erkannt: … · ✗ verworfen: …"
+          - kept == 0 AND drops > 0 → "[det][cam:…] ✗ verworfen: …"
           - kept == 0 AND drops == 0 → DEBUG "[det][cam:…] inference empty (raw=0)"
+        ASCII check/cross markers stand out in `docker logs` greps.
         """
         if kept:
-            log.info("[det][cam:%s] kept: %s · dropped: %s",
-                     cam_id, self._fmt_dets(kept), self._fmt_drops(drops))
+            if drops:
+                log.info("[det][cam:%s] ✓ erkannt: %s · ✗ verworfen: %s",
+                         cam_id, self._fmt_dets(kept), self._fmt_drops(drops))
+            else:
+                log.info("[det][cam:%s] ✓ erkannt: %s",
+                         cam_id, self._fmt_dets(kept))
             return
         if drops:
             # Sort by score descending so "almost made it" labels come first.
             ordered = sorted(drops, key=lambda x: x[0].score, reverse=True)
-            log.info("[det][cam:%s] all dropped — top: %s",
+            log.info("[det][cam:%s] ✗ verworfen: %s",
                      cam_id, self._fmt_drops(ordered))
             return
         log.debug("[det][cam:%s] inference empty (raw=0)", cam_id)
