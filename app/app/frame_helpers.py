@@ -134,15 +134,32 @@ def _decode(img_or_bytes) -> "np.ndarray | None":
 # ── Individual heuristics ────────────────────────────────────────────────────
 def is_grey_frame(img) -> tuple[bool, str]:
     """True when the frame is a uniform mid-grey hickup. False on real imagery
-    (including IR/night frames, which have plenty of noise across channels)."""
+    (including IR/night frames, which have plenty of noise across channels).
+
+    Reolink date OSDs render in the top-right corner and add enough
+    channel std to push an otherwise-uniform-grey frame above the
+    grey_uniform floor. Std is computed on a cropped working region
+    that excludes the top 12 % of rows AND the right 25 % of columns
+    so OSD text noise can't hide a grey hickup. Mean brightness
+    still uses the full frame because the OSD is too small to
+    materially shift overall brightness."""
     img = _decode(img)
     if img is None or img.size == 0:
         return False, ""
     if img.ndim < 3 or img.shape[2] < 3:
         return False, ""
-    std_b = float(img[:, :, 0].std())
-    std_g = float(img[:, :, 1].std())
-    std_r = float(img[:, :, 2].std())
+    h, w = img.shape[:2]
+    cy = max(1, int(h * 0.12))
+    cx = max(1, int(w * 0.75))
+    # Fall back to the full frame on tiny inputs where the OSD-aware
+    # crop would leave too little to measure.
+    if (h - cy) > 8 and cx > 8:
+        work = img[cy:, :cx]
+    else:
+        work = img
+    std_b = float(work[:, :, 0].std())
+    std_g = float(work[:, :, 1].std())
+    std_r = float(work[:, :, 2].std())
     std_sum = std_b + std_g + std_r
     if std_sum < _GREY_CHANNEL_STD_SUM:
         return True, f"grey_uniform(std_sum={std_sum:.1f})"
@@ -371,10 +388,26 @@ def is_valid_frame(img) -> tuple[bool, str]:
     # (B=G=R from chroma drop-out) and luma stuck in the mid-grey band.
     # IR/night passes because it's dark; daytime passes because real
     # scenes carry chroma even under desaturated lighting.
+    #
+    # Chroma std uses a TRIMMED metric (drop the top 10 % of pixel-level
+    # |B-G| and |B-R| differences before std) so a mostly-grey frame
+    # with a small chroma island (e.g. the green LED of a clock or a
+    # red OSD pixel) doesn't escape the gate via the bright outliers.
+    # np.partition is O(n) — no full sort needed.
     luma = (b + g + r) / 3.0
-    chroma_std_bg = float(np.abs(img[:, :, 0].astype(np.int16) - img[:, :, 1]).std())
-    chroma_std_br = float(np.abs(img[:, :, 0].astype(np.int16) - img[:, :, 2]).std())
-    chroma_std = (chroma_std_bg + chroma_std_br) / 2.0
+    diff_bg = np.abs(img[:, :, 0].astype(np.int16) - img[:, :, 1]).flatten()
+    diff_br = np.abs(img[:, :, 0].astype(np.int16) - img[:, :, 2]).flatten()
+    def _trimmed_std(arr, drop_frac=0.10):
+        if arr.size == 0:
+            return 0.0
+        cut = max(1, int(arr.size * (1.0 - drop_frac)))
+        if cut >= arr.size:
+            return float(arr.std())
+        # partition keeps the smallest `cut` elements in the first slots
+        # — order within the kept slice is undefined but std doesn't care.
+        kept = np.partition(arr, cut - 1)[:cut]
+        return float(kept.std())
+    chroma_std = (_trimmed_std(diff_bg) + _trimmed_std(diff_br)) / 2.0
     if (_GREY_TONED_LUMA_MIN <= luma <= _GREY_TONED_LUMA_MAX
             and chroma_std < _GREY_TONED_CHROMA_STD_MAX):
         return False, (f"grey_toned(luma={luma:.0f},chroma_std={chroma_std:.1f})")
