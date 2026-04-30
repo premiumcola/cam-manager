@@ -7014,35 +7014,79 @@ function renderWeatherStatsChart(){
     wrap.innerHTML = '<div class="ws-stats-empty">Noch zu wenige Messpunkte — der Verlauf füllt sich alle 5 min.</div>';
     return;
   }
-  // Layout. Right padding is generous so per-field threshold labels can
-  // sit outside the chart area in all-lines mode without clipping.
+  // Layout. Left lane reserved for Y-axis labels of the active line;
+  // right padding for per-field threshold ticks in all-lines mode.
   const VB_W = 600, VB_H = 220;
-  const pad = { l: 8, r: 72, t: 12, b: 22 };
+  const pad = { l: 42, r: 72, t: 12, b: 26 };
   const cw = VB_W - pad.l - pad.r;
   const ch = VB_H - pad.t - pad.b;
   const isolated = _wsStatsState.isolated;
   const fields = isolated ? [isolated] : _WS_FIELD_ORDER;
-  // X-axis ticks: 4 for ≤24 h windows, 6 for the wider 7 d / 30 d ranges
-  // so a month of data still has a legible time-axis. Label format is
-  // adaptive (HH:MM / weekday HH:MM / DD.MM.) keyed off the configured
-  // window in _wsStatsState.hours. First/last tick anchor to start/end so
-  // the label can't escape the viewBox on narrow viewports.
   const hours = _wsStatsState.hours || 24;
-  const intervals = hours <= 24 ? 3 : 5;
-  const last = samples.length - 1;
-  const tickIdx = [];
-  for (let k = 0; k <= intervals; k++){
-    tickIdx.push(Math.round(last * k / intervals));
-  }
+
+  // Time-based tick spacing keyed off the configured window:
+  //   1 h  → every 10 min  · 6 ticks
+  //   6 h  → every 1 h     · 6 ticks
+  //   24 h → every 4 h     · 6 ticks
+  //   7 d  → every 1 day   · 7 ticks
+  //   30 d → every 5 days  · 6 ticks
+  // Format adapts: HH:MM for ≤24 h, dd.MM for ≥7 d. Falls back to the
+  // legacy index-based 6-tick scheme if timestamps fail to parse.
+  const tFirst = new Date(samples[0]?.ts).getTime();
+  const tLast = new Date(samples[samples.length - 1]?.ts).getTime();
+  const tSpan = tLast - tFirst;
   let tickSvg = '';
-  for (let i = 0; i < tickIdx.length; i++){
-    const idx = tickIdx[i];
-    const label = _wsFmtTick(samples[idx]?.ts, hours);
-    const x = pad.l + (samples.length === 1 ? 0 : (idx / last) * cw);
-    const anchor = i === 0 ? 'start'
-                  : i === tickIdx.length - 1 ? 'end'
-                  : 'middle';
-    tickSvg += `<text x="${x.toFixed(1)}" y="${VB_H - 6}" text-anchor="${anchor}" font-size="10" fill="#7faec9" opacity="0.85">${label}</text>`;
+  let xAxisFmt = (d) => {
+    const p2 = n => (n < 10 ? '0' : '') + n;
+    return p2(d.getHours()) + ':' + p2(d.getMinutes());
+  };
+  if (hours >= 168){
+    xAxisFmt = (d) => {
+      const p2 = n => (n < 10 ? '0' : '') + n;
+      return p2(d.getDate()) + '.' + p2(d.getMonth() + 1);
+    };
+  }
+  if (Number.isFinite(tFirst) && Number.isFinite(tLast) && tSpan > 0){
+    let stepMs;
+    if (hours <= 1)        stepMs = 10 * 60 * 1000;          // 10 min
+    else if (hours <= 6)   stepMs = 60 * 60 * 1000;          // 1 h
+    else if (hours <= 24)  stepMs = 4 * 60 * 60 * 1000;      // 4 h
+    else if (hours <= 168) stepMs = 24 * 60 * 60 * 1000;     // 1 d
+    else                   stepMs = 5 * 24 * 60 * 60 * 1000; // 5 d
+    // Anchor first tick at first ceil-step boundary inside the window.
+    const firstTick = Math.ceil(tFirst / stepMs) * stepMs;
+    const ticks = [];
+    for (let t = firstTick; t <= tLast; t += stepMs){
+      ticks.push(t);
+    }
+    // Cap to a sane number so a 1-min-data 30-d zoom doesn't render 720 ticks.
+    while (ticks.length > 8) ticks.splice(1, 2);  // thin every other inner tick
+    for (const t of ticks){
+      const x = pad.l + ((t - tFirst) / tSpan) * cw;
+      const label = xAxisFmt(new Date(t));
+      tickSvg += `<line x1="${x.toFixed(1)}" y1="${(pad.t + ch).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(pad.t + ch + 5).toFixed(1)}" stroke="rgba(255,255,255,.18)" stroke-width="1"/>`;
+      tickSvg += `<text x="${x.toFixed(1)}" y="${(VB_H - 8).toFixed(1)}" text-anchor="middle" font-size="10" fill="rgba(255,255,255,.55)" text-rendering="geometricPrecision" shape-rendering="geometricPrecision">${label}</text>`;
+    }
+  } else {
+    // Legacy fallback — no parseable timestamps, fall back to 6 ticks
+    // anchored to data extremes.
+    const last = samples.length - 1;
+    const intervals = 5;
+    for (let k = 0; k <= intervals; k++){
+      const idx = Math.round(last * k / intervals);
+      const x = pad.l + (idx / last) * cw;
+      const anchor = k === 0 ? 'start' : k === intervals ? 'end' : 'middle';
+      tickSvg += `<text x="${x.toFixed(1)}" y="${(VB_H - 8).toFixed(1)}" text-anchor="${anchor}" font-size="10" fill="rgba(255,255,255,.55)" text-rendering="geometricPrecision">${_wsFmtTick(samples[idx]?.ts, hours)}</text>`;
+    }
+  }
+
+  // Horizontal grid: 4 evenly-spaced lines across the plotting area.
+  // Subtle so they don't fight the data lines visually. Drawn UNDER
+  // the lines (precedes linesSvg in the final concat).
+  let gridSvg = '';
+  for (let g = 0; g <= 4; g++){
+    const y = pad.t + (g / 4) * ch;
+    gridSvg += `<line x1="${pad.l}" y1="${y.toFixed(1)}" x2="${(pad.l + cw).toFixed(1)}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,.06)" stroke-width="1"/>`;
   }
   // Lines — collect per-field meta so the threshold pass can renormalise
   // each tick against the same {lo, hi} the line was drawn against.
@@ -7142,8 +7186,33 @@ function renderWeatherStatsChart(){
       `;
     }
   }
+  // Y-axis labels: when a line is isolated (or fields == 1), surface
+  // its min and max in the line's own colour at the top-left and
+  // bottom-left of the plotting area. In all-lines mode each line is
+  // independently normalised, so a shared Y label would be meaningless;
+  // skip the labels entirely in that mode (gridlines still anchor the
+  // visual reading).
+  let yAxisSvg = '';
+  if (isolated && lineMetas[isolated]){
+    const meta = lineMetas[isolated];
+    const u = (data?.units || {})[isolated] || '';
+    const colour = WEATHER_STATS_PALETTE[isolated] || '#94a3b8';
+    const fmt = (v) => {
+      if (Math.abs(v) < 100 && !Number.isInteger(v)) return v.toFixed(2);
+      return Math.round(v).toString();
+    };
+    const hiTxt = `${fmt(meta.hi)}${u ? ' ' + u : ''}`;
+    const loTxt = `${fmt(meta.lo)}${u ? ' ' + u : ''}`;
+    yAxisSvg = `
+      <text x="${pad.l - 6}" y="${(pad.t + 4).toFixed(1)}" text-anchor="end" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="10" fill="${colour}" opacity="0.75" text-rendering="geometricPrecision" shape-rendering="geometricPrecision">${hiTxt}</text>
+      <text x="${pad.l - 6}" y="${(pad.t + ch).toFixed(1)}" text-anchor="end" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="10" fill="${colour}" opacity="0.75" text-rendering="geometricPrecision" shape-rendering="geometricPrecision">${loTxt}</text>
+    `;
+  }
+
   wrap.innerHTML = `
     <svg viewBox="0 0 ${VB_W} ${VB_H}" preserveAspectRatio="none" role="img" aria-label="Wetterverlauf">
+      ${gridSvg}
+      ${yAxisSvg}
       ${tickSvg}
       ${linesSvg}
       ${thresholdSvg}
