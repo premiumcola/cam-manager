@@ -300,6 +300,20 @@
                   <code class="cam-id-preview-value" id="camIdPreview" data-camid="">unknown_unknown_unknown_unknown</code>
                   <span class="cam-id-preview-hint">wird automatisch aus Hersteller, Modell, Name und IP-Endung erzeugt</span>
                 </div>
+                <!-- Erkennungs-Modus — architecture-level switch (motion vs.
+                     KI vs. both). Lives here on the Allgemein tab rather
+                     than the Erkennung tab because it picks WHICH pipeline
+                     runs, not how to tune it. -->
+                <div class="cam-sep"></div>
+                <div class="field-wrap">
+                  <select name="detection_trigger">
+                    <option value="motion_and_objects">Bewegung + Objekte (Standard)</option>
+                    <option value="objects_only">Nur Objekte (KI)</option>
+                    <option value="motion_only">Nur Bewegung</option>
+                  </select>
+                  <span class="field-label">Erkennungs-Modus</span>
+                </div>
+                <div class="field-help">Welche Art von Event diese Kamera erkennt.</div>
               </div>
             </div>
 
@@ -536,13 +550,6 @@
                 </div>
 
               </div>
-
-              <!-- detection_trigger temporarily kept here as a hidden input
-                   so existing values are preserved across the refactor.
-                   The follow-up commit "refactor: move detection_trigger
-                   select to allgemein tab" surfaces it as a visible select
-                   on the Allgemein tab. -->
-              <input type="hidden" name="detection_trigger" value="motion_and_objects" />
             </div>
 
             <!-- Panel: Alerting — notifications, alarm, schedule -->
