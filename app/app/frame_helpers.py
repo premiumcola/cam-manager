@@ -94,7 +94,16 @@ _TILE_DEAD_BLURRED_STD_FLOOR = 3.0   # blurred std under this → no real struct
 _TILE_GREY_BAND_MIN = 100.0          # mid-grey band lower bound
 _TILE_GREY_BAND_MAX = 160.0          # mid-grey band upper bound
 _TILE_GREY_BAND_BLURRED_STD = 6.0    # mid-grey tile passes only with real low-freq detail
-_TILE_DEAD_FRACTION = 0.55           # > 55 % dead tiles → reject the frame
+# Per-tile chroma uniformity floor — catches macroblock smears that have
+# luma structure (bstd above floor) but no chroma variation (B≈G≈R per
+# pixel). Gated to the mid-grey luma band so IR/dark/sky tiles
+# (legitimately near-monochrome) don't trip it.
+_TILE_CHROMA_STD_FLOOR = 4.0
+# Threshold tightened from 0.55 → 0.35: a bottom-half macroblock smear
+# (the dominant cluster in user-reported timelapse corruption) lands
+# around 50 % dead-tile fraction and previously passed; a quarter-frame
+# corruption lands around 25 % and still passes.
+_TILE_DEAD_FRACTION = 0.35           # > 35 % dead tiles → reject the frame
 
 # Frame-level "grey-toned mid-luma" gate. Catches H.264 macroblock-corruption
 # frames that escape the per-tile dead-area test because each tile has
@@ -148,11 +157,17 @@ def dead_area_score(img) -> tuple[float, int, int]:
     """Score a frame for "dead area" using a fixed tile grid.
 
     Returns (dead_fraction, dead_tile_count, total_tile_count). A tile is
-    "dead" when it has no real texture (low gray std AND low Laplacian
-    variance) OR when it sits in the mid-grey band with low edge density.
+    "dead" when ANY of:
+      (1) blurred std < _TILE_DEAD_BLURRED_STD_FLOOR — no real texture
+      (2) mid-grey band tile with low blurred std — flat grey block
+      (3) mid-grey band tile with B≈G≈R chroma std < _TILE_CHROMA_STD_FLOOR
+          — luma-structured but chroma-flat macroblock smear
     Genuine dark/IR frames have noisy texture in every tile and stay near
     zero; corrupted frames with a thin live strip on top score around
-    0.85 (the strip has texture, everything below is dead)."""
+    0.85 (the strip has texture, everything below is dead). The chroma
+    check (3) is gated to the mid-grey luma band so IR/dark tiles
+    (legitimately monochrome) and bright sky tiles (also legitimately
+    near-monochrome) never trip it."""
     img = _decode(img)
     if img is None or img.size == 0:
         return 1.0, 0, 0
@@ -181,6 +196,21 @@ def dead_area_score(img) -> tuple[float, int, int]:
             elif (_TILE_GREY_BAND_MIN <= tmean <= _TILE_GREY_BAND_MAX
                   and bstd < _TILE_GREY_BAND_BLURRED_STD):
                 tile_dead = True
+            elif _TILE_GREY_BAND_MIN <= tmean <= _TILE_GREY_BAND_MAX:
+                # Chroma uniformity check — only fires inside the
+                # mid-grey luma band where macroblock corruption lives.
+                # IR/night/sky tiles (luma outside the band) skip this
+                # branch and stay alive.
+                tile_bgr = img[y0:y1, x0:x1]
+                if tile_bgr.size > 0 and tile_bgr.ndim >= 3 and tile_bgr.shape[2] >= 3:
+                    b = tile_bgr[:, :, 0].astype(np.int16)
+                    g = tile_bgr[:, :, 1].astype(np.int16)
+                    r = tile_bgr[:, :, 2].astype(np.int16)
+                    chroma_std = float(
+                        (np.abs(b - g).std() + np.abs(b - r).std()) / 2.0
+                    )
+                    if chroma_std < _TILE_CHROMA_STD_FLOOR:
+                        tile_dead = True
             if tile_dead:
                 dead += 1
             total += 1
