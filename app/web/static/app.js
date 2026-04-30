@@ -1291,6 +1291,80 @@ function _initErkSliders(form){
   }
 }
 
+// Per-class confidence drilldown rendered into #erkPerClassAdvanced when
+// the user opens "Pro Klasse anpassen" under step 2. Defaults mirror the
+// settings_store fallbacks (cat 0.55 / bird 0.45 / squirrel 0.45 / car
+// 0.65 / dog 0.55) so a fresh camera with no per-class entries doesn't
+// look misconfigured. Sliders are name="label_threshold_<key>" so the
+// save handler's _collectLabelThresholds() picks them up automatically.
+const _ERK_PERCLASS_CONFIDENCE = [
+  { key: 'cat',      label: 'Katze',        defaultV: 0.55 },
+  { key: 'bird',     label: 'Vogel',        defaultV: 0.45 },
+  { key: 'squirrel', label: 'Eichhörnchen', defaultV: 0.45 },
+  { key: 'car',      label: 'Auto',         defaultV: 0.65 },
+  { key: 'dog',      label: 'Hund',         defaultV: 0.55 },
+];
+function _renderErkPerClassConfidence(form, cam){
+  const wrap = byId('erkPerClassAdvanced'); if (!wrap) return;
+  const thresholds = cam?.label_thresholds || {};
+  wrap.innerHTML = _ERK_PERCLASS_CONFIDENCE.map(c => {
+    const raw = thresholds[c.key];
+    const v = (raw != null && Number.isFinite(parseFloat(raw))) ? parseFloat(raw) : c.defaultV;
+    return `
+      <div class="erk-card">
+        <div class="row">
+          <input type="range" name="label_threshold_${c.key}" min="0.50" max="0.95" step="0.01" value="${v.toFixed(2)}" />
+          <span class="val" id="erkLT_${c.key}_val">${Math.round(v * 100)}%</span>
+        </div>
+        <span class="lbl">${esc(c.label)} · überschreibt allgemein</span>
+      </div>`;
+  }).join('');
+  // Live-update value labels.
+  _ERK_PERCLASS_CONFIDENCE.forEach(c => {
+    const inp = wrap.querySelector(`[name="label_threshold_${c.key}"]`);
+    const lbl = byId(`erkLT_${c.key}_val`);
+    if (inp && lbl){
+      inp.addEventListener('input', () => {
+        lbl.textContent = Math.round(parseFloat(inp.value) * 100) + '%';
+      });
+    }
+  });
+}
+
+// One-time wiring for the "Pro Klasse anpassen ▾" disclosure toggle in
+// step 2. Flips #erkPerClassAdvanced visibility, swaps the label text,
+// and updates aria-expanded — no animation per CLAUDE.md / reduced-
+// motion default. Idempotent via dataset.wired so re-opening cam-edit
+// doesn't double-bind.
+function _bindErkPerClassToggle(){
+  const btn = byId('erkPerClassToggle');
+  const wrap = byId('erkPerClassAdvanced');
+  const lbl = byId('erkPerClassToggleLbl');
+  if (!btn || !wrap || !lbl || btn.dataset.wired) return;
+  btn.dataset.wired = '1';
+  btn.addEventListener('click', () => {
+    const open = wrap.hidden;
+    wrap.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    lbl.textContent = open ? 'Weniger anzeigen' : 'Pro Klasse anpassen';
+  });
+}
+
+// Read every label_threshold_<class> slider from the form into the
+// dict shape settings.json expects. Includes the step-2 person
+// slider AND any per-class drilldown sliders rendered into
+// #erkPerClassAdvanced. Drops NaN values silently — no slider, no
+// entry, schema falls back to the global detection_min_score.
+function _collectLabelThresholds(form){
+  const out = {};
+  form.querySelectorAll('[name^="label_threshold_"]').forEach(inp => {
+    const key = inp.name.replace('label_threshold_', '');
+    const v = parseFloat(inp.value);
+    if (key && Number.isFinite(v)) out[key] = v;
+  });
+  return out;
+}
+
 // Per-camera object-filter pills (Person/Katze/Vogel/Auto/Hund). Same
 // visual recipe as the Mediathek filter bar — active pill fills with the
 // object colour via --cb. _camObjectFilterState is kept in sync with the
@@ -1665,6 +1739,11 @@ function editCamera(camId){
   // Re-bind all step-1/2/3/4/5 slider value labels now that the form
   // values have been populated.
   _initErkSliders(byId('cameraForm'));
+  // Step 2 drilldown — populate per-class confidence sliders + bind the
+  // "Pro Klasse anpassen" toggle. The wrap stays hidden by default so a
+  // user reopening cam-edit isn't shown the drilldown unless they ask.
+  _renderErkPerClassConfidence(byId('cameraForm'), c);
+  _bindErkPerClassToggle();
   _whitelistState=[...(c.whitelist_names||[])]; _updateWhitelistHidden();
   shapeState.camera=camId; shapeState.zones=JSON.parse(JSON.stringify(c.zones||[])); shapeState.masks=JSON.parse(JSON.stringify(c.masks||[])); shapeState.points=[]; shapeState.pulse=null;
   f['zones_json'].value=JSON.stringify(shapeState.zones); f['masks_json'].value=JSON.stringify(shapeState.masks);
@@ -3321,15 +3400,7 @@ byId('cameraForm').onsubmit=async(e)=>{
     post_motion_tail_s:parseFloat(f['post_motion_tail_s']?.value||0),
     alarm_profile:f['alarm_profile']?.value||'soft',
     detection_min_score:parseFloat(f['detection_min_score']?.value||0),
-    label_thresholds:(()=>{
-      // Per-label thresholds: only persist values that differ from the
-      // global detection_min_score, and never persist NaN. Currently only
-      // wires the person slider; structure is open for future labels.
-      const out={};
-      const p=parseFloat(f['label_threshold_person']?.value);
-      if(!Number.isNaN(p)) out.person=p;
-      return out;
-    })(),
+    label_thresholds: _collectLabelThresholds(e.target),
     confirmation_window:(()=>{
       // Start from the existing camera's confirmation_window so per-class
       // entries (cw[person], cw[cat], …) survive the Phase 1 refactor
