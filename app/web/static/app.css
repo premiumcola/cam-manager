@@ -227,19 +227,30 @@ select option{background:#1e1e1e;color:#c8c8c8}
 .cv-tr{position:absolute;top:calc(var(--cv-overlay-inset) + 22px);right:var(--cv-overlay-inset);display:flex;flex-direction:column;gap:8px;align-items:flex-end;z-index:3}
 
 /* Base pill */
-.cv-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px 5px 8px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.02em;position:relative;cursor:default;backdrop-filter:blur(8px);min-height:28px;line-height:1.1;box-sizing:border-box}
+.cv-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 8px;border-radius:999px;font-size:10.5px;font-weight:700;letter-spacing:.02em;position:relative;cursor:default;backdrop-filter:blur(8px);min-height:0;line-height:1.2;box-sizing:border-box}
 
 /* Live dot */
-.cv-pdot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.cv-pdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 /* Expanding live capsule */
-.cv-pill-live-wrap{--lp-collapsed-w:118px;--lp-expanded-w:210px;position:relative;border-radius:999px;border:1.5px solid rgba(34,197,94,.55);background:rgba(34,197,94,.18);color:#c8f5e0;font-size:12px;font-weight:700;cursor:default;overflow:hidden;backdrop-filter:blur(8px);min-width:var(--lp-collapsed-w);max-width:var(--lp-collapsed-w);max-height:28px;transition:max-width .28s ease,max-height .28s ease,border-radius .28s ease;margin-left:auto}
+.cv-pill-live-wrap{--lp-collapsed-w:104px;--lp-expanded-w:210px;position:relative;border-radius:999px;border:1.5px solid rgba(34,197,94,.55);background:rgba(34,197,94,.18);color:#c8f5e0;font-size:10.5px;font-weight:700;cursor:default;overflow:hidden;backdrop-filter:blur(8px);min-width:var(--lp-collapsed-w);max-width:var(--lp-collapsed-w);max-height:22px;transition:max-width .28s ease,max-height .28s ease,border-radius .28s ease;margin-left:auto}
 .cv-pill-live-wrap.cv-lp-open{border-radius:14px;max-width:var(--lp-expanded-w);max-height:200px}
 .cv-live-off{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.35)}
-.cv-live-collapsed{display:flex;align-items:center;gap:6px;padding:5px 10px 5px 10px;white-space:nowrap;font-size:12px;line-height:1.1;min-height:25px;box-sizing:border-box;opacity:1;transform:translateY(0);transition:opacity .18s ease,transform .28s ease}
+/* Slimmer collapsed row — 3 px vertical padding, 10.5 px font, 1.2 line-
+   height. The 22 px max-height on the wrap clips any overflow but the
+   inner padding has been tightened so nothing visually clips. */
+.cv-live-collapsed{display:flex;align-items:center;gap:6px;padding:3px 8px;white-space:nowrap;font-size:10.5px;line-height:1.2;min-height:0;box-sizing:border-box;opacity:1;transform:translateY(0);transition:opacity .18s ease,transform .28s ease}
 .cv-pill-live-wrap.cv-lp-open .cv-live-collapsed{opacity:0;transform:translateY(-4px);pointer-events:none;max-height:0;padding:0;overflow:hidden}
-.cv-live-expanded{padding:0 10px;max-height:0;opacity:0;overflow:hidden;transition:max-height .3s ease,opacity .25s ease,padding .3s ease;width:100%;min-width:0}
-.cv-pill-live-wrap.cv-lp-open .cv-live-expanded{max-height:160px;opacity:1;padding:0 0 10px 0}
-.cv-live-exp-header{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:#c8f5e0;padding:10px 10px 8px 10px;border-bottom:1px solid rgba(34,197,94,.2);margin-bottom:6px}
+.cv-live-expanded{padding:0 12px;max-height:0;opacity:0;overflow:hidden;transition:max-height .3s ease,opacity .25s ease,padding .3s ease;width:100%;min-width:0}
+.cv-pill-live-wrap.cv-lp-open .cv-live-expanded{max-height:160px;opacity:1;padding:8px 12px 10px}
+/* Tighter popover header — was 10 px top + 8 px bottom + 6 px margin =
+   24 px before the dot. Now 8 px above the title and 8 px below the
+   border, eliminating the empty band the user saw at the top of the
+   expanded popover. */
+.cv-live-exp-header{display:flex;align-items:center;gap:10px;font-size:11.5px;font-weight:700;color:#c8f5e0;padding:0 0 6px 0;border-bottom:1px solid rgba(34,197,94,.2);margin:0 0 8px}
+/* Belt-and-braces — strip any inherited top margin from the popover's
+   first child so a future content tweak can't reintroduce the empty
+   band above the dot. */
+.cv-pill-live-wrap.cv-lp-open .cv-live-expanded > *:first-child{margin-top:0}
 .cv-pill-live-wrap.cv-live-active .cv-pdot{background:#22c55e;animation:cv-pulse-green 2s ease-in-out infinite}
 .cv-pill-live-wrap.cv-live-off .cv-pdot{background:rgba(255,255,255,.3);animation:none}
 .cv-lp-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:5px;font-size:10px;padding:0 10px}
@@ -2920,7 +2931,9 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   .cv-name{font-size:13px}
   /* Live pill — collapsed shrinks; expanded width caps to viewport so the
      pill never overflows a 375 px card. */
-  .cv-pill-live-wrap{--lp-collapsed-w:88px;--lp-expanded-w:min(210px,calc(100vw - 32px))}
+  .cv-pill-live-wrap{--lp-collapsed-w:84px;--lp-expanded-w:min(210px,calc(100vw - 32px));font-size:10px;max-height:20px}
+  .cv-live-collapsed{padding:2px 7px;font-size:10px}
+  .cv-pill-tl{font-size:10px;padding:2px 7px}
 }
 
 /* ── Statistik · timeline tap-tooltip ─────────────────────────────────── */
