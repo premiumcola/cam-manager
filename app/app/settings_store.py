@@ -238,6 +238,10 @@ class SettingsStore:
             # for the one-time derivation from the legacy schedule.actions.
             "schedule_notify": cam.get("schedule_notify") or {},
             "schedule_record": cam.get("schedule_record") or {},
+            # Per-class notification cooldown (seconds). Empty dict =
+            # use the runtime's per-class fallbacks (see
+            # _NOTIFY_COOLDOWN_DEFAULTS in telegram_bot).
+            "notification_cooldown": cam.get("notification_cooldown") or {},
         }
 
     @staticmethod

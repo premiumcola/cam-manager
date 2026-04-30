@@ -1604,6 +1604,81 @@ function _checkAlertingConflicts(form){
   }
 }
 
+// Per-class notification-cooldown drilldown rendered into
+// #alertCooldownGrid when "Cooldown pro Klasse anpassen ▾" is opened.
+// Each class gets a 0-600 s slider (15 s steps); the value label
+// switches from "X s" to "X min" past 60 s for compactness.
+// Defaults match _NOTIFY_COOLDOWN_DEFAULTS in telegram_bot so the
+// surfaced values reflect the actual runtime fallback.
+const _ALERT_COOLDOWN_CLASSES = [
+  { key: 'person',   label: 'Person',       def: 60  },
+  { key: 'cat',      label: 'Katze',        def: 120 },
+  { key: 'bird',     label: 'Vogel',        def: 300 },
+  { key: 'squirrel', label: 'Eichhörnchen', def: 300 },
+  { key: 'dog',      label: 'Hund',         def: 120 },
+  { key: 'car',      label: 'Auto',         def: 30  },
+  { key: 'motion',   label: 'Bewegung',     def: 30  },
+];
+function _fmtCooldownVal(s){
+  const v = parseInt(s, 10);
+  if (!Number.isFinite(v)) return '—';
+  if (v === 0) return 'aus';
+  if (v < 60)  return v + ' s';
+  return Math.round(v / 60) + ' min';
+}
+function _renderAlertCooldownGrid(form, cam){
+  const wrap = byId('alertCooldownGrid'); if (!wrap) return;
+  const cd = cam?.notification_cooldown || {};
+  wrap.innerHTML = _ALERT_COOLDOWN_CLASSES.map(c => {
+    const raw = cd[c.key];
+    const v = (raw != null && Number.isFinite(parseInt(raw, 10))) ? parseInt(raw, 10) : c.def;
+    return `
+      <div class="erk-card">
+        <div class="row">
+          <input type="range" name="cooldown_${c.key}" min="0" max="600" step="15" value="${v}" />
+          <span class="val" id="erkCD_${c.key}_val">${esc(_fmtCooldownVal(v))}</span>
+        </div>
+        <span class="lbl">${esc(c.label)} · min. Abstand zwischen zwei Pushes</span>
+      </div>`;
+  }).join('');
+  _ALERT_COOLDOWN_CLASSES.forEach(c => {
+    const inp = wrap.querySelector(`[name="cooldown_${c.key}"]`);
+    const lbl = byId(`erkCD_${c.key}_val`);
+    if (inp && lbl){
+      inp.addEventListener('input', () => { lbl.textContent = _fmtCooldownVal(inp.value); });
+    }
+  });
+}
+
+// One-time wiring for the cooldown disclosure toggle.
+function _bindAlertCooldownToggle(){
+  const btn = byId('alertCooldownToggle');
+  const wrap = byId('alertCooldownGrid');
+  const lbl = byId('alertCooldownToggleLbl');
+  if (!btn || !wrap || !lbl || btn.dataset.wired) return;
+  btn.dataset.wired = '1';
+  btn.addEventListener('click', () => {
+    const open = wrap.hidden;
+    wrap.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    lbl.textContent = open ? 'Weniger anzeigen' : 'Cooldown pro Klasse anpassen';
+  });
+}
+
+// Read every cooldown_<class> slider from the form into the dict
+// shape settings.json expects. Empty grid (drilldown never opened)
+// yields {}, which the runtime treats as "use _NOTIFY_COOLDOWN_DEFAULTS"
+// — same effective behaviour as before this commit.
+function _collectAlertCooldown(form){
+  const out = {};
+  form.querySelectorAll('[name^="cooldown_"]').forEach(inp => {
+    const key = inp.name.replace('cooldown_', '');
+    const v = parseInt(inp.value, 10);
+    if (key && Number.isFinite(v)) out[key] = v;
+  });
+  return out;
+}
+
 // Test-Push button on the Alerting tab — fires
 // /api/cameras/<id>/test-alert, animates the play-icon while in
 // flight, then renders a per-channel result panel below: ✓ Telegram
@@ -2135,6 +2210,13 @@ function editCamera(camId){
   _bindAlertTestButton();
   const alertTestResult = byId('alertTestResult');
   if (alertTestResult) alertTestResult.hidden = true;
+  // Per-class cooldown drilldown — populate sliders + bind disclosure
+  // toggle. Drilldown stays hidden by default so the matrix is the
+  // first impression; user opens it when fine-tuning.
+  _renderAlertCooldownGrid(byId('cameraForm'), c);
+  _bindAlertCooldownToggle();
+  const alertCooldownGrid = byId('alertCooldownGrid');
+  if (alertCooldownGrid) alertCooldownGrid.hidden = true;
   if(f['enabled']) f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed;
   // Two independent schedules — schedule_notify for Telegram/MQTT,
   // schedule_record for the on-disk archive. Either can be enabled or
@@ -3918,6 +4000,11 @@ byId('cameraForm').onsubmit=async(e)=>{
     // class_severity migration on subsequent loads) keep working.
     class_severity: _collectClassSeverity(e.target),
     recording_enabled: f['recording_enabled'] ? !!f['recording_enabled'].checked : (existingCam?.recording_enabled !== false),
+    // Per-class notification cooldown (seconds). Empty when the
+    // drilldown was never opened — runtime falls back to
+    // _NOTIFY_COOLDOWN_DEFAULTS in that case so behaviour is
+    // unchanged.
+    notification_cooldown: _collectAlertCooldown(e.target),
     // Fields whose UI was removed in the Erkennung-tab refactor — fall
     // back to the camera's currently-stored value so a save doesn't
     // silently flip them to the schema default. Schema defaults still

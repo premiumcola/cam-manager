@@ -153,6 +153,14 @@ CAMERA_SCHEMA: dict = {
     # load.
     "schedule_notify":     (dict,  {}),
     "schedule_record":     (dict,  {}),
+    # Per-class notification cooldown — minimum seconds between two
+    # successive pushes for the same label on the same camera. Empty
+    # default falls back to per-class hardcoded fallbacks in the
+    # runtime (bird/squirrel default to 300 s because flap-flap-flap
+    # spams faster than humans can read; person/car default to 60 s).
+    # 0 disables cooldown entirely for that class. Affects only push
+    # notifications — recording / archiving is never gated by this.
+    "notification_cooldown": (dict, {}),
 }
 
 # ── Section schemas (for update_section; all fields optional) ──────────────────

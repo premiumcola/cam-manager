@@ -96,6 +96,23 @@ _MUTE_DEFAULT_S = 3600
 _MUTE_EXTEND_S = 4 * 3600
 
 
+# Per-class notification cooldown defaults (seconds). Used when the
+# camera's notification_cooldown dict has no entry for the label.
+# Birds and squirrels get the longest cooldown because they trigger
+# detections faster than humans want to read them; person/car get a
+# tight cooldown so a real intruder isn't gated. Motion is rare in
+# practice (severity=off by default in soft profile) so 30 s.
+_NOTIFY_COOLDOWN_DEFAULTS = {
+    "person":   60,
+    "cat":      120,
+    "bird":     300,
+    "squirrel": 300,
+    "dog":      120,
+    "car":      30,
+    "motion":   30,
+}
+
+
 class TelegramService:
     def __init__(self, cfg: dict, store=None, runtimes=None, global_cfg=None,
                  timelapse_builder=None, settings_store=None):
@@ -146,6 +163,14 @@ class TelegramService:
         # the /api/system/telegram health endpoint to drive the
         # cam-edit Alerting-tab status strip "letzte Push vor X" line.
         self._last_push_ts: float | None = None
+        # Per-class cooldown bookkeeping — (camera_id, label) →
+        # monotonic timestamp of the last accepted push. send_event_alert
+        # consults this against the camera's notification_cooldown dict
+        # before forwarding to send(), and skips the push silently when
+        # the elapsed time is below the configured cooldown. Recording
+        # and archiving are never gated by this — only the user-facing
+        # push.
+        self._last_notify: dict[tuple[str, str], float] = {}
         self._scheduler = None
         self._lifecycle_lock = Lock()
         self._stopped = False
@@ -741,6 +766,27 @@ class TelegramService:
             return
 
         cam_cfg = self._camera_cfg(camera_id) or {}
+        # Per-class cooldown — minimum elapsed seconds between two
+        # successive pushes for the SAME class on the SAME camera. The
+        # primary label (already resolved above) is the gate; multi-
+        # class events update the primary's cooldown and only the
+        # primary's cooldown is consulted next time. Recording /
+        # archiving are unaffected — this is purely a notification gate.
+        cd_cfg = cam_cfg.get("notification_cooldown") or {}
+        cd_default = _NOTIFY_COOLDOWN_DEFAULTS.get(primary, 0)
+        cd_seconds = int(cd_cfg.get(primary, cd_default))
+        if cd_seconds > 0:
+            now_mono = time.monotonic()
+            key = (camera_id, primary)
+            last = self._last_notify.get(key, 0.0)
+            elapsed = now_mono - last
+            if last and elapsed < cd_seconds:
+                log.info(
+                    "[tg] skip: cooldown active for %s on %s (%ds remaining)",
+                    primary, camera_id, int(cd_seconds - elapsed),
+                )
+                return
+            self._last_notify[key] = now_mono
         # Per-camera notification schedule gate. Outside the configured
         # schedule_notify window the push is suppressed. Daily reports /
         # highlights / watchdog are system-level and are not gated by
