@@ -1099,6 +1099,66 @@ _CONN_FIELDS = {"rtsp_url", "snapshot_url", "username", "password", "enabled"}
 _RESTORE_CONN_FIELDS = ("rtsp_url", "snapshot_url", "username", "password")
 
 
+def _auto_detect_device_info(cam: dict) -> list[str]:
+    """Reolink GetDevInfo auto-detect for camera saves. Fills empty
+    manufacturer / model when the cam has credentials and the IP
+    responds — so the user no longer has to type "Reolink" / "RLC-810A"
+    by hand (and the recurring manuf/model-loss bug stops biting because
+    the values are derived from the camera itself on every save).
+
+    Mutates `cam` in-place and returns the list of field names that were
+    filled by auto-detect — the cam-edit UI surfaces this as an
+    "automatisch erkannt" hint under each affected input.
+
+    Opportunistic: silent on every failure (missing creds, unparseable
+    URL, login error, non-Reolink camera, network timeout). Save flow
+    must never block on auto-detect — a 4 s budget across login +
+    GetDevInfo + logout is the cap. If the user typed manuf/model
+    manually, this is a no-op (we don't overwrite — the existing values
+    are respected).
+    """
+    if cam.get("manufacturer") and cam.get("model"):
+        return []
+    rtsp_url = (cam.get("rtsp_url") or "").strip()
+    user = cam.get("username") or ""
+    password = cam.get("password") or ""
+    if not rtsp_url or not user:
+        return []
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(rtsp_url).hostname
+    except Exception:
+        host = None
+    if not host:
+        return []
+    try:
+        from . import reolink_api
+        token = reolink_api.login(host, user, password, timeout=4.0)
+        if not token:
+            return []
+        info = reolink_api.get_device_info(host, token, timeout=4.0)
+        reolink_api.logout(host, token, timeout=2.0)
+    except Exception as e:
+        logging.info("[cam] auto-detect skipped host=%s: %s", host, e)
+        return []
+    if not info:
+        return []
+    filled: list[str] = []
+    if not cam.get("manufacturer"):
+        cam["manufacturer"] = info["manufacturer"]
+        filled.append("manufacturer")
+    if not cam.get("model"):
+        cam["model"] = info["model"]
+        filled.append("model")
+    if filled:
+        logging.info(
+            "[cam] auto-detected via Reolink GetDevInfo: %s %s (cam=%s)",
+            info["manufacturer"], info["model"],
+            cam.get("name") or cam.get("id"),
+        )
+    return filled
+
+
 def _mask_password_in_url(url: str) -> str:
     """Replace the password in an embedded-credential URL with '•••' so the
     recovery preview can show the URL shape without leaking the secret."""
@@ -1256,6 +1316,11 @@ def api_settings_cameras_save():
             # Retain the existing persisted value; display-only URLs must not overwrite it.
             preserved = old_cfg.get(field, "")
             payload[field] = preserved
+    # Reolink auto-detect: fill empty manufacturer/model from the camera
+    # itself before persisting. No-op when the user typed values manually
+    # or the camera doesn't respond. The returned list flags which fields
+    # were filled so the UI can show an "automatisch erkannt" hint.
+    auto_detected = _auto_detect_device_info(payload)
     try:
         new_id = settings.upsert_camera(payload)
     except ValueError as exc:
@@ -1285,6 +1350,7 @@ def api_settings_cameras_save():
         "reloaded": conn_changed or id_renamed,
         "id": new_id,
         "id_renamed_from": old_id if id_renamed else None,
+        "auto_detected": auto_detected,
     })
 
 
@@ -1596,6 +1662,11 @@ def api_wizard_complete():
             settings.update_section("mqtt", payload["mqtt"])
         for cam in payload.get("cameras", []) or []:
             if cam.get("id"):
+                # Auto-detect manuf/model on first save too — wizard
+                # users typically enter creds but skip the optional
+                # Reolink/RLC fields. Mutates cam in place; ignored
+                # silently on non-Reolink or no-response.
+                _auto_detect_device_info(cam)
                 settings.upsert_camera(cam)
         settings.update_section("ui", {"wizard_completed": True})
     except ValueError as exc:
