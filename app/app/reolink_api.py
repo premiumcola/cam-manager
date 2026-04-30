@@ -126,6 +126,60 @@ def set_daynight(host: str, token: str, mode: str,
         return False
 
 
+def get_device_info(host: str, token: str, timeout: float = 5.0) -> dict | None:
+    """Query Reolink GetDevInfo CGI — used by the cam-save auto-detect flow
+    so the user doesn't have to type "Reolink" / "RLC-810A" by hand and
+    the canonical camera-id can be built without "unknown_unknown_…"
+    fallbacks. Returns:
+
+      {"manufacturer": "Reolink",
+       "model":        "RLC-810A",   # exact GetDevInfo model string
+       "firmware":     "v3.0.0.494",
+       "hardware":     "IPC_523128M5MP"}
+
+    or None on any failure (no token, network error, non-200 HTTP, error
+    rspCode, missing model). Failures are silent at WARNING level so a
+    flaky probe never blocks a save.
+    """
+    if not token:
+        return None
+    body = [{"cmd": "GetDevInfo", "action": 0, "param": {}}]
+    try:
+        r = _session.post(
+            _base_url(host),
+            params={"cmd": "GetDevInfo", "token": token},
+            json=body,
+            timeout=timeout,
+        )
+    except Exception as e:
+        log.warning("[reolink] get_device_info network error host=%s: %s", host, e)
+        return None
+    if r.status_code != 200:
+        log.warning("[reolink] get_device_info HTTP %s host=%s", r.status_code, host)
+        return None
+    try:
+        payload = r.json()
+        first = payload[0] if isinstance(payload, list) and payload else {}
+        if first.get("code") != 0:
+            log.warning("[reolink] get_device_info host=%s code=%s rsp=%s",
+                        host, first.get("code"), str(payload)[:200])
+            return None
+        dev = (first.get("value") or {}).get("DevInfo") or {}
+        model = str(dev.get("model", "") or "").strip()
+        if not model:
+            return None
+        return {
+            "manufacturer": "Reolink",
+            "model":        model,
+            "firmware":     str(dev.get("firmVer", "") or "").strip(),
+            "hardware":     str(dev.get("hardVer", "") or "").strip(),
+        }
+    except Exception as e:
+        log.warning("[reolink] get_device_info parse error host=%s: %s body=%s",
+                    host, e, r.text[:200])
+        return None
+
+
 def logout(host: str, token: str, timeout: float = 5.0) -> None:
     """Best-effort token release. Errors are swallowed and only logged at
     DEBUG — leaking a token to its 30-min server-side timeout is not a
