@@ -319,6 +319,11 @@ function startLiveUpdate(){
         state.cameras=r.cameras||state.cameras;
         renderDashboard();
       }
+      // Refresh the cam-edit Erkennung-tab status strip every poll so
+      // the dot colour, ms/Frame, and "letztes Update vor X" stay in
+      // sync with reality. The function reads the form's current cam id
+      // and is a no-op when no cam-edit form is open.
+      _renderGlobalStatusRows();
     }catch{/* silent */}
   },3000);
 }
@@ -1348,17 +1353,25 @@ function _renderGlobalStatusRows(){
   const camId=byId('cameraForm')?.elements?.['id']?.value;
   const cam=(state.cameras||[]).find(x=>x.id===camId) || state.cameras?.[0];
   const proc=state.config?.processing||{};
-  const coralOn=!!(proc.coral_enabled ?? (cam?.detection_mode!=='motion_only'));
-  const coralAvail=!!cam?.coral_available;
-  // Variant: 'is-ok' (TPU green), 'is-cpu' (CPU fallback orange/pulse),
-  // 'is-off' (detector disabled grey). Detection_mode 'motion_only'
-  // counts as "off" for the Coral strip — motion-only inference doesn't
-  // exercise Coral.
-  let variant, text;
-  if (!coralOn){ variant='is-off'; text='Coral aus'; }
-  else if (cam?.detection_mode==='coral' && coralAvail){ variant='is-ok'; text='Coral läuft'; }
-  else if (cam?.detection_mode==='cpu'){ variant='is-cpu'; text='CPU-Notfall'; }
-  else { variant='is-off'; text='Coral aus'; }
+  // Prefer the backend's explicit coral_mode (one of 'tpu' /
+  // 'cpu_fallback' / 'off' — see camera_runtime.status). Fall back to
+  // deriving from detection_mode + coral_available for older builds /
+  // tests that don't surface coral_mode yet.
+  let mode = cam?.coral_mode;
+  if (!mode){
+    const coralOn = !!(proc.coral_enabled ?? (cam?.detection_mode !== 'motion_only'));
+    const coralAvail = !!cam?.coral_available;
+    if (!coralOn) mode = 'off';
+    else if (cam?.detection_mode === 'coral' && coralAvail) mode = 'tpu';
+    else if (cam?.detection_mode === 'cpu') mode = 'cpu_fallback';
+    else mode = 'off';
+  }
+  const variant = mode === 'tpu' ? 'is-ok'
+                : mode === 'cpu_fallback' ? 'is-cpu'
+                : 'is-off';
+  const text = mode === 'tpu' ? 'Coral läuft'
+             : mode === 'cpu_fallback' ? 'CPU-Notfall'
+             : 'Coral aus';
   const dot=host.querySelector('.dot');
   if (dot){
     dot.classList.remove('is-ok','is-cpu','is-off');

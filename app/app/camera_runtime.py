@@ -2696,6 +2696,16 @@ class CameraRuntime:
                 self.camera_id, det_mode,
             )
             self._det_state_warned = cur_state
+        # Explicit coral_mode for the cam-edit Erkennung-tab status strip:
+        # collapses (detection_mode, coral_available) into one of three
+        # display states the frontend can map to a dot variant without
+        # re-deriving the combination.
+        if det_mode == "coral" and det_ready:
+            coral_mode = "tpu"           # green dot, "Coral läuft"
+        elif det_mode == "cpu":
+            coral_mode = "cpu_fallback"  # orange pulse, "CPU-Notfall"
+        else:
+            coral_mode = "off"           # grey dot, "Coral aus" / motion-only / disabled
         return {
             "id": self.camera_id,
             "name": cfg.get("name", self.camera_id),
@@ -2708,6 +2718,7 @@ class CameraRuntime:
             "today_events": self.event_counter_today,
             "timelapse_enabled": bool((cfg.get("timelapse") or {}).get("enabled")),
             "detection_mode": det_mode,
+            "coral_mode": coral_mode,
             "coral_available": coral_avail,
             "coral_reason": getattr(self.detector, "reason", "disabled"),
             "bird_species_available": getattr(self.bird_classifier, "available", False),
