@@ -421,19 +421,40 @@ def is_valid_frame(img) -> tuple[bool, str]:
 
 
 # ── Retry wrapper ────────────────────────────────────────────────────────────
-def grab_valid_frame(grab_fn, attempts: int = 3, sleep_s: float = 0.7
+def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
+                     max_total_seconds: float = 5.0
                      ) -> tuple[object, int, str]:
-    """Call ``grab_fn`` up to ``attempts`` times; return the first frame that
-    passes ``is_valid_frame``.
+    """Call ``grab_fn`` up to ``attempts`` times OR
+    ``max_total_seconds`` wall-clock, whichever comes first.
 
-    Returns (frame_or_None, attempt_index_used_or_attempts, last_reason).
-    A first-attempt success returns attempt_index_used=0; the caller can use
-    that to bump a "retry recoveries" counter when index > 0.
+    Returns (frame_or_None, attempt_index_used_or_final_attempts,
+    last_reason). A first-attempt success returns
+    attempt_index_used=0; the caller can use that to bump a "retry
+    recoveries" counter when index > 0.
 
-    grab_fn() may return either a decoded BGR ndarray or JPEG bytes — both
-    are handled transparently by ``is_valid_frame``."""
+    Defaults bumped from 3 attempts × 0.7 s (2.1 s typical, no hard
+    cap) to 6 attempts × 0.4 s (2.4 s typical) plus a 5 s wall-clock
+    ceiling. The extra attempts catch cluster-E cases where the
+    corrupt region wanders frame-to-frame; the wall-clock ceiling
+    guarantees a single bad camera can never stall the entire
+    capture loop for a full interval. If the budget fires before
+    `attempts` is exhausted, last_reason gets a
+    "budget_exceeded(<seconds>s)" suffix appended so the caller's
+    diagnostics see why we gave up.
+
+    grab_fn() may return either a decoded BGR ndarray or JPEG bytes
+    — both are handled transparently by ``is_valid_frame``."""
+    t0 = time.monotonic()
     last_reason = ""
-    for i in range(max(1, attempts)):
+    attempt = 0
+    n = max(1, attempts)
+    while attempt < n:
+        if time.monotonic() - t0 >= max_total_seconds:
+            last_reason = (
+                (last_reason + "|" if last_reason else "")
+                + f"budget_exceeded({max_total_seconds}s)"
+            )
+            break
         try:
             frame = grab_fn()
         except Exception as e:
@@ -442,13 +463,14 @@ def grab_valid_frame(grab_fn, attempts: int = 3, sleep_s: float = 0.7
         if frame is not None:
             ok, reason = is_valid_frame(frame)
             if ok:
-                return frame, i, ""
+                return frame, attempt, ""
             last_reason = reason or last_reason or "invalid"
         else:
             last_reason = last_reason or "grab_returned_none"
-        if i < attempts - 1:
+        attempt += 1
+        if attempt < n:
             time.sleep(sleep_s)
-    return None, attempts, last_reason
+    return None, attempt, last_reason
 
 
 # ── Per-session capture stats ────────────────────────────────────────────────

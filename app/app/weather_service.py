@@ -1627,11 +1627,13 @@ class WeatherService:
         n_written = 0
         i = 0
         while datetime.now() < end_at:
-            # 3-attempt retry: snapshot_jpeg is a fresh fetch from the cam,
-            # so each attempt actually pulls a new frame past the hickup.
+            # Long-running capture loop — uses grab_valid_frame defaults
+            # (6 attempts × 0.4 s with a 5 s wall-clock cap). Each
+            # snapshot_jpeg pulls a fresh frame from the cam so the
+            # extra attempts catch the wandering-corruption cluster
+            # without stalling on a hung camera.
             jpg, attempt_used, last_reason = grab_valid_frame(
                 lambda: rt.snapshot_jpeg(quality=82),
-                attempts=3, sleep_s=0.7,
             )
             if jpg:
                 out = frames_dir / f"{i:05d}.jpg"
@@ -1643,7 +1645,7 @@ class WeatherService:
                     pass
             else:
                 stats.record_invalid()
-                log.info("[weather] %s slot %05d: 3 invalid grabs, leaving slot empty (%s)",
+                log.info("[weather] %s slot %05d: invalid grabs, leaving slot empty (%s)",
                          cam_name, i, last_reason)
             stats.flush()
             i += 1
@@ -2019,7 +2021,6 @@ class WeatherService:
         while datetime.now() < end_at:
             jpg, attempt_used, last_reason = grab_valid_frame(
                 lambda: rt.snapshot_jpeg(quality=82),
-                attempts=3, sleep_s=0.7,
             )
             if jpg:
                 try:
@@ -2030,7 +2031,7 @@ class WeatherService:
                     pass
             else:
                 stats.record_invalid()
-                log.info("[weather] %s slot %05d: 3 invalid grabs, leaving slot empty (%s)",
+                log.info("[weather] %s slot %05d: invalid grabs, leaving slot empty (%s)",
                          cam_name, i, last_reason)
             stats.flush()
             i += 1
