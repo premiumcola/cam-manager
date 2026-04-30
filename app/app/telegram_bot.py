@@ -576,7 +576,7 @@ class TelegramService:
         """Unified send. `photo`/`video` accept bytes or a filesystem path.
         Auto-falls-back to sendDocument when limits are exceeded."""
         if not self.enabled or not self.bot:
-            log.debug("[tg] send_alert skipped (enabled=%s, bot=%s)", self.enabled, self.bot is not None)
+            log.info("[tg] send_alert skipped (enabled=%s, bot=%s)", self.enabled, self.bot is not None)
             return
         if dark:
             log.info("[tg] dark/night alert")

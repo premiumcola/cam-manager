@@ -1594,6 +1594,20 @@ class CameraRuntime:
             notify = False
         if not meta.get("send_telegram", True):
             notify = False
+        # Diagnose: one ROUTING line per finalized event, BEFORE any further
+        # gating. Surfaces the exact reason an alert is dropped without
+        # forcing a DEBUG log level. Companion line on successful handoff
+        # below confirms the notifier accepted the event.
+        log.info(
+            "[trigger][cam:%s] alert routing: labels=%s notify=%s armed=%s "
+            "telegram_enabled=%s send_telegram_meta=%s alarm_level=%s",
+            self.camera_id,
+            ",".join(sorted(set(meta.get("labels", [])))),
+            notify, self.cfg.get("armed", True),
+            self.cfg.get("telegram_enabled", True),
+            meta.get("send_telegram", True),
+            meta.get("alarm_level"),
+        )
         if notify and self.cfg.get("telegram_enabled", True) and self.notifier:
             try:
                 snap_path = (Path(self.global_cfg["storage"]["root"]) / thumb_rel) if thumb_rel else None
@@ -1619,6 +1633,10 @@ class CameraRuntime:
                         dashboard_url=public_base,
                         camera_id=self.camera_id,
                     )
+                log.info(
+                    "[trigger][cam:%s] alert handed off to notifier (event_id=%s)",
+                    self.camera_id, meta.get("event_id"),
+                )
             except Exception as e:
                 log.warning("[%s] telegram event push failed: %s", self.camera_id, e)
 
