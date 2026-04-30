@@ -1951,7 +1951,15 @@ select option{background:#1e1e1e;color:var(--text)}
 }
 .ws-stats-threshold-label{
   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  font-size:10px;font-weight:700;fill:#fb7185;letter-spacing:.04em
+  font-size:10px;font-weight:700;fill:#fb7185;letter-spacing:.04em;
+  /* paint-order=stroke draws the dark stroke first, fill on top — so
+     each glyph gets a 3 px dark halo that keeps the red text legible
+     even when it crosses a coloured data line beneath. */
+  paint-order:stroke;
+  stroke:rgba(15,15,18,.9);
+  stroke-width:3;
+  stroke-linejoin:round;
+  text-rendering:geometricPrecision;
 }
 .ws-stats-no-threshold{
   position:absolute;top:8px;right:10px;

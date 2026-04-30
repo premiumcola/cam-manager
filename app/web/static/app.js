@@ -7016,7 +7016,10 @@ function renderWeatherStatsChart(){
   }
   // Layout. Left lane reserved for Y-axis labels of the active line;
   // right padding for per-field threshold ticks in all-lines mode.
-  const VB_W = 600, VB_H = 220;
+  // VB_PAD adds slack around the viewBox so axis labels never clip at
+  // the very edge of the wrapper (overflow:hidden) even when their
+  // baseline sits on the plot boundary.
+  const VB_W = 600, VB_H = 220, VB_PAD = 4;
   const pad = { l: 42, r: 72, t: 12, b: 26 };
   const cw = VB_W - pad.l - pad.r;
   const ch = VB_H - pad.t - pad.b;
@@ -7061,11 +7064,35 @@ function renderWeatherStatsChart(){
     }
     // Cap to a sane number so a 1-min-data 30-d zoom doesn't render 720 ticks.
     while (ticks.length > 8) ticks.splice(1, 2);  // thin every other inner tick
+    // For ≤24 h windows that cross a midnight boundary, append a muted
+    // "· dd.MM" suffix to the first tick of each new day so consecutive
+    // "06:00 / 06:00" labels can be told apart. The dd.MM format already
+    // shows the date for ≥7 d windows, so suffix only kicks in here.
+    const isShortWindow = hours <= 24;
+    let multiDay = false;
+    if (isShortWindow){
+      const dayKeys = new Set();
+      for (const t of ticks){
+        const dt = new Date(t);
+        dayKeys.add(dt.getFullYear() + '-' + dt.getMonth() + '-' + dt.getDate());
+      }
+      multiDay = dayKeys.size > 1;
+    }
+    let lastDayKey = null;
+    const p2 = n => (n < 10 ? '0' : '') + n;
     for (const t of ticks){
       const x = pad.l + ((t - tFirst) / tSpan) * cw;
-      const label = xAxisFmt(new Date(t));
-      tickSvg += `<line x1="${x.toFixed(1)}" y1="${(pad.t + ch).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(pad.t + ch + 5).toFixed(1)}" stroke="rgba(255,255,255,.18)" stroke-width="1"/>`;
-      tickSvg += `<text x="${x.toFixed(1)}" y="${(VB_H - 8).toFixed(1)}" text-anchor="middle" font-size="10" fill="rgba(255,255,255,.55)" text-rendering="geometricPrecision" shape-rendering="geometricPrecision">${label}</text>`;
+      const dt = new Date(t);
+      const dayKey = dt.getFullYear() + '-' + dt.getMonth() + '-' + dt.getDate();
+      const label = xAxisFmt(dt);
+      let suffix = '';
+      if (multiDay && dayKey !== lastDayKey){
+        suffix = ` · ${p2(dt.getDate())}.${p2(dt.getMonth() + 1)}`;
+      }
+      lastDayKey = dayKey;
+      tickSvg += `<line x1="${x.toFixed(1)}" y1="${(pad.t + ch).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(pad.t + ch + 5).toFixed(1)}" stroke="rgba(255,255,255,.18)" stroke-width="1" shape-rendering="geometricPrecision"/>`;
+      const suffixSvg = suffix ? `<tspan fill="rgba(255,255,255,.4)" font-size="9">${suffix}</tspan>` : '';
+      tickSvg += `<text x="${x.toFixed(1)}" y="${(VB_H - 8).toFixed(1)}" text-anchor="middle" font-size="10" fill="rgba(255,255,255,.55)" text-rendering="geometricPrecision" shape-rendering="geometricPrecision">${label}${suffixSvg}</text>`;
     }
   } else {
     // Legacy fallback — no parseable timestamps, fall back to 6 ticks
@@ -7124,11 +7151,15 @@ function renderWeatherStatsChart(){
       if (norm >= -0.05 && norm <= 1.05){
         const y = pad.t + ch - Math.max(0, Math.min(1, norm)) * ch;
         const u = (data?.units || {})[isolated] || '';
-        const lbl = `Schwelle ${thr}${u ? ' ' + u : ''}`;
+        // Floating annotation that sits ON the dashed line at the right
+        // edge. The CSS class adds a paint-order=stroke halo so the red
+        // text stays legible even when crossing a coloured data line.
+        const lbl = `▲ ${thr}${u ? ' ' + u : ''} Schwelle`;
         thresholdSvg = `
           <line x1="${pad.l}" y1="${y.toFixed(1)}" x2="${pad.l + cw}" y2="${y.toFixed(1)}"
-                stroke="#fb7185" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.85" />
-          <text class="ws-stats-threshold-label" x="${pad.l + cw - 4}" y="${(y - 4).toFixed(1)}" text-anchor="end">${lbl}</text>
+                stroke="#fb7185" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.85"
+                vector-effect="non-scaling-stroke" shape-rendering="geometricPrecision" />
+          <text class="ws-stats-threshold-label" x="${pad.l + cw - 8}" y="${(y - 4).toFixed(1)}" text-anchor="end">${lbl}</text>
         `;
       } else {
         noThresholdHint = '<div class="ws-stats-no-threshold">Schwelle außerhalb des sichtbaren Bereichs</div>';
@@ -7203,14 +7234,23 @@ function renderWeatherStatsChart(){
     };
     const hiTxt = `${fmt(meta.hi)}${u ? ' ' + u : ''}`;
     const loTxt = `${fmt(meta.lo)}${u ? ' ' + u : ''}`;
+    // Top label sits 14 px BELOW the top gridline (was 4 px above) so it
+    // never tips outside the SVG viewBox at the top edge. Bottom label
+    // tucks 4 px above the bottom gridline. Both labels stay inside the
+    // plot area no matter the wrapper's overflow.
     yAxisSvg = `
-      <text x="${pad.l - 6}" y="${(pad.t + 4).toFixed(1)}" text-anchor="end" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="10" fill="${colour}" opacity="0.75" text-rendering="geometricPrecision" shape-rendering="geometricPrecision">${hiTxt}</text>
-      <text x="${pad.l - 6}" y="${(pad.t + ch).toFixed(1)}" text-anchor="end" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="10" fill="${colour}" opacity="0.75" text-rendering="geometricPrecision" shape-rendering="geometricPrecision">${loTxt}</text>
+      <text x="${pad.l - 6}" y="${(pad.t + 14).toFixed(1)}" text-anchor="end" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="10" fill="${colour}" opacity="0.75" text-rendering="geometricPrecision" shape-rendering="geometricPrecision">${hiTxt}</text>
+      <text x="${pad.l - 6}" y="${(pad.t + ch - 4).toFixed(1)}" text-anchor="end" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="10" fill="${colour}" opacity="0.75" text-rendering="geometricPrecision" shape-rendering="geometricPrecision">${loTxt}</text>
     `;
   }
 
+  // viewBox padded by VB_PAD on every side so a label sitting on the very
+  // edge of the plot area still has slack before it hits the wrap's
+  // overflow:hidden boundary. preserveAspectRatio="none" stretches the
+  // padded box to fill the wrapper, so the visual scale change is sub-
+  // pixel and not noticeable.
   wrap.innerHTML = `
-    <svg viewBox="0 0 ${VB_W} ${VB_H}" preserveAspectRatio="none" role="img" aria-label="Wetterverlauf">
+    <svg viewBox="${-VB_PAD} ${-VB_PAD} ${VB_W + 2 * VB_PAD} ${VB_H + 2 * VB_PAD}" preserveAspectRatio="none" role="img" aria-label="Wetterverlauf">
       ${gridSvg}
       ${yAxisSvg}
       ${tickSvg}
@@ -7222,7 +7262,7 @@ function renderWeatherStatsChart(){
     ${noThresholdHint}
     <div class="ws-chart-tooltip" hidden></div>
   `;
-  _wsBindChartHover(wrap, samples, fields, pad, cw, ch, VB_W, VB_H, isolated, data);
+  _wsBindChartHover(wrap, samples, fields, pad, cw, ch, VB_W, VB_H, VB_PAD, isolated, data);
 }
 
 // Hover tooltip — vertical guide line + floating box that lists every
@@ -7230,7 +7270,7 @@ function renderWeatherStatsChart(){
 // mouse + touch + pen. Touch taps auto-hide after 2.5 s. Reduced-motion
 // users get instant show/hide (the CSS .ws-chart-tooltip has no
 // transition by default; this comment is the contract).
-function _wsBindChartHover(wrap, samples, fields, pad, cw, ch, VB_W, VB_H, isolated, data){
+function _wsBindChartHover(wrap, samples, fields, pad, cw, ch, VB_W, VB_H, VB_PAD, isolated, data){
   const svg = wrap.querySelector('svg'); if (!svg) return;
   const area = svg.querySelector('.ws-chart-hover-area');
   const guide = svg.querySelector('.ws-chart-guide');
@@ -7241,6 +7281,13 @@ function _wsBindChartHover(wrap, samples, fields, pad, cw, ch, VB_W, VB_H, isola
   const tSpan = tLast - tFirst;
   const labels = data?.labels_de || {};
   const hideTimer = { id: 0 };
+  // Multi-day data: tooltip head shows "HH:MM · dd.MM" instead of just
+  // HH:MM so the same time-of-day on different days isn't ambiguous.
+  const firstDate = new Date(tFirst);
+  const lastDate = new Date(tLast);
+  const spansMultiDay = Number.isFinite(firstDate.getTime()) &&
+                       Number.isFinite(lastDate.getTime()) &&
+                       firstDate.toDateString() !== lastDate.toDateString();
 
   function _hide(){
     tip.hidden = true;
@@ -7254,8 +7301,12 @@ function _wsBindChartHover(wrap, samples, fields, pad, cw, ch, VB_W, VB_H, isola
     }
     const rect = svg.getBoundingClientRect();
     if (rect.width === 0) return;
-    // SVG uses preserveAspectRatio="none" so x maps linearly via VB_W.
-    const localX = (ev.clientX - rect.left) * (VB_W / rect.width);
+    // SVG uses preserveAspectRatio="none". The viewBox is padded by
+    // VB_PAD on each side, so client-X maps to viewBox-X via the padded
+    // total width and shifts back by -VB_PAD to get the original
+    // coordinate system pad/cw operate in.
+    const vbTotalW = VB_W + 2 * VB_PAD;
+    const localX = -VB_PAD + (ev.clientX - rect.left) * (vbTotalW / rect.width);
     if (localX < pad.l || localX > pad.l + cw){ _hide(); return; }
     // Map x → timestamp → nearest sample index.
     const t = tFirst + ((localX - pad.l) / cw) * tSpan;
