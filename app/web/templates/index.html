@@ -491,13 +491,15 @@
                     </div>
                     <span class="lbl" id="erkConfirmLbl">3 Treffer in 5 Sekunden bestätigen</span>
                   </div>
-                  <!-- Legacy per-class grid kept as a hidden compat container —
-                       its rows are no longer rendered, but the save handler
-                       reads existing per-class entries from settings.json
-                       directly so any pre-refactor configuration is preserved.
-                       Phase 2 replaces this with a "Pro Klasse anpassen"
-                       drilldown into #erkConfirmPerClass. -->
+                  <!-- Legacy per-class grid stays hidden — the save handler
+                       still reads any rows it contains for backwards-compat,
+                       but rows are no longer rendered. The new "Pro Klasse
+                       anpassen" drilldown writes into #erkConfirmPerClass. -->
                   <div id="camConfirmGrid" hidden></div>
+                  <button type="button" class="erk-more" id="erkConfirmPerClassToggle" aria-expanded="false">
+                    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5l3 3 3-3"/></svg>
+                    <span id="erkConfirmPerClassToggleLbl">Pro Klasse anpassen</span>
+                  </button>
                   <div id="erkConfirmPerClass" hidden></div>
                 </div>
 
