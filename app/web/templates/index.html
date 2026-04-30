@@ -555,6 +555,33 @@
                 </div>
 
               </div>
+
+              <!-- "Erkennung jetzt simulieren" — runs the Coral inference on
+                   the camera's most-recent frame and renders the snapshot
+                   inline with bounding boxes coloured by verdict. The
+                   result panel slides into view below the button on the
+                   first click and stays open across re-runs until the
+                   user dismisses it. -->
+              <div class="erk-test-row">
+                <button class="erk-test-btn" type="button" id="erkSimulateBtn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                  </svg>
+                  <span class="erk-test-btn-lbl">Erkennung jetzt simulieren</span>
+                </button>
+                <div class="erk-test-hint">prüft das aktuelle Snapshot · zeigt was Coral findet</div>
+                <div class="erk-test-result" id="erkSimResult" hidden>
+                  <div class="erk-test-result-head">
+                    <span class="erk-test-result-title" id="erkSimTitle">Ergebnis</span>
+                    <button type="button" class="erk-test-close" id="erkSimClose" aria-label="schließen">×</button>
+                  </div>
+                  <div class="erk-test-result-imgwrap">
+                    <img id="erkSimImg" alt="Simulations-Snapshot" />
+                    <svg id="erkSimOverlay" preserveAspectRatio="none"></svg>
+                  </div>
+                  <div class="erk-test-result-list" id="erkSimList"></div>
+                </div>
+              </div>
             </div>
 
             <!-- Panel: Alerting — notifications, alarm, schedule -->

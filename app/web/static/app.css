@@ -960,6 +960,143 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 }
 .erk-more:hover{ color:#cfe1ee; }
 .erk-more svg{ width:9px;height:9px;flex-shrink:0; }
+
+/* "Erkennung jetzt simulieren" — runs Coral inference on the live
+   frame and shows the snapshot with bounding boxes coloured by
+   verdict. Sits below the 5-step flow, above any subsequent
+   panel-level actions, with the result panel sliding in below the
+   button on the first click. */
+.erk-test-row{
+  margin-top:14px;
+  padding-top:12px;
+  text-align:center;
+}
+.erk-test-btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:11px 18px;
+  border:0;border-radius:10px;
+  background:#1c1c20;
+  color:#cfe1ee;
+  font-size:12px;font-weight:700;letter-spacing:.01em;
+  cursor:pointer;
+  transition:background .15s,color .15s,opacity .15s;
+  min-height:44px;
+}
+.erk-test-btn:hover{ background:#26262a;color:#fff; }
+.erk-test-btn:disabled{ opacity:.55;cursor:wait; }
+.erk-test-btn svg{ width:14px;height:14px;flex-shrink:0; }
+.erk-test-btn.is-busy svg{ animation:erk-test-spin .9s linear infinite; }
+@keyframes erk-test-spin{ from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+@media (prefers-reduced-motion: reduce){
+  .erk-test-btn.is-busy svg{ animation:none; }
+}
+.erk-test-hint{
+  margin-top:6px;
+  font-size:10.5px;
+  color:rgba(255,255,255,.4);
+  font-style:italic;
+}
+
+/* Result panel — flat surface, depth via background contrast and a
+   single shadow. Image fills a 16:9 wrapper (object-fit:contain so
+   tall portraits letterbox without cropping); SVG overlay sits
+   absolutely over the image with the same viewBox as frame_size so
+   absolute pixel coordinates from the backend land correctly without
+   pre-scaling. */
+.erk-test-result{
+  margin-top:14px;
+  background:rgba(0,0,0,.28);
+  border-radius:11px;
+  padding:10px;
+  text-align:left;
+}
+.erk-test-result[hidden]{display:none}
+.erk-test-result-head{
+  display:flex;align-items:center;gap:8px;
+  margin-bottom:8px;
+}
+.erk-test-result-title{
+  font-size:12px;font-weight:700;color:#fff;
+}
+.erk-test-close{
+  margin-left:auto;
+  width:26px;height:26px;
+  background:transparent;border:0;
+  color:rgba(255,255,255,.6);
+  font-size:18px;line-height:1;
+  cursor:pointer;border-radius:7px;
+}
+.erk-test-close:hover{ background:rgba(255,255,255,.06);color:#fff; }
+.erk-test-result-imgwrap{
+  position:relative;
+  width:100%;
+  aspect-ratio:16/9;
+  background:#000;
+  border-radius:8px;
+  overflow:hidden;
+}
+.erk-test-result-imgwrap img{
+  width:100%;height:100%;object-fit:contain;display:block;
+}
+.erk-test-result-imgwrap svg{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  pointer-events:none;
+}
+/* Bounding box stroke + label colours per verdict.
+   pass = green, belowthresh = orange, filtered = grey-dashed. The
+   stroke-width is fixed (vector-effect=non-scaling-stroke is set on
+   the elements) so boxes stay readable regardless of image aspect. */
+.erk-det-box{ fill:none;stroke-width:2.2; }
+.erk-det-box.is-pass{ stroke:#22c55e; }
+.erk-det-box.is-belowthresh{ stroke:#fb923c;opacity:.75; }
+.erk-det-box.is-filtered{ stroke:#6b7280;opacity:.5;stroke-dasharray:4 4; }
+.erk-det-label{
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  font-size:10px;font-weight:700;
+  fill:#fff;
+  paint-order:stroke;
+  stroke:rgba(0,0,0,.85);stroke-width:3;stroke-linejoin:round;
+  text-rendering:geometricPrecision;
+}
+
+/* List of detections under the snapshot — flat rows, no per-row
+   border. Each row has a coloured dot matching its bounding box. */
+.erk-test-result-list{
+  margin-top:10px;
+  display:flex;flex-direction:column;gap:4px;
+}
+.erk-det-row{
+  display:flex;align-items:center;gap:10px;
+  padding:6px 10px;
+  background:rgba(0,0,0,.25);
+  border-radius:7px;
+  font-size:11px;
+}
+.erk-det-row .det-dot{
+  width:7px;height:7px;border-radius:50%;flex-shrink:0;
+}
+.erk-det-row.is-pass .det-dot{ background:#22c55e; }
+.erk-det-row.is-belowthresh .det-dot{ background:#fb923c; }
+.erk-det-row.is-filtered .det-dot{ background:#6b7280; }
+.erk-det-row .det-name{ font-weight:600;color:#fff;min-width:90px; }
+.erk-det-row .det-score{
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  color:#cbd5e1;min-width:48px;
+  font-variant-numeric:tabular-nums;
+}
+.erk-det-row .det-verdict{
+  color:rgba(255,255,255,.55);font-size:10.5px;
+  font-style:italic;margin-left:auto;
+  text-align:right;
+}
+.erk-det-empty{
+  padding:14px 10px;
+  text-align:center;
+  font-size:11px;
+  color:rgba(255,255,255,.55);
+  font-style:italic;
+}
 /* Separator between logical groups inside a camera tab panel — 1px rule,
    no boxes-in-boxes, everything flat on the same level. */
 .cam-sep{height:1px;background:rgba(255,255,255,0.06);margin:14px 0}

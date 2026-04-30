@@ -1484,6 +1484,123 @@ function _collectConfirmationWindow(form, existingCam){
   return out;
 }
 
+// "Erkennung jetzt simulieren" — the button below the 5 steps in the
+// Erkennung tab. Posts to /api/cameras/<id>/test-detection, animates
+// the icon while the request is in flight, then renders the snapshot
+// + bounding boxes inline. Click again to re-run; click × to dismiss.
+function _bindErkSimulate(){
+  const btn = byId('erkSimulateBtn');
+  const close = byId('erkSimClose');
+  if (btn && !btn.dataset.wired){
+    btn.dataset.wired = '1';
+    btn.addEventListener('click', _onErkSimulateClick);
+  }
+  if (close && !close.dataset.wired){
+    close.dataset.wired = '1';
+    close.addEventListener('click', () => {
+      const wrap = byId('erkSimResult');
+      if (wrap) wrap.hidden = true;
+    });
+  }
+}
+async function _onErkSimulateClick(ev){
+  const btn = ev.currentTarget;
+  const camId = byId('cameraForm')?.elements?.['id']?.value;
+  if (!camId) return;
+  const lblEl = btn.querySelector('.erk-test-btn-lbl');
+  const originalLabel = lblEl?.textContent || '';
+  btn.disabled = true;
+  btn.classList.add('is-busy');
+  if (lblEl) lblEl.textContent = ' simuliere…';
+  try{
+    const r = await fetch(`/api/cameras/${encodeURIComponent(camId)}/test-detection`, { method: 'POST' });
+    let data = null;
+    try { data = await r.json(); } catch(_){}
+    if (!r.ok || !data?.ok){
+      const msg = (data && data.error) ? data.error : 'Fehler';
+      showToast('Test fehlgeschlagen · ' + msg, 'error');
+      return;
+    }
+    _renderErkSimResult(data);
+  }catch(err){
+    showToast('Test fehlgeschlagen · Netzwerk', 'error');
+  }finally{
+    btn.disabled = false;
+    btn.classList.remove('is-busy');
+    if (lblEl) lblEl.textContent = originalLabel;
+  }
+}
+const _ERK_VERDICT_TXT = {
+  'pass':         'würde Alarm auslösen',
+  'belowthresh':  '',
+  'filtered':     '',
+};
+function _renderErkSimResult(data){
+  const wrap = byId('erkSimResult'); if (!wrap) return;
+  const img  = byId('erkSimImg');
+  const ovl  = byId('erkSimOverlay');
+  const list = byId('erkSimList');
+  const ttl  = byId('erkSimTitle');
+  if (img) img.src = data.snapshot || '';
+  // viewBox in absolute frame pixel coordinates so backend bbox values
+  // (which are pixel-space) drop in unchanged. preserveAspectRatio in
+  // the inline element default is xMidYMid meet — but since the wrapper
+  // .erk-test-result-imgwrap forces a 16:9 aspect ratio and the <img>
+  // uses object-fit:contain, the SVG and the image scale identically.
+  // Cameras whose native aspect doesn't match 16:9 letterbox the same
+  // way under both elements.
+  const fs = data.frame_size || { w: 1920, h: 1080 };
+  if (ovl) ovl.setAttribute('viewBox', `0 0 ${Math.max(1, fs.w)} ${Math.max(1, fs.h)}`);
+
+  const dets = data.detections || [];
+  const passCount = dets.filter(d => d.verdict === 'pass').length;
+  if (ttl){
+    ttl.textContent = passCount > 0
+      ? `${passCount} Treffer würden Alarm auslösen`
+      : (dets.length === 0 ? 'Keine Erkennung' : 'Kein Treffer würde Alarm auslösen');
+  }
+  // Boxes — paint-order=stroke on the label so the dark halo stays
+  // readable above bright snapshot regions. font-size scales with the
+  // viewBox; an absolute "10 px" on a 1920-wide viewBox shows up as
+  // ~10 px in screen pixels regardless of how the wrapper scales.
+  if (ovl){
+    ovl.innerHTML = dets.map(d => {
+      const cls = `erk-det-box is-${d.verdict}`;
+      const labelText = `${d.label} ${Math.round(d.score * 100)}%`;
+      const fontSize = Math.max(10, Math.round(fs.w / 100));
+      const boxR = Math.max(2, Math.round(fs.w / 480));
+      return `
+        <rect class="${cls}" x="${d.bbox[0]}" y="${d.bbox[1]}" width="${d.bbox[2]}" height="${d.bbox[3]}" rx="${boxR}" vector-effect="non-scaling-stroke" />
+        <text class="erk-det-label" x="${d.bbox[0] + 4}" y="${d.bbox[1] + fontSize + 2}" font-size="${fontSize}">${esc(labelText)}</text>
+      `;
+    }).join('');
+  }
+  // List of detections — empty → friendly message, otherwise one row
+  // per det with a coloured dot, the label, the score, and a verdict
+  // hint (the backend's reason field carries the threshold for
+  // belowthresh and the filter reason for filtered).
+  if (list){
+    if (dets.length === 0){
+      list.innerHTML = `<div class="erk-det-empty">Coral hat in diesem Frame nichts erkannt.</div>`;
+    } else {
+      list.innerHTML = dets.map(d => {
+        const verdictText = d.reason || _ERK_VERDICT_TXT[d.verdict] || '';
+        return `
+          <div class="erk-det-row is-${esc(d.verdict)}">
+            <span class="det-dot"></span>
+            <span class="det-name">${esc(d.label)}</span>
+            <span class="det-score">${Math.round(d.score * 100)}%</span>
+            <span class="det-verdict">${esc(verdictText)}</span>
+          </div>`;
+      }).join('');
+    }
+  }
+  wrap.hidden = false;
+  // Smooth scroll except under reduced-motion.
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  wrap.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
+}
+
 // Per-camera object-filter pills (Person/Katze/Vogel/Auto/Hund). Same
 // visual recipe as the Mediathek filter bar — active pill fills with the
 // object colour via --cb. _camObjectFilterState is kept in sync with the
@@ -1866,6 +1983,11 @@ function editCamera(camId){
   _bindErkPerClassToggle();
   _renderErkPerClassConfirm(byId('cameraForm'), c);
   _bindErkConfirmPerClassToggle();
+  // "Erkennung jetzt simulieren" — bind once per session. Result panel
+  // starts hidden; reopens automatically on each successful run.
+  _bindErkSimulate();
+  const simResult = byId('erkSimResult');
+  if (simResult) simResult.hidden = true;
   _whitelistState=[...(c.whitelist_names||[])]; _updateWhitelistHidden();
   shapeState.camera=camId; shapeState.zones=JSON.parse(JSON.stringify(c.zones||[])); shapeState.masks=JSON.parse(JSON.stringify(c.masks||[])); shapeState.points=[]; shapeState.pulse=null;
   f['zones_json'].value=JSON.stringify(shapeState.zones); f['masks_json'].value=JSON.stringify(shapeState.masks);
