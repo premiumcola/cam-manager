@@ -1569,6 +1569,52 @@ function _collectClassSeverity(form){
   return out;
 }
 
+// Conflict-warning banner — flags Alerting-tab settings that wouldn't
+// reach the user. Two checks:
+//   1. Any class is set to alarm/info but BOTH channels (Telegram +
+//      MQTT) are off → push has nowhere to go.
+//   2. Any class is set to alarm/info but the master "Alerting aktiv"
+//      switch (armed) is off → push is globally muted.
+// Banner is purely informational — never blocks save. JS toggles the
+// hidden attribute and rewrites the message on every relevant change.
+function _checkAlertingConflicts(form){
+  const banner = byId('alertConflictBanner');
+  const text   = byId('alertConflictText');
+  if (!banner || !text) return;
+  const cs = _collectClassSeverity(form);
+  const anyAlarming = Object.values(cs).some(v => v === 'alarm' || v === 'info');
+  const tg = !!form.querySelector('[name="telegram_enabled"]')?.checked;
+  const mq = !!form.querySelector('[name="mqtt_enabled"]')?.checked;
+  const armed = !!form.querySelector('[name="armed"]')?.checked;
+  const messages = [];
+  if (anyAlarming && !tg && !mq){
+    messages.push("Klassen sind auf <strong>Alarm</strong> oder <strong>Info</strong> gesetzt, aber <strong>kein Kanal aktiv</strong> — es kommt nichts an. Aktiviere Telegram oder MQTT in Schritt 2.");
+  }
+  if (anyAlarming && !armed){
+    messages.push("Der globale <strong>Stumm-Schalter</strong> in Schritt 5 ist aus — alle Pushes werden blockiert.");
+  }
+  if (messages.length){
+    text.innerHTML = messages.join(' · ');
+    banner.hidden = false;
+  } else {
+    banner.hidden = true;
+  }
+}
+
+// Wire the conflict banner to react to channel/master switches in the
+// Alerting tab. Idempotent via dataset.wired so re-opening cam-edit
+// doesn't double-bind. The matrix click handler in
+// _renderSeverityMatrix already calls _checkAlertingConflicts on every
+// cell click.
+function _bindAlertingConflictWatch(form){
+  if (!form || form.dataset.alertingConflictWired) return;
+  form.dataset.alertingConflictWired = '1';
+  ['telegram_enabled', 'mqtt_enabled', 'armed', 'recording_enabled'].forEach(name => {
+    const inp = form.querySelector(`[name="${name}"]`);
+    if (inp) inp.addEventListener('change', () => _checkAlertingConflicts(form));
+  });
+}
+
 // "Erkennung jetzt simulieren" — the button below the 5 steps in the
 // Erkennung tab. Posts to /api/cameras/<id>/test-detection, animates
 // the icon while the request is in flight, then renders the snapshot
@@ -1978,8 +2024,12 @@ function editCamera(camId){
   // it on save keeps working until the cutover commit.
   if (f['alarm_profile']) f['alarm_profile'].value = (c.alarm_profile || 'soft');
   // Per-class severity matrix — render after the form's id is set so
-  // event handlers reference the right camera.
+  // event handlers reference the right camera. Also wire the
+  // conflict-banner watcher (idempotent) and run an initial check
+  // against the freshly-populated form values.
   _renderSeverityMatrix(byId('cameraForm'), c);
+  _bindAlertingConflictWatch(byId('cameraForm'));
+  _checkAlertingConflicts(byId('cameraForm'));
   if(f['enabled']) f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed;
   // Two independent schedules — schedule_notify for Telegram/MQTT,
   // schedule_record for the on-disk archive. Either can be enabled or
