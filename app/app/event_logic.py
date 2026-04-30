@@ -59,6 +59,34 @@ def schedule_action_active(schedule: dict, action: str, now: datetime | None = N
     return is_in_schedule(schedule, now)
 
 
+# Severity rank — higher wins when a single event carries multiple
+# labels (e.g. "person" + "motion"). The runtime picks the maximum
+# severity across detected labels so a person sighting still escalates
+# to "alarm" even if a parallel "motion" label is set to "info".
+_SEVERITY_RANK = {"off": 0, "info": 1, "alarm": 2}
+
+
+def compute_severity_from_matrix(class_severity: dict, labels: list[str]) -> str:
+    """Resolve a single severity ("off" / "info" / "alarm") from the
+    per-class severity matrix and the detected labels.
+
+    Returns "off" when class_severity is empty or unmapped — the caller
+    is expected to fall back to the legacy alarm_profile path in that
+    case so existing cameras without a migrated matrix still alert.
+    """
+    if not class_severity or not labels:
+        return "off"
+    best = "off"
+    best_rank = -1
+    for label in labels:
+        sev = (class_severity.get(label) or "off").lower()
+        rank = _SEVERITY_RANK.get(sev, 0)
+        if rank > best_rank:
+            best_rank = rank
+            best = sev
+    return best
+
+
 def is_schedule_window_active(schedule: dict, now: datetime | None = None) -> bool:
     """Single-window helper for the post-split alerting schedules
     (schedule_notify, schedule_record). Each is a {enabled, from, to}

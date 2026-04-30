@@ -13,7 +13,7 @@ import requests
 import numpy as np
 from .detectors import CoralObjectDetector, BirdSpeciesClassifier, WildlifeClassifier, Detection, draw_detections
 from .detection_confirmer import DetectionConfirmer
-from .event_logic import is_in_schedule, choose_alarm_level, schedule_action_active, is_schedule_window_active
+from .event_logic import is_in_schedule, choose_alarm_level, schedule_action_active, is_schedule_window_active, compute_severity_from_matrix
 
 # Does this container have an ffmpeg binary? If so, motion recording uses the
 # fast stream-copy path (direct RTSP → mp4, no CPU re-encode). Otherwise we
@@ -1067,6 +1067,23 @@ class CameraRuntime:
             whitelisted = whitelisted or bool(p.get("whitelisted"))
         profile = (self.cfg.get("alarm_profile") or "").strip() or "soft"
         level, notify = choose_alarm_level(profile, list(sorted(set(labels))), hard_active, whitelisted)
+        # Per-class severity matrix — new source of truth. When the
+        # camera carries a non-empty class_severity dict, the matrix
+        # overrides the legacy alarm_profile-derived notify decision:
+        # severity=alarm/info → notify=True (route to push), severity=
+        # off → notify=False (skip). Whitelisted detections still
+        # short-circuit notification regardless of severity.
+        class_severity_cfg = self.cfg.get("class_severity") or {}
+        if class_severity_cfg and not whitelisted:
+            severity = compute_severity_from_matrix(
+                class_severity_cfg, list(sorted(set(labels))),
+            )
+            notify = (severity != "off")
+        else:
+            # Fall back to deriving severity from the legacy decision so
+            # downstream consumers (telegram_bot silent kwarg, MQTT
+            # event payload) always have a value to read.
+            severity = "alarm" if level == "alarm" else ("info" if notify else "off")
         # "Stumm" kill-switch: armed=false suppresses all Telegram alerts
         # but keeps the event recording and archive path intact.
         if not self.cfg.get("armed", True):
@@ -1117,6 +1134,13 @@ class CameraRuntime:
             "person_name": person_match,
             "whitelisted": whitelisted,
             "alarm_level": level,
+            # New severity field driven by the class_severity matrix. The
+            # notifier reads this to pick silent vs. loud Telegram pushes
+            # ("info" → silent, "alarm" → loud) and MQTT publishes it as
+            # part of the event payload so Home Assistant can route by
+            # severity. Falls back to a legacy-derived value when the
+            # matrix is empty so consumers always have a non-empty key.
+            "severity": severity,
             # `after_hours` historically meant "alerting schedule active"; we
             # keep the key for read-side compatibility (event JSONs already on
             # disk) but its value is now the schedule's hard-mode gate.
@@ -1548,6 +1572,7 @@ class CameraRuntime:
             "armed": bool(self.cfg.get("armed", True)),
             "after_hours": meta["after_hours"],
             "alarm_level": meta["alarm_level"],
+            "severity": meta.get("severity", "off"),
             "time": start_time.isoformat(timespec="seconds"),
             "labels": meta["labels"],
             "top_label": meta["top_label"],

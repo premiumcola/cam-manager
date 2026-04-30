@@ -763,6 +763,17 @@ class TelegramService:
         # Quiet hours → silent push, unless the alert qualifies as a
         # "wakeup at night" — those must always ring through.
         silent = is_quiet and not night_wakeup
+        # Severity-driven silent override — the per-class severity
+        # matrix is the new source of truth. severity="info" → always
+        # silent regardless of quiet hours (user explicitly asked for a
+        # quiet ping). severity="alarm" keeps the existing quiet-hours
+        # behaviour (a loud alarm in quiet hours still mutes unless
+        # night_wakeup escalates it).
+        severity = (meta.get("severity") or "").lower()
+        if severity == "info":
+            silent = True
+        elif severity == "alarm":
+            silent = is_quiet and not night_wakeup
 
         eid = meta.get("event_id") or datetime.now().strftime("%Y%m%d-%H%M%S")
         score_pct = int(round(top_score * 100))
@@ -803,8 +814,8 @@ class TelegramService:
             photo = str(snapshot_path)
         self.send(caption, photo=photo, buttons=buttons, silent=silent, dark=is_night_now)
         self._record_rate_limit(camera_id)
-        log.info("[tg] event alert: cam=%s label=%s score=%.2f silent=%s dark=%s",
-                 camera_id, primary, top_score, silent, is_night_now)
+        log.info("[tg] event alert: cam=%s label=%s score=%.2f severity=%s silent=%s dark=%s",
+                 camera_id, primary, top_score, severity or "—", silent, is_night_now)
 
     def send_timelapse_alert(self, video_path: str | Path, cam_name: str,
                              profile_de: str, duration_s: int, rel_path: str):
