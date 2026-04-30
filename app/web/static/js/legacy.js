@@ -10,6 +10,19 @@ import {
   colors, OBJ_LABEL, OBJ_SVG, objBubble, objIconSvg, TL_LABELS,
   getCameraIcon, getCameraColor,
 } from './core/icons.js';
+// Stage-3a — pure dashboard helpers extracted from this file. The
+// rendering and live-update functions still live below for now;
+// stage-3b moves those out too. Each name retains its leading
+// underscore so the migration stays string-comparable diff-wise.
+import {
+  _failedSnapshotIds, _resetFailedSnapshotIds, _isSnapshotIdDead,
+  _camIdFromImg, _camImgRetry,
+  _camGridCols,
+  SURVEIL_ACC, SURVEIL_LABEL, _isInScheduleWindow, _surveilMode,
+  _surveilEyeSvg,
+  _makeOfflinePlaceholder, _makeConnectingPlaceholder,
+  _restorePlaceholder,
+} from './dashboard.js';
 
 // _hmTip stays here — fixed-position heatmap tooltip used only by the
 // timeline view; will move with the timeline module in a later stage.
@@ -84,54 +97,9 @@ const SQUIRREL_CHARS=[
 ];
 const download=(url)=>window.open(url,'_blank');
 
-// Dead-camera-id snapshot poll suppression. After a camera rename
-// (manuf/model edit triggers storage_migration to compute a new
-// canonical id), the old <img src="/api/camera/<old-id>/snapshot.jpg">
-// elements stay in the DOM until the next renderDashboard. The
-// 5 fps preview refresh keeps bumping their timestamps, producing
-// a 404 storm in the console. _failedSnapshotIds tracks the camera
-// ids whose snapshot endpoint has 404'd two times in a row;
-// _camImgRetry stops retrying once that threshold is hit, and the
-// preview refresh skips them. Every loadAll() resets the map since
-// the next dashboard re-render will use the fresh ids from
-// /api/cameras.
-const _failedSnapshotIds = new Map();
-function _resetFailedSnapshotIds(){ _failedSnapshotIds.clear(); }
-function _isSnapshotIdDead(camId){
-  return camId ? (_failedSnapshotIds.get(camId) || 0) >= 2 : false;
-}
-function _camIdFromImg(img){
-  return img?.closest?.('[data-camid]')?.dataset?.camid || null;
-}
-
-// ── Camera snapshot retry (handles 503 on initial load before stream is ready) ─
-function _camImgRetry(img){
-  const camId = _camIdFromImg(img);
-  // After a rename, the old camera id keeps producing 404s on every
-  // poll until the dashboard re-renders. Two consecutive failures is
-  // the threshold for marking the id dead — that catches a real
-  // rename (the new img element will carry the fresh id) while
-  // tolerating one transient 503 during cam restart.
-  if (camId) {
-    const n = (_failedSnapshotIds.get(camId) || 0) + 1;
-    _failedSnapshotIds.set(camId, n);
-    if (n >= 2) {
-      img.style.display = 'none';
-      return;
-    }
-  }
-  const retries=parseInt(img.dataset.snapRetry||'0');
-  if(retries>=12){img.style.display='none';return;}
-  img.dataset.snapRetry=retries+1;
-  // Exponential backoff: 500ms, 1s, 1.5s … capped at 3s
-  const delay=Math.min(500*(retries+1),3000);
-  setTimeout(()=>{
-    if(!img.isConnected) return; // card removed from DOM
-    const base=img.src.split('?')[0];
-    img.src=base+'?t='+Date.now();
-  },delay);
-}
-window._camImgRetry=_camImgRetry;
+// _failedSnapshotIds + dead-id helpers + _camImgRetry now live in
+// dashboard.js (Stage 3a). The window._camImgRetry bridge moves with
+// the function so inline onclick="_camImgRetry(this)" keeps resolving.
 
 // ── Camera edit slide panel ───────────────────────────────────────────────────
 let _currentEditCamId=null;
@@ -509,56 +477,8 @@ function renderShell(){
   if (subEl) subEl.textContent = state.config.app.subtitle || 'RTSP-Streams · KI-Erkennung · Vogelarten · Telegram-Alerts';
 }
 
-function _camGridCols(n){
-  if(n<=1) return 'cam-grid-1';
-  if(n<=2) return 'cam-grid-2';
-  if(n<=4) return 'cam-grid-4';
-  return 'cam-grid-n';
-}
-
-// Surveillance mode for the live-tile bottom-overlay. Four states drive
-// the colour + label + animation of the new .cv-surveil block:
-//   off     cam disarmed                          → grey, eye crossed-out
-//   watch   armed, no Telegram, no active window  → storm-blue, passive
-//   notify  armed + Telegram on                   → amber, eye blinks
-//   alarm   armed + currently inside a schedule
-//           window with telegram or hard action   → red, head pulses
-const SURVEIL_ACC = {
-  off:    '80,80,90',
-  watch:  '127,174,201',
-  notify: '251,146,60',
-  alarm:  '220,38,38',
-};
-const SURVEIL_LABEL = {
-  off:    'Stumm',
-  watch:  'Beobachtung',
-  notify: 'Benachrichtigung',
-  alarm:  'Wachmodus',
-};
-function _isInScheduleWindow(from, to){
-  if (!from || !to) return false;
-  const now = new Date();
-  const m = now.getHours()*60 + now.getMinutes();
-  const [fh, fm] = from.split(':').map(Number);
-  const [th, tm] = to.split(':').map(Number);
-  const f = fh*60 + fm, t = th*60 + tm;
-  return f <= t ? (m >= f && m < t) : (m >= f || m < t);
-}
-function _surveilMode(c){
-  if (!c.armed) return 'off';
-  const sch = c.schedule || {};
-  if (sch.enabled && _isInScheduleWindow(sch.from, sch.to)){
-    const acts = sch.actions || {};
-    if (acts.telegram !== false || acts.hard !== false) return 'alarm';
-  }
-  return c.telegram_enabled ? 'notify' : 'watch';
-}
-function _surveilEyeSvg(mode){
-  if (mode === 'off') {
-    return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><line x1="2" y1="2" x2="22" y2="22"/></svg>';
-  }
-  return '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/></svg>';
-}
+// _camGridCols / SURVEIL_ACC / SURVEIL_LABEL / _isInScheduleWindow /
+// _surveilMode / _surveilEyeSvg now live in dashboard.js (Stage 3a).
 
 function renderDashboard(){
   const cams=state.cameras;
@@ -4656,88 +4576,9 @@ byId('coralModelsReload')?.addEventListener('click',_loadCoralModels);
 // brackets, state-specific animation in the centre. The surrounding card
 // overlays (name, pills, etc.) are hidden by the renderer when offline, so
 // the placeholder owns the full frame without duplicate chrome.
-function _placeholderShell(accent, centerHtml, bracketKeyframe){
-  // Opposite corners get slightly different stroke widths (2.5 / 2) so the
-  // bracket set reads as a deliberate asymmetric viewfinder instead of a
-  // perfectly uniform rectangle. 30-unit arms on a 100-unit viewBox.
-  return `<div class="cv-ph cv-ph--${accent}">
-    <div class="cv-ph-grid"></div>
-    <svg class="cv-ph-brackets" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-      <g fill="none" style="animation:${bracketKeyframe} 2s ease-in-out infinite">
-        <polyline points="0,30 0,0 30,0"  stroke-width="2.5" class="cv-ph-br cv-ph-br--tl"/>
-        <polyline points="70,0 100,0 100,30" stroke-width="2"   class="cv-ph-br cv-ph-br--tr" style="animation-delay:.5s"/>
-        <polyline points="100,70 100,100 70,100" stroke-width="2.5" class="cv-ph-br cv-ph-br--br" style="animation-delay:1s"/>
-        <polyline points="30,100 0,100 0,70"    stroke-width="2"   class="cv-ph-br cv-ph-br--bl" style="animation-delay:1.5s"/>
-      </g>
-    </svg>
-    <div class="cv-ph-center">${centerHtml}</div>
-  </div>`;
-}
-
-// Structured SVG so the camera body, viewfinder cone, lens circle and strike
-// line each carry their own opacity/stroke — the old single-path Feather
-// icon had everything at one alpha and fell apart visually at small sizes.
-const _CAM_OFF_SVG=`<svg viewBox="0 0 48 48" width="72" height="72" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block">
-  <rect x="8" y="14" width="24" height="20" rx="2.5" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-  <path d="M32 20 L40 14 V34 L32 28 Z" stroke="rgba(255,255,255,0.35)" stroke-width="2"/>
-  <circle cx="20" cy="24" r="4.5" stroke="rgba(255,255,255,0.25)" stroke-width="1.5"/>
-  <line x1="4" y1="4" x2="44" y2="44" stroke="rgba(239,68,68,0.55)" stroke-width="2.5"/>
-</svg>`;
-const _CAM_SM_SVG=`<svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="rgba(59,130,246,0.5)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block">
-  <rect x="8" y="14" width="24" height="20" rx="2.5"/>
-  <path d="M32 20 L40 14 V34 L32 28 Z"/>
-  <circle cx="20" cy="24" r="5"/>
-</svg>`;
-
-function _makeOfflinePlaceholder(){
-  // Red: four expanding rings + crosshair + struck-through camera icon.
-  // All three visual layers (rings, crosshair, icon) live in .cv-ph-stage
-  // so they truly share one center regardless of container aspect ratio.
-  const rings=[0, 1, 2, 3].map(i=>
-    `<span class="cv-ph-ring" style="animation-delay:${i}s"></span>`
-  ).join('');
-  const center=`
-    <div class="cv-ph-stage">
-      <div class="cv-ph-crosshair"></div>
-      ${rings}
-      <div class="cv-ph-icon cv-ph-icon--glitch cv-ph-icon--red">${_CAM_OFF_SVG}</div>
-    </div>
-    <div class="cv-ph-label cv-ph-label--flicker cv-ph-label--red">KEIN SIGNAL</div>
-  `;
-  return _placeholderShell('red', center, 'bracketPulseRed');
-}
-
-function _makeConnectingPlaceholder(){
-  // Blue: rotating radar cone + orbiting dots + small camera icon, all
-  // inside the same stage so they share one center.
-  const center=`
-    <div class="cv-ph-stage">
-      <svg class="cv-ph-guides" viewBox="-100 -100 200 200" aria-hidden="true">
-        <circle cx="0" cy="0" r="30" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
-        <circle cx="0" cy="0" r="55" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
-        <circle cx="0" cy="0" r="80" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
-      </svg>
-      <svg class="cv-ph-radar" viewBox="-100 -100 200 200" aria-hidden="true">
-        <path d="M0,0 L85,-49 A98,98 0 0 1 85,49 Z" fill="rgba(59,130,246,0.12)"/>
-        <line x1="0" y1="0" x2="85" y2="49" stroke="rgba(59,130,246,0.5)" stroke-width="1.5"/>
-        <circle cx="85" cy="49" r="3" fill="rgba(59,130,246,0.9)"/>
-      </svg>
-      <span class="cv-ph-orbit cv-ph-orbit--1"></span>
-      <span class="cv-ph-orbit cv-ph-orbit--2"></span>
-      <span class="cv-ph-orbit cv-ph-orbit--3"></span>
-      <div class="cv-ph-icon">${_CAM_SM_SVG}</div>
-    </div>
-    <div class="cv-ph-label cv-ph-label--blue">VERBINDE…</div>
-  `;
-  return _placeholderShell('blue', center, 'bracketPulseBlue');
-}
-
-function _restorePlaceholder(card){
-  const placeholder=card.querySelector('.cv-loading-placeholder');
-  if(placeholder) placeholder.innerHTML=_makeOfflinePlaceholder();
-  const img=card.querySelector('.cv-img');
-  if(img){const base=img.src.split('?')[0];img.src=base+'?t='+Date.now();}
-}
+// _placeholderShell / _CAM_OFF_SVG / _CAM_SM_SVG /
+// _makeOfflinePlaceholder / _makeConnectingPlaceholder /
+// _restorePlaceholder all now live in dashboard.js (Stage 3a).
 function showCameraReloadAnimation(camId){
   const cameraCards=byId('cameraCards');
   const cards=camId
