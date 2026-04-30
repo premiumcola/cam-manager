@@ -616,8 +616,8 @@ ${isActive?`
               <span>Livestream aktiv</span>
             </div>
             <div class="cv-lp-row"><span>Stream-Modus</span><strong class="cv-stream-mode ${hdOn?'cv-mode-hd':(streamMode==='live'?'cv-mode-live':'cv-mode-base')}">${hdOn?'● HD-Stream':(streamMode==='live'?'● Live':'○ Vorschau')}</strong></div>
-            <div class="cv-lp-row"><span>Preview-FPS<br><small class="cv-lp-fps-sub">${hdOn?'Main-Stream aktiv':'Gemessen (Sub-Stream)'}</small></span><strong class="cv-lp-fps-val">${hdOn?'—':(previewFps!=null?previewFps+' fps':'—')}</strong></div>
-            <div class="cv-lp-row"><span>Auflösung</span><strong class="cv-lp-res-val">${hdOn?'Main-Stream':esc(c.preview_resolution||c.resolution||'—')}</strong></div>
+            <div class="cv-lp-row"><span>Preview-FPS<br><small class="cv-lp-fps-sub">${hdOn?'Analyse läuft im Sub-Stream weiter':'Gemessen (Sub-Stream)'}</small></span><strong class="cv-lp-fps-val">${hdOn?(previewFps!=null?previewFps+' fps':'—'):(previewFps!=null?previewFps+' fps':'—')}</strong></div>
+            <div class="cv-lp-row"><span>Auflösung</span><strong class="cv-lp-res-val">${hdOn?esc(c.main_resolution||c.preview_resolution||c.resolution||'—'):esc(c.preview_resolution||c.resolution||'—')}</strong></div>
             <div class="cv-lp-row"><span>Analyse-Framerate<br><small>Wie oft TAM-spy analysiert</small></span><strong>${fps!=null?fps+' fps':'—'}</strong></div>
           </div>
         </div>
