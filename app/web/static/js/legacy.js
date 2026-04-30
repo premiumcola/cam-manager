@@ -3536,9 +3536,15 @@ function loadMaskSnapshot(camId){
   img.src=`/api/camera/${camId}/snapshot.jpg?t=${Date.now()}`;
 }
 function _logMaskCanvasReady(camId, source){
+  // Was: console.log('[mask-editor] ...').
+  // Removed per CLAUDE.md "no console.log in production code". The
+  // mask-editor's readiness is observable via its DOM state already
+  // (the canvas's data-cam attribute and the visible toolbar), so the
+  // log line was diagnostic-only and not part of any error handling.
+  // Keeping the function as a no-op call site so future readiness
+  // hooks have one place to plug in without scattering new logs.
   const c=byId('maskCanvas');
   if(!c) return;
-  console.log('[mask-editor] camera=%s source=%s canvas=%dx%d', camId, source, c.width, c.height);
 }
 function scaleForCanvas(el,img){
   // Internal canvas resolution = source resolution. canvasPoint() rescales
@@ -8587,6 +8593,15 @@ function _renderWeatherGrid(){
     return;
   }
   if (empty) empty.hidden = true;
+  // Pre-compute the active-camera id set so each sighting card can
+  // decide whether to actually request its thumb. Sightings recorded
+  // before a manuf/model edit carry the OLD canonical cam_id in their
+  // sighting.id (the on-disk path was already renamed by storage_
+  // migration), so the thumb URL 404s. Skipping the <img> tag for
+  // those entries avoids the network request and keeps the console
+  // clean — the card still renders with a placeholder so the user can
+  // see the orphan exists and decide whether to delete it.
+  const _activeCamIds = new Set((state.cameras || []).map(c => c.id));
   grid.innerHTML = items.map((s, idx) => {
     const meta = WEATHER_TYPES[s.event_type] || { de: s.event_type, color: '#94a3b8', icon: '' };
     const t = new Date(s.started_at);
@@ -8594,10 +8609,14 @@ function _renderWeatherGrid(){
     const timeLabel = t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     const sevPct = Math.round((s.score || s.severity || 0) * 100);
     const camName = esc(s.cam_name || s.cam_id || '');
+    const camActive = _activeCamIds.has(s.cam_id);
+    const thumbHtml = camActive
+      ? `<img class="ws-card-thumb" loading="lazy" src="/api/weather/sightings/${encodeURIComponent(s.id)}/thumb" alt="${esc(meta.de)}" onerror="this.style.opacity=0.2"/>`
+      : `<div class="ws-card-thumb ws-card-thumb--orphan" aria-hidden="true"></div>`;
     return `
-      <div class="ws-card" data-idx="${idx}" data-id="${esc(s.id)}">
+      <div class="ws-card${camActive ? '' : ' ws-card--orphan'}" data-idx="${idx}" data-id="${esc(s.id)}">
         <div class="ws-card-thumb-wrap">
-          <img class="ws-card-thumb" loading="lazy" src="/api/weather/sightings/${encodeURIComponent(s.id)}/thumb" alt="${esc(meta.de)}" onerror="this.style.opacity=0.2"/>
+          ${thumbHtml}
           <span class="ws-card-badge ws-card-badge--type" style="background:${meta.color}cc">
             <span class="ws-card-badge-icon">${meta.icon}</span>${esc(meta.de)}
           </span>

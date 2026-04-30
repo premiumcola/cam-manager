@@ -2325,6 +2325,20 @@ select option{background:#1e1e1e;color:var(--text)}
 .ws-card-thumb-wrap{position:relative;aspect-ratio:16/9;background:#0a0e14;overflow:hidden}
 .ws-card-thumb{width:100%;height:100%;object-fit:cover;display:block;transition:transform .25s}
 .ws-card:hover .ws-card-thumb{transform:scale(1.03)}
+/* Orphan-camera placeholder — used when a sighting's cam_id is no
+   longer in the active cameras list, so the thumb endpoint would 404.
+   Card still renders so the user knows the entry exists; the thumb
+   slot just shows a subtle striped surface in place of the missing
+   image. */
+.ws-card-thumb--orphan{
+  width:100%;height:100%;display:block;
+  background:repeating-linear-gradient(
+    135deg,
+    rgba(255,255,255,.04) 0 6px,
+    rgba(255,255,255,.02) 6px 12px
+  );
+}
+.ws-card--orphan{ opacity:.65; }
 
 /* Top-Left type badge with icon — blur background like Mediathek */
 .ws-card-badge{position:absolute;display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:8px;font-size:11px;font-weight:700;color:#fff;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);text-shadow:0 1px 2px rgba(0,0,0,0.4);line-height:1}
