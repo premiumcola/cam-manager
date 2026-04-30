@@ -1604,6 +1604,56 @@ function _checkAlertingConflicts(form){
   }
 }
 
+// Test-Push button on the Alerting tab — fires
+// /api/cameras/<id>/test-alert, animates the play-icon while in
+// flight, then renders a per-channel result panel below: ✓ Telegram
+// angekommen / ✗ MQTT: Kanal aus. Idempotent wiring via
+// dataset.wired so re-opening cam-edit doesn't double-bind.
+function _bindAlertTestButton(){
+  const btn = byId('alertTestBtn'); if (!btn || btn.dataset.wired) return;
+  btn.dataset.wired = '1';
+  btn.addEventListener('click', _onAlertTestClick);
+}
+const _ALERT_CHAN_LABELS = { telegram: 'Telegram', mqtt: 'MQTT' };
+async function _onAlertTestClick(ev){
+  const btn = ev.currentTarget;
+  const camId = byId('cameraForm')?.elements?.['id']?.value;
+  const result = byId('alertTestResult');
+  if (!camId || !result) return;
+  const lblEl = btn.querySelector('.alert-test-btn-lbl');
+  const original = lblEl?.textContent || '';
+  btn.disabled = true;
+  btn.classList.add('is-busy');
+  if (lblEl) lblEl.textContent = ' sende…';
+  result.hidden = true;
+  let data = null;
+  try{
+    const r = await fetch(`/api/cameras/${encodeURIComponent(camId)}/test-alert`, { method: 'POST' });
+    try { data = await r.json(); } catch(_){}
+  }catch(_){
+    data = null;
+  }
+  btn.disabled = false;
+  btn.classList.remove('is-busy');
+  if (lblEl) lblEl.textContent = original;
+  if (!data){
+    result.className = 'alert-test-result is-err';
+    result.innerHTML = `<strong>Fehler:</strong> Netzwerk · keine Antwort vom Server`;
+    result.hidden = false;
+    return;
+  }
+  const lines = [];
+  for (const [chan, res] of Object.entries(data.channels || {})){
+    const label = _ALERT_CHAN_LABELS[chan] || chan;
+    if (res?.ok)  lines.push(`✓ ${label} angekommen`);
+    else          lines.push(`✗ ${label}: ${res?.error || 'Fehler'}`);
+  }
+  result.className = 'alert-test-result ' + (data.ok ? 'is-ok' : 'is-err');
+  const head = data.ok ? 'Erfolg' : 'Fehler';
+  result.innerHTML = `<strong>${head}</strong><ul>${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>`;
+  result.hidden = false;
+}
+
 // Hydrate the Alerting-tab status strip from /api/system/telegram.
 // Mutates the existing static markup rather than re-rendering so the
 // dot's CSS animation isn't restarted on every poll. Three pieces:
@@ -2079,6 +2129,12 @@ function editCamera(camId){
   // Telegram bot health strip — fire-and-forget; the function handles
   // its own error states and never throws.
   _renderAlertStatusStrip();
+  // Test-Push button — wires once per session; result panel resets on
+  // every reopen so a stale "✓ Telegram angekommen" from the previous
+  // edit doesn't linger.
+  _bindAlertTestButton();
+  const alertTestResult = byId('alertTestResult');
+  if (alertTestResult) alertTestResult.hidden = true;
   if(f['enabled']) f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed;
   // Two independent schedules — schedule_notify for Telegram/MQTT,
   // schedule_record for the on-disk archive. Either can be enabled or

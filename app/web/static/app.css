@@ -1214,6 +1214,59 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .alert-conflict-text{ color:#fef9c3; }
 .alert-conflict-text strong{ color:#fff;font-weight:700; }
 
+/* Test-Push row — slim button + result panel below. Sits below the
+   5-step alert flow so the user runs validation after configuring,
+   not before. The amber accent on the button matches the Alerting-tab
+   theme without competing with the matrix's red/blue/grey choices. */
+.alert-test-row{
+  margin-top:14px;
+  padding-top:12px;
+  text-align:center;
+}
+.alert-test-btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:11px 18px;
+  border:0;border-radius:10px;
+  background:#1c1c20;
+  color:#fdba74;
+  font-size:12px;font-weight:700;letter-spacing:.01em;
+  cursor:pointer;
+  min-height:44px;
+  transition:background .15s,color .15s,opacity .15s;
+}
+.alert-test-btn:hover{ background:#26262a;color:#fed7aa; }
+.alert-test-btn:disabled{ opacity:.55;cursor:wait; }
+.alert-test-btn svg{ width:14px;height:14px;flex-shrink:0; }
+.alert-test-btn.is-busy svg{ animation:erk-test-spin .9s linear infinite; }
+@media (prefers-reduced-motion: reduce){
+  .alert-test-btn.is-busy svg{ animation:none; }
+}
+.alert-test-hint{
+  margin-top:6px;
+  font-size:10.5px;
+  color:rgba(255,255,255,.4);
+  font-style:italic;
+}
+.alert-test-result{
+  margin-top:10px;
+  padding:9px 12px;
+  border-radius:9px;
+  font-size:11.5px;
+  text-align:left;
+}
+.alert-test-result[hidden]{ display:none; }
+.alert-test-result.is-ok{
+  background:rgba(34,197,94,.14);
+  color:#86efac;
+}
+.alert-test-result.is-err{
+  background:rgba(239,68,68,.14);
+  color:#fca5a5;
+}
+.alert-test-result strong{ color:#fff;font-weight:700; }
+.alert-test-result ul{ margin:4px 0 0 18px;padding:0; }
+.alert-test-result li{ margin-bottom:2px; }
+
 /* "Erkennung jetzt simulieren" — runs Coral inference on the live
    frame and shows the snapshot with bounding boxes coloured by
    verdict. Sits below the 5-step flow, above any subsequent

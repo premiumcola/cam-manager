@@ -1354,6 +1354,54 @@ def api_settings_cameras_save():
     })
 
 
+@app.post('/api/cameras/<cam_id>/test-alert')
+def api_test_alert(cam_id: str):
+    """Fire a test push through every channel currently enabled on the
+    camera. Returns per-channel success/error so the cam-edit Alerting-
+    tab "Test-Push senden" button can show which channel arrived and
+    which silently dropped. Lets the user verify their config end-to-
+    end without having to wait for an actual detection.
+
+    The test never goes through the severity / class_severity / quiet-
+    hours pipeline — it bypasses send_event_alert and calls the raw
+    send_alert_sync (Telegram) and publish (MQTT) so the user sees the
+    transport status, not whether it would have been silenced. Errors
+    are caught per-channel; one bad channel doesn't bury the others.
+    """
+    cam = settings.get_camera(cam_id)
+    if not cam:
+        return jsonify({"error": "camera not found"}), 404
+    cam_name = cam.get("name") or cam_id
+    caption = f"🧪 Test-Push · {cam_name} · {datetime.now().strftime('%H:%M:%S')}"
+    results: dict[str, dict] = {}
+    if cam.get("telegram_enabled") and telegram_service is not None and telegram_service.enabled:
+        try:
+            telegram_service.send_alert_sync(caption=caption, jpeg_bytes=None)
+            results["telegram"] = {"ok": True}
+        except Exception as e:
+            results["telegram"] = {"ok": False, "error": str(e)}
+    else:
+        reason = "Kanal aus" if not cam.get("telegram_enabled") else "Bot nicht aktiv"
+        results["telegram"] = {"ok": False, "error": reason}
+    if cam.get("mqtt_enabled") and mqtt_service is not None:
+        try:
+            payload = {
+                "test": True,
+                "camera_id": cam_id,
+                "camera_name": cam_name,
+                "ts": datetime.now().isoformat(timespec="seconds"),
+            }
+            mqtt_service.publish(f"events/{cam_id}/test", payload)
+            results["mqtt"] = {"ok": True}
+        except Exception as e:
+            results["mqtt"] = {"ok": False, "error": str(e)}
+    else:
+        reason = "Kanal aus" if not cam.get("mqtt_enabled") else "MQTT nicht konfiguriert"
+        results["mqtt"] = {"ok": False, "error": reason}
+    any_ok = any(r.get("ok") for r in results.values())
+    return jsonify({"ok": any_ok, "channels": results}), (200 if any_ok else 502)
+
+
 @app.get('/api/system/telegram')
 def api_system_telegram():
     """Health snapshot for the cam-edit Alerting-tab status strip.
