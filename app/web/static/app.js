@@ -1408,25 +1408,6 @@ window._scrollToCoralSettings=function(ev){
   },120);
 };
 
-function _updateMotionOffState(){
-  const f=byId('cameraForm')?.elements; if(!f) return;
-  const off=!(f['motion_enabled']?.checked);
-  const block=document.querySelector('.cam-det-block'); if(!block) return;
-  block.classList.toggle('motion-off',off);
-  const hint=block.querySelector('.cam-det-motionoff'); if(hint) hint.hidden=!off;
-}
-
-// Wildlife-only form fields are hidden when the global wildlife model
-// switch is off — there's nothing to tune in that case. Read the global
-// checkbox state (populated by hydrateSettings) and toggle the wrap.
-function _updateWildlifeFormVisibility(){
-  const on = !!byId('wildlifeEnabled')?.checked;
-  document.querySelectorAll('.field-wrap--wildlife-only,.field-help--wildlife-only').forEach(el=>{
-    el.style.display = on ? '' : 'none';
-  });
-}
-window._updateWildlifeFormVisibility = _updateWildlifeFormVisibility;
-
 // ── camera_id JS port — keep in lockstep with app/app/camera_id.py ──────────
 // The backend treats the persisted id as authoritative; this preview shows
 // the user what build_camera_id() will compute on save so there are no
@@ -1539,7 +1520,6 @@ function editCamera(camId){
   _initCameraFormListeners();
   initCameraEditTabs();
   initRtspBuilder();
-  _updateWildlifeFormVisibility();
   const f=byId('cameraForm').elements;
   f['id'].value=c.id||''; f['id'].dataset.autoGen='0';
   f['name'].value=c.name||'';
@@ -3473,9 +3453,10 @@ window._toggleCoralSetting=async function(key,inputEl){
   const wildlifeOn  =key==='wildlife_enabled'?nowOn:!!(byId('wildlifeEnabled')?.checked);
   await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({processing:{coral_enabled:coralEnabled,bird_species_enabled:birdEnabled,wildlife_enabled:wildlifeOn}})});
   showToast('Coral gespeichert · Kameras werden neu gestartet.','success');
-  // Reflect the new toggle state in any currently-open camera form +
-  // the pipeline-tree opacity before loadAll() rebuilds everything.
-  _updateWildlifeFormVisibility?.();
+  // Reflect the new toggle state in the pipeline tree before loadAll()
+  // rebuilds everything from scratch. The wildlife-only form fields
+  // were retired in the Erkennung-tab refactor, so no per-form toggle
+  // is needed here anymore.
   _renderCoralPipelineTree?.();
   await loadAll();
 };
