@@ -84,8 +84,42 @@ const SQUIRREL_CHARS=[
 ];
 const download=(url)=>window.open(url,'_blank');
 
+// Dead-camera-id snapshot poll suppression. After a camera rename
+// (manuf/model edit triggers storage_migration to compute a new
+// canonical id), the old <img src="/api/camera/<old-id>/snapshot.jpg">
+// elements stay in the DOM until the next renderDashboard. The
+// 5 fps preview refresh keeps bumping their timestamps, producing
+// a 404 storm in the console. _failedSnapshotIds tracks the camera
+// ids whose snapshot endpoint has 404'd two times in a row;
+// _camImgRetry stops retrying once that threshold is hit, and the
+// preview refresh skips them. Every loadAll() resets the map since
+// the next dashboard re-render will use the fresh ids from
+// /api/cameras.
+const _failedSnapshotIds = new Map();
+function _resetFailedSnapshotIds(){ _failedSnapshotIds.clear(); }
+function _isSnapshotIdDead(camId){
+  return camId ? (_failedSnapshotIds.get(camId) || 0) >= 2 : false;
+}
+function _camIdFromImg(img){
+  return img?.closest?.('[data-camid]')?.dataset?.camid || null;
+}
+
 // ── Camera snapshot retry (handles 503 on initial load before stream is ready) ─
 function _camImgRetry(img){
+  const camId = _camIdFromImg(img);
+  // After a rename, the old camera id keeps producing 404s on every
+  // poll until the dashboard re-renders. Two consecutive failures is
+  // the threshold for marking the id dead — that catches a real
+  // rename (the new img element will carry the fresh id) while
+  // tolerating one transient 503 during cam restart.
+  if (camId) {
+    const n = (_failedSnapshotIds.get(camId) || 0) + 1;
+    _failedSnapshotIds.set(camId, n);
+    if (n >= 2) {
+      img.style.display = 'none';
+      return;
+    }
+  }
   const retries=parseInt(img.dataset.snapRetry||'0');
   if(retries>=12){img.style.display='none';return;}
   img.dataset.snapRetry=retries+1;
@@ -174,6 +208,12 @@ function startPreviewRefresh(){
     if(!grid) return;
     grid.querySelectorAll('.cv-img.loaded').forEach(img=>{
       if(img.dataset.hdMode==='1') return; // HD MJPEG stream refreshes itself
+      // Skip stale post-rename camera ids (see _failedSnapshotIds).
+      // Without this, the 5 fps loop keeps refreshing dead URLs and
+      // produces a 404 storm in the console until the dashboard
+      // re-renders with the fresh id.
+      const camId = _camIdFromImg(img);
+      if (_isSnapshotIdDead(camId)) return;
       const base=img.src.split('?')[0];
       img.src=base+'?t='+Date.now();
     });
@@ -302,6 +342,10 @@ async function loadAll(){
   state.bootstrap=await j('/api/bootstrap');
   state.config=await j('/api/config');
   state.cameras=(await j('/api/cameras')).cameras||[];
+  // Fresh camera list — clear the post-rename dead-id tally so the
+  // (now-current) ids start polling again. _camImgRetry rebuilds the
+  // map on the next 404 streak if a rename happens later.
+  _resetFailedSnapshotIds();
   if(typeof window._updateMobileDockLiveDot==='function') window._updateMobileDockLiveDot();
   state.timeline=await j(`/api/timeline?hours=${state.tlHours||168}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`);
   await loadMediaStorageStats();
