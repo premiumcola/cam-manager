@@ -1228,21 +1228,62 @@ function _initCameraFormListeners(){
     const v=parseFloat(f['motion_sensitivity'].value||0);
     const lbl=byId('motionSensLabel'); if(lbl) lbl.textContent=Math.round(v*100)+'%';
   });
-  // Sliders update a sibling label. Each label lookup is null-guarded so
-  // that a template change that removes the label element doesn't abort
-  // the whole event handler — any future refactor can hide a slider
-  // safely just by not rendering the label.
-  f['detection_min_score']?.addEventListener('input',()=>{ const v=parseFloat(f['detection_min_score'].value); const el=byId('detectionMinScoreLabel'); if(el) el.textContent=v.toFixed(2); });
-  f['wildlife_motion_sensitivity']?.addEventListener('input',()=>{ const v=parseFloat(f['wildlife_motion_sensitivity'].value); const el=byId('wildlifeMotionLabel'); if(el) el.textContent=Math.round(v*100)+'%'; });
-  f['label_threshold_person']?.addEventListener('input',()=>{ const v=parseFloat(f['label_threshold_person'].value); const el=byId('labelThresholdPersonLabel'); if(el) el.textContent=v.toFixed(2); });
-  f['frame_interval_ms']?.addEventListener('input',()=>{
-    const v=parseInt(f['frame_interval_ms'].value,10)||350;
-    const el=byId('frameIntervalLabel');
-    if(el) el.textContent=v+' ms · '+Math.round(1000/v)+' fps';
-  });
-  f['snapshot_interval_s']?.addEventListener('input',()=>{ const el=byId('snapshotIntervalLabel'); if(el) el.textContent=f['snapshot_interval_s'].value+'s'; });
-  // Motion toggle → grey out the trigger dropdown + show hint
-  f['motion_enabled']?.addEventListener('change',_updateMotionOffState);
+  // Slider value labels (Erkennung tab — see _initErkSliders). The old
+  // motionSensLabel / detectionMinScoreLabel / labelThresholdPersonLabel /
+  // frameIntervalLabel / wildlifeMotionLabel / snapshotIntervalLabel
+  // wiring lived here; the new 5-step workflow uses _initErkSliders for
+  // the consolidated wiring with new IDs (erkMinScoreVal etc.).
+  _initErkSliders(byId('cameraForm'));
+}
+
+// Erkennung-tab slider value labels. Single delegated handler over a
+// (name, valueId, formatter) map so adding a new slider in Phase 2 is
+// one extra row — not a new addEventListener block. The label lookup
+// is null-guarded per row so a template that omits a label element
+// doesn't abort the whole init. Compound labels (frame-interval → fps,
+// confirm_n + confirm_seconds → "N Treffer in S Sekunden") run after
+// the per-slider loop so they pick up the latest input value.
+function _initErkSliders(form){
+  if (!form) return;
+  const map = [
+    ['detection_min_score',    'erkMinScoreVal',      v => Math.round(v * 100) + '%'],
+    ['label_threshold_person', 'erkPersonVal',        v => Math.round(v * 100) + '%'],
+    ['motion_sensitivity',     'erkMotionVal',        v => Math.round(v * 100) + '%'],
+    ['frame_interval_ms',      'erkFrameIntervalVal', v => v + ' ms'],
+    ['confirm_n',              'erkConfirmN',         v => v + ' ×'],
+    ['confirm_seconds',        'erkConfirmS',         v => v + ' s'],
+  ];
+  for (const [name, valId, fmt] of map){
+    const inp = form.querySelector(`[name="${name}"]`);
+    const lbl = document.getElementById(valId);
+    if (!inp || !lbl) continue;
+    const upd = () => { lbl.textContent = fmt(parseFloat(inp.value)); };
+    inp.addEventListener('input', upd);
+    upd();
+  }
+  // Compound: confirmation filter — "N Treffer in S Sekunden bestätigen".
+  const cn = form.querySelector('[name="confirm_n"]');
+  const cs = form.querySelector('[name="confirm_seconds"]');
+  const cl = document.getElementById('erkConfirmLbl');
+  if (cn && cs && cl){
+    const upd = () => { cl.textContent = `${cn.value} Treffer in ${cs.value} Sekunden bestätigen`; };
+    cn.addEventListener('input', upd);
+    cs.addEventListener('input', upd);
+    upd();
+  }
+  // Compound: frame_interval_ms → fps line. 1000 / interval rounded to
+  // nearest integer; the slider's 100 ms low end is 10 fps, the 2000 ms
+  // high end is 0.5 fps (rounds to 1).
+  const fi = form.querySelector('[name="frame_interval_ms"]');
+  const fl = document.getElementById('erkFrameIntervalLbl');
+  if (fi && fl){
+    const upd = () => {
+      const fps = Math.max(1, Math.round(1000 / parseFloat(fi.value)));
+      fl.textContent = `≈ ${fps} fps · niedriger = mehr Coral-Last`;
+    };
+    fi.addEventListener('input', upd);
+    upd();
+  }
 }
 
 // Per-camera object-filter pills (Person/Katze/Vogel/Auto/Hund). Same
@@ -1289,39 +1330,71 @@ window._updateAlarmProfileHint=function(){
   hint.textContent=_ALARM_PROFILE_HINTS[sel.value]||'';
 };
 
-// Read-only status rows shown at the top of the Erkennung tab. Values are
-// global (Coral + motion detector state) so the rows link back to Coral
-// settings rather than offering an inline toggle here.
+// Erkennung-tab status strip — slim row with a coloured dot, an inline
+// Coral state label, the per-frame inference latency, and the seconds-
+// since-last-good-frame as a relative time. Mutates the static markup
+// already in the template (#camGlobalStatus.erk-status) rather than
+// rendering full HTML, so the dot pulse animation isn't restarted on
+// every state recompute. Called from editCamera() after the camera has
+// been resolved so we can read its detection_mode / coral_available /
+// inference_avg_ms / frame_age_s — falls back to camGlobalStatus's
+// initial "Coral läuft" placeholder when no camera is in scope.
 function _renderGlobalStatusRows(){
   const host=byId('camGlobalStatus'); if(!host) return;
+  // Resolve the camera being edited, with fallback to the first cam in
+  // state.cameras (the original behaviour). This also covers the brief
+  // window between editCamera being entered and the form being fully
+  // populated.
+  const camId=byId('cameraForm')?.elements?.['id']?.value;
+  const cam=(state.cameras||[]).find(x=>x.id===camId) || state.cameras?.[0];
   const proc=state.config?.processing||{};
-  // Motion is on by default; only "off" if explicitly disabled in config.
-  const motionOn=proc.motion?.enabled!==false;
-  // Coral / CPU / motion_only → derived from the first camera's runtime state.
-  const cam0=state.cameras?.[0];
-  const coralOn=!!(proc.coral_enabled ?? (cam0?.detection_mode!=='motion_only'));
-  const coralAvail=!!cam0?.coral_available;
-  // Variant: 'on' (green), 'off' (grey), 'warn' (orange — CPU fallback).
-  let kiText, kiVariant;
-  if(!coralOn){kiText='KI-Objekterkennung deaktiviert'; kiVariant='off';}
-  else if(cam0?.detection_mode==='coral' && coralAvail){kiText='KI-Objekterkennung aktiv (Coral TPU)'; kiVariant='on';}
-  else if(cam0?.detection_mode==='cpu'){kiText='⚠ KI-Objekterkennung läuft im CPU-Fallback'; kiVariant='warn';}
-  else{kiText='KI-Objekterkennung nicht verfügbar'; kiVariant='off';}
+  const coralOn=!!(proc.coral_enabled ?? (cam?.detection_mode!=='motion_only'));
+  const coralAvail=!!cam?.coral_available;
+  // Variant: 'is-ok' (TPU green), 'is-cpu' (CPU fallback orange/pulse),
+  // 'is-off' (detector disabled grey). Detection_mode 'motion_only'
+  // counts as "off" for the Coral strip — motion-only inference doesn't
+  // exercise Coral.
+  let variant, text;
+  if (!coralOn){ variant='is-off'; text='Coral aus'; }
+  else if (cam?.detection_mode==='coral' && coralAvail){ variant='is-ok'; text='Coral läuft'; }
+  else if (cam?.detection_mode==='cpu'){ variant='is-cpu'; text='CPU-Notfall'; }
+  else { variant='is-off'; text='Coral aus'; }
+  const dot=host.querySelector('.dot');
+  if (dot){
+    dot.classList.remove('is-ok','is-cpu','is-off');
+    dot.classList.add(variant);
+  }
+  const txt=host.querySelector('#erkStatusText');
+  if (txt) txt.textContent=text;
+  // Inference latency — render '—' when the cam is offline / hasn't yet
+  // returned a meaningful sample. _wsFmtRel is too heavy for the strip;
+  // a single Math.round suffices.
+  const ms=Number(cam?.inference_avg_ms);
+  const msEl=byId('erkStatusMs');
+  if (msEl){
+    msEl.textContent = (Number.isFinite(ms) && ms > 0)
+      ? `${Math.round(ms)} ms / Frame`
+      : '— ms / Frame';
+  }
+  // "letztes Update" — frame_age_s is the seconds-since-last-good-frame
+  // counter (see camera_runtime.status). null/undefined means the cam
+  // never produced a frame.
+  const age=Number(cam?.frame_age_s);
+  const upEl=byId('erkStatusUpdated');
+  if (upEl) upEl.textContent = _fmtRelativeAgeS(age);
+}
 
-  const row=(variant, text)=>{
-    const mod = variant==='off' ? ' cam-gs-row--off'
-              : variant==='warn' ? ' cam-gs-row--warn'
-              : '';
-    return `
-    <div class="cam-gs-row${mod}">
-      <span class="cam-gs-dot"></span>
-      <span class="cam-gs-text">${esc(text)}</span>
-      <span class="cam-gs-tag">Global-Einstellung</span>
-    </div>`;
-  };
-  host.innerHTML = row(motionOn?'on':'off', motionOn?'Bewegungserkennung aktiv':'Bewegungserkennung deaktiviert')
-                 + row(kiVariant, kiText)
-                 + `<a href="#coral-settings" class="cam-gs-link" onclick="_scrollToCoralSettings(event)">In Coral-Settings ändern →</a>`;
+// Formatter for "vor X Sek/Min/Std/Tagen" used by the Erkennung status
+// strip. Anything older than 7 days collapses to "vor >1 Woche" so the
+// strip doesn't spell out an obviously-stale interval.
+function _fmtRelativeAgeS(s){
+  if (s == null || !Number.isFinite(s)) return '—';
+  if (s < 5)        return 'gerade eben';
+  if (s < 60)       return `vor ${Math.round(s)} s`;
+  if (s < 3600)     return `vor ${Math.round(s/60)} Min.`;
+  if (s < 86400)    return `vor ${Math.round(s/3600)} Std.`;
+  if (s < 7*86400)  return `vor ${Math.round(s/86400)} Tagen`;
+  return 'vor >1 Woche';
 }
 window._scrollToCoralSettings=function(ev){
   ev?.preventDefault();
@@ -1532,7 +1605,10 @@ function editCamera(camId){
   if(f['telegram_enabled']) f['telegram_enabled'].checked=(c.telegram_enabled!==false);
   if(f['mqtt_enabled']) f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
   if(f['bottom_crop_px']) f['bottom_crop_px'].value=c.bottom_crop_px||0;
-  if(f['motion_sensitivity']){const ms=c.motion_sensitivity!=null?c.motion_sensitivity:0.5; f['motion_sensitivity'].value=ms; const lbl=byId('motionSensLabel'); if(lbl) lbl.textContent=Math.round(parseFloat(ms)*100)+'%';}
+  if(f['motion_sensitivity']){
+    const ms=c.motion_sensitivity!=null?c.motion_sensitivity:0.5;
+    f['motion_sensitivity'].value=ms;
+  }
   if(f['wildlife_motion_sensitivity']){
     const raw=c.wildlife_motion_sensitivity;
     // 0.0 = "auto" → display the derived 1.4× motion_sensitivity preview
@@ -1548,43 +1624,54 @@ function editCamera(camId){
     const globalMs=state.config?.processing?.detection?.min_score ?? 0.55;
     const cms=(c.detection_min_score && c.detection_min_score>0) ? c.detection_min_score : globalMs;
     f['detection_min_score'].value=cms;
-    const el=byId('detectionMinScoreLabel'); if(el) el.textContent=Number(cms).toFixed(2);
   }
   if(f['label_threshold_person']){
     const lt=(c.label_thresholds||{}).person;
     const v=(lt!=null && !Number.isNaN(parseFloat(lt))) ? parseFloat(lt) : 0.72;
     f['label_threshold_person'].value=v;
-    const el=byId('labelThresholdPersonLabel'); if(el) el.textContent=v.toFixed(2);
   }
-  // Bestätigungs-Filter rows — one per active object_filter entry, with
-  // sensible per-class fallbacks mirrored from settings_store defaults.
+  // Confirmation-window step 3 sliders — confirm_n/confirm_seconds carry
+  // the new global entry. Existing per-class entries (cw[person] etc.)
+  // stay in storage untouched; Phase 2 surfaces them via a "Pro Klasse
+  // anpassen" drilldown into #erkConfirmPerClass.
+  if(f['confirm_n']){
+    const g=(c.confirmation_window||{}).global||{};
+    const n=parseInt(g.n,10);
+    f['confirm_n'].value=Number.isFinite(n)?n:3;
+  }
+  if(f['confirm_seconds']){
+    const g=(c.confirmation_window||{}).global||{};
+    const s=parseFloat(g.seconds);
+    f['confirm_seconds'].value=Number.isFinite(s)?Math.round(s):5;
+  }
+  // Legacy per-class grid is no longer rendered as visible UI but the
+  // function is null-safe (returns early when #camConfirmGrid is hidden
+  // via [hidden]). Phase 2 reactivates the drilldown.
   _renderCamConfirmGrid(c);
-  // Erkennung & Aufnahme trio
-  if(f['motion_enabled']){
-    f['motion_enabled'].checked=(c.motion_enabled!==false);
-    _updateMotionOffState();
-  }
+  // detection_trigger lives as a hidden input on the Erkennung tab during
+  // this transition; the follow-up commit moves it to a visible select on
+  // the Allgemein tab. Either way we set the value so save preserves it.
   if(f['detection_trigger']) f['detection_trigger'].value=c.detection_trigger||'motion_and_objects';
   if(f['post_motion_tail_s']){
-    // Normalise: 0 or null → "0" (global default), otherwise match closest preset
+    // Normalise: 0 or null → "0" (Standard / Global-Wert), otherwise pick
+    // closest preset. Save handler stores 0 when "Standard" is selected,
+    // preserving the use-global-default sentinel.
     const tail=c.post_motion_tail_s||0;
     const presets=['0','3','5','8','10','15'];
     f['post_motion_tail_s'].value=presets.includes(String(tail))?String(tail):'0';
   }
-  if(f['resolution']) f['resolution'].value=c.resolution||'auto';
-  // frame_interval_ms is a visible slider in the Erkennung tab —
-  // its label (#frameIntervalLabel) renders ms + derived fps.
-  // snapshot_interval_s remains a hidden input (no UI yet).
+  // frame_interval_ms is now the slider in step 4 of the Erkennung flow.
   if(f['frame_interval_ms']){
     const fi=c.frame_interval_ms||350;
     f['frame_interval_ms'].value=fi;
-    const el=byId('frameIntervalLabel'); if(el) el.textContent=fi+' ms · '+Math.round(1000/fi)+' fps';
   }
-  if(f['snapshot_interval_s']){
-    const si=c.snapshot_interval_s||3;
-    f['snapshot_interval_s'].value=si;
-    const el=byId('snapshotIntervalLabel'); if(el) el.textContent=si+'s';
-  }
+  // motion_enabled, resolution, snapshot_interval_s, bottom_crop_px,
+  // wildlife_motion_sensitivity have no UI in the new Erkennung layout;
+  // their persisted values are preserved via existingCam fallback in the
+  // form-submit handler so saves don't silently flip them to defaults.
+  // Re-bind all step-1/2/3/4/5 slider value labels now that the form
+  // values have been populated.
+  _initErkSliders(byId('cameraForm'));
   _whitelistState=[...(c.whitelist_names||[])]; _updateWhitelistHidden();
   shapeState.camera=camId; shapeState.zones=JSON.parse(JSON.stringify(c.zones||[])); shapeState.masks=JSON.parse(JSON.stringify(c.masks||[])); shapeState.points=[]; shapeState.pulse=null;
   f['zones_json'].value=JSON.stringify(shapeState.zones); f['masks_json'].value=JSON.stringify(shapeState.masks);
@@ -3228,11 +3315,16 @@ byId('cameraForm').onsubmit=async(e)=>{
         hard:     f['schedule_action_hard']     ? !!f['schedule_action_hard'].checked     : true,
       },
     },
-    bottom_crop_px:parseInt(f['bottom_crop_px']?.value||0),
+    // Fields whose UI was removed in the Erkennung-tab refactor — fall
+    // back to the camera's currently-stored value so a save doesn't
+    // silently flip them to the schema default. Schema defaults still
+    // apply for fresh cameras (existingCam is undefined → "" / 0 / etc.
+    // → backend coerces to schema default).
+    bottom_crop_px:parseInt(f['bottom_crop_px']?.value ?? existingCam?.bottom_crop_px ?? 0),
     motion_sensitivity:parseFloat(f['motion_sensitivity']?.value||0.5),
-    wildlife_motion_sensitivity:parseFloat(f['wildlife_motion_sensitivity']?.value||0),
-    motion_enabled:f['motion_enabled']?f['motion_enabled'].checked:true,
-    detection_trigger:f['detection_trigger']?.value||'motion_and_objects',
+    wildlife_motion_sensitivity:parseFloat(f['wildlife_motion_sensitivity']?.value ?? existingCam?.wildlife_motion_sensitivity ?? 0),
+    motion_enabled:f['motion_enabled']?f['motion_enabled'].checked:(existingCam?.motion_enabled!==false),
+    detection_trigger:f['detection_trigger']?.value||existingCam?.detection_trigger||'motion_and_objects',
     post_motion_tail_s:parseFloat(f['post_motion_tail_s']?.value||0),
     alarm_profile:f['alarm_profile']?.value||'soft',
     detection_min_score:parseFloat(f['detection_min_score']?.value||0),
@@ -3246,11 +3338,16 @@ byId('cameraForm').onsubmit=async(e)=>{
       return out;
     })(),
     confirmation_window:(()=>{
-      // Read each rendered row of #camConfirmGrid into a per-class
-      // {n, seconds} dict. Rows are only rendered for classes in the
-      // active object_filter, so this naturally drops removed classes.
-      const out={};
-      const grid=byId('camConfirmGrid');
+      // Start from the existing camera's confirmation_window so per-class
+      // entries (cw[person], cw[cat], …) survive the Phase 1 refactor
+      // even though the per-class UI is no longer rendered. Phase 2 will
+      // populate #erkConfirmPerClass with sliders that overwrite these
+      // entries; until then they are preserved untouched.
+      const out = { ...(existingCam?.confirmation_window || {}) };
+      // Legacy per-class grid (#camConfirmGrid) is hidden in the new
+      // layout but kept for compatibility — if a future template renders
+      // rows back into it, this block picks them up.
+      const grid = byId('camConfirmGrid');
       grid?.querySelectorAll('[data-cw-cls]').forEach(row=>{
         const cls=row.dataset.cwCls;
         const nIn=row.querySelector('[data-cw-n]');
@@ -3261,11 +3358,18 @@ byId('cameraForm').onsubmit=async(e)=>{
           out[cls]={n:Math.max(1,n), seconds:Math.max(0.5,s)};
         }
       });
+      // Step-3 global slider — single n/seconds pair for all classes
+      // unless a per-class entry overrides it.
+      const gn=parseInt(f['confirm_n']?.value,10);
+      const gs=parseFloat(f['confirm_seconds']?.value);
+      if(Number.isFinite(gn) && Number.isFinite(gs)){
+        out.global={n:Math.max(1,gn), seconds:Math.max(2,gs)};
+      }
       return out;
     })(),
-    resolution:f['resolution']?.value||'auto',
+    resolution:f['resolution']?.value||existingCam?.resolution||'auto',
     frame_interval_ms:parseInt(f['frame_interval_ms']?.value||350),
-    snapshot_interval_s:parseInt(f['snapshot_interval_s']?.value||3),
+    snapshot_interval_s:parseInt(f['snapshot_interval_s']?.value ?? existingCam?.snapshot_interval_s ?? 3),
     zones:JSON.parse(f['zones_json'].value||'[]'),masks:JSON.parse(f['masks_json'].value||'[]')};
   const _savedId=payload.id; _restoreEditWrapper();
   // Backend rebuilds the canonical id when manufacturer/model/name/rtsp_url

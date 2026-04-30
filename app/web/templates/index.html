@@ -383,126 +383,166 @@
               </div>
             </div>
 
-            <!-- Panel: Erkennung — detection settings only -->
+            <!-- Panel: Erkennung — 5-step workflow with vertical "thread"
+                 connecting the steps. Status strip at top shows live
+                 Coral state; numbered nodes guide the user through
+                 class filter → confidence → confirmation → analysis
+                 rate → motion pre-trigger. Each card sits flat on the
+                 panel surface (no nested borders per CLAUDE.md). -->
             <div class="cam-tab-panel" id="cam-tab-erkennung">
-              <!-- Global (read-only) status indicators — link to Coral section -->
-              <div id="camGlobalStatus" class="cam-global-status"></div>
-
-              <div class="cam-sep"></div>
-
-              <div class="field-wrap">
-                <select name="detection_trigger">
-                  <option value="motion_and_objects">Motion + Objekte (Standard)</option>
-                  <option value="objects_only">Nur Objekte — weniger Fehlalarme</option>
-                  <option value="motion_only">Nur Motion</option>
-                </select>
-                <span class="field-label">Event-Auslöser</span>
+              <!-- Status strip: dot variant + ms/Frame + last-update relative.
+                   Hydrated by _updateErkStatusStrip from the camera's runtime
+                   status (detection_mode, coral_available, inference_avg_ms,
+                   frame_age_s). -->
+              <div id="camGlobalStatus" class="erk-status">
+                <span class="dot is-ok"></span>
+                <span class="lbl" id="erkStatusText">Coral läuft</span>
+                <span class="val" id="erkStatusMs">— ms / Frame</span>
+                <span class="sep"></span>
+                <span class="lbl">letztes Update</span>
+                <span class="val" id="erkStatusUpdated">—</span>
               </div>
-              <div class="field-help">Bestimmt was eine Aufnahme auslöst.</div>
 
-              <div class="cam-sep"></div>
+              <div class="erk-flow">
 
-              <div class="cam-field-label">Objekte erkennen</div>
-              <div id="camObjectFilter" class="cam-objfilter-bar"></div>
-              <div class="field-help" style="margin-top:4px">Nur ausgewählte Objekte lösen Events aus.</div>
-
-              <div class="cam-sep"></div>
-
-              <div class="field-wrap">
-                <div style="display:flex;align-items:center;gap:8px">
-                  <input type="range" name="detection_min_score" min="0.3" max="0.95" step="0.05" value="0.55" style="flex:1" />
-                  <span id="detectionMinScoreLabel" style="font-size:12px;color:var(--muted);min-width:48px;text-align:right">0.55</span>
+                <!-- STEP 1 — Klassenfilter -->
+                <div class="erk-step">
+                  <div class="erk-step-num">1</div>
+                  <div class="erk-step-head">
+                    <svg class="erk-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <span class="erk-step-title">Was suchen?</span>
+                    <span class="erk-step-hint">Klassen-Filter</span>
+                  </div>
+                  <div class="erk-card">
+                    <div id="camObjectFilter" class="cam-objfilter-bar"></div>
+                  </div>
                 </div>
-                <span class="field-label">KI-Empfindlichkeit</span>
-              </div>
-              <div class="field-help">Höher = weniger Fehlalarme.</div>
 
-              <div class="field-wrap" style="margin-top:10px">
-                <div style="display:flex;align-items:center;gap:8px">
-                  <input type="range" name="label_threshold_person" min="0.55" max="0.95" step="0.01" value="0.72" style="flex:1" />
-                  <span id="labelThresholdPersonLabel" style="font-size:12px;color:var(--muted);min-width:48px;text-align:right">0.72</span>
+                <!-- STEP 2 — Konfidenz -->
+                <div class="erk-step">
+                  <div class="erk-step-num">2</div>
+                  <div class="erk-step-head">
+                    <svg class="erk-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9"/>
+                      <path d="M12 7v5l3 3"/>
+                    </svg>
+                    <span class="erk-step-title">Wie sicher?</span>
+                    <span class="erk-step-hint">Konfidenz-Schwelle</span>
+                  </div>
+                  <div class="erk-card">
+                    <div class="row">
+                      <input type="range" name="detection_min_score" min="0.30" max="0.95" step="0.05" value="0.55" />
+                      <span class="val" id="erkMinScoreVal">55%</span>
+                    </div>
+                    <span class="lbl">Allgemein · für alle Klassen</span>
+                  </div>
+                  <div class="erk-card">
+                    <div class="row">
+                      <input type="range" name="label_threshold_person" min="0.55" max="0.95" step="0.01" value="0.72" />
+                      <span class="val" id="erkPersonVal">72%</span>
+                    </div>
+                    <span class="lbl">Person · überschreibt allgemein</span>
+                  </div>
+                  <!-- Phase 2 populates per-class drilldown sliders here. -->
+                  <div id="erkPerClassAdvanced" hidden></div>
                 </div>
-                <span class="field-label">Person · Mindest-Konfidenz</span>
-              </div>
-              <div class="field-help">COCO erkennt Personen bei statischen Kameras oft fälschlich auf Holzstrukturen. Höherer Wert = strikter (nur klare Person-Detektionen).</div>
 
-              <div class="field-wrap" style="margin-top:10px">
-                <div style="display:flex;align-items:center;gap:8px">
-                  <input type="range" name="motion_sensitivity" min="0.1" max="1.0" step="0.1" value="0.5" style="flex:1" />
-                  <span id="motionSensLabel" style="font-size:12px;color:var(--muted);min-width:36px;text-align:right">50%</span>
+                <!-- STEP 3 — Bestätigungs-Filter (N-of-M sliding window) -->
+                <div class="erk-step">
+                  <div class="erk-step-num">3</div>
+                  <div class="erk-step-head">
+                    <svg class="erk-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12"/>
+                      <polyline points="20 12 14 18" opacity=".5"/>
+                    </svg>
+                    <span class="erk-step-title">Wie oft bestätigen?</span>
+                    <span class="erk-step-hint">Anti-Fehlalarm</span>
+                  </div>
+                  <div class="erk-card">
+                    <div class="two-col">
+                      <div class="row">
+                        <input type="range" name="confirm_n" min="1" max="10" step="1" value="3" />
+                        <span class="val" id="erkConfirmN">3 ×</span>
+                      </div>
+                      <div class="row">
+                        <input type="range" name="confirm_seconds" min="2" max="20" step="1" value="5" />
+                        <span class="val" id="erkConfirmS">5 s</span>
+                      </div>
+                    </div>
+                    <span class="lbl" id="erkConfirmLbl">3 Treffer in 5 Sekunden bestätigen</span>
+                  </div>
+                  <!-- Legacy per-class grid kept as a hidden compat container —
+                       its rows are no longer rendered, but the save handler
+                       reads existing per-class entries from settings.json
+                       directly so any pre-refactor configuration is preserved.
+                       Phase 2 replaces this with a "Pro Klasse anpassen"
+                       drilldown into #erkConfirmPerClass. -->
+                  <div id="camConfirmGrid" hidden></div>
+                  <div id="erkConfirmPerClass" hidden></div>
                 </div>
-                <span class="field-label">Motion-Empfindlichkeit</span>
-              </div>
-              <div class="field-help">Niedriger = nur große Bewegungen.</div>
 
-              <div class="field-wrap field-wrap--wildlife-only" id="wildlifeMotionWrap" style="margin-top:10px;display:none">
-                <div style="display:flex;align-items:center;gap:8px">
-                  <input type="range" name="wildlife_motion_sensitivity" min="0.1" max="1.0" step="0.1" value="0.7" style="flex:1" />
-                  <span id="wildlifeMotionLabel" style="font-size:12px;color:var(--muted);min-width:36px;text-align:right">70%</span>
+                <!-- STEP 4 — Analyse-Intervall -->
+                <div class="erk-step">
+                  <div class="erk-step-num">4</div>
+                  <div class="erk-step-head">
+                    <svg class="erk-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    </svg>
+                    <span class="erk-step-title">Wie schnell scannen?</span>
+                    <span class="erk-step-hint">Analyse-Intervall</span>
+                  </div>
+                  <div class="erk-card">
+                    <div class="row">
+                      <input type="range" name="frame_interval_ms" min="100" max="2000" step="50" value="350" />
+                      <span class="val" id="erkFrameIntervalVal">350 ms</span>
+                    </div>
+                    <span class="lbl" id="erkFrameIntervalLbl">≈ 3 fps · niedriger = mehr Coral-Last</span>
+                  </div>
                 </div>
-                <span class="field-label">Wildlife-Empfindlichkeit</span>
-              </div>
-              <div class="field-help field-help--wildlife-only" id="wildlifeMotionHelp" style="display:none">Nur für Eichhörnchen / Fuchs / Igel. Höher = kleine Bewegungen lösen die Wildlife-Klassifikation aus.</div>
 
-              <div class="cam-sep"></div>
-
-              <div class="field-wrap">
-                <select name="post_motion_tail_s">
-                  <option value="0">3s (Standard)</option>
-                  <option value="3">3s</option>
-                  <option value="5">5s</option>
-                  <option value="8">8s</option>
-                  <option value="10">10s</option>
-                  <option value="15">15s</option>
-                </select>
-                <span class="field-label">Nachlauf nach Bewegung</span>
-              </div>
-              <div class="field-help">Wie lange nach letzter Bewegung weiter aufnehmen.</div>
-
-              <div class="cam-sep"></div>
-
-              <!-- Bestätigungs-Filter — N-of-M sliding window per class.
-                   Renders one row per object_filter entry; JS wires the
-                   inputs and merges values into the save payload. -->
-              <div class="cam-section-head">
-                <h4 style="margin:0 0 4px;font-size:13px;font-weight:700;color:var(--text)">Bestätigungs-Filter</h4>
-                <p class="cam-section-hint" style="margin:0;font-size:12px;color:var(--muted);line-height:1.45">
-                  Verhindert Fehlalarme: Coral muss eine Klasse mehrfach
-                  kurz hintereinander erkennen, bevor ein Alarm ausgelöst
-                  wird. Höhere Werte = weniger Fehlalarme, aber kurze
-                  echte Sichtungen werden eher übersehen.
-                </p>
-              </div>
-              <div class="cam-confirm-grid" id="camConfirmGrid"></div>
-
-              <div class="cam-sep"></div>
-
-              <!-- Analyse-Geschwindigkeit — wie oft Coral pro Sekunde
-                   ein Bild zur Inferenz bekommt. Schema-Feld
-                   frame_interval_ms existiert seit jeher; war bisher
-                   nur als hidden-input persistiert. Slider in ms
-                   (intuitiver als reziprok-fps), Label rechnet beides. -->
-              <div class="cam-section-head">
-                <h4 style="margin:0 0 4px;font-size:13px;font-weight:700;color:var(--text)">Analyse-Geschwindigkeit</h4>
-                <p class="cam-section-hint" style="margin:0;font-size:12px;color:var(--muted);line-height:1.45">
-                  Wie oft soll TAM-spy ein Bild zur Erkennung an Coral
-                  schicken? Höher = schneller reagiert, aber mehr CPU-
-                  und Coral-Last. Empfohlen: 3 fps (350 ms).
-                </p>
-              </div>
-              <div class="field-wrap">
-                <div style="display:flex;align-items:center;gap:10px">
-                  <input type="range" name="frame_interval_ms" min="100" max="2000" step="50" value="350" id="frameIntervalSlider" style="flex:1" />
-                  <span class="field-label" id="frameIntervalLabel" style="margin:0;padding:0;min-width:110px;text-align:right;white-space:nowrap">350 ms · 3 fps</span>
+                <!-- STEP 5 — Bewegungs-Vortrigger -->
+                <div class="erk-step">
+                  <div class="erk-step-num">5</div>
+                  <div class="erk-step-head">
+                    <svg class="erk-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M3 12h3l3-9 6 18 3-9h3"/>
+                    </svg>
+                    <span class="erk-step-title">Bewegungs-Vortrigger</span>
+                    <span class="erk-step-hint">vor der KI</span>
+                  </div>
+                  <div class="erk-card">
+                    <div class="row">
+                      <input type="range" name="motion_sensitivity" min="0.1" max="1.0" step="0.1" value="0.5" />
+                      <span class="val" id="erkMotionVal">50%</span>
+                    </div>
+                    <span class="lbl">Empfindlichkeit · niedrig = nur große Bewegung</span>
+                  </div>
+                  <div class="erk-card">
+                    <div class="row">
+                      <select name="post_motion_tail_s">
+                        <option value="0">Standard (Global-Wert)</option>
+                        <option value="3">3 Sekunden</option>
+                        <option value="5">5 Sekunden</option>
+                        <option value="8">8 Sekunden</option>
+                        <option value="10">10 Sekunden</option>
+                        <option value="15">15 Sekunden</option>
+                      </select>
+                    </div>
+                    <span class="lbl">Nachlauf-Aufnahme nach letzter Bewegung</span>
+                  </div>
                 </div>
+
               </div>
 
-              <!-- Hidden: field still saved, controlled by global setting. -->
-              <input type="hidden" name="motion_enabled" value="true" />
-              <!-- Legacy fields kept hidden so save payload shape stays stable. -->
-              <input type="hidden" name="resolution" value="auto" />
-              <input type="hidden" name="snapshot_interval_s" value="3" />
-              <input type="hidden" name="bottom_crop_px" value="0" />
+              <!-- detection_trigger temporarily kept here as a hidden input
+                   so existing values are preserved across the refactor.
+                   The follow-up commit "refactor: move detection_trigger
+                   select to allgemein tab" surfaces it as a visible select
+                   on the Allgemein tab. -->
+              <input type="hidden" name="detection_trigger" value="motion_and_objects" />
             </div>
 
             <!-- Panel: Alerting — notifications, alarm, schedule -->
