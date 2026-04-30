@@ -426,6 +426,22 @@
               </div>
               <div class="field-help">Wie lange nach letzter Bewegung weiter aufnehmen.</div>
 
+              <div class="cam-sep"></div>
+
+              <!-- Bestätigungs-Filter — N-of-M sliding window per class.
+                   Renders one row per object_filter entry; JS wires the
+                   inputs and merges values into the save payload. -->
+              <div class="cam-section-head">
+                <h4 style="margin:0 0 4px;font-size:13px;font-weight:700;color:var(--text)">Bestätigungs-Filter</h4>
+                <p class="cam-section-hint" style="margin:0;font-size:12px;color:var(--muted);line-height:1.45">
+                  Verhindert Fehlalarme: Coral muss eine Klasse mehrfach
+                  kurz hintereinander erkennen, bevor ein Alarm ausgelöst
+                  wird. Höhere Werte = weniger Fehlalarme, aber kurze
+                  echte Sichtungen werden eher übersehen.
+                </p>
+              </div>
+              <div class="cam-confirm-grid" id="camConfirmGrid"></div>
+
               <!-- Hidden: field still saved, controlled by global setting. -->
               <input type="hidden" name="motion_enabled" value="true" />
               <!-- Legacy fields kept hidden so save payload shape stays stable. -->

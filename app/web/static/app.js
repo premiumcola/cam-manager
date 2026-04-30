@@ -1386,6 +1386,45 @@ function buildCameraId(manufacturer, model, name, ip){
   return parts.join('_');
 }
 
+// Per-class fallbacks for the confirmation-window UI grid. Mirrors the
+// settings_store._CONFIRMATION_WINDOW_DEFAULTS Python-side dict so the
+// UI shows the same defaults the backend would apply.
+const _CW_DEFAULTS = {
+  person:   { n: 3, seconds: 5.0 },
+  cat:      { n: 3, seconds: 5.0 },
+  bird:     { n: 2, seconds: 4.0 },
+  squirrel: { n: 2, seconds: 3.0 },
+  dog:      { n: 3, seconds: 5.0 },
+  car:      { n: 3, seconds: 5.0 },
+  motion:   { n: 2, seconds: 4.0 },
+};
+function _renderCamConfirmGrid(c){
+  const grid = byId('camConfirmGrid'); if (!grid) return;
+  const filter = (c.object_filter || []).filter(Boolean);
+  const cw = c.confirmation_window || {};
+  if (!filter.length){
+    grid.innerHTML = `<div class="field-help" style="margin:0">Wähle oben Objekte aus, um Bestätigungs-Filter pro Klasse zu konfigurieren.</div>`;
+    return;
+  }
+  grid.innerHTML = filter.map(cls => {
+    const fb = _CW_DEFAULTS[cls] || { n: 3, seconds: 5.0 };
+    const cur = cw[cls] || {};
+    const n = parseInt(cur.n, 10);
+    const s = parseFloat(cur.seconds);
+    const nVal = Number.isFinite(n) ? n : fb.n;
+    const sVal = Number.isFinite(s) ? s : fb.seconds;
+    const lbl = (typeof OBJ_LABEL === 'object' && OBJ_LABEL[cls]) ? OBJ_LABEL[cls] : cls;
+    return `
+      <div class="cam-confirm-row" data-cw-cls="${esc(cls)}">
+        <span class="cam-confirm-cls">${esc(lbl)} bestätigen nach</span>
+        <input type="number" class="cam-confirm-n" data-cw-n min="1" max="10" step="1" value="${nVal}" inputmode="numeric"/>
+        <span class="cam-confirm-sep">Treffer in</span>
+        <input type="number" class="cam-confirm-s" data-cw-s min="0.5" max="30" step="0.5" value="${sVal}" inputmode="decimal"/>
+        <span class="cam-confirm-unit">Sek</span>
+      </div>`;
+  }).join('');
+}
+
 function _refreshCamIdPreview(){
   const el = byId('camIdPreview'); if(!el) return;
   const f = byId('cameraForm')?.elements; if(!f) return;
@@ -1502,6 +1541,9 @@ function editCamera(camId){
     f['label_threshold_person'].value=v;
     const el=byId('labelThresholdPersonLabel'); if(el) el.textContent=v.toFixed(2);
   }
+  // Bestätigungs-Filter rows — one per active object_filter entry, with
+  // sensible per-class fallbacks mirrored from settings_store defaults.
+  _renderCamConfirmGrid(c);
   // Erkennung & Aufnahme trio
   if(f['motion_enabled']){
     f['motion_enabled'].checked=(c.motion_enabled!==false);
@@ -3187,6 +3229,24 @@ byId('cameraForm').onsubmit=async(e)=>{
       const out={};
       const p=parseFloat(f['label_threshold_person']?.value);
       if(!Number.isNaN(p)) out.person=p;
+      return out;
+    })(),
+    confirmation_window:(()=>{
+      // Read each rendered row of #camConfirmGrid into a per-class
+      // {n, seconds} dict. Rows are only rendered for classes in the
+      // active object_filter, so this naturally drops removed classes.
+      const out={};
+      const grid=byId('camConfirmGrid');
+      grid?.querySelectorAll('[data-cw-cls]').forEach(row=>{
+        const cls=row.dataset.cwCls;
+        const nIn=row.querySelector('[data-cw-n]');
+        const sIn=row.querySelector('[data-cw-s]');
+        const n=parseInt(nIn?.value,10);
+        const s=parseFloat(sIn?.value);
+        if(cls && Number.isFinite(n) && Number.isFinite(s)){
+          out[cls]={n:Math.max(1,n), seconds:Math.max(0.5,s)};
+        }
+      });
       return out;
     })(),
     resolution:f['resolution']?.value||'auto',

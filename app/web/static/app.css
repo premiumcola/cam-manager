@@ -2482,3 +2482,53 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   margin-top:2px;padding-left:14px;line-height:1.3;
   opacity:.75;
 }
+
+/* Bestätigungs-Filter — pro Klasse eine Zeile mit N+seconds Inputs.
+   Flat design, kein border, depth via background-tint. */
+.cam-section-head{margin:8px 0 10px}
+.cam-confirm-grid{display:grid;gap:6px}
+.cam-confirm-row{
+  display:grid;
+  grid-template-columns:1fr 64px auto 64px auto;
+  align-items:center;gap:8px;
+  padding:10px 12px;
+  border-radius:10px;
+  background:rgba(255,255,255,.035);
+  min-height:44px;
+}
+.cam-confirm-cls{
+  font-size:13px;font-weight:600;color:var(--text);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.cam-confirm-sep,.cam-confirm-unit{
+  font-size:12px;color:var(--muted);font-style:italic;white-space:nowrap;
+}
+.cam-confirm-n,.cam-confirm-s{
+  width:100%;
+  padding:8px 10px;
+  border-radius:8px;
+  background:#1e1e1e;
+  border:1.5px solid rgba(255,255,255,.07);
+  color:var(--text);
+  font-size:14px;
+  text-align:center;
+  -webkit-appearance:none;appearance:none;
+  outline:none;
+  transition:border-color .15s,box-shadow .15s;
+}
+.cam-confirm-n:focus,.cam-confirm-s:focus{
+  border-color:#555;box-shadow:0 0 0 3px rgba(255,255,255,.06);
+}
+@media (max-width:640px){
+  .cam-confirm-row{
+    grid-template-columns:1fr;
+    gap:4px;padding:10px 12px;
+  }
+  .cam-confirm-cls{font-size:12px}
+  .cam-confirm-row > input{width:100%}
+  .cam-confirm-sep,.cam-confirm-unit{display:none}
+  .cam-confirm-row::before{
+    content:"Treffer / Sekunden";
+    font-size:11px;color:var(--muted);font-style:italic;
+  }
+}
