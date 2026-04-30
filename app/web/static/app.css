@@ -178,7 +178,7 @@ select option{background:#1e1e1e;color:#c8c8c8}
 .cv-tr-row .cv-pill-live-wrap{margin-left:0}
 
 /* ── Top-right pill container ─────────────────────────────────────────────── */
-.cv-tr{position:absolute;top:var(--cv-overlay-inset);right:var(--cv-overlay-inset);display:flex;flex-direction:column;gap:8px;align-items:flex-end;z-index:3}
+.cv-tr{position:absolute;top:calc(var(--cv-overlay-inset) + 22px);right:var(--cv-overlay-inset);display:flex;flex-direction:column;gap:8px;align-items:flex-end;z-index:3}
 
 /* Base pill */
 .cv-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px 5px 8px;border-radius:999px;font-size:12px;font-weight:700;letter-spacing:.02em;position:relative;cursor:default;backdrop-filter:blur(8px);min-height:28px;line-height:1.1;box-sizing:border-box}
