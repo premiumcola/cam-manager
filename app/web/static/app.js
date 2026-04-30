@@ -7369,12 +7369,20 @@ function _wsBindChartHover(wrap, samples, fields, pad, cw, ch, VB_W, VB_H, VB_PA
     guide.setAttribute('x1', guideX.toFixed(1));
     guide.setAttribute('x2', guideX.toFixed(1));
     guide.style.display = '';
-    // Tooltip body
+    // Tooltip body. Sample values live on sample.values[key], not on
+    // sample[key] directly — the previous version walked the wrong
+    // path so every row was filtered out and only the time header
+    // rendered. Multi-day windows append "· dd.MM" so the same HH:MM
+    // on adjacent days isn't ambiguous.
     const p2 = n => (n < 10 ? '0' : '') + n;
     const dt = new Date(sampleTs);
-    const head = p2(dt.getHours()) + ':' + p2(dt.getMinutes());
+    const headTime = `${p2(dt.getHours())}:${p2(dt.getMinutes())}`;
+    const head = spansMultiDay
+      ? `${headTime} · ${p2(dt.getDate())}.${p2(dt.getMonth() + 1)}`
+      : headTime;
+    const sampleVals = sample.values || {};
     const rows = fields.map(key => {
-      const v = sample[key];
+      const v = sampleVals[key];
       if (v == null || !Number.isFinite(Number(v))) return '';
       const colour = WEATHER_STATS_PALETTE[key] || '#94a3b8';
       const lbl = labels[key] || key;

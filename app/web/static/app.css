@@ -2575,7 +2575,7 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
    gets absolute-positioned by the JS handler, clamped to the wrap. */
 .ws-chart-tooltip{
   position:absolute;
-  background:rgba(15,15,18,.92);
+  background:rgba(15,15,18,.94);
   backdrop-filter:blur(8px);
   -webkit-backdrop-filter:blur(8px);
   border-radius:10px;
@@ -2583,10 +2583,17 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   font-size:11px;
   color:#edf4fb;
   pointer-events:none;
+  white-space:nowrap;
   z-index:10;
-  box-shadow:0 6px 18px rgba(0,0,0,.5);
+  box-shadow:0 6px 20px rgba(0,0,0,.5);
   min-width:140px;
-  max-width:220px;
+  max-width:240px;
+}
+@media (prefers-reduced-motion: reduce){
+  /* Spec: tooltip appears/disappears instantly. The class has no
+     transition by default, but explicitly disable any future addition
+     so a visual rev doesn't accidentally animate for these users. */
+  .ws-chart-tooltip{transition:none !important}
 }
 .ws-chart-tooltip[hidden]{display:none}
 .ws-tt-time{
@@ -2612,6 +2619,7 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
 }
 .ws-tt-val{
   font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  font-variant-numeric:tabular-nums;
   color:#fff;font-weight:600;
   text-rendering:geometricPrecision;
 }
