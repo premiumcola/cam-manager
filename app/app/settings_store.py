@@ -234,6 +234,10 @@ class SettingsStore:
             # Recording-archive toggle. Defaults True to preserve the
             # historical "actions.record=True" behaviour pre-split.
             "recording_enabled": cam.get("recording_enabled", True),
+            # Two independent schedules — see _migrate_alerting_schedules
+            # for the one-time derivation from the legacy schedule.actions.
+            "schedule_notify": cam.get("schedule_notify") or {},
+            "schedule_record": cam.get("schedule_record") or {},
         }
 
     @staticmethod
@@ -304,6 +308,7 @@ class SettingsStore:
         self._ensure_camera_defaults()
         self._migrate_schedules()
         self._migrate_class_severity()
+        self._migrate_alerting_schedules()
         self._ensure_timelapse_settings()
         self._ensure_timelapse_profiles()
         self._ensure_telegram_push_defaults()
@@ -634,6 +639,55 @@ class SettingsStore:
                    "cat": "info", "bird": "info", "squirrel": "info", "dog": "info",
                    "motion": "off"},
     }
+
+    def _migrate_alerting_schedules(self):
+        """One-time migration: derive schedule_notify and
+        schedule_record from the legacy schedule.actions structure.
+        The legacy schedule field stays in storage but is no longer
+        the source of truth — the runtime now reads schedule_notify
+        for Telegram/MQTT gating and schedule_record for archive
+        gating.
+
+        Mapping:
+          schedule_notify.enabled = legacy.enabled AND actions.telegram
+          schedule_notify.from/to = legacy.from/to
+          schedule_record.enabled = legacy.enabled AND actions.record
+          schedule_record.from/to = legacy.from/to
+
+        Idempotent — cameras that already carry both new schedules are
+        left untouched. Empty schedule_notify or schedule_record keys
+        are filled in even when the other already exists.
+        """
+        migrated = 0
+        for cam in self.data.get("cameras", []):
+            has_n = isinstance(cam.get("schedule_notify"), dict) and cam["schedule_notify"]
+            has_r = isinstance(cam.get("schedule_record"), dict) and cam["schedule_record"]
+            if has_n and has_r:
+                continue
+            sch = cam.get("schedule") or {}
+            actions = sch.get("actions") or {}
+            sch_enabled = bool(sch.get("enabled"))
+            sch_from = sch.get("from") or "21:00"
+            sch_to   = sch.get("to")   or "06:00"
+            if not has_n:
+                cam["schedule_notify"] = {
+                    "enabled": sch_enabled and actions.get("telegram", True) is not False,
+                    "from": sch_from,
+                    "to":   sch_to,
+                }
+            if not has_r:
+                cam["schedule_record"] = {
+                    "enabled": sch_enabled and actions.get("record", True) is not False,
+                    "from": sch_from,
+                    "to":   sch_to,
+                }
+            migrated += 1
+            log.info(
+                "Alerting-Schedule-Migration: %s ← legacy=%s → notify=%s record=%s",
+                cam.get("id", "?"), sch, cam["schedule_notify"], cam["schedule_record"],
+            )
+        if migrated:
+            log.info("Alerting-Schedule-Migration: %d Kameras migriert", migrated)
 
     def _migrate_class_severity(self):
         """One-time migration: derive class_severity dict from the

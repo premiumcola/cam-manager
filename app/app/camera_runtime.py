@@ -13,7 +13,7 @@ import requests
 import numpy as np
 from .detectors import CoralObjectDetector, BirdSpeciesClassifier, WildlifeClassifier, Detection, draw_detections
 from .detection_confirmer import DetectionConfirmer
-from .event_logic import is_in_schedule, choose_alarm_level, schedule_action_active
+from .event_logic import is_in_schedule, choose_alarm_level, schedule_action_active, is_schedule_window_active
 
 # Does this container have an ffmpeg binary? If so, motion recording uses the
 # fast stream-copy path (direct RTSP → mp4, no CPU re-encode). Otherwise we
@@ -2409,15 +2409,18 @@ class CameraRuntime:
                     has_motion = bool(effective_motion) or bool(object_labels)
                     labels = sorted(set(effective_motion + object_labels)) if has_motion else []
 
-                # Per-camera unified schedule — record action gate. Outside
-                # the configured window (or when actions.record is off) we
+                # Per-camera recording schedule — outside the configured
+                # window (or when recording_enabled is off entirely) we
                 # still detect, but never start a new on-disk event.
                 # In-progress recordings finalize normally (gate only fires
                 # when has_motion AND we're not already recording).
+                # New schedule_record dict gates by time window; the
+                # recording_enabled toggle is the master record on/off.
                 if has_motion and not self._recording:
-                    if not schedule_action_active(self.cfg.get("schedule") or {}, "record"):
-                        time.sleep(interval)
-                        continue
+                    if not self.cfg.get("recording_enabled", True):
+                        time.sleep(interval); continue
+                    if not is_schedule_window_active(self.cfg.get("schedule_record") or {}):
+                        time.sleep(interval); continue
 
                 if self.cfg.get("rtsp_url"):
                     # ── RTSP: pre-buffer + per-session video recording ────────

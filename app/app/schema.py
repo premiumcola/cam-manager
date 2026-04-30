@@ -144,6 +144,15 @@ CAMERA_SCHEMA: dict = {
     "whitelist_names":     (list,  []),
     "timelapse":           (dict,  {}),
     "schedule":            (dict,  {}),
+    # Two independent schedules — one for notifications (Telegram/MQTT),
+    # one for archival recording. Replaces the single 'schedule' dict's
+    # actions={record,telegram,hard} pattern. Empty dict on a fresh
+    # camera defaults to "always allowed" (the runtime treats missing
+    # / disabled schedules as 24/7 active). _migrate_alerting_schedules
+    # in settings_store derives both from the legacy schedule on first
+    # load.
+    "schedule_notify":     (dict,  {}),
+    "schedule_record":     (dict,  {}),
 }
 
 # ── Section schemas (for update_section; all fields optional) ──────────────────

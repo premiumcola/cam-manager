@@ -732,14 +732,24 @@ class TelegramService:
             return
 
         cam_cfg = self._camera_cfg(camera_id) or {}
-        # Per-camera schedule gate (telegram action). Outside the configured
-        # window, or when actions.telegram is off, suppress the push. Daily
-        # reports / highlights / watchdog are system-level and are not
-        # gated by this — they go through their own jobs.
-        from .event_logic import schedule_action_active as _sched_act
-        if not _sched_act(cam_cfg.get("schedule") or {}, "telegram"):
-            log.warning("[tg] skip: schedule blocks telegram (cam=%s)", camera_id)
-            return
+        # Per-camera notification schedule gate. Outside the configured
+        # schedule_notify window the push is suppressed. Daily reports /
+        # highlights / watchdog are system-level and are not gated by
+        # this — they go through their own jobs. Falls back to the
+        # legacy schedule.actions.telegram check for cameras that
+        # haven't been migrated yet (the boot-time
+        # _migrate_alerting_schedules in settings_store catches them on
+        # next start).
+        from .event_logic import is_schedule_window_active, schedule_action_active as _sched_act
+        sch_notify = cam_cfg.get("schedule_notify")
+        if isinstance(sch_notify, dict) and sch_notify:
+            if not is_schedule_window_active(sch_notify):
+                log.warning("[tg] skip: schedule_notify blocks telegram (cam=%s)", camera_id)
+                return
+        else:
+            if not _sched_act(cam_cfg.get("schedule") or {}, "telegram"):
+                log.warning("[tg] skip: legacy schedule blocks telegram (cam=%s)", camera_id)
+                return
         cam_name = cam_cfg.get("name") or camera_id
         is_armed = bool(cam_cfg.get("armed", True))
         is_night_now = self._is_night_for_camera(camera_id)

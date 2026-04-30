@@ -59,6 +59,20 @@ def schedule_action_active(schedule: dict, action: str, now: datetime | None = N
     return is_in_schedule(schedule, now)
 
 
+def is_schedule_window_active(schedule: dict, now: datetime | None = None) -> bool:
+    """Single-window helper for the post-split alerting schedules
+    (schedule_notify, schedule_record). Each is a {enabled, from, to}
+    dict — no actions sub-tree. Semantics:
+      - missing or enabled=False → always active (24/7)
+      - enabled=True             → active only inside the window
+    """
+    if not schedule:
+        return True
+    if not schedule.get("enabled"):
+        return True
+    return is_in_schedule(schedule, now)
+
+
 def choose_alarm_level(profile, labels: list[str], hard_active: bool, whitelisted: bool) -> tuple[str, bool]:
     """Decide (alarm_level, notify) for an event.
 
