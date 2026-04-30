@@ -1602,13 +1602,13 @@ select option{background:#1e1e1e;color:var(--text)}
    section split it is the only child of #weather, so the old border-top
    shows up as an unwanted line at the top of the panel — hence flat margin
    and no border. */
-.weather-sightings-block{margin-top:0;padding-top:0;border-top:0}
+.weather-sightings-block{margin:0 0 12px;padding:0;background:transparent}
 .weather-sightings-head{display:flex;align-items:baseline;gap:12px;margin-bottom:12px;flex-wrap:wrap}
 .ws-title{display:inline-flex;align-items:center;gap:8px;font-size:18px;font-weight:700;color:#7faec9}
 .ws-title svg{flex-shrink:0;color:#7faec9}
 .ws-subtitle{font-size:12px;color:var(--muted);font-style:italic}
 .ws-filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
-.ws-empty{padding:32px 18px;text-align:center;color:var(--muted);font-size:13px;background:rgba(127,174,201,0.04);border-radius:12px}
+.ws-empty{padding:18px 8px;text-align:center;color:var(--muted);font-size:13px;background:transparent}
 
 /* Galerie 3-spaltig auf Desktop, 2 auf Tablet, 1 auf iPhone */
 .ws-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
@@ -1910,16 +1910,24 @@ select option{background:#1e1e1e;color:var(--text)}
    The chart itself is hand-rolled inline SVG — no external dep, matches
    the rest of the app's vanilla approach. Background/depth comes from a
    subtle storm-blue tint (the section's data-accent) instead of borders. */
+/* Wetterdaten & Prognose now sits inside the parent #weather panel
+   without its own card surface — depth was redundant box-in-box.
+   The title demotes from 18 → 14 px so it reads as a sub-section
+   under the section's own H3. */
 .ws-stats-block{
-  margin-bottom:18px;padding:14px 16px;border-radius:14px;
-  background:rgba(127,174,201,0.06);
+  margin:0 0 12px;padding:0;border-radius:0;background:transparent;
 }
 .ws-stats-head{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
-  margin-bottom:12px;flex-wrap:wrap
+  margin-bottom:10px;flex-wrap:wrap
 }
-.ws-stats-head .ws-title{display:inline-flex;align-items:center;gap:8px;font-size:18px;font-weight:700;color:#7faec9}
-.ws-stats-head .ws-title svg{flex-shrink:0;color:#7faec9}
+.ws-stats-head .ws-title{
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:14px;font-weight:600;
+  color:rgba(127,174,201,.85);
+  letter-spacing:.01em;
+}
+.ws-stats-head .ws-title svg{flex-shrink:0;width:16px;height:16px;color:rgba(127,174,201,.85)}
 .ws-stats-pills{display:flex;gap:6px;background:rgba(0,0,0,0.18);border-radius:999px;padding:3px}
 .ws-stats-pill{
   background:transparent;border:0;color:var(--muted);

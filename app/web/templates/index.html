@@ -42,6 +42,17 @@
         <path d="M11 19l-1 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
         <path d="M14 17l-2 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
       </symbol>
+      <!-- Trend / chart-up glyph used as the sub-heading icon for the
+           Wetterdaten & Prognose section so it doesn't repeat the
+           cloud-rain icon used by the parent panel header. -->
+      <symbol id="icon-trend" viewBox="0 0 24 24">
+        <polyline points="3,17 9,11 13,15 21,7" fill="none"
+                  stroke="currentColor" stroke-width="2.2"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="14,7 21,7 21,14" fill="none"
+                  stroke="currentColor" stroke-width="2.2"
+                  stroke-linecap="round" stroke-linejoin="round"/>
+      </symbol>
       <!-- Tool-section icons used by both the sidebar nav and the
            panel headers. Same currentColor convention so each callsite
            picks its tint via CSS color or stroke. -->
@@ -693,7 +704,7 @@
         <div class="ws-stats-block" id="weatherStatsBlock">
           <div class="ws-stats-head">
             <span class="ws-title">
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><use href="#icon-cloud-rain"/></svg>
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#icon-trend"/></svg>
               Wetterdaten &amp; Prognose
             </span>
             <div class="ws-stats-pills" id="weatherStatsPills" role="tablist" aria-label="Zeitfenster">
