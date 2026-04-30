@@ -173,10 +173,49 @@ function _camImgRetry(img){
 }
 window._camImgRetry=_camImgRetry;
 
+// ─── DIAG:cam-edit-lock ─────────────────────────────────────────────────────
+// Temporary diagnostic strip + helper for the "cam-edit panel locks until
+// F5 after a Verbinden/restart" bug. The strip shows a rolling history of
+// the last 8 events so the lock-up moment is visible in real time. To
+// remove this entire block plus the inline _erkDebugSet calls below,
+// search for the literal string "DIAG:cam-edit-lock" and delete every
+// matching line.
+const _erkDebugHistory = [];
+function _erkDebugSet(msg){
+  try{
+    const ts = new Date();
+    const stamp = `${String(ts.getHours()).padStart(2,'0')}:`
+                + `${String(ts.getMinutes()).padStart(2,'0')}:`
+                + `${String(ts.getSeconds()).padStart(2,'0')}`
+                + `.${String(ts.getMilliseconds()).padStart(3,'0').slice(0,2)}`;
+    _erkDebugHistory.push(`${stamp} ${msg}`);
+    while(_erkDebugHistory.length > 8) _erkDebugHistory.shift();
+    let strip = document.getElementById('erkDebugStrip');
+    if(!strip){
+      strip = document.createElement('div');
+      strip.id = 'erkDebugStrip';
+      strip.style.cssText = 'position:fixed;top:8px;left:8px;z-index:99999;'
+        + 'background:rgba(0,0,0,.85);color:#fde047;padding:8px 10px;'
+        + 'border-radius:8px;font-family:ui-monospace,Menlo,monospace;'
+        + 'font-size:10.5px;line-height:1.45;max-width:min(90vw,520px);'
+        + 'pointer-events:none;white-space:pre-wrap;backdrop-filter:blur(4px)';
+      document.body.appendChild(strip);
+    }
+    strip.textContent = _erkDebugHistory.join('\n');
+  }catch(_){}
+}
+window._erkDebugSet = _erkDebugSet;
+// ─── /DIAG:cam-edit-lock ────────────────────────────────────────────────────
+
 // ── Camera edit slide panel ───────────────────────────────────────────────────
 let _currentEditCamId=null;
 function _restoreEditWrapper(){
-  const w=byId('cameraEditWrapper'); if(!w) return;
+  const w=byId('cameraEditWrapper');
+  // DIAG:cam-edit-lock — surface whether the wrapper exists at the moment
+  // of restore. If it's null here, that's the lock cause: a previous
+  // renderCameraSettings blew away the row that held it.
+  _erkDebugSet(`_restoreEditWrapper · wrapper=${w?'ok':'NULL'} · _currentEditCamId=${_currentEditCamId}`);
+  if(!w) return;
   w.classList.remove('slide-open');
   document.querySelectorAll('.cam-item.editing').forEach(el=>el.classList.remove('editing'));
   const sec=byId('cameras'); if(sec&&w.parentElement!==sec) sec.appendChild(w);
@@ -185,6 +224,7 @@ function _restoreEditWrapper(){
 function _closeEditPanel(){
   if(!_currentEditCamId) return;
   const w=byId('cameraEditWrapper');
+  _erkDebugSet(`_closeEditPanel · wrapper=${w?'ok':'NULL'}`);  // DIAG:cam-edit-lock
   w?.classList.remove('slide-open');
   document.querySelectorAll('.cam-item.editing').forEach(el=>el.classList.remove('editing'));
   setTimeout(()=>{ const sec=byId('cameras'); if(sec) sec.appendChild(w); },400);
@@ -1043,6 +1083,13 @@ window.toggleCameraEnabled=async function(camId,enabled){
   await loadAll();
 };
 function renderCameraSettings(){
+  // DIAG:cam-edit-lock — fires every time the cam list innerHTML is
+  // blown. If the wrapper was a child of one of those rows at this
+  // moment, it gets destroyed. The followup "wrapper.parent" log line
+  // makes the parent visible so we know whether it survives.
+  const _diagWrap = byId('cameraEditWrapper');
+  const _diagWrapParentId = _diagWrap?.parentElement?.id || _diagWrap?.parentElement?.className || 'unknown';
+  _erkDebugSet(`renderCameraSettings · wrapper.parent=${_diagWrapParentId} · _currentEditCamId=${_currentEditCamId}`);
   byId('cameraSettingsList').innerHTML=state.cameras.map(c=>{
     // Merge is offered only for cameras that have been offline for ≥ 10 min
     // straight (frame_age_s is the seconds-since-last-good-frame counter the
@@ -1196,6 +1243,7 @@ byId('mergeConfirmBtn')?.addEventListener('click',async()=>{
   }
 });
 window._reconnectCam=function(camId,btn){
+  _erkDebugSet(`_reconnectCam(${camId}) clicked`);  // DIAG:cam-edit-lock
   btn.classList.add('spinning');
   setTimeout(()=>btn.classList.remove('spinning'),520);
   reloadCamera(camId);
@@ -2145,10 +2193,20 @@ function _bindCamIdPreviewListeners(){
 }
 
 function editCamera(camId){
+  // DIAG:cam-edit-lock — entry, abort, toggle paths instrumented so we
+  // can see whether the click handler actually fires and which branch
+  // it follows.
+  _erkDebugSet(`editCamera(${camId}) · _currentEditCamId=${_currentEditCamId} · _camFormInited=${_camFormInited}`);
   const c=(state.config?.cameras||[]).find(x=>x.id===camId)||(state.cameras||[]).find(x=>x.id===camId);
-  if(!c){console.error('editCamera: not found',camId); return;}
+  if(!c){
+    _erkDebugSet(`editCamera ABORTED: cam ${camId} not in state`);  // DIAG:cam-edit-lock
+    console.error('editCamera: not found',camId); return;
+  }
   // Toggle: clicking same camera closes the panel
-  if(_currentEditCamId===camId){_closeEditPanel(); return;}
+  if(_currentEditCamId===camId){
+    _erkDebugSet(`editCamera TOGGLE-CLOSE same camId`);  // DIAG:cam-edit-lock
+    _closeEditPanel(); return;
+  }
   // Switch camera: restore immediately then open new
   _restoreEditWrapper();
   _initCameraFormListeners();
@@ -2346,8 +2404,11 @@ function editCamera(camId){
   // Slide down inside the clicked camera card.
   const camRow=byId('cameraSettingsList')?.querySelector(`[data-camid="${camId}"]`);
   const wrapper=byId('cameraEditWrapper');
+  // DIAG:cam-edit-lock — confirm row + wrapper both exist at this point.
+  // If wrapper is null here, the form will fail to render.
+  _erkDebugSet(`editCamera mount · camRow=${camRow?'ok':'NULL'} · wrapper=${wrapper?'ok':'NULL'}`);
   if(camRow){ camRow.appendChild(wrapper); camRow.classList.add('editing'); }
-  requestAnimationFrame(()=>wrapper.classList.add('slide-open'));
+  requestAnimationFrame(()=>wrapper?.classList.add('slide-open'));
   _currentEditCamId=camId;
   setTimeout(()=>wrapper.scrollIntoView({behavior:'smooth',block:'nearest'}),120);
   // Populate connection diagnostics panel
@@ -4708,8 +4769,13 @@ function showCameraReloadAnimation(camId){
   });
 }
 async function reloadCamera(camId){
+  // DIAG:cam-edit-lock — log entry/exit so we can see whether the POST
+  // returns at all and at what wall-clock moment the cam-edit lock is
+  // first observed.
+  _erkDebugSet(`reloadCamera(${camId}) start`);
   showCameraReloadAnimation(camId);
   await fetch(`/api/camera/${encodeURIComponent(camId)}/reload`,{method:'POST'}).catch(()=>{});
+  _erkDebugSet(`reloadCamera(${camId}) POST done`);  // DIAG:cam-edit-lock
 }
 window.reloadCamera=reloadCamera;
 
