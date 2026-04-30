@@ -2175,6 +2175,22 @@ function editCamera(camId){
   // can see whether the click handler actually fires and which branch
   // it follows.
   _erkDebugSet(`editCamera(${camId}) · _currentEditCamId=${_currentEditCamId} · _camFormInited=${_camFormInited}`);
+  // Defensive: if the cam-edit form isn't in the DOM yet (rare but
+  // happens on the first click during a page-load race, OR when the
+  // wrapper has been detached by a previous renderCameraSettings()
+  // and not re-created), wait one frame and retry once. After that,
+  // tell the user to reload — there's no recoverable state at this
+  // point. Without the guard, the next line crashes on .elements of
+  // null and the toast fires every click forever.
+  const formEl = byId('cameraForm');
+  if (!formEl) {
+    _erkDebugSet(`editCamera DEFER: cameraForm not yet in DOM`);  // DIAG:cam-edit-lock
+    requestAnimationFrame(() => {
+      if (byId('cameraForm')) editCamera(camId);
+      else showToast('Bearbeitungs-Form nicht bereit — Seite neu laden (F5)', 'error');
+    });
+    return;
+  }
   const c=(state.config?.cameras||[]).find(x=>x.id===camId)||(state.cameras||[]).find(x=>x.id===camId);
   if(!c){
     _erkDebugSet(`editCamera ABORTED: cam ${camId} not in state`);  // DIAG:cam-edit-lock
@@ -2200,7 +2216,10 @@ function editCamera(camId){
   _initCameraFormListeners();
   initCameraEditTabs();
   initRtspBuilder();
-  const f=byId('cameraForm').elements;
+  // formEl was captured + null-checked at the top of editCamera; reuse
+  // it instead of paying for another byId lookup that could race with
+  // a mid-flight wrapper detach.
+  const f=formEl.elements;
   f['id'].value=c.id||''; f['id'].dataset.autoGen='0';
   f['name'].value=c.name||'';
   if(f['manufacturer']) f['manufacturer'].value = c.manufacturer || '';
