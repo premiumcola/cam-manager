@@ -201,8 +201,28 @@ select option{background:#1e1e1e;color:#c8c8c8}
 .cv-lp-row small{font-size:9px;color:rgba(220,252,231,.5);display:block}
 .cv-lp-row strong{color:#fff;font-weight:700;white-space:nowrap}
 /* HD badge — primary control next to the Live pill. */
-.cv-hd-badge{display:inline-flex;align-items:center;justify-content:center;padding:5px 12px;border-radius:999px;font-size:12px;font-weight:800;letter-spacing:.04em;cursor:pointer;border:none;background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.35);backdrop-filter:blur(4px);transition:all .2s;pointer-events:auto;min-height:28px;line-height:1.1;box-sizing:border-box}
-.cv-hd-badge.active{background:rgba(255,255,255,0.85);color:#0a0a0a}
+/* HD toggle — flat dark surface that matches .cv-cog so they read as
+   one button family. Bottom-right of the tile, just left of the cog,
+   stable position regardless of the live-pill expansion state. */
+.cv-hd-badge{
+  position:absolute;
+  right:50px;bottom:8px;
+  height:34px;min-width:38px;
+  padding:0 10px;
+  border-radius:11px;
+  background:#1c1c20;
+  color:rgba(255,255,255,.7);
+  font-size:11px;font-weight:700;letter-spacing:.05em;
+  border:0;outline:0;
+  display:inline-flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  z-index:6;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s,color .15s,transform .12s;
+}
+.cv-hd-badge:hover{background:#26262a;color:#fff}
+.cv-hd-badge.active{background:rgba(59,130,246,.22);color:#bfdbfe}
+.cv-hd-badge:active{transform:scale(.94)}
 
 /* ── Bottom-left surveillance stack ────────────────────────────────────────
    Replaces the old Motion + Objekte pills (cv-br) and the alarm pill
@@ -214,7 +234,8 @@ select option{background:#1e1e1e;color:#c8c8c8}
   display:flex;flex-direction:column;gap:5px;
   align-items:flex-start;
   z-index:3;
-  max-width:calc(100% - 56px); /* leave room for cv-cog right of bottom */
+  /* leave room for HD-badge (50 + ~38) + cog (34) + gap on the right */
+  max-width:calc(100% - 100px);
   pointer-events:none;
 }
 .cv-surveil > *{pointer-events:auto}

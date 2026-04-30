@@ -621,10 +621,10 @@ ${isActive?`
             <div class="cv-lp-row"><span>Analyse-Framerate<br><small>Wie oft TAM-spy analysiert</small></span><strong>${fps!=null?fps+' fps':'—'}</strong></div>
           </div>
         </div>
-        ${c.rtsp_url?`<button class="cv-hd-badge${hdOn?' active':''}" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau">HD</button>`:''}
       </div>
       ${tlOn?`<div class="cv-pill cv-pill-tl" title="Timelapse aktiv">${objIconSvg('timelapse',14)}Timelapse</div>`:''}
     </div>
+    ${c.rtsp_url?`<button class="cv-hd-badge${hdOn?' active':''}" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau">HD</button>`:''}
 `:''}
     <!-- bottom-left: surveillance stack — mode pill + targets row +
          optional schedule window time. Always rendered (mode='off'
