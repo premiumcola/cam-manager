@@ -7428,7 +7428,14 @@ function renderWeatherStatsLegend(){
     const colour = WEATHER_STATS_PALETTE[key] || '#94a3b8';
     const label = labels[key] || key;
     const val = _wsFmtVal(key, _wsCurrentValue(key));
-    const cls = (isolated === key) ? 'ws-stats-chip is-isolated' : 'ws-stats-chip';
+    // When one series is isolated, the others render with .is-disabled
+    // (opacity .35) so the active chip stands out without needing a
+    // background pill to mark it. With no isolation, all chips render
+    // at full opacity.
+    let cls = 'ws-stats-chip';
+    if (isolated){
+      cls += isolated === key ? ' is-isolated' : ' is-disabled';
+    }
     return `<button type="button" class="${cls}" data-field="${key}" aria-pressed="${isolated === key ? 'true' : 'false'}">
       <span class="ws-stats-chip-dot" style="--cb:${colour};background:${colour}"></span>
       <span class="ws-stats-chip-meta">
