@@ -1354,6 +1354,54 @@ def api_settings_cameras_save():
     })
 
 
+@app.post('/api/cameras/<cam_id>/probe-device-info')
+def api_camera_probe_device_info(cam_id: str):
+    """Manual rescan endpoint behind the cam-edit "jetzt erneut erkennen"
+    button. Runs the same Reolink GetDevInfo flow as the auto-detect
+    save path but on demand and without persisting — the frontend then
+    asks the user whether to overwrite existing manuf/model values.
+    Used when a camera is firmware-updated or physically replaced but
+    keeps the same IP, where the persisted manuf/model are stale.
+    """
+    cam = settings.get_camera(cam_id)
+    if not cam:
+        return jsonify({"ok": False, "error": "camera not found"}), 404
+    rtsp_url = (cam.get("rtsp_url") or "").strip()
+    user = cam.get("username") or ""
+    password = cam.get("password") or ""
+    if not rtsp_url or not user:
+        return jsonify({"ok": False, "error": "no credentials configured"}), 400
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(rtsp_url).hostname
+    except Exception:
+        host = None
+    if not host:
+        return jsonify({"ok": False, "error": "cannot parse host from rtsp_url"}), 400
+    try:
+        from . import reolink_api
+        token = reolink_api.login(host, user, password, timeout=4.0)
+        if not token:
+            return jsonify({"ok": False, "error": "login failed"}), 502
+        info = reolink_api.get_device_info(host, token, timeout=4.0)
+        reolink_api.logout(host, token, timeout=2.0)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"probe failed: {e}"}), 502
+    if not info:
+        return jsonify({"ok": False, "error": "no device info returned"}), 502
+    return jsonify({
+        "ok":           True,
+        "manufacturer": info["manufacturer"],
+        "model":        info["model"],
+        "firmware":     info["firmware"],
+        "hardware":     info["hardware"],
+        "current": {
+            "manufacturer": cam.get("manufacturer", ""),
+            "model":        cam.get("model", ""),
+        },
+    })
+
+
 @app.post('/api/camera/<cam_id>/reload')
 def api_camera_reload(cam_id: str):
     global cfg
