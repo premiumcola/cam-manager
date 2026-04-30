@@ -187,7 +187,19 @@ function _closeEditPanel(){
   _erkDebugSet(`_closeEditPanel · wrapper=${w?'ok':'NULL'}`);  // DIAG:cam-edit-lock
   w?.classList.remove('slide-open');
   document.querySelectorAll('.cam-item.editing').forEach(el=>el.classList.remove('editing'));
-  setTimeout(()=>{ const sec=byId('cameras'); if(sec) sec.appendChild(w); },400);
+  // The 400 ms timeout lets the slide-out animation finish before
+  // detaching the wrapper from its host row. If `w` was already null
+  // when we entered (the wrapper was destroyed by a renderCameraSettings
+  // innerHTML blow), or if it gets detached between now and the
+  // timeout firing, sec.appendChild(null) would throw
+  // "parameter 1 is not of type 'Node'". The guard inside the timer
+  // re-checks both `w` and `sec` so a transient null on either side
+  // is silently absorbed instead of cascading into an uncaught error.
+  setTimeout(()=>{
+    if(!w) return;
+    const sec=byId('cameras');
+    if(sec) sec.appendChild(w);
+  },400);
   _currentEditCamId=null;
 }
 
