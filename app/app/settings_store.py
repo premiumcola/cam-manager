@@ -227,6 +227,13 @@ class SettingsStore:
             "detection_trigger": cam.get("detection_trigger", "motion_and_objects"),
             "post_motion_tail_s": float(cam.get("post_motion_tail_s") or 0.0),
             "alarm_profile": (cam.get("alarm_profile") or "").strip(),
+            # Per-class severity matrix — derived once from the legacy
+            # alarm_profile if absent, then persisted as the source of
+            # truth. See _migrate_class_severity for the mapping.
+            "class_severity": cam.get("class_severity") or {},
+            # Recording-archive toggle. Defaults True to preserve the
+            # historical "actions.record=True" behaviour pre-split.
+            "recording_enabled": cam.get("recording_enabled", True),
         }
 
     @staticmethod
@@ -296,6 +303,7 @@ class SettingsStore:
                 pass
         self._ensure_camera_defaults()
         self._migrate_schedules()
+        self._migrate_class_severity()
         self._ensure_timelapse_settings()
         self._ensure_timelapse_profiles()
         self._ensure_telegram_push_defaults()
@@ -601,6 +609,56 @@ class SettingsStore:
         if e_min > s_min:
             return e_min - s_min
         return 1440 - s_min + e_min  # wraps midnight
+
+    # Per-class severity matrix — one of "off" / "info" / "alarm" per
+    # supported class (person, cat, bird, squirrel, dog, car, motion).
+    # Replaces the four-valued alarm_profile string. The mapping below
+    # mirrors the previous profile semantics so an upgrade with a
+    # legacy alarm_profile lands on the equivalent matrix without the
+    # user having to redo their notification config:
+    #   hard:   person/car=alarm, animals=off, motion=off
+    #   medium: person/car=alarm, animals=info, motion=off
+    #   soft:   person=alarm, car=info, animals=info, motion=info
+    #   info:   animals=info, person/car/motion=off
+    _ALARM_PROFILE_TO_SEVERITY = {
+        "hard":   {"person": "alarm", "car": "alarm",
+                   "cat": "off", "bird": "off", "squirrel": "off", "dog": "off",
+                   "motion": "off"},
+        "medium": {"person": "alarm", "car": "alarm",
+                   "cat": "info", "bird": "info", "squirrel": "info", "dog": "info",
+                   "motion": "off"},
+        "soft":   {"person": "alarm", "car": "info",
+                   "cat": "info", "bird": "info", "squirrel": "info", "dog": "info",
+                   "motion": "info"},
+        "info":   {"person": "off", "car": "off",
+                   "cat": "info", "bird": "info", "squirrel": "info", "dog": "info",
+                   "motion": "off"},
+    }
+
+    def _migrate_class_severity(self):
+        """One-time migration: derive class_severity dict from the
+        legacy alarm_profile when class_severity is empty. The legacy
+        alarm_profile field stays in storage so older code paths still
+        read it; class_severity becomes the new source of truth.
+        Idempotent — cameras that already carry a non-empty
+        class_severity dict are left untouched.
+        """
+        migrated = 0
+        for cam in self.data.get("cameras", []):
+            if cam.get("class_severity"):
+                continue
+            profile = (cam.get("alarm_profile") or "soft").strip() or "soft"
+            mapping = self._ALARM_PROFILE_TO_SEVERITY.get(
+                profile, self._ALARM_PROFILE_TO_SEVERITY["soft"]
+            )
+            cam["class_severity"] = dict(mapping)
+            migrated += 1
+            log.info(
+                "class_severity-Migration: %s ← alarm_profile=%s → %s",
+                cam.get("id", "?"), profile, mapping,
+            )
+        if migrated:
+            log.info("class_severity-Migration: %d Kameras migriert", migrated)
 
     def _migrate_schedules(self):
         """One-time migration: collapse legacy recording_schedule_* and the

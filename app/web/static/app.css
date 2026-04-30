@@ -961,6 +961,259 @@ textarea{width:100%;padding:12px 13px;border-radius:14px;background:var(--surfac
 .erk-more:hover{ color:#cfe1ee; }
 .erk-more svg{ width:9px;height:9px;flex-shrink:0; }
 
+/* ── Alerting tab — amber-themed sibling of the Erkennung flow ──────────
+   Same numbered-thread + .erk-card pattern as the Erkennung tab but with
+   an amber accent so the two tabs are visually distinct at a glance.
+   Reuses .erk-status / .erk-card and adds a parallel .alert-flow stack
+   for the 5 step blocks (severity matrix, channels, recording, two
+   schedules, master mute). */
+.alert-flow{
+  position:relative;
+  padding-left:38px;
+}
+.alert-flow::before{
+  content:'';
+  position:absolute;
+  left:14px;top:14px;bottom:30px;
+  width:2px;
+  background:linear-gradient(180deg,
+    rgba(251,146,60,.55) 0%,
+    rgba(251,146,60,.35) 100%);
+  border-radius:2px;
+}
+.alert-step{ position:relative;margin-bottom:16px; }
+.alert-step:last-child{ margin-bottom:0; }
+.alert-step-num{
+  position:absolute;
+  left:-38px;top:-1px;
+  width:28px;height:28px;
+  border-radius:50%;
+  background:#1c1c20;
+  color:#fed7aa;
+  font-size:12px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 0 3px rgba(251,146,60,.12);
+  z-index:2;
+}
+.alert-step-head{
+  display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;
+}
+.alert-step-icon{
+  width:14px;height:14px;color:rgba(251,146,60,.8);flex-shrink:0;
+}
+.alert-step-title{ font-size:13px;font-weight:700;color:#fff; }
+.alert-step-hint{
+  font-size:10.5px;color:rgba(255,255,255,.45);
+  margin-left:4px;font-style:italic;
+}
+
+/* Severity legend — three-column explainer above the matrix.
+   Drops to single-column under 540 px so the descriptions don't
+   ellipsis-truncate on phone widths. */
+.sev-legend{
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:6px;
+  margin-bottom:6px;
+}
+.sev-legend-item{
+  padding:8px 10px;
+  background:rgba(0,0,0,.22);
+  border-radius:8px;
+  display:flex;flex-direction:column;gap:3px;
+}
+.sev-legend-head{
+  display:flex;align-items:center;gap:6px;
+  font-size:11px;font-weight:700;
+}
+.sev-legend-head svg{ width:13px;height:13px;flex-shrink:0; }
+.sev-legend-head.is-off{ color:rgba(255,255,255,.55); }
+.sev-legend-head.is-info{ color:#7dd3fc; }
+.sev-legend-head.is-alarm{ color:#fecaca; }
+.sev-legend-desc{
+  font-size:10px;color:rgba(255,255,255,.5);line-height:1.4;
+}
+@media (max-width:540px){
+  .sev-legend{ grid-template-columns:1fr; }
+}
+
+/* Matrix — 7 row × 4 col grid (label + 3 severity choices). The cell
+   highlight on the active radio uses background instead of an outline
+   per CLAUDE.md (depth via colour, no thin borders). */
+.sev-matrix{
+  display:grid;
+  grid-template-columns:1.6fr repeat(3, 1fr);
+  gap:0;
+  background:rgba(0,0,0,.22);
+  border-radius:9px;
+  overflow:hidden;
+}
+.sev-cell{
+  padding:7px 10px;font-size:11px;min-height:44px;
+  display:flex;align-items:center;
+}
+.sev-header{
+  background:rgba(0,0,0,.25);
+  color:rgba(255,255,255,.5);
+  font-size:10px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.05em;
+  padding:6px 10px;
+  justify-content:center;
+  gap:4px;
+  min-height:32px;
+}
+.sev-header:first-child{ justify-content:flex-start; }
+.sev-header svg{ width:11px;height:11px; }
+.sev-row-label{ color:#cbd5e1;font-weight:600;gap:6px; }
+.sev-row-label .em{ font-size:13px; }
+.sev-radio{
+  justify-content:center;
+  cursor:pointer;
+  color:rgba(255,255,255,.3);
+  transition:background .15s,color .15s;
+  user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  font-size:13px;
+}
+.sev-radio:hover{ background:rgba(255,255,255,.04);color:rgba(255,255,255,.6); }
+.sev-radio.is-on{ font-weight:700; }
+.sev-radio.is-on.is-off-mode{ background:rgba(80,80,90,.32);color:rgba(255,255,255,.55); }
+.sev-radio.is-on.is-info-mode{ background:rgba(56,189,248,.18);color:#7dd3fc; }
+.sev-radio.is-on.is-alarm-mode{ background:rgba(220,38,38,.22);color:#fecaca; }
+
+/* Channel rows (Telegram, MQTT, Recording, Master) — flat row with an
+   icon, label/sub, and a custom switch on the right. The whole row is
+   the click target so the switch's hit area is comfortably wide. */
+.chan-row{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 11px;
+  background:rgba(0,0,0,.22);
+  border-radius:9px;
+  cursor:pointer;
+  min-height:44px;
+  position:relative;
+}
+.chan-row + .chan-row{ margin-top:5px; }
+.chan-icon{
+  width:24px;height:24px;
+  border-radius:7px;
+  display:inline-flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  background:rgba(255,255,255,.04);
+  color:rgba(255,255,255,.55);
+  transition:background .15s,color .15s;
+}
+.chan-row:has(.switch-input:checked) .chan-icon{
+  background:rgba(34,197,94,.18);
+  color:#86efac;
+}
+.chan-icon svg{ width:14px;height:14px; }
+.chan-text{ flex:1;min-width:0;display:flex;flex-direction:column; }
+.chan-name{ font-size:12px;font-weight:700;color:#fff; }
+.chan-sub{ font-size:10.5px;color:rgba(255,255,255,.5);font-style:italic;margin-top:1px; }
+
+/* Custom toggle switch — used by .chan-row and .sched-head. The
+   .switch-input checkbox is visually hidden but tab-focusable; the
+   .switch span is the visible track + thumb. */
+.switch-input{
+  position:absolute;opacity:0;pointer-events:none;
+  width:0;height:0;margin:0;
+}
+.chan-row .switch,
+.sched-head .switch{
+  width:34px;height:20px;
+  border-radius:999px;
+  background:rgba(255,255,255,.14);
+  position:relative;
+  flex-shrink:0;
+  transition:background .15s;
+}
+.chan-row .switch::after,
+.sched-head .switch::after{
+  content:'';
+  position:absolute;top:2px;left:2px;
+  width:16px;height:16px;
+  border-radius:50%;
+  background:#fff;
+  transition:left .15s;
+}
+.chan-row .switch-input:checked ~ .switch,
+.sched-head .switch-input:checked ~ .switch{
+  background:#22c55e;
+}
+.chan-row .switch-input:checked ~ .switch::after,
+.sched-head .switch-input:checked ~ .switch::after{
+  left:16px;
+}
+@media (prefers-reduced-motion: reduce){
+  .chan-row .switch,
+  .chan-row .switch::after,
+  .sched-head .switch,
+  .sched-head .switch::after{ transition:none; }
+}
+
+/* Schedule blocks — pair of compact cards with an enable switch in the
+   head row and two time-inputs side by side below. */
+.sched-block{
+  background:rgba(0,0,0,.22);
+  border-radius:9px;
+  padding:9px 11px;
+}
+.sched-block + .sched-block{ margin-top:5px; }
+.sched-head{
+  display:flex;align-items:center;gap:8px;
+  margin-bottom:6px;
+  cursor:pointer;
+  position:relative;
+  min-height:32px;
+}
+.sched-name{
+  font-size:11.5px;font-weight:700;color:#fff;flex:1;
+}
+.sched-times{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:6px;
+  margin-top:6px;
+}
+.time-input{
+  background:rgba(0,0,0,.4);
+  color:#fff;
+  border:0;outline:0;
+  padding:9px 9px;
+  border-radius:7px;
+  font-size:13px;
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  width:100%;
+  min-height:44px;
+  font-variant-numeric:tabular-nums;
+}
+.lbl-tiny{
+  font-size:10.5px;
+  color:rgba(255,255,255,.5);
+  margin-top:2px;
+  display:block;
+  text-align:center;
+}
+
+/* Conflict warning banner — amber-on-dark, sits above the flow when a
+   user setting won't reach the user (e.g. severity=alarm but channels
+   off, or master mute aus). Purely informational — never blocks save.
+   JS toggles the [hidden] attribute. */
+.alert-conflict{
+  display:flex;align-items:flex-start;gap:8px;
+  padding:9px 12px;
+  margin-bottom:14px;
+  background:rgba(250,204,21,.12);
+  color:#fde047;
+  border-radius:9px;
+  font-size:11.5px;line-height:1.45;
+}
+.alert-conflict[hidden]{ display:none; }
+.alert-conflict svg{ flex-shrink:0;margin-top:1px;color:#fbbf24; }
+.alert-conflict-text{ color:#fef9c3; }
+.alert-conflict-text strong{ color:#fff;font-weight:700; }
+
 /* "Erkennung jetzt simulieren" — runs Coral inference on the live
    frame and shows the snapshot with bounding boxes coloured by
    verdict. Sits below the 5-step flow, above any subsequent

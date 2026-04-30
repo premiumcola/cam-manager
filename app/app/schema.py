@@ -121,6 +121,18 @@ CAMERA_SCHEMA: dict = {
     "post_motion_tail_s":  (float, 0.0),  # 0 = use global default
     "detection_min_score": (float, 0.0),
     "alarm_profile":       (str,   ""),
+    # Per-class severity matrix — one of "off" / "info" / "alarm" per
+    # known class (person, cat, bird, squirrel, dog, car, motion). Empty
+    # default; a one-time migration in settings_store derives a sensible
+    # matrix from the legacy alarm_profile on first load. This replaces
+    # the alarm_profile semantics (alarm_profile is still persisted for
+    # backward compat but is no longer the source of truth).
+    "class_severity":      (dict,  {}),
+    # Whether a triggered event should be archived on disk. Default True
+    # preserves the historical behaviour where the recording-schedule
+    # action defaulted to on. Schedule_record (added alongside the
+    # schedule split) gates this further by time of day.
+    "recording_enabled":   (bool,  True),
     "object_filter":       (list,  []),
     "label_thresholds":    (dict,  {}),
     # Per-class N-of-M confirmation window. Schema default {} means "use

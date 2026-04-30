@@ -1484,6 +1484,91 @@ function _collectConfirmationWindow(form, existingCam){
   return out;
 }
 
+// ── Alerting tab — class-severity matrix ─────────────────────────────────
+// Per-class severity matrix replaces the legacy 4-valued alarm_profile
+// select. Each known class maps to one of "off" / "info" / "alarm";
+// the runtime computes the event's effective severity by reading the
+// detected labels and picking the highest-rank entry from this dict.
+// 7 classes × 3 choices fits comfortably in a 4-column grid.
+const _ALERT_SEV_CLASSES = [
+  { key: 'person',   label: 'Person',       em: '👤' },
+  { key: 'cat',      label: 'Katze',        em: '🐈' },
+  { key: 'bird',     label: 'Vogel',        em: '🐦' },
+  { key: 'squirrel', label: 'Eichhörnchen', em: '🐿' },
+  { key: 'car',      label: 'Auto',         em: '🚗' },
+  { key: 'dog',      label: 'Hund',         em: '🐕' },
+  { key: 'motion',   label: 'Bewegung',     em: '〰️' },
+];
+function _renderSeverityMatrix(form, cam){
+  const wrap = byId('alertSeverityMatrix'); if (!wrap) return;
+  const cs = cam?.class_severity || {};
+  // Header row (Klasse | Aus | Info | Alarm).
+  let html = `
+    <div class="sev-cell sev-header">Klasse</div>
+    <div class="sev-cell sev-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
+      Aus
+    </div>
+    <div class="sev-cell sev-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/></svg>
+      Info
+    </div>
+    <div class="sev-cell sev-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M2 5l4-3M22 5l-4-3"/></svg>
+      Alarm
+    </div>
+  `;
+  for (const c of _ALERT_SEV_CLASSES){
+    const cur = cs[c.key] || 'off';
+    const cell = (val, mode) => {
+      const on = cur === val;
+      const cls = `sev-cell sev-radio${on ? ' is-on is-' + mode + '-mode' : ''}`;
+      return `<div class="${cls}" data-cls="${c.key}" data-val="${val}" role="radio" aria-checked="${on}" tabindex="0">${on ? '●' : '○'}</div>`;
+    };
+    html += `
+      <div class="sev-cell sev-row-label"><span class="em">${c.em}</span>${esc(c.label)}</div>
+      ${cell('off',   'off')}
+      ${cell('info',  'info')}
+      ${cell('alarm', 'alarm')}
+    `;
+  }
+  wrap.innerHTML = html;
+  // Single delegated click handler per render (innerHTML wipes prior
+  // listeners). Touch + mouse + pen all share the same path.
+  wrap.addEventListener('click', (e) => {
+    const cell = e.target.closest('.sev-radio');
+    if (!cell) return;
+    const cls = cell.dataset.cls;
+    const val = cell.dataset.val;
+    wrap.querySelectorAll(`.sev-radio[data-cls="${cls}"]`).forEach(r => {
+      r.classList.remove('is-on','is-off-mode','is-info-mode','is-alarm-mode');
+      r.setAttribute('aria-checked','false');
+      r.textContent = '○';
+    });
+    cell.classList.add('is-on','is-' + val + '-mode');
+    cell.setAttribute('aria-checked','true');
+    cell.textContent = '●';
+    // Conflict-banner check is wired in the follow-up commit; no-op
+    // until then.
+    if (typeof _checkAlertingConflicts === 'function'){
+      _checkAlertingConflicts(form);
+    }
+  });
+}
+
+// Read the matrix back into the dict shape settings.json expects.
+// Drops unset rows silently (every row has exactly one is-on cell after
+// render so the .is-on selector is the source of truth).
+function _collectClassSeverity(form){
+  const wrap = byId('alertSeverityMatrix');
+  const out = {};
+  if (!wrap) return out;
+  wrap.querySelectorAll('.sev-radio.is-on').forEach(r => {
+    out[r.dataset.cls] = r.dataset.val;
+  });
+  return out;
+}
+
 // "Erkennung jetzt simulieren" — the button below the 5 steps in the
 // Erkennung tab. Posts to /api/cameras/<id>/test-detection, animates
 // the icon while the request is in flight, then renders the snapshot
@@ -1877,9 +1962,8 @@ function editCamera(camId){
   _applyUrlMask(f['snapshot_url']);
   // Reset eye buttons to masked-state icon
   byId('cameraForm').querySelectorAll('.url-eye').forEach(b=>{b.classList.remove('revealed'); b.textContent='👁';});
-  // Load telegram / mqtt toggles (now on the Alerting tab)
-  if(f['telegram_enabled']) f['telegram_enabled'].checked=(c.telegram_enabled!==false);
-  if(f['mqtt_enabled']) f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
+  // Telegram/MQTT toggles are populated in the Alerting-tab hydration
+  // block below alongside the severity matrix and channel switches.
   // Populate global status rows on the Erkennung tab
   _renderGlobalStatusRows();
   // Object filter is now rendered as a pill bar; keep the hidden input in
@@ -1888,25 +1972,42 @@ function editCamera(camId){
   _camObjectFilterState=[...(c.object_filter||['person','cat','bird'])];
   f['object_filter'].value=_camObjectFilterState.join(',');
   _renderCamObjectPills();
-  // Alarm profile — empty string means "inherit" for back-compat; default
-  // the dropdown to "soft" in that case.
-  const apSel=byId('camAlarmProfileSelect');
-  if(apSel){ apSel.value=(c.alarm_profile||'soft'); _updateAlarmProfileHint(); }
+  // Legacy alarm_profile is now a hidden bridge field — the source of
+  // truth is the per-class severity matrix. Carry the camera's stored
+  // alarm_profile through the form so back-end code that still reads
+  // it on save keeps working until the cutover commit.
+  if (f['alarm_profile']) f['alarm_profile'].value = (c.alarm_profile || 'soft');
+  // Per-class severity matrix — render after the form's id is set so
+  // event handlers reference the right camera.
+  _renderSeverityMatrix(byId('cameraForm'), c);
   if(f['enabled']) f['enabled'].checked=!!c.enabled; f['armed'].checked=!!c.armed;
-  // Unified per-camera schedule — {enabled, from, to, actions:{record,telegram,hard}}.
-  // Defaults below apply only when a freshly-created camera has no schedule
-  // dict yet; the migration in SettingsStore guarantees the field exists for
-  // any camera persisted via the backend.
-  const _sch=c.schedule||{};
-  const _act=_sch.actions||{};
-  if(f['schedule_enabled']) f['schedule_enabled'].checked=!!_sch.enabled;
-  if(f['schedule_from']) f['schedule_from'].value=_sch.from||'21:00';
-  if(f['schedule_to']) f['schedule_to'].value=_sch.to||'06:00';
-  if(f['schedule_action_record'])   f['schedule_action_record'].checked   = _act.record   !== false;
-  if(f['schedule_action_telegram']) f['schedule_action_telegram'].checked = _act.telegram !== false;
-  if(f['schedule_action_hard'])     f['schedule_action_hard'].checked     = _act.hard     !== false;
-  if(f['telegram_enabled']) f['telegram_enabled'].checked=(c.telegram_enabled!==false);
-  if(f['mqtt_enabled']) f['mqtt_enabled'].checked=(c.mqtt_enabled!==false);
+  // Two independent schedules — schedule_notify for Telegram/MQTT,
+  // schedule_record for the on-disk archive. Either can be enabled or
+  // disabled without affecting the other. JS keeps a hidden legacy
+  // schedule field in sync below so older backend gates that still
+  // read it (commit 3 retires those) keep working.
+  const _legacySch = c.schedule || {};
+  const _legacyAct = _legacySch.actions || {};
+  const _schN = c.schedule_notify || {
+    enabled: !!_legacySch.enabled && _legacyAct.telegram !== false,
+    from: _legacySch.from || '21:00',
+    to:   _legacySch.to   || '06:00',
+  };
+  const _schR = c.schedule_record || {
+    enabled: !!_legacySch.enabled && _legacyAct.record !== false,
+    from: _legacySch.from || '00:00',
+    to:   _legacySch.to   || '23:59',
+  };
+  if (f['schedule_notify_enabled']) f['schedule_notify_enabled'].checked = !!_schN.enabled;
+  if (f['schedule_notify_from'])    f['schedule_notify_from'].value      = _schN.from || '21:00';
+  if (f['schedule_notify_to'])      f['schedule_notify_to'].value        = _schN.to   || '06:00';
+  if (f['schedule_record_enabled']) f['schedule_record_enabled'].checked = !!_schR.enabled;
+  if (f['schedule_record_from'])    f['schedule_record_from'].value      = _schR.from || '00:00';
+  if (f['schedule_record_to'])      f['schedule_record_to'].value        = _schR.to   || '23:59';
+  // Channel toggles + recording archive toggle.
+  if (f['telegram_enabled']) f['telegram_enabled'].checked = (c.telegram_enabled !== false);
+  if (f['mqtt_enabled'])     f['mqtt_enabled'].checked     = (c.mqtt_enabled !== false);
+  if (f['recording_enabled']) f['recording_enabled'].checked = (c.recording_enabled !== false);
   if(f['bottom_crop_px']) f['bottom_crop_px'].value=c.bottom_crop_px||0;
   if(f['motion_sensitivity']){
     const ms=c.motion_sensitivity!=null?c.motion_sensitivity:0.5;
@@ -3621,16 +3722,47 @@ byId('cameraForm').onsubmit=async(e)=>{
     mqtt_enabled:f['mqtt_enabled']?f['mqtt_enabled'].checked:(existingCam?.mqtt_enabled??true),
     whitelist_names:_whitelistState.filter(Boolean),
     timelapse:existingCam?.timelapse||{enabled:false,fps:25,period:'day',daily_target_seconds:60,weekly_target_seconds:180,telegram_send:false},
-    schedule:{
-      enabled:!!f['schedule_enabled']?.checked,
-      from:f['schedule_from']?.value||'21:00',
-      to:f['schedule_to']?.value||'06:00',
-      actions:{
-        record:   f['schedule_action_record']   ? !!f['schedule_action_record'].checked   : true,
-        telegram: f['schedule_action_telegram'] ? !!f['schedule_action_telegram'].checked : true,
-        hard:     f['schedule_action_hard']     ? !!f['schedule_action_hard'].checked     : true,
-      },
+    // Two independent schedules — schedule_notify gates Telegram/MQTT,
+    // schedule_record gates the on-disk archive. The legacy `schedule`
+    // dict is kept in sync below as a derived bridge field so back-end
+    // gating that still reads it (commit 3 retires those reads) keeps
+    // working through the cutover.
+    schedule_notify: {
+      enabled: !!f['schedule_notify_enabled']?.checked,
+      from:    f['schedule_notify_from']?.value || '21:00',
+      to:      f['schedule_notify_to']?.value   || '06:00',
     },
+    schedule_record: {
+      enabled: !!f['schedule_record_enabled']?.checked,
+      from:    f['schedule_record_from']?.value || '00:00',
+      to:      f['schedule_record_to']?.value   || '23:59',
+    },
+    // Legacy bridge — derive from the new fields for back-compat. The
+    // 4-action shape (record/telegram/hard) collapses into the new
+    // two-schedule split as: telegram = schedule_notify, record =
+    // schedule_record, hard = always true (now driven by class_severity
+    // alarm rows). enabled = OR of the two so any active window keeps
+    // the legacy gate live.
+    schedule: (() => {
+      const n = !!f['schedule_notify_enabled']?.checked;
+      const r = !!f['schedule_record_enabled']?.checked;
+      // Use the notify window when notify is on, otherwise the record
+      // window — preserves the most-restrictive bound back-compat
+      // checks would have applied.
+      const useNotify = n || !r;
+      return {
+        enabled: n || r,
+        from: useNotify ? (f['schedule_notify_from']?.value || '21:00') : (f['schedule_record_from']?.value || '00:00'),
+        to:   useNotify ? (f['schedule_notify_to']?.value   || '06:00') : (f['schedule_record_to']?.value   || '23:59'),
+        actions: { record: r || !n, telegram: n || !r, hard: true },
+      };
+    })(),
+    // Per-class severity matrix — replaces alarm_profile as the source
+    // of truth. Legacy alarm_profile is preserved via existingCam
+    // fallback below so older code paths that still read it (e.g. the
+    // class_severity migration on subsequent loads) keep working.
+    class_severity: _collectClassSeverity(e.target),
+    recording_enabled: f['recording_enabled'] ? !!f['recording_enabled'].checked : (existingCam?.recording_enabled !== false),
     // Fields whose UI was removed in the Erkennung-tab refactor — fall
     // back to the camera's currently-stored value so a save doesn't
     // silently flip them to the schema default. Schema defaults still
@@ -3642,7 +3774,11 @@ byId('cameraForm').onsubmit=async(e)=>{
     motion_enabled:f['motion_enabled']?f['motion_enabled'].checked:(existingCam?.motion_enabled!==false),
     detection_trigger:f['detection_trigger']?.value||existingCam?.detection_trigger||'motion_and_objects',
     post_motion_tail_s:parseFloat(f['post_motion_tail_s']?.value||0),
-    alarm_profile:f['alarm_profile']?.value||'soft',
+    // alarm_profile is now a hidden bridge field — its value is the
+    // camera's previously-stored value (set by editCamera). Persist
+    // unchanged so the class_severity migration on next load still
+    // sees the same source if needed.
+    alarm_profile: f['alarm_profile']?.value || existingCam?.alarm_profile || 'soft',
     detection_min_score:parseFloat(f['detection_min_score']?.value||0),
     label_thresholds: _collectLabelThresholds(e.target),
     confirmation_window: _collectConfirmationWindow(e.target, existingCam),
