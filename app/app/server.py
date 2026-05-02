@@ -3835,6 +3835,55 @@ def api_weather_sighting_clip(sighting_id: str):
     return send_from_directory(full.parent, full.name, mimetype='video/mp4')
 
 
+# Serializes thumb-regen across parallel requests for the same sighting.
+# A single global lock is overkill but the operation is rare (only fires
+# when a thumb file is genuinely missing) and a per-path lock map would
+# add bookkeeping for no measurable win.
+_weather_thumb_regen_lock = threading.Lock()
+
+
+def _regenerate_weather_thumb(clip_path: Path, thumb_path: Path) -> bool:
+    """Extract a frame from roughly the middle of `clip_path` and write
+    it as JPEG to `thumb_path` via temp-file + atomic rename. Returns
+    True on success. cv2 is the same backend the original thumb writer
+    uses so no new dependency."""
+    try:
+        cap = cv2.VideoCapture(str(clip_path))
+        if not cap.isOpened():
+            return False
+        try:
+            n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+            if n > 0:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, n // 2))
+            ok, frame = cap.read()
+            if (not ok or frame is None) and n > 0:
+                # Some codecs misreport frame count — first frame always
+                # decodes if the file is otherwise valid.
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                ok, frame = cap.read()
+            if not ok or frame is None:
+                return False
+            ok2, buf = cv2.imencode(".jpg", frame,
+                                    [int(cv2.IMWRITE_JPEG_QUALITY), 88])
+            if not ok2:
+                return False
+        finally:
+            cap.release()
+        thumb_path.parent.mkdir(parents=True, exist_ok=True)
+        # Same-directory tempfile keeps the rename filesystem-local so
+        # parallel readers never see a half-written JPEG.
+        tmp = thumb_path.with_name(
+            f".{thumb_path.name}.tmp.{os.getpid()}.{threading.get_ident()}"
+        )
+        tmp.write_bytes(buf.tobytes())
+        os.replace(str(tmp), str(thumb_path))
+        return True
+    except Exception as e:
+        logging.getLogger(__name__).warning(
+            "[weather] thumb regen exception: %s", e)
+        return False
+
+
 @app.get('/api/weather/sightings/<sighting_id>/thumb')
 def api_weather_sighting_thumb(sighting_id: str):
     if weather_service is None:
@@ -3844,8 +3893,30 @@ def api_weather_sighting_thumb(sighting_id: str):
         return Response(status=404)
     rel = m.get("thumb_path", "")
     full = storage_root / rel
-    if not full.exists() or not str(full.resolve()).startswith(str(storage_root.resolve())):
+    try:
+        if not str(full.resolve()).startswith(str(storage_root.resolve())):
+            return Response(status=404)
+    except (OSError, RuntimeError):
         return Response(status=404)
+    if not full.exists():
+        # Thumb JPG missing on disk — try to regenerate from the clip
+        # before giving up. Both-missing is the only true 404 case.
+        log = logging.getLogger(__name__)
+        clip_rel = m.get("clip_path", "")
+        clip_full = (storage_root / clip_rel) if clip_rel else None
+        if not clip_full or not clip_full.exists():
+            log.warning(
+                "[weather] thumb 404 — clip and thumb both missing for %s",
+                sighting_id)
+            return Response(status=404)
+        with _weather_thumb_regen_lock:
+            # Re-check inside the lock — another request may have won.
+            if not full.exists():
+                if not _regenerate_weather_thumb(clip_full, full):
+                    log.warning("[weather] thumb regen failed for %s",
+                                sighting_id)
+                    return Response(status=404)
+                log.info("[weather] thumb regenerated for %s", sighting_id)
     return send_from_directory(full.parent, full.name, mimetype='image/jpeg')
 
 
