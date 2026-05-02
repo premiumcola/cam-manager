@@ -59,56 +59,138 @@ class _LogBuffer(logging.Handler):
 log_buffer = _LogBuffer()
 
 
-# ── Rate-limit filter (WARNING+ only) ──────────────────────────────────────
-class RateLimitFilter(logging.Filter):
-    """Suppresses repeated identical messages from the same logger within
-    a sliding window. After the window closes, emits a single coalesced
-    "[…repeated N×]" line so the operator knows the underlying condition
-    didn't disappear silently.
+# ── Burst rate-limit filter (WARNING+ only) ────────────────────────────────
+class BurstRateLimitFilter(logging.Filter):
+    """Lets the first N records of an identical message through within a
+    sliding window, then suppresses further duplicates and emits a single
+    "[…repeated K×]" summary at window close.
 
-    Applies only to records at WARNING level or higher — INFO/DEBUG flow
-    through unconditionally because their volume is what makes the timeline
-    readable."""
+    Attached to the HANDLERS, not the root logger — Logger.addFilter()
+    only filters records emitted directly on that logger, but every
+    record in this codebase goes through ``logging.getLogger(__name__)``
+    children, so a root-attached filter never sees them. The handlers
+    on the other hand see every propagated record.
 
-    def __init__(self, window_s: float = 30.0):
+    Both handlers share the same filter instance so the suppression
+    state is unified — otherwise a console-suppressed record could
+    still flood the in-memory buffer (and the web UI's log panel)."""
+
+    def __init__(self, burst_n: int = 3, window_s: float = 30.0):
         super().__init__()
-        self._window = window_s
+        self._burst_n = max(1, int(burst_n))
+        self._window = float(window_s)
         self._lock = threading.Lock()
-        # key = (logger_name, message-template) → [last_emit_ts, suppressed_n]
+        # key = (logger_name, msg_template)
+        # value = [window_start_ts, emitted_count, suppressed_count, levelno]
         self._state: dict[tuple[str, str], list] = {}
+        # Handlers we should send "[…repeated K×]" summaries to. Set via
+        # attach_handlers() once the handler chain is built.
+        self._summary_targets: list[logging.Handler] = []
+        self._sweeper_started = False
+
+    def attach_handlers(self, handlers):
+        """Register the handlers that should receive coalesced summary
+        records emitted by the background sweeper. Idempotent."""
+        self._summary_targets = list(handlers)
+        if not self._sweeper_started:
+            self._sweeper_started = True
+            threading.Thread(
+                target=self._sweep_loop, daemon=True,
+                name="logfilter-sweep",
+            ).start()
 
     def filter(self, record: logging.LogRecord) -> bool:
+        # INFO/DEBUG flow through unconditionally — their volume is
+        # what makes the timeline readable.
         if record.levelno < logging.WARNING:
             return True
         # Use the raw msg template (before % args formatting) as the key
-        # so "Garten offline" with different timestamps still collapses.
+        # so different timestamps on the same warning still collapse.
         key = (record.name, str(record.msg))
         now = time.time()
         with self._lock:
             ent = self._state.get(key)
-            if ent is None or (now - ent[0]) >= self._window:
-                # First in window OR window expired. If a previous window
-                # had suppressed records, surface the count once.
-                if ent is not None and ent[1] > 0:
-                    coal = ent[1]
-                    self._state[key] = [now, 0]
-                    # Augment the message in place (logging passes by ref).
-                    try:
-                        record.msg = f"{record.msg} […repeated {coal}×]"
-                    except Exception:
-                        pass
-                else:
-                    self._state[key] = [now, 0]
+            if ent is None:
+                self._state[key] = [now, 1, 0, record.levelno]
                 return True
-            # Inside the suppression window — bump counter, drop record.
-            ent[1] += 1
+            window_start, emitted, suppressed, _level = ent
+            if (now - window_start) >= self._window:
+                # Window expired. The sweeper may have already emitted
+                # the summary; if not, do it inline now so the
+                # transition is visible.
+                if suppressed > 0:
+                    self._emit_summary_locked(key, ent)
+                # Start a fresh window with this record as #1 of the burst.
+                self._state[key] = [now, 1, 0, record.levelno]
+                return True
+            if emitted < self._burst_n:
+                ent[1] = emitted + 1
+                return True
+            # Inside window AND already past the burst quota → suppress.
+            ent[2] = suppressed + 1
             return False
+
+    def _emit_summary_locked(self, key, ent):
+        """Emit a "[…repeated K×]" summary record directly to every
+        registered handler, then reset the entry's suppressed counter.
+        Caller MUST hold self._lock. Bypasses Handler.handle() so this
+        filter doesn't see the synthetic record again."""
+        suppressed = ent[2]
+        if suppressed <= 0:
+            return
+        logger_name, original_msg = key
+        msg = f"[…repeated {suppressed}× in last {int(self._window)}s] {original_msg}"
+        rec = logging.LogRecord(
+            name=logger_name, level=ent[3], pathname="", lineno=0,
+            msg=msg, args=None, exc_info=None,
+        )
+        for h in self._summary_targets:
+            try:
+                if rec.levelno >= h.level:
+                    h.emit(rec)
+            except Exception:
+                pass
+        ent[2] = 0
+
+    def _sweep_loop(self):
+        """Wakes once per second and flushes summary lines for any key
+        whose window has closed with suppressions outstanding. Without
+        this, a key that goes quiet for good never reports its tail."""
+        while True:
+            time.sleep(1.0)
+            now = time.time()
+            with self._lock:
+                for key, ent in list(self._state.items()):
+                    if (now - ent[0]) >= self._window and ent[2] > 0:
+                        self._emit_summary_locked(key, ent)
+                        # Reset the window so the next burst starts fresh.
+                        ent[0] = now
+                        ent[1] = 0
+
+
+# Backwards-compat alias — older import sites (if any) referenced the
+# previous class name. The new behaviour subsumes the old.
+RateLimitFilter = BurstRateLimitFilter
 
 
 # ── Setup ──────────────────────────────────────────────────────────────────
 def _resolve_level() -> int:
     raw = (os.environ.get("LOG_LEVEL") or "INFO").upper().strip()
     return getattr(logging, raw, logging.INFO)
+
+
+def _resolve_burst_n() -> int:
+    try:
+        return max(1, int(os.environ.get("LOG_BURST_N", "3")))
+    except (TypeError, ValueError):
+        return 3
+
+
+def _resolve_window_s() -> float:
+    try:
+        return max(1.0, float(os.environ.get("LOG_WINDOW_S", "30")))
+    except (TypeError, ValueError):
+        return 30.0
 
 
 _DONE = False
@@ -139,9 +221,17 @@ def setup_logging():
     # Buffer keeps its existing message-only format so the UI doesn't
     # have to reparse to render its own coloured rows.
     root.addHandler(log_buffer)
-    # Throttle WARNING+ duplicates so a flapping camera or weather
-    # outage can't drown the live tail.
-    root.addFilter(RateLimitFilter(window_s=30.0))
+    # Burst rate-limit (3 lines then quiet, summary at window close).
+    # Attached to the handlers themselves — a root-logger filter never
+    # fires on records that reach root via getLogger(__name__) → propagation.
+    # Both handlers share the SAME filter instance so suppression is unified.
+    rate_filter = BurstRateLimitFilter(
+        burst_n=_resolve_burst_n(),
+        window_s=_resolve_window_s(),
+    )
+    console.addFilter(rate_filter)
+    log_buffer.addFilter(rate_filter)
+    rate_filter.attach_handlers([console, log_buffer])
     # Silence libraries that flood at INFO/DEBUG. apscheduler is added
     # because its job-fired/job-completed pair every 60 s is far below
     # the noise floor we care about.
