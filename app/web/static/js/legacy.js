@@ -161,10 +161,13 @@ import './router.js';
 // extractions) reads and writes the same reference.
 import { lbState } from './mediathek/state.js';
 // Stage 21 — detection-bbox overlay drawer + load/resize repaint
-// triggers. The module's IIFE wires the listeners on import; the
-// exported _lbDrawDetections is what openLightbox / closeLightbox /
-// nav handlers call directly.
-import { _lbDrawDetections } from './mediathek/bbox-overlay.js';
+// triggers + Phase-2 tracking-playback overlay. The module's IIFE
+// wires the listeners on import; lbLoadTracksForItem fetches
+// tracks.json + primes the chip; lbStopTrackingPlayback halts the
+// RAF loop on close.
+import {
+  _lbDrawDetections, lbLoadTracksForItem, lbStopTrackingPlayback,
+} from './mediathek/bbox-overlay.js';
 // Stage 22 — iOS native video player handoff. openLightbox below
 // dispatches video items to _iosNativeVideoOpen on iOS so Safari
 // renders its native fullscreen player instead of stacking the
@@ -2331,6 +2334,11 @@ function openLightbox(item){
     const videoEl=byId('lightboxVideo');
     videoEl.style.display='block'; videoEl.src=vidSrc; videoEl.muted=true; videoEl.loop=true;
     videoEl.load(); videoEl.play().catch(()=>{});
+    // Fire-and-forget: fetch the tracks.json sidecar in parallel with
+    // the first paint. The chip lights up + the RAF loop draws boxes
+    // as soon as the JSON resolves; any 404 or malformed payload
+    // silently falls through to the legacy single-bbox path.
+    lbLoadTracksForItem(lbState.item);
   } else if(!imgSrc && (hasVideoLabel || lbState.item.encode_error)){
     _lbShowError('Video nicht verfügbar');
   } else {
@@ -2415,6 +2423,10 @@ function closeLightbox(){
   }
   byId('lightboxModal').classList.add('hidden');
   document.body.style.overflow='';
+  // Halt the Phase-2 tracking-playback RAF loop + hide the chip.
+  // Done before clearing lbState.item so the loop's null-check sees a
+  // consistent "lightbox closed" state on its next tick.
+  lbStopTrackingPlayback();
   lbState.item=null; lbState.index=-1;
   const videoEl=byId('lightboxVideo');
   if(videoEl){videoEl.pause();videoEl.src='';videoEl.style.display='none';}
