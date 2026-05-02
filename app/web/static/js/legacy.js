@@ -309,10 +309,22 @@ function _seedTopMediaLabel(){
   // in the currently-aggregated counts. Tapping a pill DESELECTS it;
   // tapping again reselects. An empty Set is a UX shortcut for "no filter
   // active → show everything" — never an empty grid.
+  // If state.mediaStats hasn't returned yet for the target cam (counts
+  // are all zero), fall back to seeding the full canonical label set so
+  // the pill bar shows "everything is active" right away. The downstream
+  // filter is OR-of-labels, so a fully-seeded set behaves identically to
+  // an empty set for the API call (both return everything) — but this
+  // matches the user's mental model on the very first drilldown open.
+  // _pruneEmptyMediaFilters() runs after loadMedia and trims any seeded
+  // label that ended up with zero matches.
   const counts=_aggregateMediaCounts();
   const present=MEDIA_FILTER_LABELS.filter(l=>(counts[l]||0)>0);
-  state.mediaLabels=new Set(present);
-  return present.length>0;
+  if(present.length>0){
+    state.mediaLabels=new Set(present);
+    return true;
+  }
+  state.mediaLabels=new Set(MEDIA_FILTER_LABELS);
+  return false;
 }
 
 function _pruneEmptyMediaFilters(){
@@ -387,11 +399,18 @@ async function loadMedia(){
   // Fetch ALL matching items from every camera in one pass (no server-side offset).
   // Pagination is done client-side on the merged+sorted list so that multi-camera
   // views produce a consistent global order and every page is fully filled.
+  // Per-cam try/catch so one cam 5xx-ing (or being temporarily offline) does
+  // NOT blank the whole grid. Symptom we're killing: "Lade Medien…" stuck on
+  // first open because a single fetch threw and renderMediaGrid never ran.
   const allItems=[];
   for(const camId of cams){
-    const data=await j(`/api/camera/${camId}/media?limit=9999&offset=0${labelParam}`);
-    const items=data.items||[];
-    for(const item of items) allItems.push({...item,camera_id:camId});
+    try {
+      const data=await j(`/api/camera/${camId}/media?limit=9999&offset=0${labelParam}`);
+      const items=data.items||[];
+      for(const item of items) allItems.push({...item,camera_id:camId});
+    } catch (err) {
+      console.warn(`[mediathek] failed to load media for cam ${camId}:`, err);
+    }
   }
   allItems.sort((a,b)=>(b.time||'').localeCompare(a.time||''));
   state._allMedia=allItems;
@@ -3049,7 +3068,15 @@ window.openCategoryDrilldown=async function(label){
   byId('mediaDrilldown').style.display='';
   _updateMediaSelectToggle();
   updateMediaSectionTitle();
-  await loadMedia();
+  // Always render — even if loadMedia throws, the "Keine Medien
+  // vorhanden." fallback is a far better UX than a frozen "Lade
+  // Medien…" placeholder. _pruneEmptyMediaFilters then drops any
+  // pre-seeded label that ended up with zero matches so the pill bar
+  // doesn't show stale highlights.
+  try { await loadMedia(); }
+  catch (err) { console.warn('[mediathek] loadMedia (category) failed:', err); }
+  _pruneEmptyMediaFilters();
+  renderMediaFilterPills('drilldown');
   renderMediaGrid();
 };
 function _goToPage(n){
@@ -3186,7 +3213,10 @@ async function openAllMediaDrilldown(preFilterLabel){
   _setActiveMocCard('__all__');
   _updateMediaSelectToggle();
   updateMediaSectionTitle();
-  await loadMedia();
+  try { await loadMedia(); }
+  catch (err) { console.warn('[mediathek] loadMedia (all) failed:', err); }
+  _pruneEmptyMediaFilters();
+  renderMediaFilterPills('drilldown');
   renderMediaGrid();
   // Same layout-race safety net as openMediaDrilldown — see comment there.
   setTimeout(() => {
@@ -3220,7 +3250,10 @@ async function openMediaDrilldown(camId){
   _setActiveMocCard(camId);
   _updateMediaSelectToggle();
   updateMediaSectionTitle();
-  await loadMedia();
+  try { await loadMedia(); }
+  catch (err) { console.warn('[mediathek] loadMedia (cam) failed:', err); }
+  _pruneEmptyMediaFilters();
+  renderMediaFilterPills('drilldown');
   renderMediaGrid();
   // One-tick re-render. The drilldown wrapper just transitioned from
   // display:none to display:'' — its layout box doesn't have a width
