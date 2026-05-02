@@ -32,7 +32,7 @@ import {
   _cvCardClick,
 } from './dashboard.js';
 // Stage 4 — lightbox pure DOM helpers. The state singletons
-// (_lbItem, _lbIndex, _lbDeletePending) and the orchestration
+// (lbState.item, lbState.index, lbState.deletePending) and the orchestration
 // (openLightbox / closeLightbox / keydown) stay in this file for now
 // because they reach into mediathek + timelapse + live-view modules
 // that haven't extracted yet; once those follow, the orchestration
@@ -122,7 +122,7 @@ import { _initFsBtn } from './chrome/fullscreen.js';
 import { hydrateTelegram, initTelegramTabs } from './telegram.js';
 import { hydratePushUI } from './push.js';
 // Stage 13 — easy mediathek pieces. Lightbox / bbox / iOS-video /
-// drilldown stay in this file for now; their _lbItem state is shared
+// drilldown stay in this file for now; their lbState.item state is shared
 // across 90+ callsites and needs a coordinated extraction.
 import './mediathek/rescan.js';
 import './mediathek/bulk-delete.js';
@@ -155,15 +155,20 @@ import {
 // (#/event/<id>, #/sighting/<id>, #/recap/<id>) to the right section
 // + lightbox. Runs hashchange + 1.5 s post-load self-bind.
 import './router.js';
+// Stage 20 — shared lightbox state (lbState.item/index/deletePending).
+// Mutated by the lightbox / iOS handoff / nav / delete handlers below.
+// Importing the object means every consumer (legacy + future
+// extractions) reads and writes the same reference.
+import { lbState } from './mediathek/state.js';
 
 // _hmTip moved with statistics.js (Stage 15) — its only consumer was
 // the heatmap tooltip in _renderStatistik.
 // OBJ_SVG / objBubble / objIconSvg / TL_LABELS now live in core/icons.js
 function _renderLbLabels(){
   const el=byId('lightboxLabels');
-  if(!el||!_lbItem) return;
-  const active=new Set(_lbItem.labels||[]);
-  const species=_lbItem.bird_species||'';
+  if(!el||!lbState.item) return;
+  const active=new Set(lbState.item.labels||[]);
+  const species=lbState.item.bird_species||'';
   const birdColor=colors.bird||'#0ea5e9';
   const bubbles=TL_LABELS.map(l=>{
     const isActive=active.has(l);
@@ -180,27 +185,27 @@ function _renderLbLabels(){
   el.querySelectorAll('[data-label]').forEach(btn=>{
     btn.onclick=async()=>{
       const lbl=btn.dataset.label;
-      const cur=new Set(_lbItem.labels||[]);
+      const cur=new Set(lbState.item.labels||[]);
       if(cur.has(lbl)) cur.delete(lbl); else cur.add(lbl);
       const newLabels=[...cur];
       try{
-        const res=await j(`/api/camera/${_lbItem.camera_id}/events/${_lbItem.event_id}/labels`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({labels:newLabels})});
+        const res=await j(`/api/camera/${lbState.item.camera_id}/events/${lbState.item.event_id}/labels`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({labels:newLabels})});
         if(res.ok){
-          _lbItem.labels=res.labels;
-          if(res.top_label!==undefined) _lbItem.top_label=res.top_label;
-          const idx=(state.media||[]).findIndex(x=>x.event_id===_lbItem.event_id);
+          lbState.item.labels=res.labels;
+          if(res.top_label!==undefined) lbState.item.top_label=res.top_label;
+          const idx=(state.media||[]).findIndex(x=>x.event_id===lbState.item.event_id);
           if(idx>=0){
             state.media[idx].labels=res.labels;
             if(res.top_label!==undefined) state.media[idx].top_label=res.top_label;
           }
-          const aIdx=(state._allMedia||[]).findIndex(x=>x.event_id===_lbItem.event_id);
+          const aIdx=(state._allMedia||[]).findIndex(x=>x.event_id===lbState.item.event_id);
           if(aIdx>=0){
             state._allMedia[aIdx].labels=res.labels;
             if(res.top_label!==undefined) state._allMedia[aIdx].top_label=res.top_label;
           }
           _renderLbLabels();
           // sync thumbnail in media grid
-          const thumbCard=byId('mediaGrid')?.querySelector(`[data-event-id="${CSS.escape(_lbItem.event_id)}"]`);
+          const thumbCard=byId('mediaGrid')?.querySelector(`[data-event-id="${CSS.escape(lbState.item.event_id)}"]`);
           if(thumbCard){const bubblesEl=thumbCard.querySelector('.media-label-bubbles');if(bubblesEl) bubblesEl.innerHTML=res.labels.slice(0,3).map(l=>objBubble(l,26)).join('');}
           // Re-pull timeline + storage stats so badges and dots reflect the retag.
           refreshTimelineAndStats();
@@ -2244,13 +2249,14 @@ byId('wizFinish').onclick=()=>finishWizard();
 
 
 // ── Lightbox / Media viewer ───────────────────────────────────────────────────
-let _lbItem=null;
-let _lbIndex=-1;
-let _lbDeletePending=false;
+// Lightbox state moved to mediathek/state.js (Stage 20). The shared
+// lbState object is mutated by the open/close/nav/delete/confirm
+// handlers below; future per-domain extractions (bbox-overlay, iOS
+// handoff, drilldown) read the same object via the same import.
 function _lbHandleDeleteKey(){
-  if(!_lbItem) return;
-  if(_lbItem.confirmed&&!_lbDeletePending){
-    _lbDeletePending=true;
+  if(!lbState.item) return;
+  if(lbState.item.confirmed&&!lbState.deletePending){
+    lbState.deletePending=true;
     const btn=byId('lightboxDelete');
     if(btn){btn.classList.add('confirm-delete');btn.innerHTML='<span>🗑</span><span style="font-size:9px">↓ nochmal</span>';}
     return;
@@ -2261,11 +2267,11 @@ function _lbHandleDeleteKey(){
 // _updateLbConfirmBtn now live in lightbox.js (Stage 4).
 // ── Detection-bbox overlay ───────────────────────────────────────────────────
 // Draws coloured rectangles + labels over the active lightbox media. Bbox
-// coords come from _lbItem.detections[].bbox in the original frame's pixel
+// coords come from lbState.item.detections[].bbox in the original frame's pixel
 // space; we scale them to the object-fit:contain rendered rectangle so they
 // line up whether the media is letterboxed vertically or horizontally.
 function _lbDrawDetections(){
-  const cv=byId('lightboxDetections'); if(!cv||!_lbItem) return;
+  const cv=byId('lightboxDetections'); if(!cv||!lbState.item) return;
   const ctx=cv.getContext('2d');
   const videoEl=byId('lightboxVideo');
   const imgEl=byId('lightboxImg');
@@ -2285,7 +2291,7 @@ function _lbDrawDetections(){
   cv.height=Math.round(wrapRect.height*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
   ctx.clearRect(0,0,wrapRect.width,wrapRect.height);
-  const dets=(_lbItem.detections||[]).filter(d=>d&&d.bbox&&typeof d.bbox.x1==='number');
+  const dets=(lbState.item.detections||[]).filter(d=>d&&d.bbox&&typeof d.bbox.x1==='number');
   if(!dets.length) return;
   // object-fit:contain inside the media element
   const scale=Math.min(mediaRect.width/natW,mediaRect.height/natH);
@@ -2349,15 +2355,15 @@ function openLightbox(item){
   // pagination boundaries — the page-slice (state.media) is a render
   // optimisation, not a navigation boundary.
   const globalList=state._allMedia||[];
-  _lbIndex=globalList.findIndex(x=>x.event_id===item.event_id);
-  if(_lbIndex===-1){
+  lbState.index=globalList.findIndex(x=>x.event_id===item.event_id);
+  if(lbState.index===-1){
     // Fallback: item came from somewhere outside the cached merged list
     // (rare). Open it anyway with single-item nav so the lightbox still
     // works — just no prev/next.
-    _lbIndex=0;
-    _lbItem=item;
+    lbState.index=0;
+    lbState.item=item;
   } else {
-    _lbItem=globalList[_lbIndex];
+    lbState.item=globalList[lbState.index];
   }
   // If the navigated item lives outside the current page window, jump
   // the grid's page so the thumbnails behind the lightbox match what
@@ -2365,7 +2371,7 @@ function openLightbox(item){
   // scroll because the user is still inside the lightbox modal.
   const ps=window._cachedPageSize||calcItemsPerPage();
   if(window._cachedPageSize && globalList.length>0){
-    const targetPage=Math.floor(_lbIndex/ps);
+    const targetPage=Math.floor(lbState.index/ps);
     if(targetPage!==state.mediaPage){
       state.mediaPage=targetPage;
       const offset=targetPage*ps;
@@ -2373,16 +2379,16 @@ function openLightbox(item){
       try{renderMediaGrid();renderMediaPagination();}catch(_){}
     }
   }
-  _lbDeletePending=false;
+  lbState.deletePending=false;
   _lbResetToPhoto();
   const delBtn=byId('lightboxDelete');
-  if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML=_LB_TRASH_HTML;delBtn.title=_lbItem.confirmed?'Bestätigt — trotzdem löschen?':'Löschen';}
-  _updateLbConfirmBtn(_lbItem.confirmed);
+  if(delBtn){delBtn.classList.remove('confirm-delete');delBtn.innerHTML=_LB_TRASH_HTML;delBtn.title=lbState.item.confirmed?'Bestätigt — trotzdem löschen?':'Löschen';}
+  _updateLbConfirmBtn(lbState.item.confirmed);
   // Show video player for motion clips, image for snapshots
-  const vidSrc=_lbItem.video_relpath?`/media/${_lbItem.video_relpath}`:(_lbItem.video_url||'');
-  const imgSrc=_lbItem.snapshot_relpath?`/media/${_lbItem.snapshot_relpath}`:(_lbItem.snapshot_url||'');
-  const hasVideoLabel=(_lbItem.labels||[]).some(l=>['motion','car','person','cat','bird','dog','squirrel'].includes(l));
-  const pendingMsg=_lbItem.status==='recording'?'Video wird aufgenommen…':_lbItem.status==='processing'?'Video wird verarbeitet…':null;
+  const vidSrc=lbState.item.video_relpath?`/media/${lbState.item.video_relpath}`:(lbState.item.video_url||'');
+  const imgSrc=lbState.item.snapshot_relpath?`/media/${lbState.item.snapshot_relpath}`:(lbState.item.snapshot_url||'');
+  const hasVideoLabel=(lbState.item.labels||[]).some(l=>['motion','car','person','cat','bird','dog','squirrel'].includes(l));
+  const pendingMsg=lbState.item.status==='recording'?'Video wird aufgenommen…':lbState.item.status==='processing'?'Video wird verarbeitet…':null;
   if(pendingMsg){
     _lbShowError(pendingMsg);
   } else if(vidSrc){
@@ -2390,21 +2396,21 @@ function openLightbox(item){
     const videoEl=byId('lightboxVideo');
     videoEl.style.display='block'; videoEl.src=vidSrc; videoEl.muted=true; videoEl.loop=true;
     videoEl.load(); videoEl.play().catch(()=>{});
-  } else if(!imgSrc && (hasVideoLabel || _lbItem.encode_error)){
+  } else if(!imgSrc && (hasVideoLabel || lbState.item.encode_error)){
     _lbShowError('Video nicht verfügbar');
   } else {
     byId('lightboxImg').src=imgSrc;
   }
-  const confirmedBadge=_lbItem.confirmed?`<span style="background:#166534;color:#4ade80;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700">✓ Behalten</span>`:'';
+  const confirmedBadge=lbState.item.confirmed?`<span style="background:#166534;color:#4ade80;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700">✓ Behalten</span>`:'';
   byId('lightboxMeta').innerHTML=`
-    <span class="badge">${esc(_lbItem.camera_id||'')}</span>
-    <span class="badge">${esc(_lbItem.time||'')}</span>
+    <span class="badge">${esc(lbState.item.camera_id||'')}</span>
+    <span class="badge">${esc(lbState.item.time||'')}</span>
     ${vidSrc?'<span class="badge">🎬 Video</span>':''}
     ${confirmedBadge}`;
   _renderLbLabels();
   // Edge dim only at the GLOBAL boundaries — page edges navigate through.
-  byId('lightboxPrev').style.opacity=_lbIndex>0?'1':'0.2';
-  byId('lightboxNext').style.opacity=_lbIndex<((state._allMedia||[]).length-1)?'1':'0.2';
+  byId('lightboxPrev').style.opacity=lbState.index>0?'1':'0.2';
+  byId('lightboxNext').style.opacity=lbState.index<((state._allMedia||[]).length-1)?'1':'0.2';
   byId('lightboxModal').classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
@@ -2430,14 +2436,14 @@ function _tlPeriodLabel(item){
 }
 function openTLPlayer(item){
   const navItems=_tlNavItems();
-  _lbIndex=navItems.findIndex(x=>x.event_id===item.event_id);
-  _lbItem=_lbIndex>=0?navItems[_lbIndex]:item;
+  lbState.index=navItems.findIndex(x=>x.event_id===item.event_id);
+  lbState.item=lbState.index>=0?navItems[lbState.index]:item;
   // Jump the grid page when this item lives outside the current page
   // window, so the thumbnails behind the lightbox match the lightbox
   // content — same rule as openLightbox above.
   const ps=window._cachedPageSize||calcItemsPerPage();
-  if(_lbIndex>=0 && window._cachedPageSize && navItems.length>0){
-    const targetPage=Math.floor(_lbIndex/ps);
+  if(lbState.index>=0 && window._cachedPageSize && navItems.length>0){
+    const targetPage=Math.floor(lbState.index/ps);
     if(targetPage!==state.mediaPage){
       state.mediaPage=targetPage;
       const offset=targetPage*ps;
@@ -2445,7 +2451,7 @@ function openTLPlayer(item){
       try{renderMediaGrid();renderMediaPagination();}catch(_){}
     }
   }
-  _lbDeletePending=false;
+  lbState.deletePending=false;
   _lbClearDetections();
   const imgEl=byId('lightboxImg'); imgEl.style.display='none';
   const videoEl=byId('lightboxVideo');
@@ -2463,8 +2469,8 @@ function openTLPlayer(item){
     <span class="badge">${esc(item.window_key||item.day||'')}</span>
     ${sizeBadge}`;
   const total=navItems.length;
-  byId('lightboxPrev').style.opacity=_lbIndex>0?'1':'0.2';
-  byId('lightboxNext').style.opacity=_lbIndex<total-1?'1':'0.2';
+  byId('lightboxPrev').style.opacity=lbState.index>0?'1':'0.2';
+  byId('lightboxNext').style.opacity=lbState.index<total-1?'1':'0.2';
   byId('lightboxModal').classList.remove('hidden');
   document.body.style.overflow='hidden';
 }
@@ -2474,7 +2480,7 @@ function closeLightbox(){
   }
   byId('lightboxModal').classList.add('hidden');
   document.body.style.overflow='';
-  _lbItem=null; _lbIndex=-1;
+  lbState.item=null; lbState.index=-1;
   const videoEl=byId('lightboxVideo');
   if(videoEl){videoEl.pause();videoEl.src='';videoEl.style.display='none';}
   byId('lightboxImg').style.display='';
@@ -2489,8 +2495,8 @@ byId('lightboxModal').onclick=(e)=>{if(e.target===byId('lightboxModal')) closeLi
 // item type. _tlNavItems() returns the same list (kept as an alias for
 // historical reasons + the timelapse-only callers).
 function _lbNavList(){return state._allMedia||[];}
-byId('lightboxPrev').onclick=()=>{const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>0) openLightbox(nav[i-1]);};
-byId('lightboxNext').onclick=()=>{const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);if(i>=0&&i<nav.length-1) openLightbox(nav[i+1]);};
+byId('lightboxPrev').onclick=()=>{const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===lbState.item?.event_id);if(i>0) openLightbox(nav[i-1]);};
+byId('lightboxNext').onclick=()=>{const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===lbState.item?.event_id);if(i>=0&&i<nav.length-1) openLightbox(nav[i+1]);};
 document.addEventListener('keydown',(e)=>{
   // Live view ESC close (takes priority)
   if(e.key==='Escape'&&!byId('liveViewModal')?.classList.contains('hidden')){closeLiveView();return;}
@@ -2514,7 +2520,7 @@ document.addEventListener('keydown',(e)=>{
       _v.currentTime=Math.max(0,(_v.currentTime||0)-10);
       _lbShowSeekOverlay('−10s');
     } else {
-      const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);
+      const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===lbState.item?.event_id);
       if(i>0) openLightbox(nav[i-1]);
     }
   }
@@ -2526,7 +2532,7 @@ document.addEventListener('keydown',(e)=>{
       _v.currentTime=dur>0?Math.min(dur,next):next;
       _lbShowSeekOverlay('+10s');
     } else {
-      const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===_lbItem?.event_id);
+      const nav=_lbNavList();const i=nav.findIndex(x=>x.event_id===lbState.item?.event_id);
       if(i>=0&&i<nav.length-1) openLightbox(nav[i+1]);
     }
   }
@@ -2584,14 +2590,14 @@ function _iosNativeVideoOpen(item){
   if(!item) return;
   // Tear down any previous transient first.
   _iosTeardownVideo();
-  // Keep _lbItem / _lbIndex in sync with state._allMedia for the
+  // Keep lbState.item / lbState.index in sync with state._allMedia for the
   // inline ✓/✗ buttons on each card to operate on the right entry.
   const globalList=state._allMedia||[];
   const idx=globalList.findIndex(x=>x.event_id===item.event_id);
-  _lbIndex=idx>=0?idx:0;
-  _lbItem=idx>=0?globalList[idx]:item;
-  _iosCurrentItem=_lbItem;
-  const vidSrc=_lbItem.video_relpath?`/media/${_lbItem.video_relpath}`:(_lbItem.video_url||'');
+  lbState.index=idx>=0?idx:0;
+  lbState.item=idx>=0?globalList[idx]:item;
+  _iosCurrentItem=lbState.item;
+  const vidSrc=lbState.item.video_relpath?`/media/${lbState.item.video_relpath}`:(lbState.item.video_url||'');
   if(!vidSrc){ showToast('Video nicht verfügbar','error'); return; }
   const v=document.createElement('video');
   v.src=vidSrc;
@@ -2667,8 +2673,8 @@ function _iosTeardownVideo(){
   },{passive:true});
 })();
 byId('lightboxConfirm').onclick=async()=>{
-  if(!_lbItem) return;
-  const{camera_id,event_id}=_lbItem;
+  if(!lbState.item) return;
+  const{camera_id,event_id}=lbState.item;
   if(!camera_id||!event_id) return;
   try{
     await j(`/api/camera/${encodeURIComponent(camera_id)}/events/${encodeURIComponent(event_id)}/confirm`,{method:'POST'});
@@ -2676,7 +2682,7 @@ byId('lightboxConfirm').onclick=async()=>{
     const sIdx=(state.media||[]).findIndex(x=>x.event_id===event_id);
     if(sIdx>=0) state.media[sIdx].confirmed=true;
     _updateLbConfirmBtn(true);
-    if(_lbItem) _lbItem.confirmed=true;
+    if(lbState.item) lbState.item.confirmed=true;
     // update card DOM
     const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(event_id)}"]`);
     if(card){
@@ -2692,32 +2698,32 @@ byId('lightboxConfirm').onclick=async()=>{
   }catch(e){showToast('Bestätigen fehlgeschlagen: '+e.message,'error');}
 };
 byId('lightboxDelete').onclick=async()=>{
-  if(!_lbItem) return;
+  if(!lbState.item) return;
   // Timelapse deletion
-  if(_lbItem.type==='timelapse'){
-    if(!_lbDeletePending){
-      _lbDeletePending=true;
+  if(lbState.item.type==='timelapse'){
+    if(!lbState.deletePending){
+      lbState.deletePending=true;
       const btn=byId('lightboxDelete');
       if(btn){btn.classList.add('confirm-delete');btn.innerHTML='<span style="font-size:15px;line-height:1;opacity:.75">↓</span><span style="font-size:11px">nochmal</span>';}
       return;
     }
-    const filename=_lbItem.filename||(_lbItem.relpath||'').split('/').pop();
+    const filename=lbState.item.filename||(lbState.item.relpath||'').split('/').pop();
     if(!filename){showToast('Dateiname fehlt','error');return;}
     try{
-      await j(`/api/camera/${encodeURIComponent(_lbItem.camera_id)}/timelapse/${encodeURIComponent(filename)}`,{method:'DELETE'});
-      const deletedId=_lbItem.event_id;
+      await j(`/api/camera/${encodeURIComponent(lbState.item.camera_id)}/timelapse/${encodeURIComponent(filename)}`,{method:'DELETE'});
+      const deletedId=lbState.item.event_id;
       state.media=(state.media||[]).filter(x=>x.event_id!==deletedId);
       state._allMedia=(state._allMedia||[]).filter(x=>x.event_id!==deletedId);
       renderMediaGrid();
       const nav=_tlNavItems();
-      const nextIdx=Math.min(_lbIndex,nav.length-1);
+      const nextIdx=Math.min(lbState.index,nav.length-1);
       if(nextIdx<0) closeLightbox();
       else openLightbox(nav[nextIdx]);
     }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
     return;
   }
   // Photo event deletion
-  const{camera_id,event_id}=_lbItem;
+  const{camera_id,event_id}=lbState.item;
   if(!camera_id||!event_id) return;
   try{
     const imgEl=byId('lightboxImg');
@@ -2737,9 +2743,9 @@ byId('lightboxDelete').onclick=async()=>{
     }
     renderMediaGrid();
     renderMediaPagination();
-    _lbIndex=Math.min(_lbIndex,(state.media||[]).length-1);
-    if(_lbIndex<0) closeLightbox();
-    else openLightbox(state.media[_lbIndex]);
+    lbState.index=Math.min(lbState.index,(state.media||[]).length-1);
+    if(lbState.index<0) closeLightbox();
+    else openLightbox(state.media[lbState.index]);
     await refreshTimelineAndStats();
   }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
 };
