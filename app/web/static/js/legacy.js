@@ -2947,9 +2947,18 @@ function _goToPage(n){
   renderMediaPagination();
 }
 // Stage 13 — bridges so the extracted mediathek modules (grid.js,
-// bulk-delete.js) can call back into these renderers via window.
-// Removed once the lightbox surgery extracts the rest of mediathek.
+// bulk-delete.js, chrome/storage-stats.js) can call back into these
+// renderers via window. Without renderMediaOverview bridged the
+// overview cards never repainted after loadMediaStorageStats() —
+// the symptom was "no media visible after restart". The other three
+// (filter pills + their helpers) keep the drilldown's pill bar
+// in sync when stats arrive while a drilldown is open.
+// All five removed once the lightbox surgery extracts the rest of mediathek.
 window.renderMediaPagination = renderMediaPagination;
+window.renderMediaOverview   = renderMediaOverview;
+window.renderMediaFilterPills = renderMediaFilterPills;
+window._pruneEmptyMediaFilters = _pruneEmptyMediaFilters;
+window._seedTopMediaLabel    = _seedTopMediaLabel;
 function renderMediaPagination(){
   const pg=byId('mediaPagination'); if(!pg) return;
   const total=state.mediaTotalPages||1;
