@@ -3405,6 +3405,20 @@ def api_coral_test_batch():
     )
     payload = request.get_json(silent=True) or {}
     folder_filter = (payload.get("folder") or "").strip()
+    # Optional mode dispatch — see ALLOWED_MODES below. Default cascade
+    # mirrors the previous behaviour byte-for-byte (plus the new
+    # source_model tags).
+    _ALLOWED_MODES = (
+        "cascade", "coco_only", "bird_species_only",
+        "wildlife_only", "all_independent",
+    )
+    mode = (payload.get("mode") or "cascade").strip()
+    if mode not in _ALLOWED_MODES:
+        return jsonify({
+            "ok": False,
+            "error": f"unknown mode: {mode!r}",
+            "allowed": list(_ALLOWED_MODES),
+        }), 400
 
     eff = get_effective_config()
     det_cfg = (eff.get("processing", {}) or {}).get("detection", {}) or {}
@@ -3429,7 +3443,11 @@ def api_coral_test_batch():
         )
 
     detector = CoralObjectDetector(det_cfg)
-    if not detector.available:
+    # COCO-less modes (bird_species_only, wildlife_only) tolerate the
+    # detector being absent — they don't call detect_frame at all. Only
+    # the modes that genuinely need COCO short-circuit on unavailability.
+    _COCO_MODES = {"cascade", "coco_only", "all_independent"}
+    if mode in _COCO_MODES and not detector.available:
         return jsonify({
             "ok": False,
             "error": "detector unavailable",
@@ -3438,9 +3456,23 @@ def api_coral_test_batch():
             "results": [],
         })
 
-    # Second-stage bird classifier — only runs when enabled and a bird is
-    # detected in the frame. Built once per batch for speed.
-    bird_clf = BirdSpeciesClassifier(bird_cfg) if bird_cfg.get("enabled") else None
+    # Build the per-stage classifiers based on the requested mode:
+    #   - cascade            → existing behaviour (bird if cfg.enabled,
+    #                          wildlife when wildlife folder + cfg ok)
+    #   - bird_species_only  → bird classifier always (force-enabled)
+    #   - wildlife_only      → wildlife classifier always (force-enabled)
+    #   - all_independent    → both always (force-enabled)
+    #   - coco_only          → neither
+    _BIRD_FORCE = mode in {"bird_species_only", "all_independent"}
+    _WL_FORCE = mode in {"wildlife_only", "all_independent"}
+
+    if _BIRD_FORCE or bird_cfg.get("enabled"):
+        bird_eff = dict(bird_cfg)
+        if _BIRD_FORCE:
+            bird_eff["enabled"] = True
+        bird_clf = BirdSpeciesClassifier(bird_eff)
+    else:
+        bird_clf = None
 
     # Wildlife classifier (fox/squirrel/hedgehog via ImageNet MobileNetV2).
     # For test-batch we want to mirror the live pipeline AND give honest
@@ -3453,7 +3485,7 @@ def api_coral_test_batch():
     needs_wildlife = bool(target_folders & _WILDLIFE_FOLDERS)
     wildlife_settings_enabled = bool(wl_cfg.get("enabled"))
     wl_clf = None
-    if wildlife_settings_enabled or needs_wildlife:
+    if _WL_FORCE or wildlife_settings_enabled or needs_wildlife:
         wl_cfg_eff = dict(wl_cfg)
         wl_cfg_eff["enabled"] = True
         wl_clf = WildlifeClassifier(wl_cfg_eff)
@@ -3474,6 +3506,64 @@ def api_coral_test_batch():
     species_counts: dict = {}
     wildlife_counts: dict = {}
 
+    from .detectors import Detection as _Det
+
+    def _classify_bird_full(frame_arg):
+        """Run the bird classifier on the full frame; return Detection
+        or None. Used by bird_species_only and all_independent modes."""
+        if not (bird_clf and bird_clf.available):
+            return None
+        try:
+            sp, sp_latin, sp_score = bird_clf.classify_crop(frame_arg)
+        except Exception:
+            return None
+        if not sp:
+            return None
+        fh2, fw2 = frame_arg.shape[:2]
+        return _Det(
+            label="bird",
+            score=float(sp_score) if sp_score is not None else 0.5,
+            bbox=(0, 0, int(fw2), int(fh2)),
+            raw_cls_id=-1,
+            species=sp,
+            species_latin=sp_latin,
+            species_score=float(sp_score) if sp_score is not None else None,
+        )
+
+    def _classify_wildlife_full(frame_arg):
+        """Run the wildlife classifier on the full frame; return
+        (Detection|None, info_dict|None). Ungated — no folder check, no
+        cat→squirrel override, no overlap suppression. Used by
+        wildlife_only and all_independent."""
+        if not (wl_clf and wl_clf.available):
+            return None, None
+        try:
+            cat, raw_lbl, wscore = wl_clf.classify_crop(frame_arg)
+        except Exception:
+            return None, None
+        fh2, fw2 = frame_arg.shape[:2]
+        full_bbox = (0, 0, int(fw2), int(fh2))
+        det = None
+        if cat or raw_lbl:
+            det = _Det(
+                label=cat if cat else (raw_lbl or "?"),
+                score=float(wscore) if wscore is not None else 0.0,
+                bbox=full_bbox,
+                raw_cls_id=-1,
+                species=raw_lbl,
+                species_latin=None,
+                species_score=float(wscore) if wscore is not None else None,
+            )
+        info = None
+        if raw_lbl is not None:
+            info = {
+                "label": cat,
+                "imagenet": raw_lbl,
+                "score": round(float(wscore), 3) if wscore is not None else None,
+                "bbox": list(full_bbox),
+            }
+        return det, info
+
     for d in candidate_dirs:
         if not d.is_dir():
             continue
@@ -3489,104 +3579,148 @@ def api_coral_test_batch():
                 })
                 continue
             stages_run: list[str] = []
-            try:
-                t0 = _time.perf_counter()
-                dets = detector.detect_frame(frame)
-                ms = round((_time.perf_counter() - t0) * 1000, 1)
-                stages_run.append("detector")
-            except Exception as e:
-                results.append({
-                    "folder": d.name,
-                    "filename": img_path.name,
-                    "error": str(e),
-                    "stages_run": stages_run,
-                })
-                continue
-            # Species classification on each bird crop when the classifier is on
-            if dets and bird_clf is not None and bird_clf.available:
-                hh, ww = frame.shape[:2]
-                for dd in dets:
-                    if dd.label != "bird":
-                        continue
-                    x1, y1, x2, y2 = dd.bbox
-                    pad = 6
-                    cx1 = max(0, x1 - pad); cy1 = max(0, y1 - pad)
-                    cx2 = min(ww, x2 + pad); cy2 = min(hh, y2 + pad)
-                    crop = frame[cy1:cy2, cx1:cx2]
-                    if crop is None or crop.size == 0:
-                        continue
-                    try:
-                        sp, sp_latin, sp_score = bird_clf.classify_crop(crop)
-                    except Exception:
-                        sp, sp_latin, sp_score = None, None, None
-                    if sp:
-                        dd.species = sp
-                        dd.species_latin = sp_latin
-                        dd.species_score = float(sp_score) if sp_score is not None else None
-                        species_counts[sp] = species_counts.get(sp, 0) + 1
-                stages_run.append("bird_classifier")
-            # Wildlife (ImageNet) classification — only runs for folders
-            # where COCO doesn't have a matching class.
+            # `tagged` carries (Detection, source_model_str) pairs so we
+            # can serialise per-detection model attribution in one place
+            # at the end of the loop body.
+            tagged: list[tuple] = []
+            ms = 0.0
             wildlife_info = None
-            if wl_clf is not None and wl_clf.available and d.name in _WILDLIFE_FOLDERS:
+
+            if mode in _COCO_MODES:
                 try:
-                    cat, raw_lbl, wscore = wl_clf.classify_crop(frame)
-                except Exception:
-                    cat, raw_lbl, wscore = None, None, None
-                fh, fw = frame.shape[:2]
-                refined_bbox: tuple[int, int, int, int] | None = None
-                if cat:
-                    # Localise the animal: re-run COCO at threshold 0.25
-                    # and steal the bbox of any animal-shape donor class
-                    # (cat/dog/bear/sheep/cow/teddy bear). Mirrors the live
-                    # pipeline so the test-batch UI shows the same kind of
-                    # detection record the runtime would emit.
-                    _DONORS = ("cat", "dog", "bear", "sheep", "cow", "teddy bear")
+                    t0 = _time.perf_counter()
+                    coco_dets = detector.detect_frame(frame)
+                    ms = round((_time.perf_counter() - t0) * 1000, 1)
+                    stages_run.append("detector")
+                except Exception as e:
+                    results.append({
+                        "folder": d.name,
+                        "filename": img_path.name,
+                        "error": str(e),
+                        "stages_run": stages_run,
+                    })
+                    continue
+            else:
+                coco_dets = []
+
+            if mode == "cascade":
+                # Existing cascade flow — preserved byte-for-byte except
+                # for the new source_model tagging.
+                dets = list(coco_dets)
+                # Species classification on each bird crop when the classifier is on
+                if dets and bird_clf is not None and bird_clf.available:
+                    hh, ww = frame.shape[:2]
+                    for dd in dets:
+                        if dd.label != "bird":
+                            continue
+                        x1, y1, x2, y2 = dd.bbox
+                        pad = 6
+                        cx1 = max(0, x1 - pad); cy1 = max(0, y1 - pad)
+                        cx2 = min(ww, x2 + pad); cy2 = min(hh, y2 + pad)
+                        crop = frame[cy1:cy2, cx1:cx2]
+                        if crop is None or crop.size == 0:
+                            continue
+                        try:
+                            sp, sp_latin, sp_score = bird_clf.classify_crop(crop)
+                        except Exception:
+                            sp, sp_latin, sp_score = None, None, None
+                        if sp:
+                            dd.species = sp
+                            dd.species_latin = sp_latin
+                            dd.species_score = float(sp_score) if sp_score is not None else None
+                            species_counts[sp] = species_counts.get(sp, 0) + 1
+                    stages_run.append("bird_classifier")
+                # Wildlife (ImageNet) classification — only runs for folders
+                # where COCO doesn't have a matching class.
+                if wl_clf is not None and wl_clf.available and d.name in _WILDLIFE_FOLDERS:
                     try:
-                        low_dets = detector.detect_frame(frame, min_score=0.25) or []
+                        cat, raw_lbl, wscore = wl_clf.classify_crop(frame)
                     except Exception:
-                        low_dets = []
-                    for ld in low_dets:
-                        if ld.label in _DONORS:
-                            refined_bbox = tuple(ld.bbox)
-                            break
-                    # Confident squirrel → suppress overlapping COCO false-
-                    # positives (cat/teddy bear/bear/dog) so the event isn't
-                    # double-labelled. Same IoU policy as camera_runtime.
-                    if cat == "squirrel" and float(wscore or 0) >= 0.55 and refined_bbox is not None:
-                        from .camera_runtime import _bbox_iou as _iou
-                        _DROP = {"cat", "dog", "bear", "teddy bear"}
-                        dets = [
-                            dd for dd in dets
-                            if not (dd.label in _DROP and _iou(tuple(dd.bbox), refined_bbox) >= 0.3)
-                        ]
-                    # Promote wildlife hit to a first-class Detection-shaped
-                    # entry on the response so the frontend renders it as a
-                    # regular pill / bbox alongside person/cat/bird/car/dog.
-                    from .detectors import Detection as _Det
-                    promoted_bbox = refined_bbox if refined_bbox is not None else (0, 0, int(fw), int(fh))
-                    dets.append(_Det(
-                        label=cat,
-                        score=float(wscore) if wscore is not None else 0.5,
-                        bbox=promoted_bbox,
-                        raw_cls_id=-1,
-                        species=raw_lbl,
-                        species_latin=None,
-                        species_score=float(wscore) if wscore is not None else None,
-                    ))
-                if raw_lbl is not None:
-                    # Diagnostic info — what ImageNet thought, regardless of
-                    # whether we mapped it to a category. The UI uses this
-                    # for the "kein Treffer XX%" bottom pill on misses.
-                    wildlife_info = {
-                        "label": cat,
-                        "imagenet": raw_lbl,
-                        "score": round(float(wscore), 3) if wscore is not None else None,
-                        "bbox": list(refined_bbox) if refined_bbox is not None else [0, 0, int(fw), int(fh)],
-                    }
+                        cat, raw_lbl, wscore = None, None, None
+                    fh, fw = frame.shape[:2]
+                    refined_bbox: tuple[int, int, int, int] | None = None
                     if cat:
-                        wildlife_counts[cat] = wildlife_counts.get(cat, 0) + 1
-                stages_run.append("wildlife_classifier")
+                        _DONORS = ("cat", "dog", "bear", "sheep", "cow", "teddy bear")
+                        try:
+                            low_dets = detector.detect_frame(frame, min_score=0.25) or []
+                        except Exception:
+                            low_dets = []
+                        for ld in low_dets:
+                            if ld.label in _DONORS:
+                                refined_bbox = tuple(ld.bbox)
+                                break
+                        if cat == "squirrel" and float(wscore or 0) >= 0.55 and refined_bbox is not None:
+                            from .camera_runtime import _bbox_iou as _iou
+                            _DROP = {"cat", "dog", "bear", "teddy bear"}
+                            dets = [
+                                dd for dd in dets
+                                if not (dd.label in _DROP and _iou(tuple(dd.bbox), refined_bbox) >= 0.3)
+                            ]
+                        promoted_bbox = refined_bbox if refined_bbox is not None else (0, 0, int(fw), int(fh))
+                        # Promoted wildlife hit gets a "wildlife" tag.
+                        tagged.append((_Det(
+                            label=cat,
+                            score=float(wscore) if wscore is not None else 0.5,
+                            bbox=promoted_bbox,
+                            raw_cls_id=-1,
+                            species=raw_lbl,
+                            species_latin=None,
+                            species_score=float(wscore) if wscore is not None else None,
+                        ), "wildlife"))
+                    if raw_lbl is not None:
+                        wildlife_info = {
+                            "label": cat,
+                            "imagenet": raw_lbl,
+                            "score": round(float(wscore), 3) if wscore is not None else None,
+                            "bbox": list(refined_bbox) if refined_bbox is not None else [0, 0, int(fw), int(fh)],
+                        }
+                        if cat:
+                            wildlife_counts[cat] = wildlife_counts.get(cat, 0) + 1
+                    stages_run.append("wildlife_classifier")
+                # Surviving COCO detections come first so the response order
+                # matches the legacy cascade ordering exactly.
+                tagged = [(dd, "coco") for dd in dets] + tagged
+
+            elif mode == "coco_only":
+                tagged = [(dd, "coco") for dd in coco_dets]
+
+            elif mode == "bird_species_only":
+                bird_det = _classify_bird_full(frame)
+                if bird_det is not None:
+                    tagged.append((bird_det, "bird_species"))
+                    if bird_det.species:
+                        species_counts[bird_det.species] = species_counts.get(bird_det.species, 0) + 1
+                    stages_run.append("bird_classifier_full")
+
+            elif mode == "wildlife_only":
+                wl_det, wl_info = _classify_wildlife_full(frame)
+                if wl_det is not None:
+                    tagged.append((wl_det, "wildlife"))
+                    if wl_det.label and wl_det.label != "?":
+                        wildlife_counts[wl_det.label] = wildlife_counts.get(wl_det.label, 0) + 1
+                    stages_run.append("wildlife_classifier_full")
+                wildlife_info = wl_info
+
+            elif mode == "all_independent":
+                # COCO entries come first, in their natural detector order.
+                tagged = [(dd, "coco") for dd in coco_dets]
+                # Bird classifier on full frame, ungated.
+                bird_det = _classify_bird_full(frame)
+                if bird_det is not None:
+                    tagged.append((bird_det, "bird_species"))
+                    if bird_det.species:
+                        species_counts[bird_det.species] = species_counts.get(bird_det.species, 0) + 1
+                    stages_run.append("bird_classifier_full")
+                # Wildlife on full frame, ungated. NO suppression, NO
+                # cat→squirrel override — the whole point is to see the
+                # raw, independent verdict from each model.
+                wl_det, wl_info = _classify_wildlife_full(frame)
+                if wl_det is not None:
+                    tagged.append((wl_det, "wildlife"))
+                    if wl_det.label and wl_det.label != "?":
+                        wildlife_counts[wl_det.label] = wildlife_counts.get(wl_det.label, 0) + 1
+                    stages_run.append("wildlife_classifier_full")
+                wildlife_info = wl_info
             # Encode the RAW frame for transport — bbox overlays are drawn
             # client-side onto a <canvas> so the user sees both COCO and
             # wildlife rectangles with the colour scheme the UI controls.
@@ -3615,22 +3749,40 @@ def api_coral_test_batch():
                     "species": dd.species,
                     "species_latin": dd.species_latin,
                     "species_score": round(float(dd.species_score), 3) if dd.species_score is not None else None,
-                } for dd in dets],
+                    "source_model": src,
+                } for (dd, src) in tagged],
                 "wildlife": wildlife_info,
             })
             total_images += 1
             inference_times.append(ms)
-            if dets:
+            if tagged:
                 with_detections += 1
-                for dd in dets:
+                for (dd, _src) in tagged:
                     by_label[dd.label] = by_label.get(dd.label, 0) + 1
             # For wildlife folders, "hit" means either COCO found something
             # or wildlife classifier found fox/squirrel/hedgehog
             if wildlife_info and wildlife_info.get("label"):
                 with_wildlife += 1
 
+    # Per-model availability badge for the UI's status strip. Nicknames
+    # come from the new _nickname_tflite helper so the test panel can
+    # render short pill-friendly labels rather than the raw filenames.
+    def _model_card(cfg, clf, default_reason):
+        fname = Path((cfg or {}).get("model_path") or "").name
+        return {
+            "nickname": _nickname_tflite(fname),
+            "available": bool(clf and clf.available),
+            "reason": (clf.reason if clf else default_reason) or "ok",
+        }
+    models_active = {
+        "coco":         _model_card(det_cfg, detector, "disabled"),
+        "bird_species": _model_card(bird_cfg, bird_clf, "disabled"),
+        "wildlife":     _model_card(wl_cfg, wl_clf, "disabled"),
+    }
     response = {
         "ok": True,
+        "mode": mode,
+        "models_active": models_active,
         "detector_mode": detector.mode,
         "detector_reason": detector.reason,
         "bird_species_mode": bird_clf.mode if bird_clf else "none",
@@ -3656,6 +3808,28 @@ def api_coral_test_batch():
 
 
 _MODELS_DIR = Path("/app/models")
+
+
+def _nickname_tflite(filename: str) -> str:
+    """Short pill-friendly badge name for a model file (≤ 16 chars).
+    Used by the Coral test UI to tag each detection with the model that
+    produced it. Filename heuristics — no model introspection."""
+    low = (filename or "").lower()
+    if ('ssd' in low and 'mobilenet' in low) or 'mobilenet_ssd' in low:
+        return "COCO SSD"
+    if 'efficientdet' in low:
+        return "EfficientDet"
+    if 'bavarian' in low and 'bird' in low:
+        return "Vögel BY"
+    if ('inat' in low and 'bird' in low) or 'inat_bird' in low:
+        return "Vögel iNat"
+    if 'imagenet' in low or ('mobilenet' in low and 'ssd' not in low and 'bird' not in low):
+        return "Wildtiere"
+    if 'bird' in low:
+        return "Vögel"
+    # Fallback: filename stem, no underscores, capped at 16 chars.
+    stem = Path(filename or "").stem.replace("_", " ").strip()
+    return (stem[:16] if stem else "Modell")
 
 
 def _describe_tflite(filename: str) -> str:
@@ -3753,6 +3927,7 @@ def api_coral_models():
                 "size_bytes": size,
                 "size_mb": round(size / 1048576, 2),
                 "description": _describe_tflite(p.name),
+                "nickname": _nickname_tflite(p.name),
                 "edgetpu": "_edgetpu" in p.name.lower(),
                 "model_category": category,
                 "labels": _labels_for_model(p.name),
