@@ -17,6 +17,7 @@ import { colors, OBJ_LABEL } from '../core/icons.js';
 import { _lbClearDetections } from '../lightbox.js';
 import { lbState } from './state.js';
 import { showToast } from '../core/toast.js';
+import { state } from '../core/state.js';
 
 // In-flight & cache state for tracks.json fetches. Keyed by event_id
 // so re-opens don't re-fetch unless the user explicitly re-indexes.
@@ -146,6 +147,37 @@ function _firstSampleOfTrack(track){
   };
 }
 
+// Resolve the allowed-label set for the current item. Returns:
+//   Set<string>  — only these labels render
+//   null         — no filter info, draw everything (legacy behaviour)
+// Distinction matters: a tracks.json with `filter_applied: []` means
+// "filter active but allowing nothing" → render zero. A camera-state
+// lookup with empty object_filter means "no filter set" → draw all.
+function _resolveAllowedLabels(){
+  const tracks = lbState.item?._tracks;
+  // 1. Authoritative source: schema≥2 tracks.json sidecars carry the
+  //    exact allowed list at write time.
+  if (tracks && Array.isArray(tracks.filter_applied)){
+    return new Set(tracks.filter_applied);
+  }
+  // 2. Fallback for legacy schema=1 sidecars (and the no-tracks render
+  //    path): look up the camera's live object_filter.
+  const camId = lbState.item?.camera_id;
+  if (camId){
+    const cam = (state.cameras || []).find(c => (c.id || '') === camId);
+    const of = cam?.object_filter;
+    if (Array.isArray(of) && of.length > 0){
+      return new Set(of);
+    }
+  }
+  // 3. No info either way → no filter.
+  return null;
+}
+
+function _labelAllowed(allowed, label){
+  return allowed === null ? true : allowed.has(label);
+}
+
 export function _lbDrawDetections(){
   const cv = byId('lightboxDetections');
   if (!cv || !lbState.item) return;
@@ -182,6 +214,10 @@ export function _lbDrawDetections(){
   // single-bbox legacy path otherwise.
   const tracks = lbState.item._tracks;
   const haveTracks = tracks && Array.isArray(tracks.tracks) && tracks.tracks.length > 0;
+  // Per-render label filter — applies to both render paths so legacy
+  // sidecars on disk (schema=1, no filter_applied) immediately stop
+  // drawing classes the user has filtered out via the camera config.
+  const allowed = _resolveAllowedLabels();
 
   ctx.font = '600 12px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
   ctx.textBaseline = 'top';
@@ -189,6 +225,7 @@ export function _lbDrawDetections(){
   if (haveTracks){
     const t = usingVideo ? (videoEl.currentTime || 0) : null;
     for (const tr of tracks.tracks){
+      if (!_labelAllowed(allowed, tr.label)) continue;
       const sample = (t == null)
         ? _firstSampleOfTrack(tr)
         : _interpolateTrackAt(tr, t);
@@ -210,7 +247,9 @@ export function _lbDrawDetections(){
                     && (videoEl.currentTime || 0) > 0.05;
   if (isPlaying) return;
 
-  const dets = (lbState.item.detections || []).filter(d => d && d.bbox && typeof d.bbox.x1 === 'number');
+  const dets = (lbState.item.detections || [])
+    .filter(d => d && d.bbox && typeof d.bbox.x1 === 'number')
+    .filter(d => _labelAllowed(allowed, d.label));
   if (!dets.length) return;
   for (const d of dets){
     const c = colors[d.label] || colors.unknown;
@@ -363,7 +402,12 @@ function _wakeChip(){
 function _renderTrackingChip(tracks){
   const chip = _ensureChip();
   if (!chip) return;
-  const n = (tracks && Array.isArray(tracks.tracks)) ? tracks.tracks.length : 0;
+  // Count POST-filter so the chip doesn't claim "6 Subjekte" when 4 of
+  // them are filtered classes the overlay just dropped.
+  const allowed = _resolveAllowedLabels();
+  const allTracks = (tracks && Array.isArray(tracks.tracks)) ? tracks.tracks : [];
+  const visible = allTracks.filter(t => _labelAllowed(allowed, t.label));
+  const n = visible.length;
   if (!tracks || n === 0){
     chip.style.display = 'none';
     chip.style.opacity = '0';
