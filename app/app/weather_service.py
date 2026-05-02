@@ -102,6 +102,139 @@ def _safe_dt(s: str) -> datetime | None:
         return None
 
 
+def _atomic_write_json(path: Path, payload: dict) -> None:
+    """Write `payload` as JSON to `path` via temp + atomic rename so a
+    concurrent reader never sees a half-written file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp.{os.getpid()}.{threading.get_ident()}")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
+                   encoding="utf-8")
+    os.replace(str(tmp), str(path))
+
+
+def migrate_sun_timelapse_layout(storage_root: Path) -> dict:
+    """One-shot, idempotent migration that splits the legacy shared
+    `weather/<cam>/sun_timelapse/` directory into per-phase directories
+    `sunrise_timelapse/` and `sunset_timelapse/`. Each manifest is
+    backed up before its clip_path / thumb_path fields are rewritten,
+    then the .json/.mp4/.jpg triplet is moved to the target dir. The
+    legacy `weather/<cam>/sunset/` directory (sunset EVENT detections,
+    NOT timelapses) is left untouched.
+
+    Safe to call on every boot — the function skips entries that are
+    already migrated.
+    """
+    weather_root = storage_root / "weather"
+    summary = {"cams": 0, "moved": 0, "skipped": 0, "errors": 0}
+    if not weather_root.exists():
+        return summary
+    ts_label = datetime.now().strftime("%Y%m%dT%H%M%S")
+    for cam_dir in weather_root.iterdir():
+        if not cam_dir.is_dir():
+            continue
+        legacy_dir = cam_dir / "sun_timelapse"
+        if not legacy_dir.is_dir():
+            continue
+        summary["cams"] += 1
+        for jf in sorted(legacy_dir.glob("*.json")):
+            stem = jf.stem  # e.g. "2026-04-30_sunrise"
+            try:
+                manifest = json.loads(jf.read_text(encoding="utf-8"))
+            except Exception as e:
+                log.warning("[migration] sun_timelapse: cannot read %s: %s", jf, e)
+                summary["errors"] += 1
+                continue
+            phase = (manifest.get("sun_phase") or "").lower()
+            if phase not in ("sunrise", "sunset"):
+                # Fallback: derive phase from filename suffix.
+                if stem.endswith("_sunrise") or stem.endswith("_rise"):
+                    phase = "sunrise"
+                elif stem.endswith("_sunset") or stem.endswith("_set"):
+                    phase = "sunset"
+                else:
+                    log.warning(
+                        "[migration] sun_timelapse: unknown phase for %s — skipping",
+                        jf.name)
+                    summary["errors"] += 1
+                    continue
+            target_dir_name = (
+                "sunrise_timelapse" if phase == "sunrise" else "sunset_timelapse"
+            )
+            target_dir = cam_dir / target_dir_name
+            target_json = target_dir / jf.name
+            if target_json.exists():
+                # Already migrated on a prior boot. Drop the leftover
+                # source files so we don't keep iterating them every
+                # restart.
+                for ext in (".json", ".mp4", ".jpg"):
+                    src = legacy_dir / f"{stem}{ext}"
+                    if src.exists():
+                        try:
+                            src.unlink()
+                            log.debug(
+                                "[migration] sun_timelapse: dropped duplicate %s",
+                                src.relative_to(storage_root))
+                        except Exception as e:
+                            log.warning(
+                                "[migration] sun_timelapse: dup-delete failed %s: %s",
+                                src, e)
+                summary["skipped"] += 1
+                continue
+            try:
+                # Manifest backup BEFORE rewrite, so a corrupted write
+                # leaves a recoverable copy on disk.
+                backup = jf.with_name(f"{jf.name}.bak.{ts_label}")
+                shutil.copy2(str(jf), str(backup))
+                cam_id = cam_dir.name
+                manifest["clip_path"] = (
+                    f"weather/{cam_id}/{target_dir_name}/{stem}.mp4"
+                )
+                manifest["thumb_path"] = (
+                    f"weather/{cam_id}/{target_dir_name}/{stem}.jpg"
+                )
+                _atomic_write_json(target_json, manifest)
+                # Move binaries — os.replace is atomic on POSIX. Skip
+                # silently if a file is already at the destination
+                # (e.g. partial prior migration) so we converge.
+                for ext in (".mp4", ".jpg"):
+                    src = legacy_dir / f"{stem}{ext}"
+                    dst = target_dir / f"{stem}{ext}"
+                    if not src.exists():
+                        continue
+                    if dst.exists():
+                        try:
+                            src.unlink()
+                        except Exception:
+                            pass
+                        continue
+                    try:
+                        os.replace(str(src), str(dst))
+                    except Exception as e:
+                        log.warning(
+                            "[migration] sun_timelapse: move %s → %s failed: %s",
+                            src.name, dst, e)
+                # Source manifest no longer needed — destination is
+                # authoritative now.
+                try:
+                    jf.unlink()
+                except Exception:
+                    pass
+                log.info(
+                    "[migration] sun_timelapse: %s → %s/",
+                    jf.name, target_dir_name)
+                summary["moved"] += 1
+            except Exception as e:
+                log.error(
+                    "[migration] sun_timelapse: %s migration failed: %s",
+                    jf.name, e)
+                summary["errors"] += 1
+    if summary["moved"] or summary["skipped"] or summary["errors"]:
+        log.info(
+            "[migration] sun_timelapse split done — %d moved, %d skipped, %d errors across %d cam(s)",
+            summary["moved"], summary["skipped"], summary["errors"], summary["cams"])
+    return summary
+
+
 class _CooldownTracker:
     """Per-(cam, event) cooldown: blocks subsequent triggers for N minutes."""
 
@@ -892,17 +1025,32 @@ class WeatherService:
             cam_id, evt, ts = sighting_id.split("__", 2)
         except ValueError:
             return None
-        # Sun-Timelapse manifests live under "sun_timelapse/" regardless of
-        # the per-phase id prefix the API exposes. Collapse the two phase
-        # subtypes back to the shared directory name when looking up.
-        # Also accept the legacy `sun_timelapse_sunrise/sunset` shape from
-        # captures written before the rise/set rename.
-        if evt in ("sun_timelapse_rise", "sun_timelapse_set",
-                   "sun_timelapse_sunrise", "sun_timelapse_sunset"):
-            evt = "sun_timelapse"
+        # Sun-Timelapse: per-phase dirs (sunrise_timelapse/sunset_timelapse)
+        # are the new on-disk layout; the legacy shared "sun_timelapse/"
+        # is still accepted as a fallback so manifests written before the
+        # boot migration ran (or recovered from backup) keep resolving.
+        sun_rise_aliases = ("sun_timelapse_rise", "sun_timelapse_sunrise")
+        sun_set_aliases  = ("sun_timelapse_set", "sun_timelapse_sunset")
+        sun_dir_lookup = None
+        if evt in sun_rise_aliases:
+            sun_dir_lookup = ("sunrise_timelapse", "sun_timelapse")
+        elif evt in sun_set_aliases:
+            sun_dir_lookup = ("sunset_timelapse", "sun_timelapse")
+        elif evt == "sun_timelapse":
+            sun_dir_lookup = ("sunrise_timelapse", "sunset_timelapse",
+                              "sun_timelapse")
+        if sun_dir_lookup:
+            cam_root = self._sightings_dir() / cam_id
+            for d in sun_dir_lookup:
+                p = cam_root / d / f"{ts}.json"
+                if p.exists():
+                    return p
+            # Nothing exists — return the canonical (new) path so callers
+            # that only rely on .exists() get a clean False.
+            return cam_root / sun_dir_lookup[0] / f"{ts}.json"
         # Event-Timelapse: id encodes the trigger kind (thunder_rising /
         # front_passing / storm_front) but all live in event_timelapse/.
-        elif evt in ("thunder_rising", "front_passing", "storm_front"):
+        if evt in ("thunder_rising", "front_passing", "storm_front"):
             evt = "event_timelapse"
         return self._sightings_dir() / cam_id / evt / f"{ts}.json"
 
@@ -1618,14 +1766,20 @@ class WeatherService:
         interval_s = max(1, int(pcfg.get("interval_s", 3) or 3))
         target_fps = max(1, int(pcfg.get("fps", 25) or 25))
         cam_name = self._cam_name(cam_id)
-        out_dir = self._sightings_dir() / cam_id / "sun_timelapse"
+        # Per-phase subdir so on-disk layout makes the kind obvious. The
+        # legacy single "sun_timelapse/" directory is still walked at
+        # read time (and the boot migration moves any existing files
+        # over) but new captures land in sunrise_timelapse/ or
+        # sunset_timelapse/.
+        phase_dir = "sunrise_timelapse" if phase == "sunrise" else "sunset_timelapse"
+        out_dir = self._sightings_dir() / cam_id / phase_dir
         out_dir.mkdir(parents=True, exist_ok=True)
         date_label = sun_dt.strftime("%Y-%m-%d")
         stem = f"{date_label}_{phase}"
         mp4_path = out_dir / f"{stem}.mp4"
         thumb_path = out_dir / f"{stem}.jpg"
         # Frames go to a temporary scratch dir; deleted after encode.
-        frames_dir = self._sightings_dir() / cam_id / "sun_timelapse" / f".scratch_{stem}"
+        frames_dir = out_dir / f".scratch_{stem}"
         frames_dir.mkdir(parents=True, exist_ok=True)
         # Sun snapshot at start (to compare with end).
         sun_at_start = self._sun_position()
@@ -1729,8 +1883,8 @@ class WeatherService:
                 "azimuth_at_start":  sun_at_start.get("azimuth"),
                 "azimuth_at_end":    sun_at_end.get("azimuth"),
             },
-            "clip_path":    f"weather/{cam_id}/sun_timelapse/{mp4_path.name}",
-            "thumb_path":   f"weather/{cam_id}/sun_timelapse/{thumb_path.name}",
+            "clip_path":    f"weather/{cam_id}/{phase_dir}/{mp4_path.name}",
+            "thumb_path":   f"weather/{cam_id}/{phase_dir}/{thumb_path.name}",
             "duration_s":   max(1, len(images) // target_fps),
             "width":  0, "height": 0,
         }

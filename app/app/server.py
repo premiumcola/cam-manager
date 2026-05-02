@@ -285,6 +285,19 @@ except Exception as _e:
         "[migration] storage migration failed (continuing with existing state): %s", _e,
         exc_info=True,
     )
+# Sun-Timelapse layout split: legacy `weather/<cam>/sun_timelapse/`
+# (mixed sunrise+sunset) → per-phase dirs. Idempotent, manifests are
+# backed up before rewrite. Touches only weather sighting files; never
+# settings.json. Must run before WeatherService starts so the service
+# only sees the new layout.
+try:
+    from .weather_service import migrate_sun_timelapse_layout as _migrate_sun_tl
+    _migrate_sun_tl(storage_root)
+except Exception as _e:
+    logging.getLogger(__name__).error(
+        "[migration] sun_timelapse split failed (continuing with existing state): %s", _e,
+        exc_info=True,
+    )
 cfg = settings.export_effective_config(base_cfg)
 cat_registry = IdentityRegistry(storage_root / "cat_registry.json", threshold=int(cfg.get("processing", {}).get("cat_identity", {}).get("match_threshold", 10)))
 person_registry = IdentityRegistry(storage_root / "person_registry.json", threshold=int(cfg.get("processing", {}).get("person_identity", {}).get("match_threshold", 10)))
