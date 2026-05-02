@@ -56,6 +56,58 @@ Docker on Unraid or any Linux host.
 - Camera-IDs ausschließlich über `camera_id.build_camera_id` erzeugen
   (Python) bzw. `buildCameraId` (JS) — beide sind bit-für-bit-Spiegel.
 
+## Linting (mechanical safety net)
+
+Lint stack lebt in `pyproject.toml`, `eslint.config.js`,
+`.prettierrc.json`, `.pre-commit-config.yaml`,
+`.github/workflows/lint.yml`. Setup einmalig:
+
+```bash
+pip install -r app/requirements-dev.txt
+pre-commit install
+npm install
+```
+
+Lokal alle Checks über staged files vor jedem Commit:
+
+```bash
+pre-commit run --all-files
+```
+
+Was geprüft wird:
+- **ruff** — Python-Linter (pyflakes + pycodestyle + isort + pyupgrade
+  + bugbear + simplify + naming). Auto-fixes bei `--fix`.
+- **ruff format** — Python-Formatter (ersetzt black). `quote-style =
+  preserve` damit der Vor-Linter-Stil unverändert bleibt.
+- **mypy** — derzeit **permissiv** (`strict_optional = false`,
+  `ignore_missing_imports = true`). Nur offensichtliche
+  `None.foo()`-Fehler werden erfasst. Striktere Modi wandern später
+  rein, wenn Type-Hints dichter sind.
+- **eslint** — JavaScript-Linter (recommended + unicorn-Subset).
+  `no-console: ['error', { allow: ['warn', 'error'] }]` — die alte
+  `kein console.log()`-Konvention ist jetzt **erzwungen**, nicht nur
+  Empfehlung. `console.warn`/`console.error` bleiben legal.
+- **prettier** — JS-Formatter, läuft in `pre-commit` über bearbeitete
+  Files. CI-prettier-check auf JS ist **bewusst aus** in dieser Phase
+  (CSS-Split-Prompt aktiviert es danach).
+- **pre-commit-hook** `no-console-log` — eigener Bash-Hook, scannt
+  staged JS-Files auf `console.log(`; blockiert den Commit. Bypasst
+  die ESLint-Konfig, falls die mal angefasst wird.
+
+Baseline-Zahlen (Stand: linter foundation merge):
+- ruff post auto-fix: 160 verbleibende violations (E702, B007, UP032
+  dominieren — schrittweiser Cleanup in späteren PRs).
+- mypy: ungezählt — derzeit nicht-blockierend, gibt warnings für
+  Sichtbarkeit.
+- eslint post auto-fix: 88 problems (59 errors, 29 warnings) — die
+  meisten errors sind `eqeqeq` und ein paar `no-undef`-Hänger zu
+  Helpers, die nie definiert wurden (`_setActiveNav`).
+- prettier: ~48 JS-files würden durch eine Mass-`--write` umformatiert;
+  bewusst übersprungen bis CSS-Split-Prompt.
+
+Diese Zahlen sind die Untergrenze für künftige Refactor-Stufen — kein
+Commit darf sie schlechter machen, ohne explizite Begründung.
+
 ## Fehlerbehandlung
 
 - Bei Fehlern: 2× selbst zu fixen versuchen.
