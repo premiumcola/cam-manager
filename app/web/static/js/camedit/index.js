@@ -192,6 +192,10 @@ window._quickDeleteCamera=async function(camId,camName){
   try{
     const r=await j(`/api/settings/cameras/${encodeURIComponent(camId)}`,{method:'DELETE'});
     if(r.event_count>0) showToast(`${r.event_count} gespeicherte Ereignisse bleiben im Archiv erhalten.`,'warn');
+    if(panelState.camId===camId) _restoreEditWrapper();
+    await loadAll();
+  }catch(e){showToast('Fehler beim Löschen: '+esc(e.message||e),'error');}
+};
 
 function editCamera(camId){
   // Defensive: if the cam-edit form isn't in the DOM yet (rare but
@@ -549,6 +553,16 @@ function hydrateSettings(){
   _updateCoralDeviceInfo();
   _renderCoralPipelineTree();
   _populateCoralTestCameras();
+  // Models list is now behind the Modelle sub-tab; load it lazily on
+  // first open via toggleCoralTab, so hydrate doesn't spin up a request
+  // users aren't looking at.
+  // Hydrate media settings form
+  const storageSec=state.config.storage||{};
+  const rdVal=storageSec.retention_days||14;
+  const rdEl=byId('ms_retention_days'); if(rdEl) rdEl.value=rdVal;
+  const rdLbl=byId('ms_retention_days_val'); if(rdLbl) rdLbl.textContent=rdVal+' Tage';
+  const acEl=byId('ms_auto_cleanup'); if(acEl) acEl.checked=!!storageSec.auto_cleanup_enabled;
+}
 
 async function updateSystemPanel(){
   const panel=byId('systemInfoPanel'); if(!panel) return;
