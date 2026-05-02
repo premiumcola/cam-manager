@@ -115,6 +115,12 @@ import { loadLogs } from './chrome/logs.js';
 // lightbox in stage 13).
 import { closeLiveView } from './chrome/live-view.js';
 import { _initFsBtn } from './chrome/fullscreen.js';
+// Stage 12 — Telegram + Push. push.js inlines the wetter-events
+// extension that used to monkey-patch hydratePushUI; renderWeather
+// Sightings / loadWeatherSightings monkey-patches at line ~6700 stay
+// in legacy.js until stage 16 ships weather/sightings.js.
+import { hydrateTelegram, initTelegramTabs } from './telegram.js';
+import { hydratePushUI } from './push.js';
 
 // _hmTip stays here — fixed-position heatmap tooltip used only by the
 // timeline view; will move with the timeline module in a later stage.
@@ -1307,50 +1313,6 @@ async function updateSystemPanel(){
   }catch(e){/* silent — system info optional */}
 }
 
-// ── Telegram page hydrate & logic ─────────────────────────────────────────────
-
-function hydrateTelegram(){
-  const tg=state.config?.telegram||{};
-  const el=byId('tg_enabled'); if(el) el.checked=!!tg.enabled;
-  // Initial badge from config — immediately overwritten by the live polling
-  // status fetch below, so the user sees the actual updater state, not just
-  // the "enabled" flag.
-  const tgBadge=byId('tgStatusBadge');
-  if(tgBadge){tgBadge.textContent=tg.enabled?'aktiv':'aus';tgBadge.className='set-status-badge '+(tg.enabled?'set-status-badge--on':'set-status-badge--off');}
-  const tok=byId('tg_token'); if(tok) tok.value=tg.token||'';
-  const cid=byId('tg_chat_id'); if(cid) cid.value=tg.chat_id||'';
-  const fmt=tg.format||'photo';
-  document.querySelectorAll('[name="tg_format"]').forEach(r=>r.checked=r.value===fmt);
-  renderTgFormatPreview(fmt);
-  refreshTelegramPollingStatus();
-}
-
-let _tgPollStatusTimer=null;
-async function refreshTelegramPollingStatus(){
-  const badge=byId('tgStatusBadge'); if(!badge) return;
-  try{
-    const r=await fetch('/api/telegram/status');
-    const d=await r.json();
-    const s=d.state||'off';
-    if(s==='active'){
-      const mins=Math.floor((d.since_seconds||0)/60);
-      const lbl=mins>0?`aktiv (seit ${mins} min)`:'aktiv';
-      badge.textContent=lbl;
-      badge.className='set-status-badge set-status-badge--on';
-    }else if(s==='conflict'){
-      badge.textContent='Conflict (Backoff)';
-      badge.className='set-status-badge set-status-badge--warn';
-    }else if(s==='starting'){
-      badge.textContent='startet…';
-      badge.className='set-status-badge set-status-badge--warn';
-    }else{
-      badge.textContent=d.enabled?'aus':'aus';
-      badge.className='set-status-badge set-status-badge--off';
-    }
-  }catch(e){/* leave the existing badge alone on transient fetch errors */}
-  clearTimeout(_tgPollStatusTimer);
-  _tgPollStatusTimer=setTimeout(refreshTelegramPollingStatus, 10000);
-}
 
 function initCameraEditTabs(){
   const bar=document.querySelector('.cam-tab-bar'); if(!bar) return;
@@ -1369,350 +1331,6 @@ function initCameraEditTabs(){
     });
   });
 }
-function initTelegramTabs(){
-  const bar=document.querySelector('.tg-tab-bar'); if(!bar) return;
-  const allPanels=['tg-panel-verbindung','tg-panel-wann','tg-panel-was','tg-panel-tree','tg-panel-presets'];
-  bar.querySelectorAll('.set-tab').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      bar.querySelectorAll('.set-tab').forEach(b=>b.classList.remove('active'));
-      btn.classList.add('active');
-      const target=btn.dataset.tab;
-      allPanels.forEach(id=>{const p=byId(id); if(p) p.hidden=(id!==target);});
-    });
-  });
-}
-
-// ── Push-Settings UI (Phase 2) ───────────────────────────────────────────────
-
-// Order in the "Was senden" list — matches the spec's reading order
-// (Person first, animals + person before motion).
-const _PUSH_LABEL_ORDER = ['person','squirrel','dog','car','cat','bird','motion'];
-
-// Schema-default block — used by the "Standard"-Preset and as a fallback when
-// the backend hasn't shipped the keys yet. Mirror of _TELEGRAM_PUSH_DEFAULTS
-// in settings_store.py — keep the two in sync.
-function _pushDefaults(){
-  return {
-    enabled:true, rate_limit_seconds:30,
-    quiet_hours:{start:'22:00',end:'07:00'},
-    night_alert:{enabled:true,armed_only:true,use_sun:true,lat:null,lon:null,start:'22:00',end:'07:00'},
-    labels:{
-      person:{push:true,threshold:0.85},
-      cat:{push:false,threshold:0.80},
-      dog:{push:true,threshold:0.80},
-      bird:{push:false,threshold:0.90},
-      car:{push:true,threshold:0.85},
-      squirrel:{push:true,threshold:0.80},
-      motion:{push:false,threshold:0.0},
-    },
-    daily_report:{enabled:true,time:'22:00'},
-    highlight:{enabled:true,time:'19:00'},
-    system:{enabled:true},
-    timelapse:{enabled:true},
-  };
-}
-
-// Pull current push config from loaded state with safe fallbacks.
-function _pushCfg(){
-  const tg = state.config?.telegram || {};
-  // Deep merge defaults under user values so the UI never gets undefined.
-  const def = _pushDefaults();
-  const cur = tg.push || {};
-  const merge = (d, c) => {
-    const out = {...d};
-    for (const k of Object.keys(c||{})) {
-      if (c[k] && typeof c[k]==='object' && !Array.isArray(c[k]) && d[k] && typeof d[k]==='object') {
-        out[k] = merge(d[k], c[k]);
-      } else {
-        out[k] = c[k];
-      }
-    }
-    return out;
-  };
-  return merge(def, cur);
-}
-
-let _pushSaveTimer = null;
-async function savePushCfg(partial){
-  // Always send through telegram.push.* so the deep-merge in
-  // SettingsStore.update_section preserves sibling keys.
-  const payload = {telegram:{push:partial}};
-  try{
-    await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    // Reflect the change locally so the next read sees it without reloading.
-    state.config = state.config || {};
-    state.config.telegram = state.config.telegram || {};
-    state.config.telegram.push = _mergeDeep(state.config.telegram.push||{}, partial);
-  }catch(e){
-    showToast('Speichern fehlgeschlagen.','error');
-  }
-}
-function _mergeDeep(t,s){
-  for (const k of Object.keys(s||{})){
-    if(s[k] && typeof s[k]==='object' && !Array.isArray(s[k]) && t[k] && typeof t[k]==='object'){
-      _mergeDeep(t[k], s[k]);
-    } else { t[k] = s[k]; }
-  }
-  return t;
-}
-function _debouncedPushSave(partial, ms=600){
-  // Coalesce slider drags into one save. The merged payload is rebuilt from
-  // the form on every fire so the latest values win.
-  clearTimeout(_pushSaveTimer);
-  _pushSaveTimer = setTimeout(()=>savePushCfg(partial), ms);
-}
-
-function hydratePushUI(){
-  const cfg = _pushCfg();
-  // ── "Wann senden" ─────────────────────────────────────────────────────────
-  const set = (id, prop, val) => { const el=byId(id); if(el) el[prop]=val; };
-  set('push_enabled','checked', !!cfg.enabled);
-  set('push_daily_enabled','checked', !!cfg.daily_report?.enabled);
-  set('push_daily_time','value', cfg.daily_report?.time || '22:00');
-  set('push_highlight_enabled','checked', !!cfg.highlight?.enabled);
-  set('push_highlight_time','value', cfg.highlight?.time || '19:00');
-  set('push_quiet_enabled','checked', !!cfg.quiet_hours?.start && !!cfg.quiet_hours?.end);
-  set('push_quiet_start','value', cfg.quiet_hours?.start || '22:00');
-  set('push_quiet_end','value', cfg.quiet_hours?.end || '07:00');
-  set('push_night_enabled','checked', !!cfg.night_alert?.enabled);
-  set('push_night_armed','checked', !!cfg.night_alert?.armed_only);
-  const useSun = cfg.night_alert?.use_sun !== false;
-  document.querySelectorAll('input[name="push_night_mode"]').forEach(r=>{
-    r.checked = (r.value === (useSun ? 'sun' : 'time'));
-  });
-  set('push_night_start','value', cfg.night_alert?.start || '22:00');
-  set('push_night_end','value', cfg.night_alert?.end || '07:00');
-  _updatePushNightModeUI();
-
-  // ── "Was senden" — labels list + bottom toggles ───────────────────────────
-  _renderPushLabelsList(cfg.labels || {});
-  set('push_timelapse_enabled','checked', !!cfg.timelapse?.enabled);
-  set('push_system_enabled','checked', !!cfg.system?.enabled);
-
-  // ── "Abhängigkeiten" ─────────────────────────────────────────────────────
-  hydratePushDeps();
-  if (!_pushDepsTimer) _pushDepsTimer = setInterval(hydratePushDeps, 30000);
-
-  _bindPushHandlers();
-}
-
-let _pushDepsTimer = null;
-
-function _renderPushLabelsList(labels){
-  const wrap = byId('pushLabelsList'); if(!wrap) return;
-  const colorMap = (typeof colors==='object') ? colors : {};
-  const labelMap = (typeof OBJ_LABEL==='object') ? OBJ_LABEL : {};
-  wrap.innerHTML = _PUSH_LABEL_ORDER.map(lbl=>{
-    const l = labels[lbl] || {push:false, threshold:0.8};
-    const color = colorMap[lbl] || '#5bc8f5';
-    const name = labelMap[lbl] || lbl;
-    const pct = Math.round((l.threshold||0) * 100);
-    return `
-      <div class="push-label-row" data-label="${esc(lbl)}">
-        <span class="push-label-chip" style="background:${esc(color)}22;border:1px solid ${esc(color)}55;color:${esc(color)}">${esc(name)}</span>
-        <label class="switch push-label-toggle"><input type="checkbox" ${l.push?'checked':''} data-push-toggle/><span class="slider"></span></label>
-        <input type="range" class="push-label-slider" min="0.5" max="1.0" step="0.05" value="${l.threshold||0.8}" ${l.push?'':'disabled'} data-push-slider/>
-        <span class="push-label-pct">${pct}%</span>
-      </div>`;
-  }).join('');
-}
-
-function _updatePushNightModeUI(){
-  const useSun = document.querySelector('input[name="push_night_mode"][value="sun"]')?.checked;
-  const sunInfo = byId('push_night_sun_info');
-  const timeRow = byId('push_night_time_row');
-  if(timeRow) timeRow.style.display = useSun ? 'none' : 'grid';
-  if(!sunInfo) return;
-  if(useSun){
-    const cfg = _pushCfg();
-    const lat = cfg.night_alert?.lat, lon = cfg.night_alert?.lon;
-    if(lat==null || lon==null){
-      sunInfo.innerHTML = '<span style="color:#ef4444">Standort in App &amp; Server festlegen, sonst fällt der Nacht-Alarm auf die feste Uhrzeit zurück.</span>';
-    } else {
-      sunInfo.textContent = `Standort gesetzt (lat ${lat}, lon ${lon}). Nacht-Erkennung über Sonnenstand (Civil Dusk = elev < −6°).`;
-    }
-  } else {
-    sunInfo.textContent = '';
-  }
-}
-
-function _bindPushHandlers(){
-  // Top-level master switch
-  byId('push_enabled')?.addEventListener('change', e => savePushCfg({enabled: e.target.checked}));
-  // Daily / highlight: toggle + time
-  for (const [id, key] of [['push_daily_enabled','daily_report'],['push_highlight_enabled','highlight']]){
-    byId(id)?.addEventListener('change', e => savePushCfg({[key]:{enabled:e.target.checked}}));
-  }
-  byId('push_daily_time')?.addEventListener('change', e => savePushCfg({daily_report:{time:e.target.value}}));
-  byId('push_highlight_time')?.addEventListener('change', e => savePushCfg({highlight:{time:e.target.value}}));
-  // Quiet hours
-  byId('push_quiet_enabled')?.addEventListener('change', e => {
-    // "off" ≈ start==end. We simply leave start/end as-is and treat the toggle
-    // as a UI cue; backend doesn't have a separate enabled flag. To actually
-    // disable, blank out start/end (backend's is_quiet_now returns false).
-    if(e.target.checked){
-      savePushCfg({quiet_hours:{start:byId('push_quiet_start').value||'22:00', end:byId('push_quiet_end').value||'07:00'}});
-    } else {
-      savePushCfg({quiet_hours:{start:'00:00', end:'00:00'}});
-    }
-  });
-  byId('push_quiet_start')?.addEventListener('change', e => savePushCfg({quiet_hours:{start:e.target.value}}));
-  byId('push_quiet_end')?.addEventListener('change',   e => savePushCfg({quiet_hours:{end:e.target.value}}));
-  // Night alert
-  byId('push_night_enabled')?.addEventListener('change', e => savePushCfg({night_alert:{enabled:e.target.checked}}));
-  byId('push_night_armed')?.addEventListener('change',   e => savePushCfg({night_alert:{armed_only:e.target.checked}}));
-  document.querySelectorAll('input[name="push_night_mode"]').forEach(r=>{
-    r.addEventListener('change', () => {
-      const useSun = document.querySelector('input[name="push_night_mode"][value="sun"]').checked;
-      savePushCfg({night_alert:{use_sun:useSun}});
-      _updatePushNightModeUI();
-    });
-  });
-  byId('push_night_start')?.addEventListener('change', e => savePushCfg({night_alert:{start:e.target.value}}));
-  byId('push_night_end')?.addEventListener('change',   e => savePushCfg({night_alert:{end:e.target.value}}));
-  // Per-label rows (delegated)
-  byId('pushLabelsList')?.addEventListener('change', e => {
-    const row = e.target.closest('.push-label-row'); if(!row) return;
-    const lbl = row.dataset.label;
-    if(e.target.matches('[data-push-toggle]')){
-      const on = e.target.checked;
-      // Enable/disable the slider visually + functionally.
-      const slider = row.querySelector('[data-push-slider]'); if(slider) slider.disabled = !on;
-      savePushCfg({labels:{[lbl]:{push:on}}});
-    }
-    if(e.target.matches('[data-push-slider]')){
-      // Saved on input event below; this 'change' fires on release too.
-    }
-  });
-  byId('pushLabelsList')?.addEventListener('input', e => {
-    if(!e.target.matches('[data-push-slider]')) return;
-    const row = e.target.closest('.push-label-row');
-    const lbl = row.dataset.label;
-    const v = parseFloat(e.target.value) || 0;
-    const pctEl = row.querySelector('.push-label-pct');
-    if(pctEl) pctEl.textContent = Math.round(v*100) + '%';
-    _debouncedPushSave({labels:{[lbl]:{threshold:v}}});
-  });
-  // Bottom toggles
-  byId('push_timelapse_enabled')?.addEventListener('change', e => savePushCfg({timelapse:{enabled:e.target.checked}}));
-  byId('push_system_enabled')?.addEventListener('change',    e => savePushCfg({system:{enabled:e.target.checked}}));
-  // Presets
-  document.querySelectorAll('.push-preset-btn').forEach(btn=>{
-    btn.addEventListener('click', async () => {
-      if(!await showConfirm('Aktuelle Push-Einstellungen überschreiben?')) return;
-      const preset = btn.dataset.preset;
-      const block = _buildPushPreset(preset);
-      await savePushCfg(block);
-      hydratePushUI();
-      showToast('Preset angewendet.', 'success');
-    });
-  });
-}
-
-function _buildPushPreset(name){
-  const def = _pushDefaults();
-  if(name === 'standard') return def;
-  if(name === 'quiet'){
-    return {
-      enabled:true, quiet_hours:{start:'22:00',end:'08:00'},
-      highlight:{enabled:false},
-      labels:{
-        person:{push:true,threshold:0.90},
-        car:{push:true,threshold:0.90},
-        squirrel:{push:false,threshold:0.80},
-        dog:{push:false,threshold:0.80},
-        cat:{push:false,threshold:0.80},
-        bird:{push:false,threshold:0.90},
-        motion:{push:false,threshold:0.0},
-      },
-    };
-  }
-  if(name === 'all'){
-    return {
-      enabled:true, quiet_hours:{start:'00:00',end:'00:00'},
-      labels:{
-        person:{push:true,threshold:0.70},
-        car:{push:true,threshold:0.70},
-        squirrel:{push:true,threshold:0.70},
-        dog:{push:true,threshold:0.70},
-        cat:{push:true,threshold:0.70},
-        bird:{push:true,threshold:0.70},
-        motion:{push:false,threshold:0.0},
-      },
-    };
-  }
-  return def;
-}
-
-function hydratePushDeps(){
-  const wrap = byId('pushDepsList'); if(!wrap) return;
-  const tg = state.config?.telegram || {};
-  const proc = state.config?.processing || {};
-  const srv = state.config?.server || {};
-  const cams = state.cameras || [];
-  const someCoral = cams.some(c => c.coral_available);
-  const someBird  = cams.some(c => c.bird_species_available);
-  const hasLoc = !!(srv.location?.lat || (tg.push?.night_alert?.lat));
-  const tgConn = !!(tg.enabled && tg.token && tg.chat_id);
-  const rows = [
-    [someCoral, 'Coral TPU aktiv',          'Wildlife-Erkennung verfügbar'],
-    [someBird,  'iNaturalist-Modell vorhanden', 'Vogelarten-Klassifikation'],
-    [hasLoc,    'Standort gesetzt',          'Sonnenstand-basierter Nacht-Alarm'],
-    [tgConn,    'Telegram-Bot verbunden',    'Push-System sendet Nachrichten'],
-  ];
-  wrap.innerHTML = rows.map(([ok, title, desc]) => `
-    <div class="push-dep-row">
-      <span class="push-dep-dot ${ok?'ok':'off'}"></span>
-      <div class="push-dep-text">
-        <div class="push-dep-title">${esc(title)}</div>
-        <div class="push-dep-desc">${esc(desc)}</div>
-      </div>
-    </div>
-  `).join('');
-}
-
-function renderTgFormatPreview(fmt){
-  const preview=byId('tgFormatPreview'); if(!preview) return;
-  const cam=state.cameras?.[0];
-  const ts=new Date().toLocaleString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  let html=`<div class="tg-bubble">
-    <div class="tg-bubble-meta">🚨 motion, person · 📷 ${esc(cam?.name||'Kamera')} · 📍 Einfahrt · 🕒 ${ts}</div>`;
-  if(fmt==='photo'||fmt==='video'){
-    const snap=cam?.snapshot_url||'';
-    html+=`<div class="tg-bubble-img">${snap?`<img src="${esc(snap)}" alt="snapshot"/>`:'<div class="tg-bubble-img-ph">📷 Snapshot</div>'}</div>`;
-  }
-  if(fmt==='video') html+=`<div class="tg-bubble-vid">🎬 Video-Clip angehängt (wenn verfügbar)</div>`;
-  html+=`<div class="tg-bubble-btns">[ 📷 Live ] [ 🎥 Clip ] [ 🖥 Dashboard ]</div></div>`;
-  preview.innerHTML=html;
-}
-
-byId('telegramForm')?.addEventListener('submit',async e=>{
-  e.preventDefault();
-  const existingToken=state.config?.telegram?.token||'';
-  const token=byId('tg_token')?.value||existingToken;
-  const payload={telegram:{
-    enabled:!!byId('tg_enabled')?.checked,
-    token,
-    chat_id:byId('tg_chat_id')?.value||'',
-    format:(state.config?.telegram||{}).format||'photo',
-  }};
-  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  showToast('Telegram-Verbindung gespeichert.','success');
-  await loadAll();
-});
-
-document.querySelectorAll('[name="tg_format"]').forEach(r=>{
-  r.addEventListener('change',()=>renderTgFormatPreview(r.value));
-});
-
-byId('saveTgFormatBtn')?.addEventListener('click',async()=>{
-  const fmt=[...document.querySelectorAll('[name="tg_format"]')].find(r=>r.checked)?.value||'photo';
-  const existing=state.config?.telegram||{};
-  const payload={telegram:{...existing,format:fmt}};
-  await fetch('/api/settings/app',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  showToast('Format gespeichert.','success');
-  await loadAll();
-});
 
 
 function openWizard(){ byId('wizard').classList.remove('hidden'); showWizardStep(1); }
@@ -2925,24 +2543,6 @@ byId('wizFinish').onclick=()=>finishWizard();
 
 
 
-// ── Telegram test button ──────────────────────────────────────────────────────
-byId('telegramTestBtn')?.addEventListener('click',async()=>{
-  const btn=byId('telegramTestBtn');
-  const res=byId('telegramTestResult');
-  btn.disabled=true; btn.textContent='Sende …';
-  if(res){res.style.display='inline';res.style.color='var(--muted)';res.textContent='...';}
-  try{
-    const r=await j('/api/telegram/test',{method:'POST'});
-    if(res){res.style.color='var(--good)';res.textContent='✓ Gesendet';}
-  }catch(e){
-    let msg='Fehler';
-    try{msg=JSON.parse(e.message)?.error||e.message;}catch{}
-    if(res){res.style.color='var(--danger)';res.textContent='✗ '+msg;}
-  }finally{
-    btn.disabled=false; btn.textContent='📨 Testnachricht senden';
-    if(res) setTimeout(()=>{res.style.display='none';},6000);
-  }
-});
 
 // ── Media rescan button ───────────────────────────────────────────────────────
 byId('rescanMediaBtn')?.addEventListener('click',async()=>{
@@ -6729,56 +6329,6 @@ function openWeatherRecapLightbox(idx){
   document.body.style.overflow = 'hidden';
 }
 
-// ── Push Weather settings (extends the Telegram "Was senden" tab) ───────────
-
-const _PUSH_WEATHER_ORDER = ['thunder', 'heavy_rain', 'snow', 'fog', 'sunset'];
-
-function _renderPushWeatherEvents(weatherCfg){
-  const wrap = byId('pushWeatherEventsList'); if (!wrap) return;
-  const events = (weatherCfg && weatherCfg.events) || {};
-  wrap.innerHTML = _PUSH_WEATHER_ORDER.map(t => {
-    const meta = (typeof WEATHER_TYPES === 'object' && WEATHER_TYPES[t]) || { de: t, color: '#94a3b8', icon: '' };
-    const on = events[t] !== undefined ? !!events[t] : false;
-    return `
-      <div class="push-label-row" data-weather-evt="${esc(t)}">
-        <span class="push-label-chip" style="background:${meta.color}22;border:1px solid ${meta.color}55;color:${meta.color}">${meta.icon} ${esc(meta.de)}</span>
-        <label class="switch push-label-toggle"><input type="checkbox" ${on ? 'checked' : ''} data-weather-event-toggle/><span class="slider"></span></label>
-        <span></span>
-        <span></span>
-      </div>`;
-  }).join('');
-}
-
-function _hydratePushWeather(){
-  const w = ((state.config?.telegram?.push) || {}).weather || {};
-  const en = byId('push_weather_enabled'); if (en) en.checked = !!w.enabled;
-  const recap = byId('push_weather_recap'); if (recap) recap.checked = w.recap_push !== false;
-  const sl = byId('push_weather_min_score');
-  const lbl = byId('push_weather_min_score_pct');
-  const v = w.min_score != null ? Number(w.min_score) : 0.4;
-  if (sl) sl.value = v;
-  if (lbl) lbl.textContent = Math.round(v * 100) + '%';
-  _renderPushWeatherEvents(w);
-}
-
-function _bindPushWeatherHandlers(){
-  byId('push_weather_enabled')?.addEventListener('change', e =>
-    savePushCfg({ weather: { enabled: e.target.checked } }));
-  byId('push_weather_recap')?.addEventListener('change', e =>
-    savePushCfg({ weather: { recap_push: e.target.checked } }));
-  byId('push_weather_min_score')?.addEventListener('input', e => {
-    const v = parseFloat(e.target.value) || 0;
-    const lbl = byId('push_weather_min_score_pct');
-    if (lbl) lbl.textContent = Math.round(v * 100) + '%';
-    _debouncedPushSave({ weather: { min_score: v } });
-  });
-  byId('pushWeatherEventsList')?.addEventListener('change', e => {
-    const row = e.target.closest('.push-label-row[data-weather-evt]'); if (!row) return;
-    if (!e.target.matches('[data-weather-event-toggle]')) return;
-    const evt = row.dataset.weatherEvt;
-    savePushCfg({ weather: { events: { [evt]: !!e.target.checked } } });
-  });
-}
 
 // ── Hash anchor handler — open lightbox for #weather/<id> on page load ──────
 
@@ -6814,12 +6364,6 @@ const _origLoadWeatherSightings = loadWeatherSightings;
 loadWeatherSightings = async function(filter){
   await _origLoadWeatherSightings(filter);
   await loadWeatherRecaps();
-};
-const _origHydratePushUI = hydratePushUI;
-hydratePushUI = function(){
-  _origHydratePushUI();
-  _hydratePushWeather();
-  _bindPushWeatherHandlers();
 };
 window.addEventListener('hashchange', _handleWeatherHashAnchor);
 // Fire once after the initial loadAll() completes.
@@ -6961,9 +6505,6 @@ window.renderCameraSettings    = renderCameraSettings;
 window.renderProfiles          = renderProfiles;
 window.renderAudit             = renderAudit;
 window.hydrateSettings         = hydrateSettings;
-window.hydrateTelegram         = hydrateTelegram;
-window.initTelegramTabs        = initTelegramTabs;
-window.hydratePushUI           = hydratePushUI;
 window.initWeatherTabs         = initWeatherTabs;
 window.initWeatherStats        = initWeatherStats;
 window.loadWeatherSightings    = loadWeatherSightings;

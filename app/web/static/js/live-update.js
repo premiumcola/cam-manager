@@ -16,6 +16,8 @@ import {
 import { renderTimeline } from './timeline.js';
 import { _renderGlobalStatusRows } from './camedit/detection.js';
 import { loadMediaStorageStats } from './chrome/storage-stats.js';
+import { hydrateTelegram, initTelegramTabs } from './telegram.js';
+import { hydratePushUI } from './push.js';
 
 let _liveUpdateInterval = null;
 const _prevCamStatuses = new Map();
@@ -101,9 +103,9 @@ export async function loadAll() {
   if (typeof window.renderProfiles === 'function')        await window.renderProfiles();
   if (typeof window.renderAudit === 'function')           await window.renderAudit();
   if (typeof window.hydrateSettings === 'function')       window.hydrateSettings();
-  if (typeof window.hydrateTelegram === 'function')       window.hydrateTelegram();
-  if (typeof window.initTelegramTabs === 'function')      window.initTelegramTabs();
-  if (typeof window.hydratePushUI === 'function')         window.hydratePushUI();
+  hydrateTelegram();
+  initTelegramTabs();
+  hydratePushUI();
   if (typeof window.initWeatherTabs === 'function')       window.initWeatherTabs();
   if (typeof window.initWeatherStats === 'function')      window.initWeatherStats();
   if (typeof window.loadWeatherSightings === 'function')  await window.loadWeatherSightings();
