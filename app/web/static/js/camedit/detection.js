@@ -468,7 +468,7 @@ export function _renderGlobalStatusRows(){
   if (upEl) upEl.textContent = _fmtRelativeAgeS(age);
 }
 
-function _fmtRelativeAgeS(s){
+export function _fmtRelativeAgeS(s){
   if (s == null || !Number.isFinite(s)) return '—';
   if (s < 5)        return 'gerade eben';
   if (s < 60)       return `vor ${Math.round(s)} s`;

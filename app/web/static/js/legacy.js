@@ -91,6 +91,7 @@ import {
   _bindErkSimulate,
   _renderCamObjectPills, getCamObjectFilterState, setCamObjectFilterState,
   _renderGlobalStatusRows, _renderCamConfirmGrid,
+  _fmtRelativeAgeS,
 } from './camedit/detection.js';
 // Stage 9 — polygon zone/mask editor. Importing the module also fires
 // its IIFE that wires the canvas + toolbar buttons (idempotent against
