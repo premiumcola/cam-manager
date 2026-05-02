@@ -9,6 +9,7 @@ import { byId } from '../core/dom.js';
 import { j } from '../core/api.js';
 import { showToast } from '../core/toast.js';
 import { loadMediaStorageStats } from '../chrome/storage-stats.js';
+import { state } from '../core/state.js';
 
 byId('rescanMediaBtn')?.addEventListener('click', async () => {
   const btn = byId('rescanMediaBtn');
@@ -127,6 +128,69 @@ byId('fixThumbsBtn')?.addEventListener('click', async () => {
     }
   } catch (e){
     showToast('Fehler: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('scanning');
+  }
+});
+
+// ── Bulk track-reindex ─────────────────────────────────────────────────────
+// Posts to /api/tracking/reindex-all (?camera_id=… when a single-camera
+// drilldown is open), then polls /api/tracking/status until queued reaches
+// 0 or 60 s elapse. Mirrors the worker stance: live progress visible, never
+// blocks the UI, and reports "worker not alive" cleanly when the singleton
+// hasn't booted (e.g. detection mode = none).
+function _camDisplayName(camId){
+  const c = (state.cameras || []).find(x => (x.id || '') === camId);
+  return c?.name || camId;
+}
+
+byId('reindexTrackingBtn')?.addEventListener('click', async () => {
+  const btn = byId('reindexTrackingBtn');
+  if (btn.disabled) return;
+  const camId = state.mediaCamera || null;
+  const scopeLabel = camId ? _camDisplayName(camId) : 'alle Kameras';
+  btn.disabled = true;
+  btn.classList.add('scanning');
+  try {
+    const url = '/api/tracking/reindex-all'
+      + (camId ? `?camera_id=${encodeURIComponent(camId)}` : '');
+    const r = await fetch(url, { method: 'POST' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok){
+      const msg = (d.error || r.statusText || 'Fehler');
+      showToast('Tracking-Re-Index: ' + msg, 'error');
+      return;
+    }
+    const queued = d.queued || 0;
+    if (queued === 0){
+      showToast(`Tracking aktuell — ${scopeLabel} schon indiziert`, 'success');
+      return;
+    }
+    showToast(`${queued} Clip${queued === 1 ? '' : 's'} werden indiziert (${scopeLabel}) …`, 'info');
+    // Poll /api/tracking/status every 3 s up to 60 s, edging the toast
+    // text down toward 0. Stop on first zero or on worker-down.
+    const t0 = Date.now();
+    const tick = async () => {
+      if (Date.now() - t0 > 60_000) return;  // hand off to background
+      let s;
+      try { s = await (await fetch('/api/tracking/status')).json(); }
+      catch { s = null; }
+      if (!s || !s.alive){
+        showToast('Tracking-Worker nicht erreichbar', 'error');
+        return;
+      }
+      const q = s.queued || 0;
+      if (q <= 0){
+        showToast(`Tracking abgeschlossen — ${scopeLabel}`, 'success');
+        return;
+      }
+      showToast(`Tracking läuft … noch ${q} in der Queue`, 'info');
+      setTimeout(tick, 3000);
+    };
+    setTimeout(tick, 3000);
+  } catch (e){
+    showToast('Tracking-Re-Index fehlgeschlagen: ' + (e.message || e), 'error');
   } finally {
     btn.disabled = false;
     btn.classList.remove('scanning');
