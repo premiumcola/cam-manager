@@ -827,19 +827,17 @@ class WildlifeClassifier:
         self.available = False
         self.reason = "disabled"
         self.mode = "none"  # "coral" | "cpu" | "none"
-        # Auto-discovery fallback: when the configured model path is missing
-        # or absent on disk, try to locate a MobileNet ImageNet model in
-        # /app/models. Lets users just drop a model in without editing yaml.
-        configured = self.cfg.get("model_path")
-        if not configured or not Path(configured).exists():
-            disc = discover_wildlife_paths()
-            for k, v in disc.items():
-                self.cfg.setdefault(k, v)
-                # If the configured value pointed at a missing file, replace
-                # it with the discovered one so downstream logic uses the
-                # path that actually exists on disk.
-                if not self.cfg.get(k) or not Path(self.cfg[k]).exists():
-                    self.cfg[k] = v
+        # Auto-discovery: locate a MobileNet ImageNet model + its labels
+        # file in /app/models. Lets users drop a model in without editing
+        # yaml. Always runs (cheap glob) so partial configs — common case:
+        # model_path set but labels_path missing — still get the labels
+        # filled in. Existing keys win via setdefault; broken paths get
+        # replaced with the discovered alternative.
+        disc = discover_wildlife_paths()
+        for k, v in disc.items():
+            self.cfg.setdefault(k, v)
+            if not self.cfg.get(k) or not Path(self.cfg[k]).exists():
+                self.cfg[k] = v
         self.labels = load_label_map(self.cfg.get("labels_path"))
         self.min_score = float(self.cfg.get("min_score", 0.35))
         self.interpreter = None
