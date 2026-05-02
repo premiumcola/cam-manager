@@ -1788,12 +1788,20 @@ function _truncMid(s,max){
   const keep=Math.max(8,Math.floor((max-1)/2));
   return s.slice(0,keep)+'…'+s.slice(-keep);
 }
-// Category metadata — headings shown for each group of models.
+// Category metadata — headings + per-category note shown for each group
+// of models. The note sits between the category description and the
+// model rows; used today only for the detection category to flag that
+// COCO + EfficientDet are interchangeable.
 const _MODEL_CATEGORIES=[
-  {id:'detection',    title:'Objekt-Erkennung (COCO)',           desc:'Erkennt 80 Alltagsobjekte: Personen, Autos, Vögel, Katzen, Hunde etc.'},
-  {id:'bird_species', title:'Vogelarten-Klassifikation (iNaturalist)', desc:'Bestimmt ~960 Vogelarten weltweit. Läuft als zweite Stufe nach COCO-Erkennung.'},
-  {id:'wildlife',     title:'Wildtier-Erkennung (ImageNet)',     desc:'1000 ImageNet-Klassen inkl. Eichhörnchen, Fuchs, Igel, Reh. Zweite Stufe für Tiere außerhalb COCO.'},
-  {id:'other',        title:'Sonstige Modelle',                  desc:'Eigene .tflite-Modelle, die keiner der obigen Kategorien zuzuordnen sind.'},
+  {id:'detection',    title:'Objekt-Erkennung (COCO)',
+    desc:'Findet Objekte im Bild und markiert sie mit Rahmen. Erste Stufe für alles: Mensch, Auto, Vogel, Tier.',
+    note:'Eines der beiden Modelle ist aktiv. Das andere ist als Alternative zum schnellen Wechsel verfügbar — kann gefahrlos gelöscht werden, wenn nicht gebraucht.'},
+  {id:'bird_species', title:'Vogelarten-Klassifikation (iNaturalist)',
+    desc:'Bestimmt die Vogelart, sobald die erste Stufe einen Vogel gefunden hat. Läuft auf dem Bildausschnitt des Vogels.'},
+  {id:'wildlife',     title:'Wildtier-Erkennung (ImageNet)',
+    desc:"Bestimmt die Tierart bei Säugern, die die erste Stufe nur generisch als 'Tier' erkennt — Eichhörnchen, Fuchs, Igel, Reh."},
+  {id:'other',        title:'Sonstige Modelle',
+    desc:'Eigene .tflite-Modelle, die keiner der obigen Kategorien zuzuordnen sind.'},
 ];
 
 // Strip the EdgeTPU / CPU suffix so CPU + TPU variants of the same model
@@ -1830,7 +1838,10 @@ async function _loadCoralModels(){
     for(const cat of _MODEL_CATEGORIES){
       const stems=byCat[cat.id];
       if(!stems||!Object.keys(stems).length) continue;
-      html+=`<div class="mcat"><div class="mcat-head">${esc(cat.title)}</div><div class="mcat-desc">${esc(cat.desc)}</div>`;
+      const catNote = cat.note
+        ? `<div class="mcat-note">${esc(cat.note)}</div>`
+        : '';
+      html+=`<div class="mcat"><div class="mcat-head">${esc(cat.title)}</div><div class="mcat-desc">${esc(cat.desc)}</div>${catNote}`;
       // Stable stem order, alphabetical.
       const stemKeys=Object.keys(stems).sort();
       // Coral TPU availability picks which variant is actively in use:
@@ -1848,10 +1859,13 @@ async function _loadCoralModels(){
         const pairInUse = variants.some(v=>v.active_in_category);
         const usedVariant = pairInUse ? (coralAvail ? (tpu||cpu) : (cpu||tpu)) : null;
         const labelInfo=(variants[0]||{}).labels||{};
+        // "Erkennt N Klassen · Liste: <file>" instead of the cryptic
+        // "Labels: <file> (N Einträge)" — N is the number of classes
+        // the model can identify, not a generic file count.
         const labelPill=labelInfo.filename
           ? (labelInfo.exists
-              ? `<span class="mpair-labels" title="${esc(labelInfo.path||'')}">Labels: ${esc(labelInfo.filename)}${labelInfo.count?` (${labelInfo.count} Einträge)`:''}</span>`
-              : `<span class="mpair-labels mpair-labels--missing">⚠ Labels fehlen: ${esc(labelInfo.filename)}</span>`)
+              ? `<span class="mpair-labels" title="${esc(labelInfo.path||'')}">${labelInfo.count?`Erkennt ${labelInfo.count} Klassen · `:''}Liste: ${esc(labelInfo.filename)}</span>`
+              : `<span class="mpair-labels mpair-labels--missing">⚠ Klassen-Liste fehlt: ${esc(labelInfo.filename)}</span>`)
           : '';
         const mkVariantHtml=(v,label)=>{
           if(!v) return `<div class="mvar mvar--missing"><span class="mvar-kind">${esc(label)}</span><span class="mvar-empty">nicht vorhanden</span></div>`;
@@ -1868,11 +1882,18 @@ async function _loadCoralModels(){
             ${stateChip}
           </div>`;
         };
-        // Title row: model stem + description
+        // Title row: friendly stem + official filenames in a muted
+        // sub-line (CPU first, EDGETPU second; "—" placeholder when one
+        // variant is missing). Keeps the stem readable while preserving
+        // the actual on-disk filenames so users can locate the file.
         const anyVar=cpu||tpu;
+        const fileNames=`${cpu?esc(cpu.filename):'—'} · ${tpu?esc(tpu.filename):'—'}`;
         html+=`<div class="mpair">
           <div class="mpair-head">
-            <span class="mpair-name" title="${esc(anyVar.filename)}">${esc(stem)}</span>
+            <span class="mpair-name-block">
+              <span class="mpair-name" title="${esc(anyVar.filename)}">${esc(stem)}</span>
+              <span class="mpair-files">${fileNames}</span>
+            </span>
             ${labelPill}
           </div>
           <div class="mpair-desc">${esc(anyVar.description||'')}</div>
