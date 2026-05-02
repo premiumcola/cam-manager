@@ -4280,6 +4280,16 @@ function _renderWeatherGrid(){
     const dateLabel = t.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' });
     const timeLabel = t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     const sevPct = Math.round((s.score || s.severity || 0) * 100);
+    // The percentage badge means different things per event type and
+    // users were asking what it stood for. sun_timelapse_* uses a
+    // sky-quality metric (100% = clear sky, ~50% = overcast); all
+    // other event types use a generic severity score. The same text
+    // is mirrored into the click-to-toast handler below for touch
+    // devices since title= doesn't surface on tap.
+    const isSunTl = typeof s.event_type === 'string' && s.event_type.startsWith('sun_timelapse');
+    const scoreTip = isSunTl
+      ? 'Himmelsqualität · 100% = klarer Himmel, 50% = stark bewölkt'
+      : 'Stärke des Wetterereignisses';
     const camName = esc(s.cam_name || s.cam_id || '');
     const camActive = _activeCamIds.has(s.cam_id);
     const thumbHtml = camActive
@@ -4292,7 +4302,7 @@ function _renderWeatherGrid(){
           <span class="ws-card-badge ws-card-badge--type" style="background:${meta.color}cc">
             <span class="ws-card-badge-icon">${meta.icon}</span>${esc(meta.de)}
           </span>
-          ${sevPct > 0 ? `<span class="ws-card-badge ws-card-badge--score">${sevPct}%</span>` : ''}
+          ${sevPct > 0 ? `<span class="ws-card-badge ws-card-badge--score" role="button" tabindex="0" title="${esc(scoreTip)}" aria-label="${sevPct} Prozent, ${esc(scoreTip)}" data-score-tip="${esc(scoreTip)}">${sevPct}%<span class="ws-score-info" aria-hidden="true">ⓘ</span></span>` : ''}
           <span class="ws-card-play">
             <svg viewBox="0 0 24 24" width="34" height="34" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
           </span>
@@ -4303,6 +4313,18 @@ function _renderWeatherGrid(){
   }).join('');
   grid.querySelectorAll('.ws-card').forEach(card => {
     card.addEventListener('click', () => openWeatherLightbox(parseInt(card.dataset.idx, 10)));
+  });
+  // Score badges fire a toast with the metric explanation on tap —
+  // title= alone is desktop-only. stopPropagation keeps the badge tap
+  // from also opening the card lightbox.
+  grid.querySelectorAll('.ws-card-badge--score').forEach(b => {
+    const tip = b.getAttribute('data-score-tip');
+    if (!tip) return;
+    const fire = (e) => { e.stopPropagation(); showToast(tip, 'info'); };
+    b.addEventListener('click', fire);
+    b.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(e); }
+    });
   });
 }
 

@@ -2416,7 +2416,11 @@ select option{background:#1e1e1e;color:var(--text)}
 /* Top-Left type badge with icon — blur background like Mediathek */
 .ws-card-badge{position:absolute;display:inline-flex;align-items:center;gap:5px;padding:4px 9px;border-radius:8px;font-size:11px;font-weight:700;color:#fff;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);text-shadow:0 1px 2px rgba(0,0,0,0.4);line-height:1}
 .ws-card-badge--type{top:8px;left:8px}
-.ws-card-badge--score{top:8px;right:8px;background:rgba(0,0,0,0.55);font-variant-numeric:tabular-nums}
+.ws-card-badge--score{top:8px;right:8px;background:rgba(0,0,0,0.55);font-variant-numeric:tabular-nums;cursor:help}
+/* Info-dot inside the score badge — signals to touch users that the
+   percentage is tappable for an explanation toast. Slightly muted vs
+   the digits so it doesn't fight the value. */
+.ws-card-badge--score .ws-score-info{margin-left:3px;opacity:.7;font-size:10px;font-weight:600;line-height:1}
 .ws-card-badge-icon{display:inline-flex;align-items:center}
 .ws-card-badge-icon svg{width:14px;height:14px}
 
