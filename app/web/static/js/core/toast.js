@@ -3,17 +3,25 @@
 // module instead of native window.confirm() (per CLAUDE.md). Both are
 // exported AND attached to window so inline onclick handlers in
 // dynamically-rendered template strings can still find them.
-import { byId, esc } from './dom.js';
+import { byId } from './dom.js';
 
 export function showToast(msg, type = 'info') {
   const c = byId('toastContainer');
   if (!c) return;
   const t = document.createElement('div');
   t.className = `toast ${type}`;
-  const icons = { warn: '⚠️', error: '✕', success: '✓', info: 'ℹ' };
-  t.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ'}</span>`
-    + `<span class="toast-msg">${esc(msg)}</span>`
-    + `<button class="toast-close" onclick="this.closest('.toast').remove()">✕</button>`;
+  const glyphs = { warn: '!', error: '×', success: '✓', info: 'i' };
+  const icon = document.createElement('span');
+  icon.className = 'toast-icon';
+  icon.textContent = glyphs[type] || 'i';
+  const text = document.createElement('span');
+  text.className = 'toast-msg';
+  text.textContent = String(msg ?? '');
+  const close = document.createElement('button');
+  close.className = 'toast-close';
+  close.textContent = '×';
+  close.addEventListener('click', () => t.remove());
+  t.append(icon, text, close);
   c.appendChild(t);
   // Toast lifetime by severity — errors linger longest because the
   // user usually wants time to read what failed before reaching for

@@ -317,7 +317,7 @@ window.saveTlCameraProfiles=async function(camId){
   // Keep a camera-level fps too (most recently edited) for legacy readers.
   const payload={...cam,timelapse:{...(cam.timelapse||{}),enabled:anyEnabled,fps:latestFps,profiles}};
   await fetch('/api/settings/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-  showToast(`Timelapse für ${esc(cam.name)} gespeichert.`,'success');
+  showToast(`Timelapse für ${cam.name} gespeichert.`,'success');
   await loadAll();
   _updateTlActiveTags(state.cameras||[]);
   const content=byId('tlSettingsContent');

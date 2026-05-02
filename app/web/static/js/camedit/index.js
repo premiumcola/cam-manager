@@ -194,7 +194,7 @@ window._quickDeleteCamera=async function(camId,camName){
     if(r.event_count>0) showToast(`${r.event_count} gespeicherte Ereignisse bleiben im Archiv erhalten.`,'warn');
     if(panelState.camId===camId) _restoreEditWrapper();
     await loadAll();
-  }catch(e){showToast('Fehler beim Löschen: '+esc(e.message||e),'error');}
+  }catch(e){showToast('Fehler beim Löschen: '+(e.message||e),'error');}
 };
 
 function editCamera(camId){

@@ -2312,7 +2312,15 @@ def api_camera_snapshot(cam_id):
     rt = runtimes.get(cam_id)
     if not rt:
         return ("not running", 404)
+    # Brief wait — capture loop normally refills within a frame interval, so
+    # transient gaps (post-reconnect, watchdog restart, runtime swap) don't
+    # surface as 503 noise in the dashboard's 5 fps refresh loop.
+    import time as _t
+    deadline = _t.monotonic() + 1.5
     data = rt.snapshot_jpeg()
+    while not data and _t.monotonic() < deadline:
+        _t.sleep(0.05)
+        data = rt.snapshot_jpeg()
     if not data:
         return ("no frame", 503)
     return Response(data, mimetype='image/jpeg', headers={'Cache-Control': 'no-store'})
