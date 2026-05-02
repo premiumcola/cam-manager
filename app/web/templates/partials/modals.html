@@ -1,0 +1,136 @@
+  <div id="discoveryModal" class="modal hidden">
+    <div class="modal-card panel">
+      <div class="modal-inner-head">
+        <h3>Netzwerk-Discovery</h3>
+        <button id="closeDiscoveryBtn" class="close-btn" type="button">✕</button>
+      </div>
+      <div class="field-help">Gefundene Hosts mit typischen Kamera-Ports. Klick auf "Als RTSP übernehmen" trägt die IP direkt in die Form ein.</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:4px">
+        <div id="discoveryStatus" class="small muted">Noch keine Suche gestartet.</div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer;flex-shrink:0">
+          <input type="checkbox" id="discoveryHideConfigured" style="cursor:pointer" />
+          Bereits konfigurierte ausblenden
+        </label>
+      </div>
+      <div id="discoveryResults" class="list" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- Lightbox modal for media viewer -->
+  <div id="lightboxModal" class="modal hidden" style="padding:0;align-items:center;justify-content:center">
+    <div id="lightboxInner" style="position:relative;width:min(94vw,1400px);display:flex;flex-direction:column;align-items:center">
+      <div id="lightboxMediaWrap" style="position:relative;width:100%;border-radius:18px;overflow:hidden;background:#080510;min-height:240px">
+        <img id="lightboxImg" src="" alt="Event" style="width:100%;max-height:80vh;object-fit:contain;background:#081119;display:block;transition:transform .18s ease-in,opacity .18s ease-in" />
+        <video id="lightboxVideo" style="display:none;width:100%;max-height:80vh;object-fit:contain;background:#080510;outline:none;border-radius:18px" controls playsinline preload="metadata"></video>
+        <canvas id="lightboxDetections" style="position:absolute;inset:0;pointer-events:none;z-index:3"></canvas>
+        <button id="lightboxClose" type="button">✕</button>
+        <button id="lightboxPrev" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15,18 9,12 15,6"/></svg></button>
+        <button id="lightboxNext" type="button"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="9,18 15,12 9,6"/></svg></button>
+        <div id="lightboxLabels" style="position:absolute;bottom:80px;left:14px;display:flex;gap:6px;flex-wrap:wrap;pointer-events:none;z-index:4"></div>
+        <button id="lightboxConfirm" type="button"></button>
+        <button id="lightboxDelete" type="button"></button>
+      </div>
+      <div id="lightboxMeta" style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center"></div>
+    </div>
+  </div>
+
+  <!-- Live view modal -->
+  <div id="liveViewModal" class="modal hidden" style="position:fixed;inset:0;background:#000;z-index:1000;display:flex;align-items:center;justify-content:center;">
+    <div id="liveViewWrap" style="position:relative;width:100%;height:100dvh;display:flex;align-items:center;justify-content:center;background:#000;">
+      <img id="liveViewImg" src="" alt="Live"
+           style="max-width:100%;max-height:100dvh;object-fit:contain;display:block;cursor:pointer;" />
+
+      <!-- top-left: camera name -->
+      <div style="position:absolute;top:14px;left:14px;pointer-events:none;">
+        <span id="liveViewTitle"
+              style="font-size:15px;font-weight:600;color:#fff;background:rgba(0,0,0,0.5);padding:5px 12px;border-radius:20px;backdrop-filter:blur(4px)"></span>
+      </div>
+
+      <!-- top-right: close button -->
+      <button onclick="closeLiveView()"
+              style="position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,0.55);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 24 24" width="18" height="18" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+
+      <!-- bottom-left: SD/HD toggle + Fullscreen button -->
+      <div style="position:absolute;bottom:14px;left:14px;display:flex;gap:8px;align-items:center;">
+        <button id="liveViewHdBtn"
+                onclick="_setLiveViewStream(!_liveViewHd)"
+                style="height:32px;padding:0 12px;border-radius:8px;border:1.5px solid rgba(255,255,255,0.2);background:rgba(0,0,0,0.55);color:rgba(255,255,255,0.5);font-size:11px;font-weight:700;letter-spacing:.05em;cursor:pointer;backdrop-filter:blur(4px);transition:all .2s">
+          HD
+        </button>
+        <button id="liveViewFsBtn"
+                style="width:40px;height:40px;border-radius:10px;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.15);cursor:pointer;display:flex;align-items:center;justify-content:center;">
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast container -->
+  <div id="toastContainer"></div>
+
+  <!-- Camera merge modal -->
+  <div id="mergeModal" class="modal hidden">
+    <div class="modal-card panel" style="max-width:480px;width:100%">
+      <div class="modal-inner-head">
+        <h3>Kameras zusammenführen</h3>
+        <button id="closeMergeBtn" class="close-btn" type="button">✕</button>
+      </div>
+      <p id="mergeIntro" style="font-size:14px;line-height:1.55;color:var(--text);margin:8px 0 14px"></p>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:6px">Ziel-Kamera</div>
+      <div id="mergeTargets" class="list" style="margin-bottom:14px;max-height:280px;overflow-y:auto"></div>
+      <p id="mergeWarning" class="field-help" style="border-left:3px solid #f59e0b;padding:8px 10px;display:none"></p>
+      <div class="modal-actions">
+        <button id="mergeCancelBtn" style="padding:10px 22px;border-radius:12px;border:1px solid #3a5060;background:var(--surface);color:var(--text);cursor:pointer;font-weight:600;font-size:14px">Abbrechen</button>
+        <button id="mergeConfirmBtn" disabled style="padding:10px 22px;border-radius:12px;border:none;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;margin-left:10px;opacity:.5">Zusammenführen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm modal -->
+  <div id="confirmModal" class="modal hidden">
+    <div class="modal-card panel" style="max-width:420px;width:100%">
+      <p id="confirmMsg" style="font-size:15px;line-height:1.55;margin-bottom:20px;color:var(--text)"></p>
+      <div class="modal-actions">
+        <button id="confirmCancel" style="padding:10px 22px;border-radius:12px;border:1px solid #3a5060;background:var(--surface);color:var(--text);cursor:pointer;font-weight:600;font-size:14px">Abbrechen</button>
+        <button id="confirmOk" style="padding:10px 22px;border-radius:12px;border:none;background:var(--accent);color:#fff;font-weight:700;cursor:pointer;margin-left:10px">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Camera connection-recovery modal. Two tabs: Sicherung (server-stored
+       backups → full restore + auto-reconnect) and Auto-Erkennung (network
+       discovery → fills the form, user enters creds, normal Save). -->
+  <div id="camRecoveryModal" class="modal hidden">
+    <div class="modal-card panel" style="max-width:560px;width:100%">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#7faec9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 4 3 9 8 9"/></svg>
+        <h3 style="margin:0;font-size:17px">Verbindungsdaten wiederherstellen</h3>
+      </div>
+      <div class="cam-recovery-tabs">
+        <button type="button" class="cam-recovery-tab active" data-tab="rec-backup">Aus Sicherung</button>
+        <button type="button" class="cam-recovery-tab" data-tab="rec-discovery">Auto-Erkennung</button>
+      </div>
+      <div class="cam-recovery-tab-content" id="rec-backup">
+        <div id="camRecoveryBackupList" class="cam-recovery-list"></div>
+        <div class="field-help" style="margin-top:8px">
+          Beim Übernehmen werden ausschließlich die vier Verbindungsfelder dieser Kamera (RTSP-URL, Snapshot-URL, Benutzer, Passwort) zurückgespielt. Alle anderen Einstellungen und alle anderen Kameras bleiben unverändert.
+        </div>
+      </div>
+      <div class="cam-recovery-tab-content" id="rec-discovery" hidden>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <button type="button" class="btn-action" onclick="loadCamRecoveryDiscovery()" id="camRecoveryDiscoverBtn">🔍 Subnetz scannen</button>
+          <span id="camRecoveryDiscoverStatus" class="small muted"></span>
+        </div>
+        <div id="camRecoveryDiscoveryList" class="cam-recovery-list"></div>
+        <div class="field-help" style="margin-top:8px">
+          Discovery findet IP und RTSP-Pfad. Benutzer und Passwort werden danach in den Formularfeldern eingegeben — anschließend speichern.
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button type="button" class="btn-action" onclick="closeCamRecoveryModal()">Schließen</button>
+      </div>
+    </div>
+  </div>

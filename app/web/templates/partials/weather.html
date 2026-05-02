@@ -1,0 +1,56 @@
+      <section id="weather" class="panel section" data-accent="127,174,201">
+        <!-- Wetter-Ereignisse: clip grid + recaps + filter pills. The user
+             opens the section primarily to look at recent events, so this
+             block sits at the top. Element ids (weatherSightingsBlock /
+             Grid / Empty) keep the legacy "sightings" naming because the
+             backend storage paths and API routes still use it — only the
+             user-facing labels were renamed. -->
+        <div class="weather-sightings-block" id="weatherSightingsBlock">
+          <div class="weather-sightings-head">
+            <span class="ws-title">
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><use href="#icon-cloud-rain"/></svg>
+              Wetter-Ereignisse
+            </span>
+            <span class="ws-subtitle" id="weatherSightingsSubtitle"></span>
+          </div>
+          <div class="ws-recaps-row" id="weatherRecapsRow" hidden>
+            <div class="ws-recaps-title">Recaps</div>
+            <div class="ws-recaps-strip" id="weatherRecapsStrip"></div>
+          </div>
+          <div class="ws-filter-bar" id="weatherFilterBar"></div>
+          <div class="ws-grid" id="weatherSightingsGrid"></div>
+          <div class="ws-empty" id="weatherSightingsEmpty" hidden>
+            Noch keine Wetter-Ereignisse. Sobald eine Wetter-Kamera ein Ereignis erkennt (Gewitter, Starkregen, Nebel, Sonnenuntergang …), erscheint hier ein 10-Sekunden-Clip.
+          </div>
+        </div>
+
+        <!-- Wetterdaten & Prognose: persisted history of all numeric
+             Open-Meteo parameters + sun altitude, rendered as a single
+             multi-line SVG chart with per-line normalisation. Fetches
+             /api/weather/history on visibility (IntersectionObserver)
+             and refreshes every 60 s while the section is in view. -->
+        <div class="ws-stats-block" id="weatherStatsBlock">
+          <div class="ws-stats-head">
+            <span class="ws-title">
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><use href="#icon-trend"/></svg>
+              Wetterdaten &amp; Prognose
+            </span>
+            <div class="ws-stats-pills" id="weatherStatsPills" role="tablist" aria-label="Zeitfenster">
+              <button type="button" class="ws-stats-pill" data-hours="1">1 h</button>
+              <button type="button" class="ws-stats-pill" data-hours="6">6 h</button>
+              <button type="button" class="ws-stats-pill is-active" data-hours="24">24 h</button>
+              <button type="button" class="ws-stats-pill" data-hours="168">7 d</button>
+              <button type="button" class="ws-stats-pill" data-hours="720">30 d</button>
+            </div>
+          </div>
+          <div class="ws-stats-chart-wrap" id="weatherStatsChartWrap">
+            <!-- populated by renderWeatherStatsChart() -->
+          </div>
+          <div class="ws-stats-legend" id="weatherStatsLegend">
+            <!-- populated by renderWeatherStatsLegend() -->
+          </div>
+          <div class="ws-stats-explainer" id="weatherStatsExplainer" hidden>
+            <!-- populated by renderWeatherStatsExplainer() when a chip is isolated -->
+          </div>
+        </div>
+      </section>

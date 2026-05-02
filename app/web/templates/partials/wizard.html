@@ -1,0 +1,67 @@
+  <div id="wizard" class="wizard hidden">
+    <div class="wizard-card panel">
+      <div class="wizard-head">
+        <div class="logo lg">🐈‍⬛</div>
+        <div>
+          <div class="eyebrow">TAM-spy · First Start</div>
+          <h2>Erstkonfiguration</h2>
+          <div class="muted">Kompakter Startassistent für Unraid, MQTT, Telegram und die erste Kamera.</div>
+        </div>
+      </div>
+      <div class="wizard-steps">
+        <button class="wiz-tab active" data-step="1">1 App</button>
+        <button class="wiz-tab" data-step="2">2 Telegram</button>
+        <button class="wiz-tab" data-step="3">3 MQTT</button>
+        <button class="wiz-tab" data-step="4">4 Kamera</button>
+      </div>
+      <div class="wizard-body">
+        <section class="wiz-step active" data-step="1">
+          <div class="form compact">
+            <input id="wiz_app_name" placeholder="App-Name" value="TAM-spy" />
+            <input id="wiz_tagline" placeholder="Tagline" value="Analyse · Sicherheit · Tierbeobachtung" />
+            <input id="wiz_logo" placeholder="Logo Emoji" value="🐈‍⬛" />
+            <input id="wiz_subnet" placeholder="Discovery-Subnet" value="192.168.1.0/24" />
+          </div>
+        </section>
+        <section class="wiz-step" data-step="2">
+          <div class="form compact">
+            <label class="toggle-row"><span>Telegram aktiv</span><label class="switch"><input type="checkbox" id="wiz_tg_enabled" /><span class="slider"></span></label></label>
+            <div class="field-help">Beispiel Token: <code>123456789:AAExampleBotToken</code></div>
+            <input id="wiz_tg_token" placeholder="Telegram Token · Beispiel: 123456789:AAExampleBotToken" />
+            <div class="field-help">Beispiel Chat-ID: <code>123456789</code> oder <code>-1001234567890</code> bei Gruppen.</div>
+            <input id="wiz_tg_chat_id" placeholder="Telegram Chat ID · Beispiel: 123456789" />
+          </div>
+        </section>
+        <section class="wiz-step" data-step="3">
+          <div class="form compact">
+            <label class="toggle-row"><span>MQTT aktiv</span><label class="switch"><input type="checkbox" id="wiz_mqtt_enabled" checked /><span class="slider"></span></label></label>
+            <div class="field-help">Beispiel Host: <code>192.168.X.X</code> oder <code>homeassistant.local</code></div>
+            <input id="wiz_mqtt_host" placeholder="MQTT Host · Beispiel: 192.168.X.X" value="homeassistant.local" />
+            <div class="row3"><input id="wiz_mqtt_port" placeholder="Port · Beispiel: 1883" value="1883" /><input id="wiz_mqtt_username" placeholder="MQTT Benutzer" /><input id="wiz_mqtt_password" placeholder="MQTT Passwort" /></div>
+            <div class="field-help">Base Topic = Präfix aller MQTT-Nachrichten. Beispiel: <code>tam-spy</code></div>
+            <input id="wiz_mqtt_topic" placeholder="Base Topic · Beispiel: tam-spy" value="tam-spy" />
+          </div>
+        </section>
+        <section class="wiz-step" data-step="4">
+          <div class="form compact">
+            <div class="field-help">Für deine Kamera <code>192.168.X.X</code>: IP kommt nicht extra in ein eigenes Feld, sondern in die RTSP- oder Snapshot-URL.</div>
+            <input id="wiz_cam_id" placeholder="Kamera-ID · Beispiel: cam-werkstatt" />
+            <input id="wiz_cam_name" placeholder="Kameraname · Beispiel: Werkstatt" />
+            <div class="field-help">Hersteller + Modell sind optional, sorgen aber für saubere Speicherpfade — fließen in die Kamera-ID ein.</div>
+            <input id="wiz_cam_manufacturer" placeholder="Hersteller (optional) · Beispiel: Reolink" />
+            <input id="wiz_cam_model" placeholder="Modell (optional) · Beispiel: RLC-810A" />
+            <input id="wiz_cam_location" placeholder="Ort · Beispiel: Werkbank / Tor" />
+            <div class="field-help">RTSP URL = der Video-Stream deiner Kamera. Beispiele:<br><code>rtsp://user:pass@192.168.X.X:554/h264Preview_01_main</code> (Reolink)<br><code>rtsp://user:pass@192.168.X.X:554/Streaming/Channels/101</code> (Hikvision)<br><code>rtsp://user:pass@192.168.X.X:554/cam/realmonitor?channel=1&amp;subtype=0</code> (Dahua)</div>
+            <input id="wiz_cam_rtsp" placeholder="RTSP URL · Beispiel: rtsp://user:pass@192.168.X.X:554/Streaming/Channels/101" />
+            <div class="field-help">Snapshot URL = einzelnes JPG-Bild der Kamera. Optional. Beispiel: <code>http://user:pass@192.168.X.X/cgi-bin/snapshot.cgi</code></div>
+            <input id="wiz_cam_snapshot" placeholder="Snapshot URL optional · Beispiel: http://user:pass@192.168.X.X/cgi-bin/snapshot.cgi" />
+          </div>
+        </section>
+      </div>
+      <div class="wizard-actions">
+        <button id="wizPrev" class="ghost">Zurück</button>
+        <button id="wizNext">Weiter</button>
+        <button id="wizFinish" class="hidden">Setup abschließen</button>
+      </div>
+    </div>
+  </div>

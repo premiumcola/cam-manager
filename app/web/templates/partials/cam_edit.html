@@ -1,0 +1,684 @@
+      <section id="cameras" class="panel section" data-dock-section="dashboard">
+        <div class="section-head section-head--with-icon">
+          <span class="section-head-icon" aria-hidden="true"><svg width="24" height="24"><use href="#icon-cameras"/></svg></span>
+          <h3>Geräte</h3>
+          <button id="discoverBtn" type="button" class="btn-action action-green" style="margin-left:auto"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/><circle cx="7" cy="7" r="2" opacity=".4"/></svg> Netzwerk-Discovery</button>
+        </div>
+        <div id="tlStatusBar" class="tl-status-bar"></div>
+        <div id="cameraSettingsList" class="list"></div>
+        <div id="cameraEditWrapper" class="cam-edit-wrapper">
+          <div class="cam-edit-inner">
+          <div class="cam-edit-header">
+            <h3 id="cameraEditTitle">Kamera bearbeiten</h3>
+          </div>
+          <form id="cameraForm" class="cam-form-compact">
+            <input type="hidden" name="id" />
+            <input type="hidden" name="zones_json" />
+            <input type="hidden" name="masks_json" />
+            <input type="hidden" name="whitelist_names" />
+
+            <!-- Tab bar — 5 tabs: Allgemein / Verbindung / Erkennung / Alerting / Zonen -->
+            <div class="cam-tab-bar">
+              <button type="button" class="cam-tab-btn active" data-tab="cam-tab-allgemein"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M13 10h4"/><path d="M13 13h4"/></svg><span>Allgemein</span></button>
+              <button type="button" class="cam-tab-btn" data-tab="cam-tab-verbindung"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6"/><path d="M15 2v6"/><rect x="7" y="8" width="10" height="6" rx="1.2"/><path d="M12 14v4a3 3 0 0 0 3 3h1"/></svg><span>Verbindung</span></button>
+              <button type="button" class="cam-tab-btn" data-tab="cam-tab-erkennung"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span>Erkennung</span></button>
+              <button type="button" class="cam-tab-btn" data-tab="cam-tab-alerting"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>Alerting</span></button>
+              <button type="button" class="cam-tab-btn" data-tab="cam-tab-zonen"><svg class="cam-tab-ico" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg><span>Zonen</span></button>
+              <!-- Connection-recovery indicator: always present, pinned to
+                   the right edge so the existing horizontal-scrolling tab
+                   list keeps its behaviour. Two states (.is-warn flips
+                   colour + adds the ⚠ badge). The state is driven by
+                   _refreshConnectionWarn() in app.js. -->
+              <button type="button" id="camTabRecoveryBtn"
+                      class="cam-tab-recovery-btn"
+                      onclick="openCamRecoveryModal()"
+                      aria-label="Verbindung wiederherstellen"
+                      title="Verbindung wiederherstellen">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                     stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 12a9 9 0 1 0 3-6.7"/>
+                  <polyline points="3 4 3 9 8 9"/>
+                </svg>
+                <span class="cam-tab-recovery-badge" aria-hidden="true">⚠</span>
+              </button>
+            </div>
+
+            <!-- Panel: Allgemein — identity (name, manufacturer, model,
+                 icon, canonical id preview). Set once, rarely edited; the
+                 connection-troubleshooting fields live in the next tab. -->
+            <div class="cam-tab-panel active" id="cam-tab-allgemein">
+              <div style="display:grid;gap:8px">
+                <div class="field-wrap"><input name="name" placeholder="Werkstatt" required /><span class="field-label">Anzeigename</span></div>
+                <!-- Manuf + Model row plus a tiny rescan icon. Backend
+                     auto-detects via Reolink GetDevInfo on save when
+                     these are blank; rescan triggers a fresh probe even
+                     when filled (firmware update / device replaced at
+                     same IP). The "automatisch erkannt" hint surfaces
+                     when the most recent save filled the field by
+                     auto-detect — disappears on the next manual edit. -->
+                <div class="cam-id-row">
+                  <div class="field-wrap">
+                    <input name="manufacturer" placeholder="Reolink" autocomplete="off" />
+                    <span class="field-label">Hersteller</span>
+                    <span class="cam-autodetected-hint" data-for="manufacturer" hidden>automatisch erkannt</span>
+                  </div>
+                  <div class="field-wrap">
+                    <input name="model" placeholder="RLC-810A" autocomplete="off" />
+                    <span class="field-label">Modell</span>
+                    <span class="cam-autodetected-hint" data-for="model" hidden>automatisch erkannt</span>
+                  </div>
+                  <button type="button" id="camProbeDeviceInfo" class="cam-probe-btn"
+                          title="Vom Gerät erkennen (Reolink GetDevInfo)"
+                          aria-label="Vom Gerät erkennen">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  </button>
+                </div>
+                <div class="field-wrap"><input name="icon" placeholder="🔧" maxlength="4" /><span class="field-label">Icon (Emoji)</span></div>
+                <!-- Live ID preview. Read-only and updated by JS on every
+                     change to manufacturer / model / name / IP. -->
+                <div class="cam-id-preview">
+                  <span class="cam-id-preview-label">Kamera-ID</span>
+                  <code class="cam-id-preview-value" id="camIdPreview" data-camid="">unknown_unknown_unknown_unknown</code>
+                  <span class="cam-id-preview-hint">wird automatisch aus Hersteller, Modell, Name und IP-Endung erzeugt</span>
+                </div>
+                <!-- Erkennungs-Modus — architecture-level switch (motion vs.
+                     KI vs. both). Lives here on the Allgemein tab rather
+                     than the Erkennung tab because it picks WHICH pipeline
+                     runs, not how to tune it. -->
+                <div class="cam-sep"></div>
+                <div class="field-wrap">
+                  <select name="detection_trigger">
+                    <option value="motion_and_objects">Bewegung + Objekte (Standard)</option>
+                    <option value="objects_only">Nur Objekte (KI)</option>
+                    <option value="motion_only">Nur Bewegung</option>
+                  </select>
+                  <span class="field-label">Erkennungs-Modus</span>
+                  <div class="field-help">Welche Art von Event diese Kamera erkennt.</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel: Verbindung — access fields only. The "Verbindungsdaten
+                 unvollständig" banner that lived here has been replaced by
+                 the right-aligned ↺ indicator in the tab bar above and the
+                 .cam-field-warn highlight on the specific missing fields. -->
+            <div class="cam-tab-panel" id="cam-tab-verbindung">
+              <div style="display:grid;gap:8px">
+                <div class="row" style="grid-template-columns:1fr 70px;gap:8px">
+                  <div class="field-wrap">
+                    <input name="rtsp_ip" placeholder="192.168.X.X" readonly class="cam-readonly-input" />
+                    <span class="field-label">Kamera-IP</span>
+                    <span class="cam-readonly-hint">Zum Ändern: Kamera neu einrichten.</span>
+                  </div>
+                  <div class="field-wrap"><input name="rtsp_port" placeholder="554" value="554" /><span class="field-label">Port</span></div>
+                </div>
+                <div class="cam-userpass">
+                  <div class="field-wrap"><input name="rtsp_user" placeholder="admin" /><span class="field-label">Benutzer</span></div>
+                  <div class="field-wrap pw-wrap">
+                    <div class="pw-input-row">
+                      <input name="rtsp_pass" type="password" placeholder="Passwort" autocomplete="off" />
+                      <button type="button" class="pw-eye" onclick="togglePwField(this,'rtsp_pass')" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                    </div>
+                    <span class="field-label">Passwort</span>
+                  </div>
+                </div>
+              </div>
+              <!-- Erweitert: RTSP-Pfad picker, auto-built RTSP-URL, optional
+                   Snapshot-URL. All debug/optional fields most users never
+                   touch — auto-defaults from manufacturer + credentials. -->
+              <div class="cam-rtsp-erw">
+                <button type="button" class="cam-rtsp-erw-btn" id="camRtspErwBtn"
+                        onclick="_toggleCamRtspErw()" aria-expanded="false">
+                  <svg class="cam-rtsp-erw-chev" viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+                  <span>Erweitert · RTSP-Pfad &amp; URLs</span>
+                  <span class="cam-rtsp-erw-pill" id="rtspPathCustomPill" hidden title="RTSP-Pfad weicht vom Hersteller-Default ab">manuell</span>
+                </button>
+                <div class="cam-rtsp-erw-body" id="rtspPathErwBody" hidden>
+                  <div class="field-help">Nur ändern wenn die Standard-Pfade des Herstellers nicht funktionieren (z. B. ältere Reolink mit H.264 statt H.265).</div>
+                  <div class="field-wrap"><select name="rtsp_path" id="rtspPathSelect"></select><span class="field-label">RTSP-Pfad</span></div>
+                  <div class="field-wrap url-wrap">
+                    <div class="pw-input-row">
+                      <input name="rtsp_url" readonly class="cam-readonly-input" data-mask-url="1" />
+                      <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                    </div>
+                    <span class="field-label">RTSP-URL (automatisch)</span>
+                  </div>
+                  <div class="field-wrap url-wrap">
+                    <div class="pw-input-row">
+                      <input name="snapshot_url" placeholder="http://…" data-mask-url="1" />
+                      <button type="button" class="url-eye" onclick="_toggleUrlMask(this)" title="Passwort anzeigen/verbergen" aria-label="Passwort anzeigen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                    </div>
+                    <span class="field-label">Snapshot-URL – optional</span>
+                  </div>
+                </div>
+              </div>
+              <input type="hidden" name="object_filter" />
+              <!-- Connection health diagnostics — collapsible; shows a one-line
+                   summary when collapsed, auto-opens on error. Populated by JS. -->
+              <div id="camDiagnostics" class="cam-diag" style="display:none;margin-top:10px">
+                <button type="button" class="cam-diag-head" onclick="_toggleCamDiag()">
+                  <span class="cam-diag-dot" id="camDiagDot"></span>
+                  <span class="cam-diag-title">Verbindungsdiagnose</span>
+                  <span class="cam-diag-summary" id="camDiagSummary">Verbindung stabil</span>
+                  <svg class="cam-diag-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+                </button>
+                <div class="cam-diag-body">
+                  <div class="cam-diag-grid">
+                    <div class="cam-diag-item"><span class="cam-diag-label">Stream-Alter</span><span id="diagFrameAge" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Preview-FPS</span><span id="diagPreviewFps" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Stream-Modus</span><span id="diagStreamMode" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Aktive Viewer</span><span id="diagLiveViewers" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Reconnects</span><span id="diagReconnects" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Fehler-Streak</span><span id="diagErrorStreak" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Stale Incidents</span><span id="diagStale" class="cam-diag-val">—</span></div>
+                    <div class="cam-diag-item"><span class="cam-diag-label">Stale Streak</span><span id="diagStaleStreak" class="cam-diag-val">—</span></div>
+                  </div>
+                  <div id="diagLastError" style="display:none;margin-top:5px;font-size:11px;color:var(--danger);background:rgba(239,68,68,.08);border-radius:6px;padding:5px 8px;word-break:break-all"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel: Erkennung — 5-step workflow with vertical "thread"
+                 connecting the steps. Status strip at top shows live
+                 Coral state; numbered nodes guide the user through
+                 class filter → confidence → confirmation → analysis
+                 rate → motion pre-trigger. Each card sits flat on the
+                 panel surface (no nested borders per CLAUDE.md). -->
+            <div class="cam-tab-panel" id="cam-tab-erkennung">
+              <!-- Status strip: dot variant + ms/Frame + last-update relative.
+                   Hydrated by _updateErkStatusStrip from the camera's runtime
+                   status (detection_mode, coral_available, inference_avg_ms,
+                   frame_age_s). -->
+              <div id="camGlobalStatus" class="erk-status">
+                <span class="dot is-ok"></span>
+                <span class="lbl" id="erkStatusText">Coral läuft</span>
+                <span class="val" id="erkStatusMs">— ms / Frame</span>
+                <span class="sep"></span>
+                <span class="lbl">letztes Update</span>
+                <span class="val" id="erkStatusUpdated">—</span>
+              </div>
+
+              <div class="erk-flow">
+
+                <!-- STEP 1 — Klassenfilter -->
+                <div class="erk-step">
+                  <div class="erk-step-num">1</div>
+                  <div class="erk-step-head">
+                    <svg class="erk-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    <span class="erk-step-title">Was suchen?</span>
+                    <span class="erk-step-hint">Klassen-Filter</span>
+                  </div>
+                  <div class="erk-card">
+                    <div id="camObjectFilter" class="cam-objfilter-bar"></div>
+                  </div>
+                </div>
+
+                <!-- STEP 2 — Konfidenz -->
+                <div class="erk-step">
+                  <div class="erk-step-num">2</div>
+                  <div class="erk-step-head">
+                    <svg class="erk-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9"/>
+                      <path d="M12 7v5l3 3"/>
+                    </svg>
+                    <span class="erk-step-title">Wie sicher?</span>
+                    <span class="erk-step-hint">Konfidenz-Schwelle</span>
+                  </div>
+                  <div class="erk-card">
+                    <div class="row">
+                      <input type="range" name="detection_min_score" min="0.30" max="0.95" step="0.05" value="0.55" />
+                      <span class="val" id="erkMinScoreVal">55%</span>
+                    </div>
+                    <span class="lbl">Allgemein · für alle Klassen</span>
+                  </div>
+                  <div class="erk-card">
+                    <div class="row">
+                      <input type="range" name="label_threshold_person" min="0.55" max="0.95" step="0.01" value="0.72" />
+                      <span class="val" id="erkPersonVal">72%</span>
+                    </div>
+                    <span class="lbl">Person · überschreibt allgemein</span>
+                  </div>
+                  <button type="button" class="erk-more" id="erkPerClassToggle" aria-expanded="false">
+                    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5l3 3 3-3"/></svg>
+                    <span id="erkPerClassToggleLbl">Pro Klasse anpassen</span>
+                  </button>
+                  <div id="erkPerClassAdvanced" hidden></div>
+                </div>
+
+                <!-- STEP 3 — Bestätigungs-Filter (N-of-M sliding window) -->
+                <div class="erk-step">
+                  <div class="erk-step-num">3</div>
+                  <div class="erk-step-head">
+                    <svg class="erk-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12"/>
+                      <polyline points="20 12 14 18" opacity=".5"/>
+                    </svg>
+                    <span class="erk-step-title">Wie oft bestätigen?</span>
+                    <span class="erk-step-hint">Anti-Fehlalarm</span>
+                  </div>
+                  <div class="erk-card">
+                    <div class="two-col">
+                      <div class="row">
+                        <input type="range" name="confirm_n" min="1" max="10" step="1" value="3" />
+                        <span class="val" id="erkConfirmN">3 ×</span>
+                      </div>
+                      <div class="row">
+                        <input type="range" name="confirm_seconds" min="2" max="20" step="1" value="5" />
+                        <span class="val" id="erkConfirmS">5 s</span>
+                      </div>
+                    </div>
+                    <span class="lbl" id="erkConfirmLbl">3 Treffer in 5 Sekunden bestätigen</span>
+                  </div>
+                  <!-- Legacy per-class grid stays hidden — the save handler
+                       still reads any rows it contains for backwards-compat,
+                       but rows are no longer rendered. The new "Pro Klasse
+                       anpassen" drilldown writes into #erkConfirmPerClass. -->
+                  <div id="camConfirmGrid" hidden></div>
+                  <button type="button" class="erk-more" id="erkConfirmPerClassToggle" aria-expanded="false">
+                    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5l3 3 3-3"/></svg>
+                    <span id="erkConfirmPerClassToggleLbl">Pro Klasse anpassen</span>
+                  </button>
+                  <div id="erkConfirmPerClass" hidden></div>
+                </div>
+
+                <!-- STEP 4 — Analyse-Intervall -->
+                <div class="erk-step">
+                  <div class="erk-step-num">4</div>
+                  <div class="erk-step-head">
+                    <svg class="erk-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                    </svg>
+                    <span class="erk-step-title">Wie schnell scannen?</span>
+                    <span class="erk-step-hint">Analyse-Intervall</span>
+                  </div>
+                  <div class="erk-card">
+                    <div class="row">
+                      <input type="range" name="frame_interval_ms" min="100" max="2000" step="50" value="350" />
+                      <span class="val" id="erkFrameIntervalVal">350 ms</span>
+                    </div>
+                    <span class="lbl" id="erkFrameIntervalLbl">≈ 3 fps · niedriger = mehr Coral-Last</span>
+                  </div>
+                </div>
+
+                <!-- STEP 5 — Bewegungs-Vortrigger -->
+                <div class="erk-step">
+                  <div class="erk-step-num">5</div>
+                  <div class="erk-step-head">
+                    <svg class="erk-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M3 12h3l3-9 6 18 3-9h3"/>
+                    </svg>
+                    <span class="erk-step-title">Bewegungs-Vortrigger</span>
+                    <span class="erk-step-hint">vor der KI</span>
+                  </div>
+                  <div class="erk-card">
+                    <div class="row">
+                      <input type="range" name="motion_sensitivity" min="0.1" max="1.0" step="0.1" value="0.5" />
+                      <span class="val" id="erkMotionVal">50%</span>
+                    </div>
+                    <span class="lbl">Empfindlichkeit · niedrig = nur große Bewegung</span>
+                  </div>
+                  <div class="erk-card">
+                    <div class="row">
+                      <select name="post_motion_tail_s">
+                        <option value="0">Standard (Global-Wert)</option>
+                        <option value="3">3 Sekunden</option>
+                        <option value="5">5 Sekunden</option>
+                        <option value="8">8 Sekunden</option>
+                        <option value="10">10 Sekunden</option>
+                        <option value="15">15 Sekunden</option>
+                      </select>
+                    </div>
+                    <span class="lbl">Nachlauf-Aufnahme nach letzter Bewegung</span>
+                  </div>
+                </div>
+
+              </div>
+
+              <!-- "Erkennung jetzt simulieren" — runs the Coral inference on
+                   the camera's most-recent frame and renders the snapshot
+                   inline with bounding boxes coloured by verdict. The
+                   result panel slides into view below the button on the
+                   first click and stays open across re-runs until the
+                   user dismisses it. -->
+              <div class="erk-test-row">
+                <button class="erk-test-btn" type="button" id="erkSimulateBtn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                  </svg>
+                  <span class="erk-test-btn-lbl">Erkennung jetzt simulieren</span>
+                </button>
+                <div class="erk-test-hint">prüft das aktuelle Snapshot · zeigt was Coral findet</div>
+                <div class="erk-test-result" id="erkSimResult" hidden>
+                  <div class="erk-test-result-head">
+                    <span class="erk-test-result-title" id="erkSimTitle">Ergebnis</span>
+                    <button type="button" class="erk-test-close" id="erkSimClose" aria-label="schließen">×</button>
+                  </div>
+                  <div class="erk-test-result-imgwrap">
+                    <img id="erkSimImg" alt="Simulations-Snapshot" />
+                    <svg id="erkSimOverlay" preserveAspectRatio="none"></svg>
+                  </div>
+                  <div class="erk-test-result-list" id="erkSimList"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Panel: Alerting — 5-step workflow with amber thread.
+                 Mirrors the Erkennung-tab pattern (status strip, .erk-flow
+                 + numbered nodes, .erk-card surfaces) but uses an amber
+                 accent so the two tabs read as related-but-distinct
+                 sections. The 4 alarm-profile presets retire here in
+                 favour of a per-class severity matrix that maps each
+                 detected class to one of off / info / alarm. Two
+                 independent schedules let the user notify only at night
+                 but archive 24/7 (or vice versa). The conflict banner at
+                 the top flags settings that won't reach the user (e.g.
+                 alarms set but no channel active). -->
+            <div class="cam-tab-panel" id="cam-tab-alerting">
+
+              <!-- Status strip — Telegram bot connection + last push.
+                   Hydrated by _renderAlertStatusStrip in a follow-up
+                   commit; renders a green dot placeholder until then. -->
+              <div id="alertStatusStrip" class="erk-status">
+                <span class="dot is-ok" id="alertStatusDot"></span>
+                <span class="lbl">Telegram-Bot</span>
+                <span class="val" id="alertStatusBot">verbunden</span>
+                <span class="sep"></span>
+                <span class="lbl">letzte Push</span>
+                <span class="val" id="alertStatusLast">—</span>
+              </div>
+
+              <!-- Conflict warning banner — JS toggles `hidden` based on
+                   the matrix + channel + master switch state. -->
+              <div id="alertConflictBanner" class="alert-conflict" hidden>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <circle cx="12" cy="17" r=".5" fill="currentColor"/>
+                </svg>
+                <span class="alert-conflict-text" id="alertConflictText"></span>
+              </div>
+
+              <div class="alert-flow">
+
+                <!-- STEP 1 — Severity matrix -->
+                <div class="alert-step">
+                  <div class="alert-step-num">1</div>
+                  <div class="alert-step-head">
+                    <svg class="alert-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="3" y="3" width="7" height="7"/>
+                      <rect x="14" y="3" width="7" height="7"/>
+                      <rect x="3" y="14" width="7" height="7"/>
+                      <rect x="14" y="14" width="7" height="7"/>
+                    </svg>
+                    <span class="alert-step-title">Was tun bei was?</span>
+                    <span class="alert-step-hint">Pro Klasse</span>
+                  </div>
+                  <!-- Legend: Aus / Info / Alarm explainer -->
+                  <div class="sev-legend">
+                    <div class="sev-legend-item">
+                      <div class="sev-legend-head is-off">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+                          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+                          <path d="M10 21a2 2 0 0 0 4 0"/>
+                          <line x1="2" y1="2" x2="22" y2="22"/>
+                        </svg>
+                        Aus
+                      </div>
+                      <div class="sev-legend-desc">ignoriert · keine Push, keine Aufnahme</div>
+                    </div>
+                    <div class="sev-legend-item">
+                      <div class="sev-legend-head is-info">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+                          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+                          <path d="M10 21a2 2 0 0 0 4 0"/>
+                        </svg>
+                        Info
+                      </div>
+                      <div class="sev-legend-desc">stille Push · kein Sound am Handy</div>
+                    </div>
+                    <div class="sev-legend-item">
+                      <div class="sev-legend-head is-alarm">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+                          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+                          <path d="M10 21a2 2 0 0 0 4 0"/>
+                          <path d="M2 5l4-3M22 5l-4-3"/>
+                        </svg>
+                        Alarm
+                      </div>
+                      <div class="sev-legend-desc">laute Push · mit Sound · Banner im Tile</div>
+                    </div>
+                  </div>
+                  <!-- Matrix rendered by JS into this container.
+                       7 rows (person/cat/bird/squirrel/car/dog/motion)
+                       × 3 columns (off/info/alarm). Click a cell to
+                       toggle that row's severity. -->
+                  <div id="alertSeverityMatrix" class="sev-matrix"></div>
+                  <button type="button" class="erk-more" id="alertCooldownToggle" aria-expanded="false">
+                    <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5l3 3 3-3"/></svg>
+                    <span id="alertCooldownToggleLbl">Cooldown pro Klasse anpassen</span>
+                  </button>
+                  <div id="alertCooldownGrid" hidden></div>
+                </div>
+
+                <!-- STEP 2 — Channels -->
+                <div class="alert-step">
+                  <div class="alert-step-num">2</div>
+                  <div class="alert-step-head">
+                    <svg class="alert-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M22 2L11 13"/>
+                      <path d="M22 2L15 22L11 13L2 9L22 2Z"/>
+                    </svg>
+                    <span class="alert-step-title">Wohin senden?</span>
+                    <span class="alert-step-hint">Kanäle</span>
+                  </div>
+                  <label class="chan-row">
+                    <span class="chan-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2L15 22L11 13L2 9z"/></svg>
+                    </span>
+                    <span class="chan-text">
+                      <span class="chan-name">Telegram</span>
+                      <span class="chan-sub">Push mit Snapshot &amp; Clip-Link</span>
+                    </span>
+                    <input type="checkbox" name="telegram_enabled" class="switch-input" checked />
+                    <span class="switch"></span>
+                  </label>
+                  <label class="chan-row">
+                    <span class="chan-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h3l3-9 6 18 3-9h3"/></svg>
+                    </span>
+                    <span class="chan-text">
+                      <span class="chan-name">MQTT (Home Assistant)</span>
+                      <span class="chan-sub">Events ans Smart-Home publizieren</span>
+                    </span>
+                    <input type="checkbox" name="mqtt_enabled" class="switch-input" />
+                    <span class="switch"></span>
+                  </label>
+                </div>
+
+                <!-- STEP 3 — Recording -->
+                <div class="alert-step">
+                  <div class="alert-step-num">3</div>
+                  <div class="alert-step-head">
+                    <svg class="alert-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10"/>
+                      <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                    </svg>
+                    <span class="alert-step-title">Aufzeichnen?</span>
+                    <span class="alert-step-hint">Archiv auf Disk</span>
+                  </div>
+                  <label class="chan-row">
+                    <span class="chan-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3"/></svg>
+                    </span>
+                    <span class="chan-text">
+                      <span class="chan-name">Events archivieren</span>
+                      <span class="chan-sub">Clip + Snapshot werden gespeichert</span>
+                    </span>
+                    <input type="checkbox" name="recording_enabled" class="switch-input" checked />
+                    <span class="switch"></span>
+                  </label>
+                </div>
+
+                <!-- STEP 4 — Two independent schedules. The split lets a
+                     user say "notify only at night, archive 24/7" or
+                     vice versa — impossible with the prior single-window
+                     UI. JS keeps a hidden legacy `schedule` field in
+                     sync so backend code that still reads the old shape
+                     keeps working until the schedule-split commit. -->
+                <div class="alert-step">
+                  <div class="alert-step-num">4</div>
+                  <div class="alert-step-head">
+                    <svg class="alert-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="9"/>
+                      <path d="M12 7v5l3 3"/>
+                    </svg>
+                    <span class="alert-step-title">Wann gilt das?</span>
+                    <span class="alert-step-hint">2 separate Zeitpläne</span>
+                  </div>
+                  <div class="sched-block">
+                    <label class="sched-head">
+                      <span class="sched-name">📢 Benachrichtigungen senden</span>
+                      <input type="checkbox" name="schedule_notify_enabled" class="switch-input" />
+                      <span class="switch"></span>
+                    </label>
+                    <div class="sched-times">
+                      <div>
+                        <input type="time" name="schedule_notify_from" class="time-input" value="21:00" />
+                        <span class="lbl-tiny">von</span>
+                      </div>
+                      <div>
+                        <input type="time" name="schedule_notify_to" class="time-input" value="06:00" />
+                        <span class="lbl-tiny">bis</span>
+                      </div>
+                    </div>
+                    <span class="lbl-tiny" style="margin-top:6px;font-style:italic">aus = ganztags aktiv</span>
+                  </div>
+                  <div class="sched-block">
+                    <label class="sched-head">
+                      <span class="sched-name">💾 Aufzeichnen</span>
+                      <input type="checkbox" name="schedule_record_enabled" class="switch-input" />
+                      <span class="switch"></span>
+                    </label>
+                    <div class="sched-times">
+                      <div>
+                        <input type="time" name="schedule_record_from" class="time-input" value="00:00" />
+                        <span class="lbl-tiny">von</span>
+                      </div>
+                      <div>
+                        <input type="time" name="schedule_record_to" class="time-input" value="23:59" />
+                        <span class="lbl-tiny">bis</span>
+                      </div>
+                    </div>
+                    <span class="lbl-tiny" style="margin-top:6px;font-style:italic">aus = ganztags aktiv</span>
+                  </div>
+                </div>
+
+                <!-- STEP 5 — Master mute -->
+                <div class="alert-step">
+                  <div class="alert-step-num">5</div>
+                  <div class="alert-step-head">
+                    <svg class="alert-step-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M12 2v6"/><path d="M5 8a7 7 0 1 0 14 0"/>
+                    </svg>
+                    <span class="alert-step-title">Stumm-Schalter</span>
+                    <span class="alert-step-hint">global · überstimmt alles</span>
+                  </div>
+                  <label class="chan-row">
+                    <span class="chan-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/>
+                        <path d="M10 21a2 2 0 0 0 4 0"/>
+                      </svg>
+                    </span>
+                    <span class="chan-text">
+                      <span class="chan-name">Alerting aktiv</span>
+                      <span class="chan-sub">Aus = ALLES stumm · Aufnahme nach Plan läuft trotzdem</span>
+                    </span>
+                    <input type="checkbox" name="armed" class="switch-input" checked />
+                    <span class="switch"></span>
+                  </label>
+                </div>
+
+              </div>
+
+              <!-- Test push — fires a sample notification through every
+                   enabled channel and shows per-channel success/error
+                   inline. Lets the user validate their config without
+                   waiting for a real detection. -->
+              <div class="alert-test-row">
+                <button class="alert-test-btn" type="button" id="alertTestBtn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polygon points="5 3 19 12 5 21 5 3"/>
+                  </svg>
+                  <span class="alert-test-btn-lbl">Test-Push senden</span>
+                </button>
+                <div class="alert-test-hint">schickt eine Test-Nachricht an alle aktiven Kanäle</div>
+                <div class="alert-test-result" id="alertTestResult" hidden></div>
+              </div>
+
+              <!-- Hidden legacy alarm_profile field — preserved across
+                   the refactor so back-end code that still reads it (the
+                   class_severity migration falls back to it on load)
+                   keeps working until commit 3 finishes the cutover. -->
+              <input type="hidden" name="alarm_profile" id="camAlarmProfileHidden" />
+            </div>
+
+            <!-- Panel: Zonen -->
+            <div class="cam-tab-panel" id="cam-tab-zonen">
+              <div class="mask-editor panel inset">
+                <!-- Legend — single source of truth for what blue/red mean -->
+                <div class="shape-legend">
+                  <span class="shape-legend-item"><span class="shape-legend-swatch shape-legend-swatch--zone"></span>Zone — nur hier erkennen</span>
+                  <span class="shape-legend-item"><span class="shape-legend-swatch shape-legend-swatch--mask"></span>Maske — hier NICHT erkennen</span>
+                </div>
+
+                <!-- Mode selector: colour-coded active state (blue/red) -->
+                <div class="shape-mode-row">
+                  <button class="shape-mode-btn" data-mode="zone" id="editZoneBtn" type="button">
+                    <span class="shape-mode-dot shape-mode-dot--zone"></span>Zone zeichnen
+                  </button>
+                  <button class="shape-mode-btn" data-mode="mask" id="editMaskBtn" type="button">
+                    <span class="shape-mode-dot shape-mode-dot--mask"></span>Maske zeichnen
+                  </button>
+                  <div class="shape-mode-spacer"></div>
+                  <button class="ghost small-btn" id="refreshMaskSnapshotBtn" type="button">Snapshot aktualisieren</button>
+                </div>
+
+                <div class="canvas-wrap">
+                  <img id="maskSnapshot" src="" alt="Snapshot" />
+                  <canvas id="maskCanvas" width="1280" height="720"></canvas>
+                </div>
+
+                <!-- Live counter + drawing actions (only visible while drawing) -->
+                <div class="shape-drawing-bar" id="shapeDrawingBar" hidden>
+                  <span class="shape-drawing-count" id="shapeDrawingCount">0 Punkte gesetzt</span>
+                  <button class="ghost small-btn" id="undoShapeBtn" type="button">Letzten Punkt entfernen</button>
+                  <button class="small-btn shape-save-btn" id="saveShapeBtn" type="button">Polygon übernehmen</button>
+                </div>
+
+                <!-- Polygon list — one row per saved polygon, click to pulse, trash to delete -->
+                <div class="shape-list" id="shapeList"></div>
+
+                <div class="shape-clear-row" id="shapeClearRow" hidden>
+                  <button class="ghost small-btn danger-btn" id="clearShapesBtn" type="button">Alle Polygone löschen</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="cam-form-actions">
+              <button class="cam-save-btn">Speichern &amp; Reload</button>
+              <button type="button" id="deleteCameraBtn" class="cam-delete-btn">Kamera löschen</button>
+            </div>
+          </form>
+          </div><!-- /.cam-edit-inner -->
+        </div>
+      </section>
+
+
+      <!-- #timeline redirect anchor — JS scrolls to #statistik for backward compat -->
+      <div id="timeline" style="position:absolute;visibility:hidden;pointer-events:none"></div>
+
