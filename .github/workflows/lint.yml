@@ -1,0 +1,63 @@
+# Linting CI — runs ruff + mypy + eslint + prettier on every push +
+# pull_request. Independent from the Docker image build (build.yml) so
+# image publishing isn't blocked by lint failures while the codebase
+# tightens. The build.yml flow is the gate that determines what ships;
+# this file is the early-warning system.
+
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  python:
+    name: Python (ruff + mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dev requirements
+        run: pip install -r app/requirements-dev.txt
+
+      - name: ruff check
+        run: ruff check app/
+
+      - name: ruff format check
+        run: ruff format --check app/
+
+      - name: mypy (permissive baseline)
+        # Permissive mode — currently a warning-collector, not a
+        # blocker. The `|| true` lets the job pass even with warnings;
+        # remove once the codebase's type coverage is dense enough to
+        # hold a green baseline.
+        run: mypy app/app/ || true
+
+  javascript:
+    name: JavaScript (eslint + prettier)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dev tooling
+        run: npm install --no-audit --no-fund
+
+      - name: eslint
+        run: npx eslint app/web/static/js --max-warnings 999
+        # Prettier check intentionally skipped in this round — the
+        # codebase predates prettier and a mass --write would rewrite
+        # ~48 files at once. Prettier runs in pre-commit on edited files
+        # and gets enabled in CI once the CSS-split prompt normalises
+        # the style as part of its partials work.

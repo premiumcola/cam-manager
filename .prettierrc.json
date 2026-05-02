@@ -1,5 +1,4 @@
 {
-  "_comment": "Style probe of the existing code: single quotes prevail (28 single-quoted lines vs ~half that double), semicolons are mandatory, 2-space indent. Prettier matches so it never mass-rewrites the codebase.",
   "tabWidth": 2,
   "useTabs": false,
   "singleQuote": true,
