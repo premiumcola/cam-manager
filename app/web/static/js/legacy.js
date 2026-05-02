@@ -3038,6 +3038,7 @@ function renderMediaOverview(){
   renderMediaFilterPills('overview');
 }
 window.openCategoryDrilldown=async function(label){
+  state.mediaDrillOpen=true;
   state.mediaCamera=null;
   state.mediaLabels=new Set(label?[label]:[]);
   state.mediaPage=0;
@@ -3170,6 +3171,7 @@ function _setActiveMocCard(camId){
   });
 }
 async function openAllMediaDrilldown(preFilterLabel){
+  state.mediaDrillOpen=true;
   state.mediaCamera=null;
   state.mediaLabels=preFilterLabel?new Set([preFilterLabel]):new Set();
   state.mediaPage=0;
@@ -3201,6 +3203,7 @@ async function openAllMediaDrilldown(preFilterLabel){
 }
 window.openAllMediaDrilldown=openAllMediaDrilldown;
 async function openMediaDrilldown(camId){
+  state.mediaDrillOpen=true;
   state.mediaCamera=camId;
   state.mediaLabels=new Set(); state.mediaPage=0;
   if(state.mediaSelectMode) _exitMediaSelectMode();
@@ -3240,6 +3243,7 @@ async function openMediaDrilldown(camId){
   }, 0);
 }
 function closeMediaDrilldown(){
+  state.mediaDrillOpen=false;
   state.mediaCamera=null; state.media=[];
   if(state.mediaSelectMode) _exitMediaSelectMode();
   byId('mediaDrilldown').style.display='none';
@@ -3253,7 +3257,13 @@ function closeMediaDrilldown(){
 const _MEDIA_TITLE_SVG=`<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M7 6V4h10v2"/><circle cx="12" cy="13" r="3"/></svg>`;
 function updateMediaSectionTitle(){
   const h=byId('mediaSectionTitle'); if(!h) return;
-  const drillOpen=byId('mediaDrilldown')?.style.display!=='none';
+  // Drive the title from a state flag instead of probing
+  // #mediaDrilldown.style.display. The DOM probe was returning stale
+  // values right after the openers flipped the inline style, leaving
+  // the heading stuck on bare "Mediathek" even when a cam was selected.
+  // The flag is owned by openMediaDrilldown / openAllMediaDrilldown /
+  // openCategoryDrilldown / closeMediaDrilldown — see core/state.js.
+  const drillOpen=!!state.mediaDrillOpen;
   if(drillOpen && state.mediaCamera){
     const cam=(state.cameras||[]).find(c=>c.id===state.mediaCamera);
     const camName=cam?.name||state.mediaCamera;

@@ -16,6 +16,14 @@ export const state = {
   period: 'week',
   bootstrap: null,
   mediaCamera: null,
+  // True while a Mediathek drilldown is visible (single-cam, all-media,
+  // or category-pre-filtered). Drives updateMediaSectionTitle without
+  // having to probe #mediaDrilldown.style.display — that probe was
+  // sometimes returning stale values right after the openers flipped
+  // the inline style, leaving the section heading stuck on bare
+  // "Mediathek". Owners: openMediaDrilldown / openAllMediaDrilldown /
+  // openCategoryDrilldown set true; closeMediaDrilldown sets false.
+  mediaDrillOpen: false,
   mediaStats: [],
   mediaLabels: new Set(),
   tlHours: 168,
