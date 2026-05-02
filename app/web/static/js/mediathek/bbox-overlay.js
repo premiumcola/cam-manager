@@ -294,17 +294,47 @@ function _startRafLoop(){
 // monochrome ↺ button. Fades out 3 s after the video starts playing
 // so it doesn't sit on top of the content for the whole clip.
 
+// Chip-supporting CSS injected once per session. Lives next to the
+// chip's JS so the position constants + mobile breakpoint stay in sync
+// with the inline styles below; pulling it into a CSS partial would
+// mean threading the bottom-offset constant across two files.
+function _ensureChipStyles(){
+  if (document.getElementById('lbTrackingChipStyles')) return;
+  const s = document.createElement('style');
+  s.id = 'lbTrackingChipStyles';
+  // Desktop hit-area 36×36; mobile bumps to 44×44 per CLAUDE.md touch-target
+  // rule. The visible icon stays small inside a transparent padded wrapper.
+  s.textContent = `
+    #lbTrackingChip .lbtc-reindex{
+      background:none;border:none;color:rgba(226,232,240,.85);cursor:pointer;
+      padding:0;margin:-6px -4px -6px 2px;border-radius:10px;
+      display:inline-flex;align-items:center;justify-content:center;
+      min-width:36px;min-height:36px;-webkit-tap-highlight-color:transparent;
+    }
+    #lbTrackingChip .lbtc-reindex:hover{background:rgba(255,255,255,.10)}
+    @media (max-width:768px){
+      #lbTrackingChip{bottom:160px!important;left:10px!important}
+      #lbTrackingChip .lbtc-reindex{min-width:44px;min-height:44px;margin:-9px -6px -9px 2px}
+    }
+  `;
+  document.head.appendChild(s);
+}
+
 function _ensureChip(){
   let chip = byId('lbTrackingChip');
   if (chip) return chip;
   const wrap = byId('lightboxMediaWrap');
   if (!wrap) return null;
+  _ensureChipStyles();
   chip = document.createElement('div');
   chip.id = 'lbTrackingChip';
-  chip.style.cssText = 'position:absolute;left:14px;bottom:14px;display:none;align-items:center;gap:6px;padding:5px 8px 5px 10px;border-radius:999px;background:rgba(0,0,0,.55);color:#e2e8f0;font-size:11px;font-weight:600;letter-spacing:.02em;backdrop-filter:blur(6px);z-index:5;opacity:0;transition:opacity .25s ease;pointer-events:auto';
+  // Bottom offset 144px = lightboxLabels row sits at bottom:80px and is
+  // ~54px tall, so the chip's bottom edge clears the icons row by ~10px
+  // and never lands on the native <video> controls bar.
+  chip.style.cssText = 'position:absolute;left:14px;bottom:144px;display:none;align-items:center;gap:6px;padding:5px 8px 5px 10px;border-radius:999px;background:rgba(0,0,0,.55);color:#e2e8f0;font-size:11px;font-weight:600;letter-spacing:.02em;backdrop-filter:blur(6px);z-index:5;opacity:0;transition:opacity .25s ease;pointer-events:auto';
   chip.innerHTML = `
-    <span class="lbtc-text">Tracking</span>
-    <button type="button" class="lbtc-reindex" title="Tracking neu generieren" style="background:none;border:none;color:rgba(226,232,240,.85);cursor:pointer;padding:2px 4px;border-radius:6px;display:inline-flex;align-items:center" aria-label="Tracking neu generieren">
+    <span class="lbtc-text" title="Anzahl unterschiedlicher Track-IDs in diesem Clip. Ein Objekt, das den Bildausschnitt verlässt und wiederkommt, bekommt eine neue ID.">Tracking</span>
+    <button type="button" class="lbtc-reindex" title="Tracking neu generieren" aria-label="Tracking neu generieren">
       <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M2.5 8A5.5 5.5 0 0 1 13 5M13.5 8A5.5 5.5 0 0 1 3 11"/>
         <polyline points="12,2 12,5.5 8.5,5.5"/>
@@ -313,7 +343,21 @@ function _ensureChip(){
     </button>`;
   wrap.appendChild(chip);
   chip.querySelector('.lbtc-reindex').addEventListener('click', _onReindexClick);
+  // Re-show on hover (desktop) + tap (mobile/iOS) so 3s isn't too short
+  // to actually click reindex. Both reset the fade timer.
+  wrap.addEventListener('mouseenter', _wakeChip);
+  wrap.addEventListener('click', _wakeChip);
   return chip;
+}
+
+// Reveal the chip and reset the fade timer. Safe to call when no chip
+// is rendered (e.g. clip without tracks) — nothing happens.
+function _wakeChip(){
+  const chip = byId('lbTrackingChip');
+  if (!chip || chip.style.display === 'none') return;
+  chip.style.opacity = '1';
+  clearTimeout(_chipFadeTimer);
+  _chipFadeTimer = setTimeout(() => { chip.style.opacity = '0'; }, 3000);
 }
 
 function _renderTrackingChip(tracks){
