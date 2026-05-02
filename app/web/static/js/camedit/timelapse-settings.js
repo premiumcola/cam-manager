@@ -363,13 +363,8 @@ function renderTlStatusBar(){
 
 
 
-byId('wiz_cam_rtsp').value='rtsp://user:pass@192.168.X.X:554/Streaming/Channels/101';
-byId('wiz_cam_snapshot').value='http://user:pass@192.168.X.X/cgi-bin/snapshot.cgi';
-let wizStep=1;
-document.querySelectorAll('.wiz-tab').forEach(btn=>btn.onclick=()=>{ wizStep=Number(btn.dataset.step); showWizardStep(wizStep); });
-byId('wizPrev').onclick=()=>{ wizStep=Math.max(1,wizStep-1); showWizardStep(wizStep); };
-byId('wizNext').onclick=()=>{ wizStep=Math.min(4,wizStep+1); showWizardStep(wizStep); };
-byId('wizFinish').onclick=()=>finishWizard();
+// (Wizard form seeds + tab/prev/next/finish bindings moved into
+//  camedit/wizard.js in stage 25 C.)
 
 
 
