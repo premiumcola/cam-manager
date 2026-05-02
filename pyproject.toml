@@ -1,0 +1,103 @@
+# Linter foundation for the TAM-spy backend (stage: pre-CSS-split).
+# ruff replaces flake8 + isort + pyupgrade + black formatting in one
+# binary. mypy starts in permissive mode — its job here is to catch
+# obvious None.foo() errors during refactors, not to enforce strict
+# typing. Strict mode comes later when type hints are denser.
+
+[tool.ruff]
+# Match the runtime Python — see app/docker/Dockerfile (python:3.11-slim).
+target-version = "py311"
+# 100 cols is a small bump from the default 88. The project already has
+# many longer log strings and German labels; aggressive wrapping hurts
+# readability for those without enough payoff in fewer tracebacks-per-
+# line. Picked to minimise day-one violations.
+line-length = 100
+extend-exclude = [
+    "storage",
+    "models",
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".venv",
+]
+
+[tool.ruff.lint]
+# Enabled rule families:
+#   E, W, F  — pycodestyle + pyflakes (the classic flake8 core)
+#   I        — isort (import order)
+#   UP       — pyupgrade (modernise syntax to py311 idioms)
+#   B        — bugbear (catches common bug patterns)
+#   SIM      — flake8-simplify (style nudges towards clearer code)
+#   N        — pep8-naming (function/class/var case conventions)
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "N"]
+
+# Codes we accept as "we'll fix later" — not a permanent waiver, but the
+# initial sweep would generate noise that drowns the actually-useful
+# violations. Each comes with the reason for parking it.
+ignore = [
+    "E501",   # line-too-long: 100-col is a hint, not a hard limit. Many
+              # SVG strings + log messages need to stay one-line for grep-
+              # friendliness.
+    "E741",   # ambiguous variable name (l/I/O): we use `l` for label in
+              # several render loops — convention, not a bug.
+    "B008",   # function call in default argument: would mass-rewrite the
+              # CV2 + Path helpers the runtime threads use; the patterns
+              # there are known-safe (no shared mutable state).
+    "SIM102", # nested-if instead of `and`: collapsing `if a: if b:` blocks
+              # erases the gradual-narrowing reading order in detection
+              # pipelines. Style preference, leave alone.
+    "N802",   # function name should be lowercase: a few snake/camelCase
+              # mismatches at module boundaries (FFI-shaped APIs) — fix
+              # individually later, not by a lint rewrite.
+    "N803",   # argument name lowercase: same rationale (e.g. `N` for a
+              # tensor count in detector code).
+    "N806",   # variable name in function should be lowercase: math-style
+              # helpers use single uppercase letters (W, H, R) which read
+              # clearer than `width`/`height`/`r`.
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests get a relaxed ruleset: import discipline matters less, test names
+# mirror the function under test (no naming opinion), magic numbers in
+# fixtures are fine.
+"app/tests/*" = ["N", "F841", "B011", "F401"]
+# Generated build-info files have no source identity — leave them alone.
+"app/app/buildinfo.json" = ["ALL"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+# Keep the project's existing pattern: third-party then local, no
+# special-cases for typing-only imports.
+combine-as-imports = true
+
+[tool.ruff.format]
+# Matches the codebase's existing style: double-quote-preferred, but
+# leave single quotes alone where present (avoids a mass rewrite of
+# every f-string + test fixture).
+quote-style = "preserve"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.mypy]
+# Permissive baseline — strictness ratchets up in later stages once the
+# refactor quiet-period stabilises.
+python_version = "3.11"
+ignore_missing_imports = true
+strict_optional = false
+no_implicit_optional = false
+# Module discovery: app/ is the source root. Tests are checked but
+# loosely.
+files = ["app/app"]
+exclude = [
+    "app/tests/.*",
+    "storage/.*",
+    "models/.*",
+]
+# Show error codes so future tightening knows which classes to enable.
+show_error_codes = true
+# Don't fail the build on the first pass — the goal is "errors visible,
+# not blocking" until we close the gaps.
+check_untyped_defs = false
+disallow_untyped_defs = false
+warn_unused_ignores = false
+warn_return_any = false

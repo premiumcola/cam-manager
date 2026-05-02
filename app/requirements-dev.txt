@@ -1,0 +1,7 @@
+# Developer-only dependencies. Installed via `pip install -r app/requirements-dev.txt`.
+# Production image (app/docker/Dockerfile) does NOT install these.
+ruff==0.7.4
+mypy==1.13.0
+types-requests
+types-PyYAML
+pre-commit==4.0.1
