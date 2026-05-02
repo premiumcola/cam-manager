@@ -197,47 +197,59 @@ def test_camera_timelapse_filters_invalid_via_shared_helper(tmp_path, monkeypatc
 # TimelapseBuilder and calls ._write_video(...) at BOTH the sun and
 # event-tl render sites. Any future refactor that forks the encoder
 # breaks these assertions immediately.
-_WS_PATH = Path(__file__).parent.parent / "app" / "weather_service.py"
+# The weather_service module is now a package (split into mixins under
+# weather_service/). The assertions below check the SUM of the package
+# files — every .py under app/weather_service/ contributes its source.
+_WS_DIR = Path(__file__).parent.parent / "app" / "weather_service"
+
+
+def _ws_source() -> str:
+    return "\n".join(
+        p.read_text(encoding="utf-8")
+        for p in sorted(_WS_DIR.glob("*.py"))
+    )
 
 
 def test_weather_service_imports_timelapsebuilder():
-    src = _WS_PATH.read_text(encoding="utf-8")
-    assert re.search(r"from\s+\.timelapse\s+import\s+TimelapseBuilder", src), (
-        "weather_service.py must import TimelapseBuilder so weather + "
+    src = _ws_source()
+    # Match either the legacy single-dot (from .timelapse) or the package-
+    # relative double-dot (from ..timelapse) form.
+    assert re.search(r"from\s+\.{1,2}timelapse\s+import\s+TimelapseBuilder", src), (
+        "weather_service must import TimelapseBuilder so weather + "
         "sun timelapses share the camera-timelapse encoder. If the "
         "import moved to a different name, update this assertion."
     )
     assert "frame_helpers" in src, (
-        "weather_service.py must reference frame_helpers (grab_valid_frame "
+        "weather_service must reference frame_helpers (grab_valid_frame "
         "or is_valid_frame). Capture-time validation lives there too."
     )
 
 
 def test_weather_event_timelapse_routes_through_write_video():
-    """Event-TL render path (around line 2050) must hand frames to
-    TimelapseBuilder._write_video — not a forked encoder."""
-    src = _WS_PATH.read_text(encoding="utf-8")
+    """Event-TL render path must hand frames to TimelapseBuilder._write_video
+    — not a forked encoder."""
+    src = _ws_source()
     matches = list(re.finditer(r"tb\._write_video\(", src))
     assert len(matches) >= 2, (
-        f"weather_service.py has only {len(matches)} call(s) to "
+        f"weather_service has only {len(matches)} call(s) to "
         f"tb._write_video — expected at least 2 (one for sun render, "
         f"one for event-TL render). A path has been forked."
     )
 
 
 def test_sun_timelapse_routes_through_write_video():
-    """Sun-TL render path (around line 1670) shares the same encoder.
-    Verified jointly with the event-TL path: both must appear as
-    _write_video call sites in the file. We additionally check that
-    the imports happen inside the build closures (lazy) so the
-    weather_service module load doesn't pull timelapse during boot."""
-    src = _WS_PATH.read_text(encoding="utf-8")
+    """Sun-TL render path shares the same encoder. Verified jointly with
+    the event-TL path: both must appear as _write_video call sites in the
+    package. We additionally check that the imports happen inside the build
+    closures (lazy) so the weather_service module load doesn't pull
+    timelapse during boot."""
+    src = _ws_source()
     # Two distinct lazy imports of TimelapseBuilder, one per render path.
     lazy_imports = list(re.finditer(
-        r"from\s+\.timelapse\s+import\s+TimelapseBuilder", src
+        r"from\s+\.{1,2}timelapse\s+import\s+TimelapseBuilder", src
     ))
     assert len(lazy_imports) >= 2, (
-        f"weather_service.py has only {len(lazy_imports)} import(s) of "
+        f"weather_service has only {len(lazy_imports)} import(s) of "
         f"TimelapseBuilder. Both the sun render and the event-TL render "
         f"must lazy-import the shared encoder."
     )
