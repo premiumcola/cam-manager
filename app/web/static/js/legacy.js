@@ -42,6 +42,19 @@ import {
   _updateLbConfirmBtn,
   _lbClearDetections, _lbResetToPhoto, _lbShowError,
 } from './lightbox.js';
+// Stage 6 — timeline render lives in its own module. CAT_COLORS is
+// also re-imported because chips/badges in mediathek + sichtungen
+// still resolve their bar colour from that table; those callsites
+// migrate to direct timeline.js imports as those domains extract.
+import { renderTimeline, CAT_COLORS } from './timeline.js';
+// Stage 6 — the 3 s status poll + the cross-domain loadAll boot
+// orchestration. loadAll uses window.X for renderers that still live
+// in this file; once those domains extract, those window lookups
+// switch to direct named imports.
+import { startLiveUpdate, loadAll } from './live-update.js';
+// Stage 6 — Zusammenführen modal. bindMergeModal() is called below
+// from the post-imports init block to wire its DOM listeners once.
+import { bindMergeModal } from './camera-merge.js';
 
 // _hmTip stays here — fixed-position heatmap tooltip used only by the
 // timeline view; will move with the timeline module in a later stage.
@@ -152,119 +165,12 @@ function _closeEditPanel(){
 }
 
 // ── Live update ───────────────────────────────────────────────────────────────
-// startLiveUpdate stays here because it bridges dashboard polling
-// (renderDashboard / showCameraReloadAnimation / _refreshLivePillForCard
-// from dashboard.js) with the Erkennung-tab and Alerting-tab status
-// strip updaters that still live in this legacy file. Once those move
-// to their own modules a later stage can extract this loop too.
-let _liveUpdateInterval=null;
-const _prevCamStatuses=new Map();
-
-// _hdCards / startPreviewRefresh / toggleCardHd / _refreshLivePillForCard
-// now live in dashboard.js (Stage 3b).
-
-function startLiveUpdate(){
-  if(_liveUpdateInterval) clearInterval(_liveUpdateInterval);
-  state.cameras.forEach(c=>_prevCamStatuses.set(c.id,c.status));
-  _liveUpdateInterval=setInterval(async()=>{
-    try{
-      const r=await j('/api/cameras');
-      // Transitions into/out of 'active' change whether the live overlays
-      // (cv-tr / cv-br) are present in the DOM — those only render when
-      // the camera is active. Simply toggling classes isn't enough; we
-      // need a full renderDashboard() so the missing overlay nodes appear.
-      let needsRedraw=false;
-      (r.cameras||[]).forEach(c=>{
-        const prev=_prevCamStatuses.get(c.id);
-        _prevCamStatuses.set(c.id,c.status);
-        if(prev!==c.status){
-          const wasActive=prev==='active';
-          const nowActive=c.status==='active';
-          if(wasActive!==nowActive) needsRedraw=true;
-          if(c.status==='starting') showCameraReloadAnimation(c.id);
-          // Camera settings list badge
-          const item=byId('cameraSettingsList')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
-          if(item){
-            const stCol=s=>s==='active'?'good':s==='error'?'danger':'warn';
-            const b=item.querySelector('.badge');
-            if(b){b.className=`badge ${stCol(c.status)}`;b.textContent=c.status||'—';}
-          }
-        }
-        // Always update live pill and FPS display
-        const card=byId('cameraCards')?.querySelector(`[data-camid="${CSS.escape(c.id)}"]`);
-        if(card){
-          const livePill=card.querySelector('.cv-pill-live-wrap');
-          if(livePill){
-            const isActive=c.status==='active';
-            livePill.classList.toggle('cv-live-active',isActive);
-            livePill.classList.toggle('cv-live-off',!isActive);
-            const hdr=livePill.querySelector('.cv-live-exp-header span');
-            if(hdr) hdr.textContent='Livestream '+(isActive?'aktiv':'inaktiv');
-            // Stash the latest sub-stream values on the cached camera record so
-            // the next HD-off transition has fresh data, but do NOT paint the
-            // pill yet — _refreshLivePillForCard() decides what to render based
-            // on HD state.
-            const cached=(state.cameras||[]).find(x=>x.id===c.id);
-            if(cached){
-              cached.preview_fps=c.preview_fps;
-              cached.stream_mode=c.stream_mode;
-              cached.preview_resolution=c.preview_resolution;
-              cached.resolution=c.resolution;
-              cached.status=c.status;
-            }
-            _refreshLivePillForCard(c.id);
-          }
-        }
-      });
-      if(needsRedraw){
-        state.cameras=r.cameras||state.cameras;
-        renderDashboard();
-      }
-      // Refresh the cam-edit Erkennung-tab status strip every poll so
-      // the dot colour, ms/Frame, and "letztes Update vor X" stay in
-      // sync with reality. The function reads the form's current cam id
-      // and is a no-op when no cam-edit form is open.
-      _renderGlobalStatusRows();
-      // Same for the Alerting-tab status strip (Telegram bot
-      // connection state). Fire-and-forget; bails silently on errors.
-      _renderAlertStatusStrip();
-    }catch{/* silent */}
-  },3000);
-}
-
-async function loadAll(){
-  _restoreEditWrapper();
-  state.bootstrap=await j('/api/bootstrap');
-  state.config=await j('/api/config');
-  state.cameras=(await j('/api/cameras')).cameras||[];
-  // Fresh camera list — clear the post-rename dead-id tally so the
-  // (now-current) ids start polling again. _camImgRetry rebuilds the
-  // map on the next 404 streak if a rename happens later.
-  _resetFailedSnapshotIds();
-  if(typeof window._updateMobileDockLiveDot==='function') window._updateMobileDockLiveDot();
-  state.timeline=await j(`/api/timeline?hours=${state.tlHours||168}${state.label?`&label=${encodeURIComponent(state.label)}`:''}`);
-  await loadMediaStorageStats();
-  renderShell();
-  renderDashboard();
-  renderTimeline();
-  renderCameraSettings();
-  await renderProfiles();
-  await renderAudit();
-  hydrateSettings();
-  hydrateTelegram();
-  initTelegramTabs();
-  hydratePushUI();
-  initWeatherTabs();
-  initWeatherStats();
-  await loadWeatherSightings();
-  hydrateWeatherSettings();
-  loadTlStatus();
-  _updateTlActiveTags(state.cameras||[]);
-  if(state.bootstrap.needs_wizard) openWizard();
-  byId('openWizardBtn').classList.toggle('hidden', !!state.bootstrap?.wizard_completed || !state.bootstrap?.needs_wizard);
-  startPreviewRefresh(); // 5fps thumbnail refresh for dashboard cards
-  updateMediaSectionTitle();
-}
+// startLiveUpdate + loadAll now live in live-update.js (Stage 6).
+// loadAll is also bridged on window so the many in-file callers (save
+// flows, toggleArm, quick-delete, …) continue to resolve via the same
+// `loadAll(...)` they always did — no per-callsite import edit
+// needed because the import at the top brings the name into module
+// scope here too.
 
 // Single source of truth for page size: rows × dynamic column count.
 // Called before every load, page-change, delete, resize, and filter-change.
@@ -462,172 +368,8 @@ window._flashDetection = function(camId, cls){
 };
 
 // ── Timeline ─────────────────────────────────────────────────────────────────
-const CAT_COLORS={alle:'#8888aa',motion:'#cbd5e1',person:'#facc15',cat:'#fb923c',bird:'#38bdf8',car:'#f87171',dog:'#7c2d12',squirrel:'#7c4a1f',timelapse:'#a855f7'};
-// Lane order, top-down. Lanes auto-filter by content presence: any lane
-// with zero events in the visible time range is omitted entirely.
-const TL_LANES=['motion','person','cat','bird','car','dog','squirrel'];
-const GAP_MS=2*60*1000;
-
-function _tlGroupLane(points, label, tMin, tMax){
-  const filtered=points
-    .filter(p=>{
-      const t=new Date(p.time).getTime();
-      if(!t||t<tMin||t>tMax) return false;
-      const labs=p.labels||[];
-      if(label==='motion') return labs.length===0||labs.every(l=>l==='motion');
-      return labs.includes(label);
-    })
-    .sort((a,b)=>new Date(a.time)-new Date(b.time));
-  const groups=[];
-  let curr=null;
-  for(const p of filtered){
-    const t=new Date(p.time).getTime();
-    if(!curr||t-curr.endTime>GAP_MS){ curr={startTime:t,endTime:t,count:1}; groups.push(curr); }
-    else { curr.endTime=t; curr.count++; }
-  }
-  return groups;
-}
-
-function _tlFmtTs(ts, hours){
-  const d=new Date(ts);
-  if(hours<=3) return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
-  if(hours<=24) return d.getHours().toString().padStart(2,'0')+':00';
-  if(hours<=168) return ['So','Mo','Di','Mi','Do','Fr','Sa'][d.getDay()]+' '+d.getDate()+'.'+(d.getMonth()+1);
-  return d.getDate()+'.'+(d.getMonth()+1)+'.';
-}
-
-function renderTimeline(){
-  const container=byId('timelineContainer'); if(!container) return;
-  const tracks=state.timeline?.tracks||[];
-
-  // Find earliest event timestamp across all tracks (TASK 2)
-  let earliestMs=null;
-  tracks.forEach(tr=>{
-    (tr.points||[]).forEach(p=>{
-      const t=new Date(p.time).getTime();
-      if(t&&(!earliestMs||t<earliestMs)) earliestMs=t;
-    });
-  });
-  const now=Date.now();
-
-  const slider=byId('tlRangeSlider');
-  if(slider&&earliestMs&&!state._tlInitialized){
-    const dataHours=Math.max(1,Math.ceil((now-earliestMs)/3600000));
-    state.tlHours=dataHours;
-    state._tlInitialized=true;
-    slider.value=dataHours;
-  }
-
-  const hours=state.tlHours||12;
-  const lbl=byId('tlRangeLabel');
-  if(lbl) lbl.textContent=hours<24?`letzte ${hours}h`:`${Math.round(hours/24)} Tage`;
-
-  const tMax=now;
-  let tMin=now-hours*3600000;
-  // Clamp tMin to earliest event — no point showing empty space before first data point
-  if(earliestMs&&earliestMs>tMin) tMin=earliestMs;
-  const span=tMax-tMin||1;
-
-  // Compute which lanes have events per camera in the visible range. Only
-  // those lanes are rendered. Cameras with no events at all are skipped.
-  const camLaneGroups=tracks.map(tr=>{
-    const lanes=TL_LANES
-      .map(label=>({label,groups:_tlGroupLane(tr.points||[], label, tMin, tMax)}))
-      .filter(l=>l.groups.length>0);
-    return {tr,lanes};
-  }).filter(c=>c.lanes.length>0);
-
-  if(!camLaneGroups.length){container.innerHTML='<div class="tl-empty">Keine Ereignisse im gewählten Zeitraum.</div>';return;}
-
-  let html='';
-  camLaneGroups.forEach(({tr,lanes},ti)=>{
-    const cam=(state.config?.cameras||[]).find(c=>c.id===tr.camera_id)||{};
-    const camName=cam.name||tr.camera_id;
-    const camIcon=getCameraIcon(camName);
-    html+=`<div class="tl-cam-block${ti>0?' tl-cam-block--notfirst':''}">`;
-    const sbCls=STAT_MEDIA_DRILLDOWN?'tl-cam-sidebox stat-drillable':'tl-cam-sidebox';
-    const sbClick=STAT_MEDIA_DRILLDOWN?`onclick="_statOpenMedia('${esc(tr.camera_id)}','')"`:'' ;
-    html+=`<div class="${sbCls}" ${sbClick}><div class="tl-cam-icon">${camIcon}</div><div class="tl-cam-name">${esc(camName)}</div></div>`;
-    html+=`<div class="tl-lanes-wrap">`;
-    for(let k=1;k<5;k++) html+=`<div class="tl-vgrid" style="left:calc(var(--tl-label-w) + (100% - var(--tl-label-w))*${k}/5)"></div>`;
-    lanes.forEach(({label,groups})=>{
-      const color=colors[label]||colors.unknown;
-      const labelText=OBJ_LABEL[label]||label;
-      html+=`<div class="tl-lane">`;
-      html+=`<div class="tl-lane-label" style="--lane-c:${CAT_COLORS[label]||'#8888aa'}"><span class="tl-lane-label-icon">${OBJ_SVG[label]||''}</span><span class="tl-lane-label-text">${labelText}</span></div>`;
-      html+=`<div class="tl-track">`;
-      groups.forEach(g=>{
-        const leftPct=Math.max(0,(g.startTime-tMin)/span*100);
-        const widthPct=Math.max(0.8,Math.min((g.endTime-g.startTime)/span*100,100-leftPct));
-        if(leftPct>=100) return;
-        html+=`<div class="tl-bar" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;background:${color};opacity:0.85" data-camid="${esc(tr.camera_id)}" data-label="${esc(label)}" title="${g.count} Events · ${labelText}"></div>`;
-      });
-      html+=`</div></div>`;
-    });
-    html+=`</div></div>`;
-  });
-
-  // X-axis — 6 evenly spaced labels, aligned to track start (after label column)
-  html+=`<div class="tl-xaxis">`;
-  for(let k=0;k<6;k++) html+=`<span class="tl-xlabel">${_tlFmtTs(tMin+span*k/5,hours)}</span>`;
-  html+=`</div>`;
-  container.innerHTML=html;
-
-  // Bar click → navigate to Mediathek. On touch devices, the first tap
-  // shows a small inline tooltip with the bar's title content (camera +
-  // window + count); a second tap before the tooltip's 2.5 s dismiss
-  // navigates. Desktop click navigates immediately as before.
-  const _isCoarsePtr=()=>window.matchMedia('(hover:none) and (pointer:coarse)').matches;
-  container.querySelectorAll('.tl-bar').forEach(bar=>{
-    bar.onclick=(ev)=>{
-      if(_isCoarsePtr() && !bar.classList.contains('tl-bar--tip-shown')){
-        ev.preventDefault();
-        _tlShowBarTooltip(bar);
-        return;
-      }
-      state.mediaCamera=bar.dataset.camid;
-      state.mediaLabels=bar.dataset.label?new Set([bar.dataset.label]):new Set();
-      document.querySelector('#media').scrollIntoView({behavior:'smooth',block:'start'});
-      loadMedia().then(()=>renderMediaGrid());
-    };
-  });
-}
-
-// Tap-tooltip for .tl-bar on touch devices. The bar carries its native
-// title attribute — we read it, position a body-attached toast above the
-// bar, mark the bar as tip-shown, and auto-dismiss after 2.5 s. Tapping
-// elsewhere dismisses too.
-let _tlTipEl=null,_tlTipTimer=0;
-function _tlShowBarTooltip(bar){
-  const text=bar.getAttribute('title')||'';
-  if(!text) return;
-  if(!_tlTipEl){
-    _tlTipEl=document.createElement('div');
-    _tlTipEl.className='tl-bar-tooltip';
-    document.body.appendChild(_tlTipEl);
-  }
-  _tlTipEl.textContent=text;
-  const r=bar.getBoundingClientRect();
-  _tlTipEl.style.left=Math.max(8,Math.min(window.innerWidth-220,r.left+r.width/2-110))+'px';
-  _tlTipEl.style.top=Math.max(8,r.top-44)+'px';
-  _tlTipEl.classList.add('visible');
-  bar.classList.add('tl-bar--tip-shown');
-  clearTimeout(_tlTipTimer);
-  _tlTipTimer=setTimeout(()=>_tlHideBarTooltip(),2500);
-  // First outside tap dismisses; capture phase so it fires before the
-  // bar's own click handler if user moves to a different bar.
-  document.addEventListener('click',_tlOutsideTipHandler,{capture:true,once:true});
-}
-function _tlHideBarTooltip(){
-  if(_tlTipEl) _tlTipEl.classList.remove('visible');
-  document.querySelectorAll('.tl-bar--tip-shown').forEach(b=>b.classList.remove('tl-bar--tip-shown'));
-}
-function _tlOutsideTipHandler(e){
-  // Don't dismiss when the tap landed on a bar — that bar's click
-  // handler will run next and decide (show-tip OR navigate).
-  if(e.target?.closest?.('.tl-bar')) return;
-  _tlHideBarTooltip();
-}
+// Now lives in timeline.js (Stage 6). renderTimeline + helpers +
+// CAT_COLORS / TL_LANES / GAP_MS constants moved together.
 
 // ── RTSP path options (shared with discovery) ────────────────────────────────
 const RTSP_PATH_OPTS=[
@@ -855,107 +597,8 @@ function renderCameraSettings(){
 }
 
 // ── Camera merge modal ────────────────────────────────────────────────────────
-let _mergeSource=null;
-let _mergeTarget=null;
-function openMergeModal(sourceId,sourceName){
-  _mergeSource={id:sourceId,name:sourceName};
-  _mergeTarget=null;
-  // Active cameras only — merging into an offline replacement makes no sense.
-  const targets=(state.cameras||[]).filter(c=>c.id!==sourceId && c.status==='active');
-  byId('mergeIntro').innerHTML=`Medien von <strong>${esc(sourceName)}</strong> werden in die gewählte Ziel-Kamera verschoben. Der Eintrag <strong>${esc(sourceName)}</strong> wird danach gelöscht.`;
-  const list=byId('mergeTargets');
-  if(!targets.length){
-    list.innerHTML='<div class="item muted" style="padding:12px">Keine aktive Ziel-Kamera verfügbar.</div>';
-  } else {
-    // Inline onclick="…('${esc(name)}')" breaks on names containing single
-    // quotes (e.g. "Squirrel Town 'Nut Bar'"). Switched to data-attributes
-    // + a delegated listener on #mergeTargets — safe for any character.
-    list.innerHTML=targets.map(c=>`
-      <div class="item merge-target-item" data-tgt-id="${esc(c.id)}" data-tgt-name="${esc(c.name)}" style="cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px">
-        <span style="font-size:18px">${getCameraIcon(c.name)}</span>
-        <div style="flex:1">
-          <div style="font-weight:600">${esc(c.name)}</div>
-          <div class="small muted">${esc(c.id)}</div>
-        </div>
-        <span class="merge-target-radio" style="width:16px;height:16px;border-radius:50%;border:2px solid var(--muted);flex-shrink:0"></span>
-      </div>`).join('');
-  }
-  byId('mergeWarning').style.display='none';
-  const btn=byId('mergeConfirmBtn');
-  btn.disabled=true; btn.style.opacity='.5'; btn.textContent='Zusammenführen';
-  byId('mergeModal').classList.remove('hidden');
-  document.body.style.overflow='hidden';
-}
-window.openMergeModal=openMergeModal;
-function _selectMergeTarget(id,name){
-  _mergeTarget={id,name};
-  document.querySelectorAll('.merge-target-item').forEach(el=>{
-    const sel=el.dataset.tgtId===id;
-    el.classList.toggle('selected',sel);
-    const dot=el.querySelector('.merge-target-radio');
-    if(dot){
-      dot.style.borderColor=sel?'var(--accent)':'var(--muted)';
-      dot.style.background=sel?'var(--accent)':'transparent';
-    }
-    el.style.background=sel?'rgba(59,130,246,.08)':'';
-  });
-  const w=byId('mergeWarning');
-  w.style.display='block';
-  w.innerHTML=`Die Aktion verschiebt alle Medien von <strong>${esc(_mergeSource.name)}</strong> nach <strong>${esc(name)}</strong> und entfernt anschließend den Eintrag <strong>${esc(_mergeSource.name)}</strong> aus der Konfiguration. Sie kann nicht rückgängig gemacht werden.`;
-  const btn=byId('mergeConfirmBtn');
-  btn.disabled=false; btn.style.opacity='1';
-}
-window._selectMergeTarget=_selectMergeTarget;
-function closeMergeModal(){
-  byId('mergeModal').classList.add('hidden');
-  document.body.style.overflow='';
-  _mergeSource=null; _mergeTarget=null;
-}
-byId('closeMergeBtn')?.addEventListener('click',closeMergeModal);
-byId('mergeCancelBtn')?.addEventListener('click',closeMergeModal);
-byId('mergeModal')?.addEventListener('click',e=>{ if(e.target===byId('mergeModal')) closeMergeModal(); });
-// Delegated listeners replace inline onclick="…('${esc(name)}')" — those
-// strings break on quotes / backslashes / ampersands in camera names.
-// Buttons declare data-merge-id / data-merge-name; the listener resolves
-// values from dataset at click time, which is byte-safe for any character.
-document.addEventListener('click',(ev)=>{
-  const trigger=ev.target.closest('[data-merge-action="open"]');
-  if(!trigger) return;
-  ev.stopPropagation();
-  const id=trigger.dataset.mergeId;
-  if(!id) return;
-  openMergeModal(id, trigger.dataset.mergeName || id);
-});
-byId('mergeTargets')?.addEventListener('click',(ev)=>{
-  const item=ev.target.closest('.merge-target-item');
-  if(!item) return;
-  const id=item.dataset.tgtId;
-  if(!id) return;
-  _selectMergeTarget(id, item.dataset.tgtName || id);
-});
-byId('mergeConfirmBtn')?.addEventListener('click',async()=>{
-  if(!_mergeSource||!_mergeTarget) return;
-  const btn=byId('mergeConfirmBtn');
-  // Two-step confirm: first click arms the button, second click fires the call.
-  if(btn.dataset.armed!=='1'){
-    btn.dataset.armed='1';
-    btn.textContent='Wirklich zusammenführen?';
-    btn.style.background='#ef4444';
-    return;
-  }
-  btn.disabled=true; btn.textContent='Wird verschoben …';
-  try{
-    const r=await j(`/api/cameras/${encodeURIComponent(_mergeSource.id)}/merge-into/${encodeURIComponent(_mergeTarget.id)}`,{method:'POST'});
-    const tgtName=_mergeTarget.name;
-    closeMergeModal();
-    showToast(`${r.moved_files||0} Datei(en) nach „${tgtName}“ verschoben (${r.moved_events||0} Events, ${r.moved_timelapses||0} Timelapse).`,'success');
-    await loadAll();
-  }catch(e){
-    btn.disabled=false; btn.dataset.armed='0';
-    btn.textContent='Zusammenführen'; btn.style.background='';
-    showToast('Zusammenführen fehlgeschlagen: '+(e.message||e),'error');
-  }
-});
+// Now lives in camera-merge.js (Stage 6). bindMergeModal() is called
+// once at the bottom of this file to wire its DOM listeners.
 window._reconnectCam=function(camId,btn){
   btn.classList.add('spinning');
   setTimeout(()=>btn.classList.remove('spinning'),520);
@@ -9315,3 +8958,32 @@ window.openMediaDrilldown = openMediaDrilldown;
 // module-level binding would throw ReferenceError because none
 // exists; the inline onclicks ("window._openMediaItem(...)") look
 // up the property directly and work as soon as the gallery renders.
+
+// Stage 6 — renderers/hydrators that loadAll() (now in live-update.js)
+// invokes via window.X because they still live in this file. Each
+// migrates to a direct named import as its domain extracts in
+// stage 7+, and the matching line below disappears at that point.
+window.renderShell             = renderShell;
+window.renderCameraSettings    = renderCameraSettings;
+window.renderProfiles          = renderProfiles;
+window.renderAudit             = renderAudit;
+window.hydrateSettings         = hydrateSettings;
+window.hydrateTelegram         = hydrateTelegram;
+window.initTelegramTabs        = initTelegramTabs;
+window.hydratePushUI           = hydratePushUI;
+window.initWeatherTabs         = initWeatherTabs;
+window.initWeatherStats        = initWeatherStats;
+window.loadWeatherSightings    = loadWeatherSightings;
+window.hydrateWeatherSettings  = hydrateWeatherSettings;
+window.loadTlStatus            = loadTlStatus;
+window._updateTlActiveTags     = _updateTlActiveTags;
+window.openWizard              = openWizard;
+window.updateMediaSectionTitle = updateMediaSectionTitle;
+window.loadMediaStorageStats   = loadMediaStorageStats;
+window.loadMedia               = loadMedia;
+window.renderMediaGrid         = renderMediaGrid;
+// Stage 6 — wire the merge-modal DOM listeners once. camera-merge.js
+// owns the open/select/close logic but its event listeners need to
+// fire after the static template has rendered (always true since this
+// script loads as a module = deferred).
+bindMergeModal();
