@@ -70,8 +70,6 @@ const _populateCoralTestCameras = (...a) => window._populateCoralTestCameras?.(.
 // Tiny helper used by the export-config buttons in the App-Section.
 const download = (url) => window.open(url, '_blank');
 
-const download = (url) => window.open(url, '_blank');
-
 function renderShell(){
   // Hero title is now a static "TAM-spy" lockup with the squirrel-on-
   // hyphen ornament — no longer driven by config.app.{name,tagline,
