@@ -124,6 +124,7 @@ import {
   openAllMediaDrilldown, openMediaDrilldown, closeMediaDrilldown,
   _goToPage, renderMediaPagination, _ensureProcessingPoll, renderMediaGrid,
   _MEDIA_TITLE_SVG, updateMediaSectionTitle,
+  deleteMediaCard, deleteTLCard, confirmMediaCard,
 } from './mediathek/orchestration.js';
 // Stage 11 — live-view modal + generic fullscreen wiring. live-view's
 // inline onclicks live in index.html. closeLiveView and _initFsBtn
@@ -2189,87 +2190,9 @@ byId('wizFinish').onclick=()=>finishWizard();
 // all extracted to mediathek/orchestration.js in stage 23. _TL_FILMSTRIP
 // stays here — still referenced by the timelapse-card snippet above.
 const _TL_FILMSTRIP=`<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c4b5fd" stroke-width="2" stroke-linecap="round" style="flex-shrink:0"><line x1="6" y1="3" x2="18" y2="3"/><line x1="6" y1="21" x2="18" y2="21"/><polygon points="7,4 17,4 12,12" fill="#c4b5fd" opacity=".8"/><polygon points="12,12 7,20 17,20" fill="#c4b5fd" opacity=".5"/></svg>`;
-window.deleteMediaCard=async(btn)=>{
-  const card=btn.closest('.media-card');
-  const eventId=card?.dataset.eventId;
-  const camId=card?.dataset.cameraId;
-  if(!eventId||!camId) return;
-  try{
-    await j(`/api/camera/${encodeURIComponent(camId)}/events/${encodeURIComponent(eventId)}`,{method:'DELETE'});
-    // Brief fade-out animation, then re-render
-    if(card){
-      card.style.transition='opacity .25s,transform .25s';
-      card.style.opacity='0';
-      card.style.transform='scale(0.95)';
-    }
-    setTimeout(()=>{
-      state._allMedia=(state._allMedia||[]).filter(x=>x.event_id!==eventId);
-      const ps_d=calcItemsPerPage();
-      state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps_d));
-      state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
-      state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
-      if(state.media.length===0&&state.mediaPage>0){
-        state.mediaPage--;
-        state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
-      }
-      renderMediaGrid();
-      renderMediaPagination();
-      refreshTimelineAndStats();
-    },250);
-  }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
-};
-window.deleteTLCard=async(camId,filename,eventId)=>{
-  try{
-    await j(`/api/camera/${encodeURIComponent(camId)}/timelapse/${encodeURIComponent(filename)}`,{method:'DELETE'});
-    // Remove the unified EventStore entry too (server also does this as a backstop)
-    if(eventId){
-      try{
-        await j(`/api/camera/${encodeURIComponent(camId)}/events/${encodeURIComponent(eventId)}`,{method:'DELETE'});
-      }catch(_){ /* already cleaned by server */ }
-    }
-    const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(eventId)}"]`);
-    if(card) card.remove();
-    state._allMedia=(state._allMedia||[]).filter(x=>x.event_id!==eventId);
-    const ps_d=calcItemsPerPage();
-    state.mediaTotalPages=Math.max(1,Math.ceil(state._allMedia.length/ps_d));
-    state.mediaPage=Math.min(state.mediaPage||0,state.mediaTotalPages-1);
-    state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
-    if(state.media.length===0&&state.mediaPage>0){
-      state.mediaPage--;
-      state.media=state._allMedia.slice(state.mediaPage*ps_d,(state.mediaPage+1)*ps_d);
-    }
-    renderMediaGrid();
-    renderMediaPagination();
-    if(!byId('mediaGrid').querySelector('.media-card')){
-      byId('mediaGrid').innerHTML='<div class="item muted" style="padding:16px">Keine Medien vorhanden.</div>';
-    }
-    refreshTimelineAndStats();
-  }catch(e){showToast('Löschen fehlgeschlagen: '+e.message,'error');}
-};
-window.confirmMediaCard=async(camId,eventId,btn)=>{
-  // Brief scale animation on tap
-  if(btn){
-    btn.classList.add('mmc-confirm--anim');
-    setTimeout(()=>btn.classList.remove('mmc-confirm--anim'),200);
-  }
-  try{
-    await j(`/api/camera/${encodeURIComponent(camId)}/events/${encodeURIComponent(eventId)}/confirm`,{method:'POST'});
-    // update state.media + state._allMedia in place so lightbox nav and re-renders stay in sync
-    const sIdx=(state.media||[]).findIndex(x=>x.event_id===eventId);
-    if(sIdx>=0) state.media[sIdx].confirmed=true;
-    const aIdx=(state._allMedia||[]).findIndex(x=>x.event_id===eventId);
-    if(aIdx>=0) state._allMedia[aIdx].confirmed=true;
-    const card=byId('mediaGrid').querySelector(`[data-event-id="${CSS.escape(eventId)}"]`);
-    if(card){
-      // Wait for the scale anim to finish, then swap actions for the ✓ badge
-      setTimeout(()=>{
-        card.classList.add('mmc-confirmed');
-        const actions=card.querySelector('.mmc-actions');
-        if(actions) actions.outerHTML='<span class="media-confirmed-badge">✓</span>';
-      },200);
-    }
-  }catch(e){showToast('Bestätigen fehlgeschlagen: '+e.message,'error');}
-};
+// deleteMediaCard / deleteTLCard / confirmMediaCard moved to
+// mediathek/orchestration.js (Stage 23 C). The window.* bridges below
+// keep the inline onclicks rendered by mediaCardHTML resolving.
 
 
 
@@ -4248,6 +4171,12 @@ window._seedTopMediaLabel      = _seedTopMediaLabel;
 window.openLightbox            = openLightbox;
 window.closeLightbox           = closeLightbox;
 window.openTLPlayer            = openTLPlayer;
+// Stage 23 C — card-action bridges. Consumed by inline onclicks
+// rendered inside mediaCardHTML. Each evaporates when its card swaps
+// to delegated event listeners.
+window.deleteMediaCard         = deleteMediaCard;
+window.deleteTLCard            = deleteTLCard;
+window.confirmMediaCard        = confirmMediaCard;
 // Stage 6 — wire the merge-modal DOM listeners once. camera-merge.js
 // owns the open/select/close logic but its event listeners need to
 // fire after the static template has rendered (always true since this
