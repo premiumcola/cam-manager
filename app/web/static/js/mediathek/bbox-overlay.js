@@ -199,6 +199,17 @@ export function _lbDrawDetections(){
   }
 
   // Legacy single-bbox fallback — same as the pre-tracking overlay.
+  // The bbox is the trigger-frame detection; without per-frame tracks
+  // it would visually lie about where the subject is during playback.
+  // Hide it while the video is actually playing — the user's "bbox
+  // stays put while the subject moves out of it" complaint. Pause /
+  // ended / still-image modes paint the box back at trigger position
+  // and tag it with a small "Detection bei Auslösung" pill so the
+  // semantics are obvious.
+  const isPlaying = usingVideo && !videoEl.paused && !videoEl.ended
+                    && (videoEl.currentTime || 0) > 0.05;
+  if (isPlaying) return;
+
   const dets = (lbState.item.detections || []).filter(d => d && d.bbox && typeof d.bbox.x1 === 'number');
   if (!dets.length) return;
   for (const d of dets){
@@ -206,6 +217,23 @@ export function _lbDrawDetections(){
     _drawTrackBox(ctx, { bbox: d.bbox, score: d.score, label: d.label },
                   c, offX, offY, scale);
   }
+  // Tiny "Detection bei Auslösung" annotation above the topmost bbox
+  // so the still-image / paused-video viewer understands the box is a
+  // freeze of the trigger moment, not a real-time tracker.
+  const top = dets.reduce((min, d) =>
+    (d.bbox.y1 < min.bbox.y1 ? d : min), dets[0]);
+  const bx1 = offX + top.bbox.x1 * scale;
+  const by1 = offY + top.bbox.y1 * scale;
+  const tagText = 'Detection bei Auslösung';
+  ctx.font = '500 10px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+  const tagW = ctx.measureText(tagText).width;
+  const padX = 6, tagH = 16;
+  // Sit ABOVE the regular label pill (which renders at y1 - 20).
+  const tagY = Math.max(0, by1 - 20 - tagH - 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.78)';
+  ctx.fillRect(bx1, tagY, tagW + padX * 2, tagH);
+  ctx.fillStyle = colors[top.label] || colors.unknown;
+  ctx.fillText(tagText, bx1 + padX, tagY + 2);
 }
 
 function _drawTrackBox(ctx, sample, color, offX, offY, scale){
@@ -362,8 +390,14 @@ window.lbStopTrackingPlayback = lbStopTrackingPlayback;
   if (imgEl) imgEl.addEventListener('load', () => _lbDrawDetections());
   if (videoEl){
     videoEl.addEventListener('loadedmetadata', () => _lbDrawDetections());
-    videoEl.addEventListener('play',     () => _startRafLoop());
-    videoEl.addEventListener('playing',  () => _startRafLoop());
+    // play / playing both kick the RAF loop AND call _lbDrawDetections
+    // once. The draw call clears the canvas (synchronously); on the
+    // legacy single-bbox path it then bails (isPlaying guard) so the
+    // stale trigger-frame box doesn't sit there while the subject
+    // moves through the clip. On the tracks path the RAF loop draws
+    // interpolated boxes anyway, so the extra call is a harmless dup.
+    videoEl.addEventListener('play',     () => { _startRafLoop(); _lbDrawDetections(); });
+    videoEl.addEventListener('playing',  () => { _startRafLoop(); _lbDrawDetections(); });
     videoEl.addEventListener('pause',    () => { _stopRafLoop(); _lbDrawDetections(); });
     videoEl.addEventListener('ended',    () => { _stopRafLoop(); _lbDrawDetections(); });
     // Seek → snap the overlay to the new time on the next RAF tick.
