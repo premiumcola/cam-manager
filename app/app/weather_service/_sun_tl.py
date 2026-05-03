@@ -33,6 +33,29 @@ from ._consts import (
 )
 
 
+# 70/30 pre-event bias on the sun-timelapse window: most of the captured
+# minutes sit BEFORE the sun event so a sunrise video starts in twilight
+# and watches the sun come up; a sunset video catches the run-up to dusk
+# and a short tail of afterglow. Single source of truth — referenced by
+# both the scheduler in _register_sun_jobs and the preview math in
+# sun_times_today so the two never drift again.
+_SUN_PRE_BIAS = 0.70
+
+
+def _sun_window_bounds(sun_dt: datetime, window_min: int) -> tuple[datetime, datetime, int, int]:
+    """Apply _SUN_PRE_BIAS to (sun_dt, window_min). Returns
+    (start_dt, end_dt, pre_min, post_min). Pure function — no `self`,
+    safe to call from anywhere in the module."""
+    pre = int(round(window_min * _SUN_PRE_BIAS))
+    post = window_min - pre
+    return (
+        sun_dt - timedelta(minutes=pre),
+        sun_dt + timedelta(minutes=post),
+        pre,
+        post,
+    )
+
+
 class SunTimelapseMixin:
     """Sunrise/sunset timelapse subsystem: scheduler + capture + day/night override.
 
@@ -113,14 +136,9 @@ class SunTimelapseMixin:
                 if sun_dt is None:
                     continue
                 window = int(pcfg.get("window_min", 30) or 30)
-                # 70/30 bias around the sun event: most of the captured
-                # time should be BEFORE the event (so a sunrise video
-                # starts in twilight and watches the sun come up; a
-                # sunset video catches the run-up to dusk and a short
-                # tail of afterglow). With a 30-min window that's
-                # -21 / +9 around the event.
-                pre_min = int(round(window * 0.7))
-                start_dt = sun_dt - timedelta(minutes=pre_min)
+                # 70/30 bias around the sun event — see _SUN_PRE_BIAS.
+                # With a 30-min window that's -21 / +9 around the event.
+                start_dt, _end_dt, _pre, _post = _sun_window_bounds(sun_dt, window)
                 if start_dt <= datetime.now():
                     log.info("[weather] %s %s @ %s already passed — skipping today",
                              cam_name, phase, sun_dt.strftime("%H:%M"))
@@ -418,17 +436,27 @@ class SunTimelapseMixin:
 
     def sun_times_today(self) -> dict:
         """Used by the /api/weather/sun-times endpoint to power the
-        Settings → Wetter live preview."""
+        Settings → Wetter live preview.
+
+        Per-phase entries carry the next occurrence: today's event when
+        the recording window hasn't started yet, otherwise tomorrow's.
+        `next_is_tomorrow` lets the UI render "morgen" labels. ISO
+        datetimes are emitted alongside the legacy HH:MM strings the
+        existing UI already consumes."""
         out = {"location_set": False, "sunrise": None, "sunset": None,
                "cameras": []}
         loc = self.server_cfg.get("location") or {}
         if loc.get("lat") is None or loc.get("lon") is None:
             return out
         out["location_set"] = True
-        sr = self.sun_event_today("sunrise")
-        ss = self.sun_event_today("sunset")
-        out["sunrise"] = sr.isoformat(timespec="minutes") if sr else None
-        out["sunset"]  = ss.isoformat(timespec="minutes") if ss else None
+        # Top-level today values stay as-is for backwards compat — these
+        # are location-level and consumers expect "today's events".
+        sr_today = self.sun_event_today("sunrise")
+        ss_today = self.sun_event_today("sunset")
+        out["sunrise"] = sr_today.isoformat(timespec="minutes") if sr_today else None
+        out["sunset"]  = ss_today.isoformat(timespec="minutes") if ss_today else None
+
+        now = datetime.now()
         for cam in self._cfg_cameras():
             cw = cam.get("weather") or {}
             stl = cw.get("sun_timelapse") or {}
@@ -436,15 +464,35 @@ class SunTimelapseMixin:
                      "weather_enabled": bool(cw.get("enabled")),
                      "sunrise": dict(stl.get("sunrise") or {}),
                      "sunset":  dict(stl.get("sunset")  or {})}
-            for phase, sun_dt in (("sunrise", sr), ("sunset", ss)):
+            for phase in ("sunrise", "sunset"):
                 p = entry[phase]
-                if not p.get("enabled") or sun_dt is None:
+                if not p.get("enabled"):
                     p["window_start"] = p["window_end"] = None
                     continue
-                w = int(p.get("window_min", 30) or 30) // 2
-                p["window_start"] = (sun_dt - timedelta(minutes=w)).strftime("%H:%M")
-                p["window_end"]   = (sun_dt + timedelta(minutes=w)).strftime("%H:%M")
-                p["sun_event"]    = sun_dt.strftime("%H:%M")
+                window = int(p.get("window_min", 30) or 30)
+                # Resolve "next" event: today if its capture window
+                # hasn't started yet, else tomorrow. The capture-start
+                # boundary is what determines whether the recording is
+                # still ahead of us — the sun event itself can be in
+                # the past while the post-roll is still recording.
+                sun_dt = self.sun_event_today(phase)
+                next_is_tomorrow = False
+                if sun_dt is not None:
+                    start_dt, _, _, _ = _sun_window_bounds(sun_dt, window)
+                    if start_dt <= now:
+                        sun_dt = self.sun_event_today(phase, date.today() + timedelta(days=1))
+                        next_is_tomorrow = sun_dt is not None
+                if sun_dt is None:
+                    p["window_start"] = p["window_end"] = None
+                    continue
+                start_dt, end_dt, _, _ = _sun_window_bounds(sun_dt, window)
+                p["window_start"]      = start_dt.strftime("%H:%M")
+                p["window_end"]        = end_dt.strftime("%H:%M")
+                p["sun_event"]         = sun_dt.strftime("%H:%M")
+                p["sun_event_iso"]     = sun_dt.isoformat(timespec="seconds")
+                p["capture_start_iso"] = start_dt.isoformat(timespec="seconds")
+                p["capture_end_iso"]   = end_dt.isoformat(timespec="seconds")
+                p["next_is_tomorrow"]  = next_is_tomorrow
             out["cameras"].append(entry)
         return out
 
