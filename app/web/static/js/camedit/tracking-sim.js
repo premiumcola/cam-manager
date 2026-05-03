@@ -43,15 +43,22 @@ function _renderShell(panel){
   byId('etsRegenBtn')?.addEventListener('click', () => _regenerateTracks());
 }
 
+// Cap at 5 most-recent video events. store.list_events already returns
+// items in newest-first order, so the slice is purely defensive against
+// future server-side changes — don't re-sort.
+const _PICKER_MAX = 5;
+
 async function _loadPicker(camId){
   const picker = byId('etsPicker');
   picker.innerHTML = '<div class="ets-empty">Lade Clips…</div>';
   let items = [];
   try {
-    const r = await fetch(`/api/camera/${encodeURIComponent(camId)}/media?limit=12`);
+    const r = await fetch(`/api/camera/${encodeURIComponent(camId)}/media?limit=${_PICKER_MAX}`);
     if (!r.ok) throw new Error(r.statusText);
     const d = await r.json();
-    items = (d.items || []).filter(it => (it.video_relpath || '').endsWith('.mp4'));
+    items = (d.items || [])
+      .filter(it => (it.video_relpath || '').endsWith('.mp4'))
+      .slice(0, _PICKER_MAX);
   } catch {
     picker.innerHTML = '<div class="ets-empty">Fehler beim Laden der Clips.</div>';
     return;
@@ -62,7 +69,12 @@ async function _loadPicker(camId){
     if (regen) regen.disabled = true;
     return;
   }
-  picker.innerHTML = items.map(_pickerCardHtml).join('');
+  // Inline "nur N Videos vorhanden" hint when the camera doesn't have
+  // five clips yet — avoids padding the rail with empty placeholders.
+  const trail = items.length < _PICKER_MAX
+    ? `<div class="ets-picker-trail">nur ${items.length} Video${items.length === 1 ? '' : 's'} vorhanden</div>`
+    : '';
+  picker.innerHTML = items.map(_pickerCardHtml).join('') + trail;
   picker.querySelectorAll('.ets-card').forEach(card => {
     card.addEventListener('click', () => _selectCard(card.dataset.eventId, card.dataset.videoRelpath));
   });
@@ -91,12 +103,18 @@ function _formatTimestamp(iso){
   return t.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }) + ' ' + hhmm;
 }
 
-// Resolve a thumbnail src from a media item. The /api/camera/<id>/media
-// endpoint exposes both `thumb_url` and `snapshot_url` for typical events,
-// but legacy / in-flight events sometimes only carry the relpath fields —
-// fall through to those before giving up so the card doesn't render the
-// browser's broken-image glyph.
+// Resolve a thumbnail src from a media item.
+//
+// The convention everywhere in this codebase: the sibling `.jpg` next to
+// `.mp4` IS the thumbnail. mediaScan in storage.py creates these
+// automatically and they're guaranteed to be same-origin. Fall back to
+// the *_url fields only when the relpath isn't usable (legacy
+// non-mp4 events).
 function _pickThumbSrc(it){
+  const rel = it.video_relpath;
+  if (rel && rel.endsWith('.mp4')){
+    return `/media/${rel.slice(0, -4)}.jpg`;
+  }
   if (it.thumb_url) return it.thumb_url;
   if (it.snapshot_url) return it.snapshot_url;
   if (it.thumb_relpath) return `/media/${it.thumb_relpath}`;
@@ -342,11 +360,17 @@ export function renderTracksTimeline(container, tracksPayload, videoDurationS, m
         dots += `<circle cx="${dx}" cy="${cy}" r="3" fill="${color}"/>`;
       }
     });
+    // Track-id rendered in muted secondary colour but the SAME body sans
+    // family + size as the label text after the dot. Using a monospace
+    // stack here made the id read as oversized when the modal got wide;
+    // matching font-family fixes that without losing readability.
     return `
       <g>
         <rect x="${x0}" y="${y + LANE_H * 0.18}" width="${w}" height="${LANE_H * 0.64}" rx="3" fill="${color}" opacity="0.20"/>
         ${dots}
-        <text x="${LABEL_W - 8}" y="${cy + FONT * 0.34}" fill="rgba(255,255,255,.78)" font-size="${FONT}" font-family="ui-monospace,Menlo,monospace" text-anchor="end">${esc(tid)} · ${esc(lbl)}</text>
+        <text x="${LABEL_W - 8}" y="${cy + FONT * 0.34}" font-size="${FONT}" text-anchor="end">
+          <tspan fill="rgba(255,255,255,.42)">${esc(tid)}</tspan><tspan fill="rgba(255,255,255,.85)"> · ${esc(lbl)}</tspan>
+        </text>
       </g>`;
   }).join('');
 
@@ -355,16 +379,24 @@ export function renderTracksTimeline(container, tracksPayload, videoDurationS, m
     : '';
   const indexedAgo = mtime ? _relativeTimeAgo(new Date(mtime)) : '—';
 
+  // Wrap the SVG in a max-width container so the timeline doesn't
+  // dominate a wide camera-edit modal. 760 px matches the readable-
+  // diagram width used elsewhere; viewBox-driven scaling does the rest.
+  // Inline SVGs in the legend get explicit viewBox so the rect stays
+  // visible across browsers (some renderers shrunk the rect to a hyphen-
+  // shaped sliver without it).
   container.innerHTML = `
     <div class="ets-timeline">
-      <svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Tracks-Timeline">
-        ${ticks}
-        ${lanes}
-      </svg>
+      <div class="ets-timeline-svg-wrap">
+        <svg viewBox="0 0 ${VIEW_W} ${VIEW_H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Tracks-Timeline" font-family="Inter,system-ui,Segoe UI,Roboto,sans-serif">
+          ${ticks}
+          ${lanes}
+        </svg>
+      </div>
       <div class="ets-legend">
-        <span class="ets-legend-item"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="4" fill="none" stroke="#94a3b8" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="#94a3b8"/></svg> Trigger-Frame</span>
-        <span class="ets-legend-item"><svg width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="2.5" fill="#94a3b8"/></svg> 1 Hz Sample</span>
-        <span class="ets-legend-item"><svg width="14" height="14" aria-hidden="true"><rect x="1" y="5" width="12" height="4" rx="1.5" fill="#94a3b8" opacity=".28"/></svg> Track-Lebensdauer</span>
+        <span class="ets-legend-item"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="4" fill="none" stroke="#94a3b8" stroke-width="1.4"/><circle cx="7" cy="7" r="2" fill="#94a3b8"/></svg>Trigger-Frame</span>
+        <span class="ets-legend-item"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="2.5" fill="#94a3b8"/></svg>1 Hz Sample</span>
+        <span class="ets-legend-item"><svg viewBox="0 0 14 14" width="14" height="14" aria-hidden="true"><rect x="1" y="3" width="12" height="8" rx="1.5" fill="#94a3b8" opacity=".30"/></svg>Track-Lebensdauer</span>
       </div>
       ${hiddenLine}
       <div class="ets-stats">
