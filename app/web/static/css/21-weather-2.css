@@ -63,6 +63,23 @@
 .ws-sun-window-num{color:#fff}
 .ws-sun-preview{grid-column:1/-1;font-size:11px;color:var(--muted);font-style:italic;padding-left:28px}
 .ws-sun-preview--err{color:#ef4444;font-style:normal}
+/* Live clock + countdown line under the preview. Each "chip" segment
+   stays glued together (white-space:nowrap) so "in 14h 53m" never wraps
+   mid-value; the wrapper itself uses flex-wrap so chip pairs flow onto
+   their own line on a 375 px viewport. Same muted secondary text as the
+   line above — reads as one paragraph, not two competing rows. */
+.ws-sun-live{
+  grid-column:1/-1;
+  display:flex;flex-wrap:wrap;gap:4px 10px;
+  padding-left:28px;
+  font-size:11px;color:var(--muted);font-style:italic;
+  font-variant-numeric:tabular-nums;
+}
+.ws-sun-live-chip{white-space:nowrap}
+.ws-sun-live-chip [data-ws-now],
+.ws-sun-live-chip [data-ws-countdown]{
+  font-weight:700;color:#cbd5e1;font-style:normal;
+}
 
 /* Per-phase Video-Länge picker — sits between the window slider and the
    daynight override sub-row when the phase is on. Span full width inside

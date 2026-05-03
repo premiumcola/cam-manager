@@ -88,6 +88,67 @@ function _initWsSavedHintLifecycle(){
   sync();
 }
 
+// ── Live clock + countdown for the sun-tl preview rows ────────────────────
+// One interval ticks every 1s while the Wetter-Settings panel is open and
+// updates every [data-ws-now] (current local time) + [data-ws-countdown]
+// (time until capture_start_iso). Mirrors _initWsSavedHintLifecycle so the
+// timer stops cleanly when the user collapses the section — no leaks on
+// repeated open/close cycles.
+let _wsLiveTimer = null;
+
+function _wsFmtCountdown(targetIso, endIso){
+  if (!targetIso) return '';
+  const now = Date.now();
+  const target = new Date(targetIso).getTime();
+  const end = endIso ? new Date(endIso).getTime() : target;
+  const dt = target - now;
+  if (dt <= 0){
+    // Capture is in progress until endIso, then "fertig" until the next
+    // backend resolution rolls the row to tomorrow's event.
+    if (now <= end) return 'läuft';
+    return 'fertig';
+  }
+  const s = Math.floor(dt / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  if (h >= 1) return `in ${h}h ${m}m`;
+  if (m >= 1) return `in ${m}m ${sec}s`;
+  return `in ${sec}s`;
+}
+
+function _wsTickLive(){
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  const nowStr = `${hh}:${mm}:${ss}`;
+  document.querySelectorAll('[data-ws-now]').forEach(el => {
+    el.textContent = nowStr;
+  });
+  document.querySelectorAll('[data-ws-countdown]').forEach(el => {
+    const target = el.getAttribute('data-ws-countdown');
+    const end = el.getAttribute('data-ws-countdown-end') || '';
+    el.textContent = _wsFmtCountdown(target, end);
+  });
+}
+
+function _initWsLiveTickerLifecycle(){
+  const sec = byId('set-weather');
+  if (!sec || sec.dataset.wsLiveObs === '1') return;
+  sec.dataset.wsLiveObs = '1';
+  const start = () => {
+    _wsTickLive();
+    if (!_wsLiveTimer) _wsLiveTimer = setInterval(_wsTickLive, 1000);
+  };
+  const stop = () => {
+    if (_wsLiveTimer) { clearInterval(_wsLiveTimer); _wsLiveTimer = null; }
+  };
+  const sync = () => sec.classList.contains('open') ? start() : stop();
+  new MutationObserver(sync).observe(sec, { attributes: true, attributeFilter: ['class'] });
+  sync();
+}
+
 let _weatherSaveTimer = null;
 
 // Single chokepoint for every save inside the weather panel. Routes
@@ -155,6 +216,7 @@ function hydrateWeatherSettings(){
   _bindWeatherHandlers();
   _refreshWeatherStatus();
   _initWsSavedHintLifecycle();
+  _initWsLiveTickerLifecycle();
 }
 
 // Loose Reolink-stream-URL detector. Only the path matters — Reolink RTSP
@@ -278,7 +340,18 @@ function _renderWeatherCamPanel(c){
     if (!sunPreview.location_set) return '<span class="ws-sun-preview ws-sun-preview--err">Standort fehlt</span>';
     const ev = pre[phase] || {};
     if (!ev.window_start) return '<span class="ws-sun-preview">Polartag — kein ' + (phase === 'sunrise' ? 'Aufgang' : 'Untergang') + ' heute</span>';
-    return `<span class="ws-sun-preview">Heute: ${esc(ev.sun_event)} · Fenster ${esc(ev.window_start)} – ${esc(ev.window_end)}</span>`;
+    // Day-label switches to "Morgen" once today's window is past and the
+    // backend has rolled to tomorrow's event. The live ticker below keeps
+    // both the clock and the countdown current to the second.
+    const dayLabel = ev.next_is_tomorrow ? 'Morgen' : 'Heute';
+    const liveLine = ev.capture_start_iso
+      ? `
+        <span class="ws-sun-live">
+          <span class="ws-sun-live-chip">Jetzt <span data-ws-now>—</span></span>
+          <span class="ws-sun-live-chip">${ev.next_is_tomorrow ? 'Morgen ' : ''}nächste Aufnahme <span data-ws-countdown="${esc(ev.capture_start_iso)}" data-ws-countdown-end="${esc(ev.capture_end_iso || '')}">…</span></span>
+        </span>`
+      : '';
+    return `<span class="ws-sun-preview">${dayLabel}: ${esc(ev.sun_event)} · Fenster ${esc(ev.window_start)} – ${esc(ev.window_end)}</span>${liveLine}`;
   };
   const isReolink = _isReolinkRtsp(c.rtsp_url);
   return `
