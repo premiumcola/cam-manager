@@ -27,13 +27,16 @@ def register_blueprints(app) -> None:
         admin,
         bootstrap,
         cameras,
+        coral,
         events,
         media,
         sichtungen,
         streams,
+        telegram,
         timelapse,
         timeline_stats,
         tracking,
+        weather,
     )
     app.register_blueprint(tracking.bp)
     app.register_blueprint(sichtungen.bp)
@@ -45,3 +48,6 @@ def register_blueprints(app) -> None:
     app.register_blueprint(events.bp)
     app.register_blueprint(timeline_stats.bp)
     app.register_blueprint(timelapse.bp)
+    app.register_blueprint(coral.bp)
+    app.register_blueprint(weather.bp)
+    app.register_blueprint(telegram.bp)
