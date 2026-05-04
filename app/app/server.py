@@ -3823,7 +3823,7 @@ def _nickname_tflite(filename: str) -> str:
         return "Vögel BY"
     if ('inat' in low and 'bird' in low) or 'inat_bird' in low:
         return "Vögel iNat"
-    if 'imagenet' in low or ('mobilenet' in low and 'ssd' not in low and 'bird' not in low):
+    if 'imagenet' in low:
         return "Wildtiere"
     if 'bird' in low:
         return "Vögel"
