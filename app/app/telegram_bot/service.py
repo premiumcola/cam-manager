@@ -92,6 +92,12 @@ class TelegramService(
         self._polling_stop_event: asyncio.Event | None = None
         self._polling_active_since: float | None = None
         self._last_conflict_ts: float | None = None
+        # If stop()'s join times out, capture the orphan thread here so
+        # start() can refuse a fresh polling thread (a second
+        # getUpdates loop against the same token = sustained Conflict
+        # spam) and so get_polling_status() can surface the failure.
+        self._stale_poll_thread: Thread | None = None
+        self._stale_since: float | None = None
         # Most-recent successful send_alert timestamp (epoch seconds).
         # Set by send() on a successful Telegram API response; read by
         # the /api/system/telegram health endpoint to drive the

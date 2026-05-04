@@ -128,6 +128,23 @@ class LifecycleMixin:
 
         Idempotent: a second call while already running is a no-op."""
         with self._lifecycle_lock:
+            # Refuse if a previous stop() left an orphan polling thread
+            # behind. Spawning a second one would race the first against
+            # Telegram's single-getUpdates-slot rule and produce a
+            # sustained Conflict outage. Better to stay disabled and
+            # show the operator a status pill than to silently break
+            # every deep-link.
+            prev = getattr(self, "_stale_poll_thread", None)
+            if prev is not None and prev.is_alive():
+                log.error(
+                    "[tg] Refusing start — previous polling thread "
+                    "(thread=%s) is still alive after stop(). The bot "
+                    "stays disabled until the process restarts to avoid "
+                    "Telegram getUpdates conflicts.",
+                    prev.name,
+                )
+                return
+            self._stale_poll_thread = None  # cleared once we proceed
             if self._stopped:
                 log.warning("[tg] Start ignored: instance already stopped")
                 return
@@ -186,7 +203,24 @@ class LifecycleMixin:
                 self._poll_thread.join(timeout=10)
                 if self._poll_thread.is_alive():
                     log.warning("[tg] Polling thread did not exit within 10s")
-            self._poll_thread = None
+            # Capture orphan-thread state. If the join timed out and the
+            # thread is still alive we keep `_poll_thread` referenced so
+            # diagnostics can name it, and pin the wall-clock since when
+            # it went stale for the status endpoint. start() consults
+            # _stale_poll_thread and refuses to spawn a second polling
+            # loop while it's alive.
+            self._stale_poll_thread = (
+                self._poll_thread
+                if self._poll_thread and self._poll_thread.is_alive()
+                else None
+            )
+            if self._stale_poll_thread is not None:
+                self._stale_since = time.time()
+                # Leave _poll_thread referenced so get_polling_status
+                # can identify the orphan precisely.
+            else:
+                self._stale_since = None
+                self._poll_thread = None
             self._polling_app = None
             self._polling_loop = None
             self._polling_stop_event = None
@@ -223,12 +257,22 @@ class LifecycleMixin:
           starting  — thread alive, getUpdates not yet confirmed
           active    — getUpdates running, no recent conflict
           conflict  — Telegram returned Conflict in the last 30s
+          stale     — stop() left an orphan polling thread; start() is
+                      refusing to spawn a second one until restart
         """
         if not self.enabled:
             return {"state": "off", "since_seconds": 0, "enabled": False}
+        now = time.time()
+        stale = getattr(self, "_stale_poll_thread", None)
+        if stale is not None and stale.is_alive():
+            since = getattr(self, "_stale_since", None) or now
+            return {
+                "state": "stale",
+                "since_seconds": int(now - since),
+                "enabled": True,
+            }
         if not (self._poll_thread and self._poll_thread.is_alive()):
             return {"state": "off", "since_seconds": 0, "enabled": True}
-        now = time.time()
         if self._last_conflict_ts and (now - self._last_conflict_ts) < 30:
             return {
                 "state": "conflict",
