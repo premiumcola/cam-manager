@@ -30,7 +30,7 @@ import threading
 import time
 import uuid
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -168,6 +168,205 @@ class _Track:
             "best_frame": self.best_frame_idx,
             "samples": self.samples,
         }
+
+
+@dataclass
+class _TrackerState:
+    """Per-job mutable state shared across the per-frame helpers. Replaces
+    the four locals tracks_active / tracks_closed / samples_emitted /
+    best_top in the legacy `_run_one` body."""
+    active: list = field(default_factory=list)   # list[_Track]
+    closed: list = field(default_factory=list)   # list[_Track]
+    samples_emitted: int = 0
+    best_top: dict | None = None
+
+
+# ── Per-job pure helpers (R05) ───────────────────────────────────────────
+# Module-level so each step is independently readable + unit-testable.
+# `TrackingWorker._run_one` composes them with the worker's detector +
+# config getters; the helpers themselves never reach back into the worker.
+
+def _open_video(video_path: Path):
+    """Open the file and read its sampling cadence. Returns
+    ``(capture, meta)``; capture is None on failure (and is released
+    before returning so the caller doesn't have to). meta carries
+    ``fps``, ``frame_count``, ``duration_s``, ``sample_interval``;
+    duration / sample_interval are 0 on failure but fps / frame_count
+    are populated so the caller can log them."""
+    import cv2
+    cap = cv2.VideoCapture(str(video_path))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    if frame_count <= 0 or fps <= 0:
+        cap.release()
+        return None, {
+            "fps": fps,
+            "frame_count": frame_count,
+            "duration_s": 0.0,
+            "sample_interval": 0,
+        }
+    duration_s = frame_count / fps
+    sample_interval = max(1, int(round(fps)))  # ~1 Hz
+    return cap, {
+        "fps": fps,
+        "frame_count": frame_count,
+        "duration_s": duration_s,
+        "sample_interval": sample_interval,
+    }
+
+
+def _resolve_object_filter(cam_cfg_getter, camera_id):
+    """Pull the camera's object_filter and translate to the worker's
+    allowed-set semantics. Mirrors camera_runtime/_main_loop:
+    ``None`` == no filter (all classes pass), set == filter active.
+    Filtered classes can't spawn or extend tracks because the filter is
+    applied BEFORE association."""
+    try:
+        cam_cfg = cam_cfg_getter(camera_id) or {}
+    except Exception:
+        cam_cfg = {}
+    of_raw = cam_cfg.get("object_filter")
+    if isinstance(of_raw, list) and of_raw:
+        return {str(x) for x in of_raw}
+    return None
+
+
+def _detect_and_filter(detector, frame, allowed):
+    """One sample's detector pass with the per-frame label filter. Empty
+    list when the detector is unavailable (worker stays alive but writes
+    a tracks.json with no tracks)."""
+    if not detector.available:
+        return []
+    dets = detector.detect_frame(frame)
+    if allowed is not None:
+        dets = [d for d in dets if d.label in allowed]
+    return dets
+
+
+def _update_best_top(state: _TrackerState, det, frame_idx: int, t_s: float):
+    """Bump state.best_top when det.score beats the current best.
+    Lifted to a helper because the legacy code ran this exact 3-line
+    block twice — once after the match-loop and once after the spawn
+    loop."""
+    score = float(det.score)
+    if state.best_top is None or score > state.best_top["score"]:
+        state.best_top = {
+            "f": frame_idx,
+            "t": round(t_s, 3),
+            "score": round(score, 4),
+            "label": det.label,
+        }
+
+
+def _associate_detections(state: _TrackerState, dets, frame_idx: int, t_s: float):
+    """Greedy IoU pairing + spawn + age-out for one frame. Mutates
+    ``state`` in place: extends matched tracks with a new sample, spawns
+    tracks for unmatched detections, ages out tracks that missed too
+    many windows.
+
+    The pre-spawn snapshot (`original_count = len(state.active)`) keeps
+    freshly-spawned tracks out of the age-out pass on their birth
+    frame — without it they'd immediately get missed_windows += 1 and
+    halve the intended TRACK_MISS_WINDOWS grace period."""
+    # Match each detection to the best-IoU active track of the
+    # same label. Greedy assignment per frame — for typical
+    # 1-3 detections this is correct and orders-of-magnitude
+    # cheaper than Hungarian.
+    taken_tracks: set[int] = set()
+    taken_dets: set[int] = set()
+    pairings: list[tuple[int, int, float]] = []
+    for di, d in enumerate(dets):
+        for ti, tr in enumerate(state.active):
+            if not tr.active or tr.label != d.label:
+                continue
+            # Compare against the track's most recent bbox.
+            if not tr.samples:
+                continue
+            last = tr.samples[-1]["bbox"]
+            last_t = (last["x1"], last["y1"], last["x2"], last["y2"])
+            iou = _iou(last_t, d.bbox)
+            if iou >= IOU_MATCH_THRESHOLD:
+                pairings.append((di, ti, iou))
+    # Sort by descending IoU so the best matches consume their
+    # partners first.
+    pairings.sort(key=lambda p: p[2], reverse=True)
+    for di, ti, _iou_v in pairings:
+        if di in taken_dets or ti in taken_tracks:
+            continue
+        taken_dets.add(di)
+        taken_tracks.add(ti)
+        tr = state.active[ti]
+        d = dets[di]
+        bbox_dict = {"x1": int(d.bbox[0]), "y1": int(d.bbox[1]),
+                     "x2": int(d.bbox[2]), "y2": int(d.bbox[3])}
+        tr.add_sample(frame_idx, t_s, bbox_dict,
+                      float(d.score), "detect")
+        state.samples_emitted += 1
+        _update_best_top(state, d, frame_idx, t_s)
+    # Snapshot the pre-spawn track count so the age-out loop
+    # below can skip tracks that are about to be created on
+    # this same frame. Without this, a freshly spawned track
+    # is not in `taken_tracks` (which was built from the
+    # original indices) and immediately gets missed_windows
+    # += 1 on the same frame as its birth — halving the
+    # intended TRACK_MISS_WINDOWS grace period.
+    original_count = len(state.active)
+    # Unmatched detections → start fresh tracks.
+    for di, d in enumerate(dets):
+        if di in taken_dets:
+            continue
+        tid = _short_id()
+        tr = _Track(tid, d.label, frame_idx)
+        bbox_dict = {"x1": int(d.bbox[0]), "y1": int(d.bbox[1]),
+                     "x2": int(d.bbox[2]), "y2": int(d.bbox[3])}
+        tr.add_sample(frame_idx, t_s, bbox_dict,
+                      float(d.score), "detect")
+        state.active.append(tr)
+        state.samples_emitted += 1
+        _update_best_top(state, d, frame_idx, t_s)
+    # Age out tracks that didn't get a hit this window. After
+    # TRACK_MISS_WINDOWS misses they close — guards against the
+    # subject leaving frame and a different one re-entering at
+    # the same coordinates. Restricted to indices < original_count
+    # so newly-spawned tracks (appended above) skip this pass and
+    # get their first miss-check on the NEXT frame iteration.
+    for ti, tr in enumerate(state.active[:original_count]):
+        if ti in taken_tracks:
+            continue
+        tr.missed_windows += 1
+        if tr.missed_windows >= TRACK_MISS_WINDOWS:
+            tr.active = False
+    state.closed.extend([t for t in state.active if not t.active])
+    state.active = [t for t in state.active if t.active]
+
+
+def _build_payload(state: _TrackerState, fps: float, frame_count: int,
+                   duration_s: float, allowed, video_path: Path,
+                   storage_root: Path) -> dict:
+    """Assemble the tracks.json payload. The track-serialisation block
+    iterates state.closed; the caller is responsible for flushing any
+    still-active tracks into closed before this runs."""
+    return {
+        "schema": TRACKS_SCHEMA,
+        "video_path": _safe_relpath(video_path, storage_root),
+        "fps": round(float(fps), 3),
+        "frame_count": frame_count,
+        "duration_s": round(duration_s, 3),
+        "best_frame": state.best_top,
+        # `filter_applied` records the allowed object_filter at
+        # write time. None = no filter (all classes accepted),
+        # list = exactly these classes were considered.
+        "filter_applied": sorted(allowed) if allowed is not None else None,
+        "tracks": [t.to_dict() for t in state.closed],
+        "built_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+    }
+
+
+def _write_payload_atomic(tracks_path: Path, payload: dict) -> None:
+    """Atomic write: tmp file + rename. Pattern matches B08."""
+    tmp_path = tracks_path.with_suffix(".tmp")
+    tmp_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    tmp_path.replace(tracks_path)
 
 
 class TrackingWorker(threading.Thread):
@@ -335,35 +534,21 @@ class TrackingWorker(threading.Thread):
             log.warning("[tracking] event=%s video missing: %s",
                         job.event_id, job.video_path)
             return
-        cap = cv2.VideoCapture(str(job.video_path))
+
+        cap, meta = _open_video(job.video_path)
+        if cap is None:
+            log.warning("[tracking] event=%s unreadable (fps=%.1f frames=%d)",
+                        job.event_id, meta.get("fps", 0.0), meta.get("frame_count", 0))
+            return
+
         try:
-            fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-            if frame_count <= 0 or fps <= 0:
-                log.warning("[tracking] event=%s unreadable (fps=%.1f frames=%d)",
-                            job.event_id, fps, frame_count)
-                return
-            duration_s = frame_count / fps
-            sample_interval = max(1, int(round(fps)))  # ~1 Hz
             detector = self._ensure_detector()
-            # Per-camera object_filter — drop detections outside the
-            # allowed label set BEFORE track association so filtered
-            # classes can't spawn or extend tracks. Mirrors the runtime
-            # behaviour in camera_runtime/_main_loop. None == no filter
-            # (all classes pass), [] == filter active but allows nothing.
-            try:
-                cam_cfg = self._cam_cfg_getter(job.camera_id) or {}
-            except Exception:
-                cam_cfg = {}
-            of_raw = cam_cfg.get("object_filter")
-            allowed: set[str] | None = (
-                {str(x) for x in of_raw} if isinstance(of_raw, list) and of_raw else None
-            )
-            tracks_active: list[_Track] = []
-            tracks_closed: list[_Track] = []
+            allowed = _resolve_object_filter(self._cam_cfg_getter, job.camera_id)
+            state = _TrackerState()
             frame_idx = 0
-            samples_emitted = 0
-            best_top: dict | None = None  # highest-scoring detection across the clip
+            sample_interval = meta["sample_interval"]
+            frame_count = meta["frame_count"]
+            fps = meta["fps"]
 
             while frame_idx < frame_count:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
@@ -372,122 +557,40 @@ class TrackingWorker(threading.Thread):
                     frame_idx += sample_interval
                     continue
                 t_s = frame_idx / fps
-                if detector.available:
-                    dets = detector.detect_frame(frame)
-                else:
-                    dets = []
-                if allowed is not None:
-                    dets = [d for d in dets if d.label in allowed]
-                # Match each detection to the best-IoU active track of the
-                # same label. Greedy assignment per frame — for typical
-                # 1-3 detections this is correct and orders-of-magnitude
-                # cheaper than Hungarian.
-                taken_tracks: set[int] = set()
-                taken_dets: set[int] = set()
-                pairings: list[tuple[int, int, float]] = []
-                for di, d in enumerate(dets):
-                    for ti, tr in enumerate(tracks_active):
-                        if not tr.active or tr.label != d.label:
-                            continue
-                        # Compare against the track's most recent bbox.
-                        if not tr.samples:
-                            continue
-                        last = tr.samples[-1]["bbox"]
-                        last_t = (last["x1"], last["y1"], last["x2"], last["y2"])
-                        iou = _iou(last_t, d.bbox)
-                        if iou >= IOU_MATCH_THRESHOLD:
-                            pairings.append((di, ti, iou))
-                # Sort by descending IoU so the best matches consume their
-                # partners first.
-                pairings.sort(key=lambda p: p[2], reverse=True)
-                for di, ti, _iou_v in pairings:
-                    if di in taken_dets or ti in taken_tracks:
-                        continue
-                    taken_dets.add(di)
-                    taken_tracks.add(ti)
-                    tr = tracks_active[ti]
-                    d = dets[di]
-                    bbox_dict = {"x1": int(d.bbox[0]), "y1": int(d.bbox[1]),
-                                 "x2": int(d.bbox[2]), "y2": int(d.bbox[3])}
-                    tr.add_sample(frame_idx, t_s, bbox_dict,
-                                  float(d.score), "detect")
-                    samples_emitted += 1
-                    if best_top is None or float(d.score) > best_top["score"]:
-                        best_top = {"f": frame_idx, "t": round(t_s, 3),
-                                    "score": round(float(d.score), 4),
-                                    "label": d.label}
-                # Snapshot the pre-spawn track count so the age-out loop
-                # below can skip tracks that are about to be created on
-                # this same frame. Without this, a freshly spawned track
-                # is not in `taken_tracks` (which was built from the
-                # original indices) and immediately gets missed_windows
-                # += 1 on the same frame as its birth — halving the
-                # intended TRACK_MISS_WINDOWS grace period.
-                original_count = len(tracks_active)
-                # Unmatched detections → start fresh tracks.
-                for di, d in enumerate(dets):
-                    if di in taken_dets:
-                        continue
-                    tid = _short_id()
-                    tr = _Track(tid, d.label, frame_idx)
-                    bbox_dict = {"x1": int(d.bbox[0]), "y1": int(d.bbox[1]),
-                                 "x2": int(d.bbox[2]), "y2": int(d.bbox[3])}
-                    tr.add_sample(frame_idx, t_s, bbox_dict,
-                                  float(d.score), "detect")
-                    tracks_active.append(tr)
-                    samples_emitted += 1
-                    if best_top is None or float(d.score) > best_top["score"]:
-                        best_top = {"f": frame_idx, "t": round(t_s, 3),
-                                    "score": round(float(d.score), 4),
-                                    "label": d.label}
-                # Age out tracks that didn't get a hit this window. After
-                # TRACK_MISS_WINDOWS misses they close — guards against the
-                # subject leaving frame and a different one re-entering at
-                # the same coordinates. Restricted to indices < original_count
-                # so newly-spawned tracks (appended above) skip this pass and
-                # get their first miss-check on the NEXT frame iteration.
-                for ti, tr in enumerate(tracks_active[:original_count]):
-                    if ti in taken_tracks:
-                        continue
-                    tr.missed_windows += 1
-                    if tr.missed_windows >= TRACK_MISS_WINDOWS:
-                        tr.active = False
-                tracks_closed.extend([t for t in tracks_active if not t.active])
-                tracks_active = [t for t in tracks_active if t.active]
+                dets = _detect_and_filter(detector, frame, allowed)
+                _associate_detections(state, dets, frame_idx, t_s)
                 frame_idx += sample_interval
 
-            tracks_closed.extend(tracks_active)
+            # Flush any tracks still active at end-of-clip into closed so
+            # _build_payload's serialisation comprehension picks them up.
+            state.closed.extend(state.active)
+            state.active = []
 
-            payload = {
-                "schema": TRACKS_SCHEMA,
-                "video_path": _safe_relpath(job.video_path, self._storage_root),
-                "fps": round(float(fps), 3),
-                "frame_count": frame_count,
-                "duration_s": round(duration_s, 3),
-                "best_frame": best_top,
-                # `filter_applied` records the allowed object_filter at
-                # write time. None = no filter (all classes accepted),
-                # list = exactly these classes were considered.
-                "filter_applied": sorted(allowed) if allowed is not None else None,
-                "tracks": [t.to_dict() for t in tracks_closed],
-                "built_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
-            }
-            tracks_path = job.video_path.with_name(job.video_path.stem + ".tracks.json")
-            tmp_path = tracks_path.with_suffix(".tmp")
-            tmp_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-            tmp_path.replace(tracks_path)
+            payload = _build_payload(
+                state, fps, frame_count, meta["duration_s"],
+                allowed, job.video_path, self._storage_root,
+            )
+            tracks_path = tracks_path_for(job.video_path)
+            _write_payload_atomic(tracks_path, payload)
 
             elapsed = time.time() - t_start
             best_str = (f"best={payload['best_frame']['score']:.2f}"
                         if payload["best_frame"] else "best=—")
             log.info("[tracking] event=%s dur=%.1fs tracks=%d samples=%d %s",
                      job.event_id, elapsed, len(payload["tracks"]),
-                     samples_emitted, best_str)
-            if duration_s > 0 and elapsed > duration_s * SLOW_JOB_RATIO and elapsed > 5.0:
-                log.warning("[tracking] event=%s SLOW: processing %.1fs for clip %.1fs",
-                            job.event_id, elapsed, duration_s)
+                     state.samples_emitted, best_str)
+            self._record_slow_job(job, elapsed, meta["duration_s"])
         finally:
             cap.release()
+
+    def _record_slow_job(self, job: TrackingJob, elapsed: float, duration_s: float):
+        """One-line WARN when processing took more than SLOW_JOB_RATIO of
+        the clip duration AND was longer than 5 s in absolute terms.
+        Lifted out of `_run_one` so the orchestrator stays linear; the
+        threshold logic is unchanged."""
+        if duration_s > 0 and elapsed > duration_s * SLOW_JOB_RATIO and elapsed > 5.0:
+            log.warning("[tracking] event=%s SLOW: processing %.1fs for clip %.1fs",
+                        job.event_id, elapsed, duration_s)
 
 
 def _safe_relpath(p: Path, root: Path) -> str:
