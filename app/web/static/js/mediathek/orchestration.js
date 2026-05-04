@@ -3,12 +3,14 @@
 // grid orchestration for the Mediathek section. Pure code move from
 // legacy.js, no behaviour changes:
 //   * page-size sizer (calcItemsPerPage + the rows × cols math)
-//   * filter pill bar + label aggregation + seed/prune helpers
-//   * loadMedia (per-cam fetch loop)
 //   * three drilldown openers + close
 //   * overview cards (camera tiles + "Alle Medien" + archived strip)
 //   * media card HTML + grid + pagination + processing-poll
 //   * section title (cam name | "Alle Medien" | bare)
+//
+// R09.1 split: media-loader.js owns loadMedia; filters.js owns the
+// pill-bar bookkeeping + click handlers. Both are imported back here so
+// the existing window.* bridges keep resolving for legacy consumers.
 //
 // What's still in legacy.js: openLightbox (Stage 23 B), the
 // deleteMediaCard / confirmMediaCard / deleteTLCard window handlers
@@ -24,6 +26,12 @@ import { colors, OBJ_LABEL, objIconSvg, objBubble, getCameraIcon } from '../core
 import { CAT_COLORS } from '../timeline.js';
 import { loadMediaStorageStats, refreshTimelineAndStats } from '../chrome/storage-stats.js';
 import { _exitMediaSelectMode, _updateMediaSelectToggle } from './bulk-delete.js';
+import { loadMedia } from './media-loader.js';
+import {
+  renderMediaFilterPills,
+  _seedTopMediaLabel,
+  _pruneEmptyMediaFilters,
+} from './filters.js';
 
 // ── Page-size sizer ─────────────────────────────────────────────────────────
 // _lastKnownCols + window._cachedPageSize are bridged on window so the
@@ -48,158 +56,6 @@ export function calcItemsPerPage(){
   const GAP = 10, MIN_CARD = 192;
   const cols = window._lastKnownCols || Math.max(1, Math.floor((containerW + GAP) / (MIN_CARD + GAP)));
   return _MEDIA_ROWS * cols;
-}
-
-// ── Filter pill bar ─────────────────────────────────────────────────────────
-// Sort happens at render time (by count desc); this list seeds the
-// canonical set + tie-break order.
-export const MEDIA_FILTER_LABELS = ['motion','person','cat','bird','car','dog','squirrel','timelapse'];
-
-export function _aggregateMediaCounts(){
-  const counts = {};
-  MEDIA_FILTER_LABELS.forEach(l => counts[l] = 0);
-  const stats = (state.mediaStats || []).filter(s => {
-    if (!state.mediaCamera) return true;
-    return (s.camera_id || s.id || s.name) === state.mediaCamera;
-  });
-  stats.forEach(s => {
-    const lc = s.label_counts || {};
-    Object.entries(lc).forEach(([k, v]) => {
-      if (Object.prototype.hasOwnProperty.call(counts, k)) counts[k] += v || 0;
-    });
-    counts.timelapse += s.timelapse_count || 0;
-  });
-  return counts;
-}
-
-export function _seedTopMediaLabel(){
-  // Seed-all-available: pre-select every label that actually has items
-  // in the currently-aggregated counts. Tapping a pill DESELECTS it;
-  // tapping again reselects. An empty Set is a UX shortcut for "no filter
-  // active → show everything" — never an empty grid.
-  // If state.mediaStats hasn't returned yet for the target cam (counts
-  // are all zero), fall back to seeding the full canonical label set so
-  // the pill bar shows "everything is active" right away. The downstream
-  // filter is OR-of-labels, so a fully-seeded set behaves identically to
-  // an empty set for the API call (both return everything) — but this
-  // matches the user's mental model on the very first drilldown open.
-  // _pruneEmptyMediaFilters() runs after loadMedia and trims any seeded
-  // label that ended up with zero matches.
-  const counts = _aggregateMediaCounts();
-  const present = MEDIA_FILTER_LABELS.filter(l => (counts[l] || 0) > 0);
-  if (present.length > 0){
-    state.mediaLabels = new Set(present);
-    return true;
-  }
-  state.mediaLabels = new Set(MEDIA_FILTER_LABELS);
-  return false;
-}
-
-export function _pruneEmptyMediaFilters(){
-  const counts = _aggregateMediaCounts();
-  const before = state.mediaLabels.size;
-  for (const l of [...state.mediaLabels]){
-    if (!counts[l]) state.mediaLabels.delete(l);
-  }
-  return before > 0 && state.mediaLabels.size === 0;
-}
-
-// mode: 'overview' (all pills, no counts, click → openAllMediaDrilldown(label))
-//       'drilldown' (only pills with count>0, with counts, toggles state.mediaLabels)
-export function renderMediaFilterPills(mode){
-  const id = mode === 'overview' ? 'mediaFilterBarOverview' : 'mediaFilterBar';
-  const bar = byId(id); if (!bar) return;
-  const counts = _aggregateMediaCounts();
-  const sorted = MEDIA_FILTER_LABELS.slice().sort((a, b) => {
-    const d = (counts[b] || 0) - (counts[a] || 0);
-    if (d) return d;
-    return MEDIA_FILTER_LABELS.indexOf(a) - MEDIA_FILTER_LABELS.indexOf(b);
-  });
-  const labels = mode === 'overview' ? sorted : sorted.filter(l => (counts[l] || 0) > 0);
-  let html = labels.map(l => {
-    const cnt = counts[l] || 0;
-    const empty = cnt === 0;
-    const active = mode === 'drilldown' && state.mediaLabels.has(l);
-    const cls = `media-pill cat-filter-btn${active ? ' active' : ''}${empty ? ' media-pill--empty' : ''}`;
-    const cb = CAT_COLORS[l] || '#94a3b8';
-    const cntChip = (mode === 'drilldown' && cnt > 0) ? `<span class="mp-count" style="pointer-events:none">${cnt}</span>` : '';
-    return `<button type="button" class="${cls}" data-type="label" data-val="${l}" style="--cb:${cb}"${empty ? ' tabindex="-1" aria-disabled="true"' : ''}><span class="cfb-icon" style="pointer-events:none">${objIconSvg(l, 18)}</span><span style="pointer-events:none">${OBJ_LABEL[l] || l}</span>${cntChip}</button>`;
-  }).join('');
-  // Status hint when the user has deselected every filter — the grid then
-  // falls back to "show everything", and this pill keeps the state
-  // visible so the user knows nothing is being hidden.
-  if (mode === 'drilldown' && state.mediaLabels.size === 0 && labels.length > 0){
-    html += `<span class="media-pill media-pill--status" aria-disabled="true">alle Filter aus</span>`;
-  }
-  bar.innerHTML = html;
-  bar.querySelectorAll('.media-pill').forEach(p => {
-    if (p.classList.contains('media-pill--empty')) return;
-    const val = p.dataset.val;
-    // Belt-and-braces: re-set --cb via setProperty in addition to the
-    // inline style attribute. The tinted-pill CSS reads var(--cb) for
-    // the bg/text color-mix, and the drilldown bar inside .media-drill-
-    // head was rendering as if --cb were missing on some browsers.
-    if (val && CAT_COLORS[val]) p.style.setProperty('--cb', CAT_COLORS[val]);
-    p.addEventListener('click', () => {
-      if (mode === 'overview'){
-        openAllMediaDrilldown(val);
-        return;
-      }
-      if (state.mediaLabels.has(val)) state.mediaLabels.delete(val);
-      else state.mediaLabels.add(val);
-      state.mediaPage = 0;
-      renderMediaFilterPills('drilldown');
-      if (byId('mediaDrilldown')?.style.display !== 'none'){
-        loadMedia().then(() => { renderMediaGrid(); renderMediaPagination(); });
-      }
-    });
-  });
-}
-
-// Legacy alias — pills are now rendered dynamically via renderMediaFilterPills.
-export function syncMediaPills(){ renderMediaFilterPills('drilldown'); }
-
-// ── loadMedia ───────────────────────────────────────────────────────────────
-export async function loadMedia(){
-  const labels = state.mediaLabels;
-  const ps = calcItemsPerPage(); window._cachedPageSize = ps;
-  const cams = state.mediaCamera ? [state.mediaCamera] : state.cameras.map(c => c.id);
-  // Unified filter — EventStore now holds both motion and timelapse events.
-  const allLabels = [...labels];
-  const labelParam = allLabels.length === 1 ? `&label=${encodeURIComponent(allLabels[0])}`
-    : allLabels.length > 1 ? `&labels=${encodeURIComponent(allLabels.join(','))}` : '';
-  // Fetch ALL matching items from every camera in one pass (no server-side offset).
-  // Pagination is done client-side on the merged+sorted list so that multi-camera
-  // views produce a consistent global order and every page is fully filled.
-  // Per-cam try/catch so one cam 5xx-ing (or being temporarily offline) does
-  // NOT blank the whole grid. Symptom we're killing: "Lade Medien…" stuck on
-  // first open because a single fetch threw and renderMediaGrid never ran.
-  const allItems = [];
-  for (const camId of cams){
-    try {
-      const data = await j(`/api/camera/${camId}/media?limit=9999&offset=0${labelParam}`);
-      const items = data.items || [];
-      for (const item of items) allItems.push({ ...item, camera_id: camId });
-    } catch (err){
-      console.warn(`[mediathek] failed to load media for cam ${camId}:`, err);
-    }
-  }
-  allItems.sort((a, b) => (b.time || '').localeCompare(a.time || ''));
-  state._allMedia = allItems;
-  // If the active label filter has no matching items (period change etc.),
-  // drop it and reload once with the cleaned filter.
-  const availNow = new Set(allItems.flatMap(item => item.labels || []));
-  const toClear = [...state.mediaLabels].filter(l => l !== 'timelapse' && !availNow.has(l));
-  if (toClear.length){
-    toClear.forEach(l => state.mediaLabels.delete(l));
-    syncMediaPills();
-    return loadMedia();
-  }
-  state.mediaTotalPages = Math.max(1, Math.ceil(allItems.length / ps));
-  state.mediaPage = Math.min(state.mediaPage || 0, state.mediaTotalPages - 1);
-  const offset = (state.mediaPage || 0) * ps;
-  state.media = allItems.slice(offset, offset + ps);
-  state.mediaHasMore = false;
 }
 
 // ── Per-camera tints + helpers ──────────────────────────────────────────────
