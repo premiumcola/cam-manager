@@ -11,8 +11,18 @@
   <meta name="theme-color" content="#0a0a0a" />
   <meta name="format-detection" content="telephone=no" />
   <title>TAM-spy</title>
+  <!-- Browser-tab icon — PNGs preferred where supported, emoji as ultimate fallback. -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16.png" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐿️</text></svg>">
-  <link rel="apple-touch-icon" href="/static/apple-touch-icon.png" />
+  <!-- Apple-touch-icon family — homescreen tile per device class. -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/icon-180.png" />
+  <link rel="apple-touch-icon" sizes="167x167" href="/static/icons/icon-167.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="/static/icons/icon-152.png" />
+  <link rel="apple-touch-icon" sizes="120x120" href="/static/icons/icon-120.png" />
+  <link rel="apple-touch-icon-precomposed" href="/static/icons/icon-180.png" />
+  <!-- iOS standalone splash screens — generated per device-pixel-ratio. -->
+  {% include 'partials/splash_links.html' %}
   <link rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
