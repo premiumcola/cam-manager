@@ -9,14 +9,17 @@
 //   * section title (cam name | "Alle Medien" | bare)
 //
 // R09.1 split: media-loader.js owns loadMedia; filters.js owns the
-// pill-bar bookkeeping + click handlers. Both are imported back here so
-// the existing window.* bridges keep resolving for legacy consumers.
+// pill-bar bookkeeping + click handlers. R09.2/R15: openLightbox +
+// closeLightbox + the keyboard / swipe / confirm / delete handlers all
+// live in ../lightbox.js — this file just imports the entry point so
+// the card-onclick thunk no longer goes through window.openLightbox.
 //
-// What's still in legacy.js: openLightbox (Stage 23 B), the
-// deleteMediaCard / confirmMediaCard / deleteTLCard window handlers
-// (these read this file's exports, not the other way around).
+// The deleteMediaCard / confirmMediaCard / deleteTLCard tile-action
+// handlers (the ones rendered by mediaCardHTML's inline onclicks) stay
+// here because they re-render the grid + pagination, which are owned
+// by this module.
 //
-// All window.* bridges are kept on the legacy.js side so other still-
+// All window.* bridges are still set at the bottom so other still-
 // resident code paths (and inline onclicks in HTML) keep resolving.
 import { byId, esc } from '../core/dom.js';
 import { state } from '../core/state.js';
@@ -32,6 +35,7 @@ import {
   _seedTopMediaLabel,
   _pruneEmptyMediaFilters,
 } from './filters.js';
+import { openLightbox } from '../lightbox.js';
 
 // ── Page-size sizer ─────────────────────────────────────────────────────────
 // _lastKnownCols + window._cachedPageSize are bridged on window so the
@@ -541,8 +545,7 @@ export function renderMediaGrid(){
   window._openMediaItem = id => {
     if (state.mediaSelectMode){ window._toggleMediaSelected(id); return; }
     const item = items.find(x => x.event_id === id);
-    // openLightbox is still owned by legacy.js until Stage 23 B.
-    if (item && typeof window.openLightbox === 'function') window.openLightbox(item);
+    if (item) openLightbox(item);
   };
   // Poll for pending recording/processing items until every visible card is ready
   _ensureProcessingPoll();
