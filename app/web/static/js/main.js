@@ -18,6 +18,10 @@ import { bindConfirmModal } from './core/toast.js';
 // the app is launched from the home-screen so CSS can pull stronger
 // safe-area paddings without affecting the in-browser experience.
 import './core/standalone.js';
+// Service-worker registration — caches the app shell so a brief WLAN
+// drop doesn't blank the screen. Live data (/api, /media, MJPEG) is
+// excluded by sw.js's fetch handler.
+import './pwa.js';
 // Cross-domain orchestration loops + bootstrappers.
 import { startLiveUpdate, loadAll } from './live-update.js';
 // Zusammenführen modal — bindMergeModal() wires its DOM listeners once.

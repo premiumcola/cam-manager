@@ -47,6 +47,18 @@ def media_file(subpath):
     return send_from_directory(app_state.storage_root, subpath)
 
 
+@bp.get('/sw.js')
+def service_worker():
+    """Serve the service worker from the app root so its scope covers
+    the entire site. max_age=0 stops the browser from caching the SW
+    itself — otherwise updates land 24h late."""
+    web_static = Path(__file__).resolve().parents[2] / "web" / "static"
+    return send_from_directory(
+        str(web_static), "sw.js",
+        mimetype="application/javascript", max_age=0,
+    )
+
+
 @bp.get('/api/bootstrap')
 def api_bootstrap():
     return jsonify(app_state.settings.bootstrap_state())
