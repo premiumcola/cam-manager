@@ -375,6 +375,14 @@ class TrackingWorker(threading.Thread):
                         best_top = {"f": frame_idx, "t": round(t_s, 3),
                                     "score": round(float(d.score), 4),
                                     "label": d.label}
+                # Snapshot the pre-spawn track count so the age-out loop
+                # below can skip tracks that are about to be created on
+                # this same frame. Without this, a freshly spawned track
+                # is not in `taken_tracks` (which was built from the
+                # original indices) and immediately gets missed_windows
+                # += 1 on the same frame as its birth — halving the
+                # intended TRACK_MISS_WINDOWS grace period.
+                original_count = len(tracks_active)
                 # Unmatched detections → start fresh tracks.
                 for di, d in enumerate(dets):
                     if di in taken_dets:
@@ -394,8 +402,10 @@ class TrackingWorker(threading.Thread):
                 # Age out tracks that didn't get a hit this window. After
                 # TRACK_MISS_WINDOWS misses they close — guards against the
                 # subject leaving frame and a different one re-entering at
-                # the same coordinates.
-                for ti, tr in enumerate(tracks_active):
+                # the same coordinates. Restricted to indices < original_count
+                # so newly-spawned tracks (appended above) skip this pass and
+                # get their first miss-check on the NEXT frame iteration.
+                for ti, tr in enumerate(tracks_active[:original_count]):
                     if ti in taken_tracks:
                         continue
                     tr.missed_windows += 1
