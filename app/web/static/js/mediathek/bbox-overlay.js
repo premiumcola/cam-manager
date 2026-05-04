@@ -155,13 +155,13 @@ function _firstSampleOfTrack(track){
 // Resolve the allowed-label set for the current item. Returns:
 //   Set<string>  — only these labels render
 //   null         — no filter info, draw everything (legacy behaviour)
-// Distinction matters: a tracks.json with `filter_applied: []` means
-// "filter active but allowing nothing" → render zero. A camera-state
-// lookup with empty object_filter means "no filter set" → draw all.
 function _resolveAllowedLabels(){
   const tracks = lbState.item?._tracks;
   // 1. Authoritative source: schema≥2 tracks.json sidecars carry the
-  //    exact allowed list at write time.
+  //    exact allowed list at write time. tracking_worker only emits
+  //    `null` (no filter) or a non-empty array — empty `object_filter`
+  //    on the camera maps to no-filter at the runtime layer too, so
+  //    `[]` is unreachable here.
   if (tracks && Array.isArray(tracks.filter_applied)){
     return new Set(tracks.filter_applied);
   }
@@ -504,9 +504,20 @@ window.lbStopTrackingPlayback = lbStopTrackingPlayback;
     });
   }
   let _raf = 0;
-  window.addEventListener('resize', () => {
+  const _scheduleRedraw = () => {
     if (!byId('lightboxModal') || byId('lightboxModal').classList.contains('hidden')) return;
     cancelAnimationFrame(_raf);
     _raf = requestAnimationFrame(_lbDrawDetections);
-  });
+  };
+  window.addEventListener('resize', _scheduleRedraw);
+  // ResizeObserver covers the cases the window-resize event misses:
+  // sidenav slide, iOS Safari address-bar collapse, soft-keyboard
+  // appearance, and the video element revealing its real aspect ratio
+  // on loadedmetadata. Without this the bboxes sit stale at the
+  // previous wrap size when the video is paused (no RAF tick fires).
+  const _wrap = byId('lightboxMediaWrap');
+  if (_wrap && 'ResizeObserver' in window){
+    const obs = new ResizeObserver(_scheduleRedraw);
+    obs.observe(_wrap);
+  }
 })();
