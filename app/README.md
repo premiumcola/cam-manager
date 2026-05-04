@@ -10,42 +10,82 @@ mit Daemon-Threads pro Kamera.
 
 ## Module-Map
 
-22 Module unter `app/app/`. Reihenfolge ist nach Verantwortung gruppiert,
-nicht alphabetisch.
+77 Python-Dateien unter `app/app/` — 22 Top-Level-Module + fünf
+Pakete (`routes/`, `detectors/`, `camera_runtime/`,
+`weather_service/`, `telegram_bot/`). Reihenfolge nach Verantwortung
+gruppiert, nicht alphabetisch.
+
+### Boot + HTTP
+
+- **`server.py`** — Flask app + Boot-Sequenz. Lädt Config, baut
+  Stores, ruft `register_blueprints(app)` auf, betreibt
+  `rebuild_services` / `rebuild_runtimes` / `restart_single_camera`,
+  Heartbeat, Shutdown-Hooks. Keine `@app.route`-Definitionen mehr —
+  alle Routen liegen unter `routes/`.
+- **`app_state.py`** — geteilte Singletons (Stores, Registries,
+  Services, Runtimes). Jedes Blueprint liest hier per Request frisch,
+  damit `rebuild_services()` saubere Service-Swaps machen kann ohne
+  Stale-Referenzen.
+- **`migrations.py`** — idempotente Boot-Migrationen
+  (`migrate_timelapse_events`, `generate_missing_thumbnails`,
+  `migrate_timelapse_to_eventstore`); jede läuft im eigenen
+  Daemon-Thread.
+- **`routes/`** — Paket (14 Blueprint-Module + zwei `_*_helpers`).
+  `bootstrap`, `cameras`, `streams`, `media`, `events`,
+  `timeline_stats`, `timelapse`, `tracking`, `sichtungen`, `coral`,
+  `weather`, `telegram`, `admin`. Jedes Blueprint resolved Shared
+  State über `app_state` — niemals zurück nach `server.py` (außer den
+  Lazy-Imports von `rebuild_runtimes` / `restart_single_camera` als
+  einseitige Boot-Helpers).
 
 ### Camera Pipeline
 
-- **`camera_runtime.py`** — eine `RuntimeThread` pro Kamera. Frame-Capture
-  via OpenCV, Motion-Gate, Detektor-Cascade, Event-Persistierung,
-  Reconnect-Counter mit 24-h-Sliding-Window. Anchor für `[cam:<id>]`-Logs.
-- **`detectors.py`** — drei Detektoren als Cascade:
-  `CoralObjectDetector` → `BirdSpeciesClassifier` → `WildlifeClassifier`.
-  Drei-Tier-Fallback (pycoral / tflite-runtime / disabled) pro Stage.
-  `[det]`-Decision-Log notiert kept-vs-dropped-Reasons.
+- **`camera_runtime/`** — Paket (11 Dateien). `RuntimeThread` pro
+  Kamera plus Mixins für Capture, Motion, Recording, Zonen,
+  Timelapse, Lifecycle, Status. 24-h-Reconnect-Counter pro Kamera;
+  `[cam:<id>]`-Log-Anchor.
+- **`detectors/`** — Paket (9 Dateien). `CoralObjectDetector` →
+  `BirdSpeciesClassifier` → `WildlifeClassifier` (je eigenes Modul);
+  geteilte Primitive in `_types.py` (Detection + Region-Filter),
+  `_label_loader.py`, `_wildlife_rules.py`; `discovery.py` für
+  Auto-Discovery, `draw.py` für Bbox-Overlay-Renderer. Drei-Tier-
+  Fallback pro Stage; `[det]`-Decision-Log notiert kept-vs-dropped.
+- **`detection_confirmer.py`** — Zwei-Frame-Bestätigung gegen
+  Einzelbild-Fehlalarme.
+- **`tracking_worker.py`** — Hintergrund-Thread, schreibt
+  `tracks.json`-Sidecars für Lightbox-Bbox-Overlay; Recent-Failures-
+  Ring fürs UI.
 - **`event_logic.py`** — `is_in_schedule`, `choose_alarm_level`,
   `schedule_action_active`. Reines Regelwerk, keine I/O.
 - **`frame_helpers.py`** — "is this frame worth keeping?": grey-/pink-
   /block-Artefakt-Filter. Single source of truth für jede Capture-Loop.
-- **`timelapse.py`** — `TimelapseBuilder` ruht Frames pro Kamera/Tag in
-  MP4-Tagesfilm zusammen, ffmpeg-stream-copy wenn vorhanden, sonst OpenCV.
+- **`timelapse.py`** — `TimelapseBuilder` fügt Frames pro Kamera/Tag
+  in MP4-Tagesfilm zusammen, ffmpeg-stream-copy wenn vorhanden, sonst
+  OpenCV.
 - **`timelapse_cleanup.py`** — Reusable Cleanup-Helfer für
   `timelapse_frames/` (von Capture-Loop und CLI-Script genutzt).
 
 ### Services
 
-- **`telegram_bot.py`** — `TelegramService`. Self-mutating Anchor-Bubble:
-  `/start` öffnet eine Steuer-Nachricht, jede Drilldown-Action editiert
-  dieselbe Bubble per `edit_message_text` — kein Chat-Spam. Backoff bei
-  Polling-Conflict.
-- **`telegram_helpers.py`** — gemeinsame Konstanten: deutsche Labelnamen,
-  Scoring-Gewichte, Quiet-Hour-Helpers. Keine API-Calls drin.
-- **`weather_service.py`** — `WeatherService`. Polled Open-Meteo
+- **`telegram_bot/`** — Paket (7 Dateien). `TelegramService` +
+  Mixins (Lifecycle, In-/Outbound, Formatting). Self-mutating
+  Anchor-Bubble: `/start` öffnet eine Steuer-Nachricht, jede
+  Drilldown-Action editiert dieselbe Bubble per `edit_message_text`
+  — kein Chat-Spam. Refuse-Restart-Guard verhindert Doppel-Polling
+  bei Stale-Threads.
+- **`telegram_helpers.py`** — gemeinsame Konstanten: deutsche
+  Labelnamen, Scoring-Gewichte, Quiet-Hour-Helpers. Keine API-Calls
+  drin.
+- **`weather_service/`** — Paket (11 Dateien). Polled Open-Meteo
   (`icon_d2`-Modell), persistiert eine Sliding-History in
-  `weather_history.json`, triggert Wetter-Sichtungen (Gewitter, Sonnen-
-  untergänge, Nebel) als 10 s-Clips.
-- **`mqtt_service.py`** — `MQTTService`. Dünner Wrapper um `paho-mqtt`,
-  publiziert JSON-Payloads zu `<base_topic>/events/<cam_id>` und
-  Status-Topics. No-op wenn deaktiviert.
+  `weather_history.json`, triggert Wetter-Sichtungen (Gewitter,
+  Sonnen-untergänge, Nebel) als 10 s-Clips. Sun-Timelapse-Builder
+  inkl. Polar-Day-Edge-Case.
+- **`mqtt_service.py`** — `MQTTService`. Dünner Wrapper um
+  `paho-mqtt`, publiziert JSON-Payloads zu
+  `<base_topic>/events/<cam_id>` und Status-Topics. Rate-limited
+  Publish-Failure-Logging (1× pro 5 min pro `(topic, rc)`).
+  No-op wenn deaktiviert.
 
 ### Persistenz
 

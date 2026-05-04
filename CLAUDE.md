@@ -236,24 +236,76 @@ liefert die maßgebliche Runtime-Config.
 
 ## Architektur · `app/app/`
 
-51 Python-Dateien (22 Top-Level-Module + 29 Dateien in den drei
-Service-Paketen), gruppiert nach Verantwortung. Vollständige
-Aufstellung in `app/README.md`.
+77 Python-Dateien insgesamt — 22 Top-Level-Module + fünf Pakete
+(`routes/`, `detectors/`, `camera_runtime/`, `weather_service/`,
+`telegram_bot/`). Vollständige Aufstellung in `app/README.md`.
 
-- **`server.py`** — Flask app, alle `/api/*`-Routen. Modul-Init läuft
-  `rebuild_runtimes()`; gleiches Re-Run wendet Config-Änderungen an.
+### Boot + HTTP
+
+- **`server.py`** — Flask app + Boot-Sequenz (Config laden, Stores
+  bauen, `register_blueprints(app)`, `rebuild_services` /
+  `rebuild_runtimes`, Migrationen anstoßen, Heartbeat, Shutdown-Hooks).
+  Keine `@app.route`-Definitionen mehr — alle Routen liegen in
+  `routes/`.
+- **`app_state.py`** — geteilte Singletons (`store`, `settings`,
+  `runtimes`, `mqtt_service`, `telegram_service`, `weather_service`,
+  Registries, Builder). Jedes Blueprint liest hier per Request frisch.
+- **`migrations.py`** — boot-only Migrations-Helfer
+  (`migrate_timelapse_events`, `generate_missing_thumbnails`,
+  `migrate_timelapse_to_eventstore`). Jede läuft im eigenen
+  Daemon-Thread.
+
+### `routes/` · 14 Blueprint-Module + zwei `_*_helpers`
+
+- **`bootstrap.py`** — `/`, `/media/<path>`, `/api/bootstrap`,
+  `/api/config`, `/api/system`, `/api/status`, `/api/discover`,
+  `/api/wizard/complete`, `/api/settings/{import,export}`.
+- **`cameras.py`** — Camera-CRUD (`/api/cameras`, `/api/settings/{cameras,app,backups}`,
+  Probe / Reload / Merge / Arm / Restore).
+- **`streams.py`** — Snapshot-JPEG + zwei MJPEG-Streams + Per-Cam-Status.
+- **`media.py`** — `/api/media/*` (Storage-Stats, Rescan,
+  Fix-Thumbs, Purge-Orphans, Cleanup) + `/api/camera/<id>/media` +
+  `/api/event/<id>`.
+- **`events.py`** — Event-CRUD (Single-Delete, Bulk-Delete, Confirm,
+  Labels, Review).
+- **`timeline_stats.py`** — `/api/timeline` + `/api/camera/<id>/stats_range`.
+- **`timelapse.py`** — Status, globaler Save, Per-Cam-Build / List /
+  Delete / Rolling.
+- **`tracking.py`** — Phase-1 Object-Tracking-Sidecar
+  (`/api/tracking/*`).
+- **`sichtungen.py`** — Cat- / Person-Identity, Achievements
+  (`/api/{cats,persons,achievements,…}`).
+- **`coral.py`** — Coral-Test-Panel (Single, Test-Images, 421-Zeilen
+  Test-Batch, Models-List + Switch) + Per-Cam-Test-Detection.
+- **`weather.py`** — Wetter-Sichtungen, Sun-Times, Recaps, Status,
+  History.
+- **`telegram.py`** — Polling-Status, Test, Per-Cam-Test-Alert,
+  System-Telegram-Health.
+- **`admin.py`** — `/api/logs`, `/api/admin/timelapse/cleanup`,
+  `/api/reload`.
+- **`_camera_helpers.py`** + **`_coral_helpers.py`** — gemeinsame
+  Hilfen (Auto-Detect, Mask-Password, Backup-File-Liste, TFLite-
+  Filename-Heuristik).
+
+### Camera Pipeline + Klassifizierer
+
 - **`camera_runtime/`** — Paket (11 Dateien). `RuntimeThread` pro
   Kamera plus Mixins für Capture, Motion, Recording, Zonen, Timelapse,
   Lifecycle, Status. 24-h-Reconnect-Counter pro Kamera.
-- **`detectors.py`** — `CoralObjectDetector` → `BirdSpeciesClassifier`
-  → `WildlifeClassifier`. Drei-Tier-Fallback (pycoral / tflite-runtime
-  / disabled) pro Stage.
+- **`detectors/`** — Paket (9 Dateien). `CoralObjectDetector` →
+  `BirdSpeciesClassifier` → `WildlifeClassifier` (je eigenes Modul);
+  geteilte Primitive in `_types.py` (Detection + Region-Filter),
+  `_label_loader.py`, `_wildlife_rules.py`; `discovery.py` für die
+  Auto-Discovery, `draw.py` für die Bbox-Overlay-Renderer.
 - **`detection_confirmer.py`** — Zwei-Frame-Bestätigung gegen
   Einzelbild-Fehlalarme.
 - **`tracking_worker.py`** — Hintergrund-Thread, schreibt
-  `tracks.json`-Sidecars für Lightbox-Bbox-Overlay.
+  `tracks.json`-Sidecars für Lightbox-Bbox-Overlay; Recent-Failures-
+  Ring fürs UI.
 - **`frame_helpers.py`** — `is_valid_frame` + `grab_valid_frame`-Retry.
-  Zentraler Frame-Filter (grey/pink/block).
+
+### Services
+
 - **`telegram_bot/`** + **`telegram_helpers.py`** — Paket (7 Dateien)
   mit `TelegramService` und Mixins für Lifecycle, In-/Outbound,
   Formatting; Anchor-Bubble Edit-in-Place, Backoff-Polling, deutsche
@@ -262,6 +314,9 @@ Aufstellung in `app/README.md`.
   History, Wetter-Sichtungen, Sun-/Event-Timelapse, Recaps.
 - **`mqtt_service.py`** — paho-mqtt-Wrapper mit Rate-Limit-Logging
   bei publish-Fehlern.
+
+### Storage + Config
+
 - **`settings_store.py`** — Source of Truth für `settings.json`.
 - **`storage.py`** — `EventStore`, Per-Cam-Event-JSONs (atomar via
   `_atomic_write_text`).
@@ -270,6 +325,9 @@ Aufstellung in `app/README.md`.
 - **`schema.py`** — JSON-Schema-Validierung.
 - **`config_loader.py`** — `config.yaml`-Loader.
 - **`logging_setup.py`** — zentrales Logging, Tag-Schema, Ringbuffer.
+
+### Sonstiges
+
 - **`discovery.py`** — Two-Phase-Subnet-Scan.
 - **`event_logic.py`** — Schedule + Alarm-Profile.
 - **`cat_identity.py`** — Histogramm-Re-ID für Katzen/Personen.
