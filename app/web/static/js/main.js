@@ -50,7 +50,7 @@ import './camedit/coral-test.js';                       // stage 25 A
 import './camedit/timelapse-settings.js';               // stage 25 B
 import './camedit/wizard.js';                           // stage 25 C
 import './camedit/discovery.js';                        // stage 25 C
-import './camedit/tracking-sim.js';                      // erk-sim Video tab
+import './camedit/erk-sim/index.js';                     // erk-sim Snapshot + Video tabs
 import './camedit/index.js';                            // stage 25 D
 import './router.js';                                   // stage 18
 // Achievement panel — loadAchievements rides the loadAll() kickoff

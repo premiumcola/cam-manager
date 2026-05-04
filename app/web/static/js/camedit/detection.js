@@ -1,19 +1,39 @@
 // ─── camedit/detection.js ──────────────────────────────────────────────────
-// Stage 8 of the legacy.js → ES modules refactor — every Erkennung-tab
-// UI bit that drives the per-camera detection settings:
-//   • Camera form one-time listeners (auto-id, motion-sens, Erk-tab sliders)
-//   • Erkennung 5-step workflow sliders + per-class confidence drilldown
-//     + per-class confirmation-window drilldown
-//   • _collectLabelThresholds / _collectConfirmationWindow — read sliders
-//     into the dict shape settings.json expects
-//   • Erkennung-tab "jetzt simulieren" button + result panel + bbox SVG
-//   • Per-camera object-filter pills (Person/Cat/Bird/Car/Dog/Squirrel)
-//   • Erkennung-tab status strip (_renderGlobalStatusRows + age formatter)
-//   • Hidden legacy confirmation-grid (_CW_DEFAULTS + _renderCamConfirmGrid)
-import { byId, esc } from '../core/dom.js';
+// Form-field initializers + Erkennung-tab status strip + thin re-exports
+// of the per-class grids, the object-filter pills, and the simulation
+// sheet. R14 lifted those pieces into their own files so this surface
+// stays focused on form + status concerns; existing camedit/index.js
+// imports stay valid via the named re-exports at the bottom.
+import { byId } from '../core/dom.js';
 import { state } from '../core/state.js';
-import { OBJ_LABEL, objIconSvg } from '../core/icons.js';
-import { showToast } from '../core/toast.js';
+
+// Re-exports — preserve the existing API used by camedit/index.js so
+// the consumer sees no rename. See each sub-module for the actual
+// implementation.
+export {
+  _renderErkPerClassConfidence,
+  _bindErkPerClassToggle,
+  _collectLabelThresholds,
+  _renderErkPerClassConfirm,
+  _bindErkConfirmPerClassToggle,
+  _collectConfirmationWindow,
+  _renderCamConfirmGrid,
+} from './detection-perclass.js';
+export {
+  getCamObjectFilterState,
+  setCamObjectFilterState,
+  _renderCamObjectPills,
+} from './detection-objectfilter.js';
+// Simulation-sheet entry points — implementations live in erk-sim/.
+import {
+  bindErkSimulate,
+  bindErkSimTabs,
+  activateErkSimTab,
+} from './erk-sim/index.js';
+export const _bindErkSimulate    = bindErkSimulate;
+export const _bindErkSimTabs     = bindErkSimTabs;
+export const _activateErkSimTab  = activateErkSimTab;
+
 
 let _camFormInited = false;
 export function _initCameraFormListeners(){
@@ -37,6 +57,7 @@ export function _initCameraFormListeners(){
   });
   _initErkSliders(byId('cameraForm'));
 }
+
 
 // Erkennung-tab slider value labels. Single delegated handler over a
 // (name, valueId, formatter) map so adding a new slider in Phase 2 is
@@ -86,389 +107,6 @@ export function _initErkSliders(form){
   }
 }
 
-// Per-class confidence drilldown rendered into #erkPerClassAdvanced when
-// the user opens "Pro Klasse anpassen" under step 2. Defaults mirror the
-// settings_store fallbacks (cat 0.55 / bird 0.45 / squirrel 0.45 / car
-// 0.65 / dog 0.55) so a fresh camera with no per-class entries doesn't
-// look misconfigured. Sliders are name="label_threshold_<key>" so the
-// save handler's _collectLabelThresholds() picks them up automatically.
-const _ERK_PERCLASS_CONFIDENCE = [
-  { key: 'cat',      label: 'Katze',        defaultV: 0.55 },
-  { key: 'bird',     label: 'Vogel',        defaultV: 0.45 },
-  { key: 'squirrel', label: 'Eichhörnchen', defaultV: 0.45 },
-  { key: 'car',      label: 'Auto',         defaultV: 0.65 },
-  { key: 'dog',      label: 'Hund',         defaultV: 0.55 },
-];
-export function _renderErkPerClassConfidence(form, cam){
-  const wrap = byId('erkPerClassAdvanced');
-  if (!wrap) return;
-  const thresholds = cam?.label_thresholds || {};
-  wrap.innerHTML = _ERK_PERCLASS_CONFIDENCE.map(c => {
-    const raw = thresholds[c.key];
-    const v = (raw != null && Number.isFinite(parseFloat(raw))) ? parseFloat(raw) : c.defaultV;
-    return `
-      <div class="erk-card">
-        <div class="row">
-          <input type="range" name="label_threshold_${c.key}" min="0.50" max="0.95" step="0.01" value="${v.toFixed(2)}" />
-          <span class="val" id="erkLT_${c.key}_val">${Math.round(v * 100)}%</span>
-        </div>
-        <span class="lbl">${esc(c.label)} · überschreibt allgemein</span>
-      </div>`;
-  }).join('');
-  _ERK_PERCLASS_CONFIDENCE.forEach(c => {
-    const inp = wrap.querySelector(`[name="label_threshold_${c.key}"]`);
-    const lbl = byId(`erkLT_${c.key}_val`);
-    if (inp && lbl){
-      inp.addEventListener('input', () => {
-        lbl.textContent = Math.round(parseFloat(inp.value) * 100) + '%';
-      });
-    }
-  });
-}
-
-// One-time wiring for the "Pro Klasse anpassen ▾" disclosure toggle in
-// step 2. Idempotent via dataset.wired so re-opening cam-edit doesn't
-// double-bind.
-export function _bindErkPerClassToggle(){
-  const btn = byId('erkPerClassToggle');
-  const wrap = byId('erkPerClassAdvanced');
-  const lbl = byId('erkPerClassToggleLbl');
-  if (!btn || !wrap || !lbl || btn.dataset.wired) return;
-  btn.dataset.wired = '1';
-  btn.addEventListener('click', () => {
-    const open = wrap.hidden;
-    wrap.hidden = !open;
-    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    lbl.textContent = open ? 'Weniger anzeigen' : 'Pro Klasse anpassen';
-  });
-}
-
-// Read every label_threshold_<class> slider from the form into the
-// dict shape settings.json expects. Includes the step-2 person
-// slider AND any per-class drilldown sliders rendered into
-// #erkPerClassAdvanced. Drops NaN values silently — no slider, no
-// entry, schema falls back to the global detection_min_score.
-export function _collectLabelThresholds(form){
-  const out = {};
-  form.querySelectorAll('[name^="label_threshold_"]').forEach(inp => {
-    const key = inp.name.replace('label_threshold_', '');
-    const v = parseFloat(inp.value);
-    if (key && Number.isFinite(v)) out[key] = v;
-  });
-  return out;
-}
-
-// Per-class confirmation-window drilldown rendered into
-// #erkConfirmPerClass when "Pro Klasse anpassen" under step 3 is
-// opened. Defaults track settings_store fallbacks (per-class N-of-M
-// vary by how noisy each class typically is).
-const _ERK_PERCLASS_CONFIRM = [
-  { key: 'person',   label: 'Person',       defN: 3, defS: 5 },
-  { key: 'cat',      label: 'Katze',        defN: 3, defS: 5 },
-  { key: 'bird',     label: 'Vogel',        defN: 2, defS: 4 },
-  { key: 'squirrel', label: 'Eichhörnchen', defN: 2, defS: 3 },
-];
-export function _renderErkPerClassConfirm(form, cam){
-  const wrap = byId('erkConfirmPerClass');
-  if (!wrap) return;
-  const cw = cam?.confirmation_window || {};
-  wrap.innerHTML = _ERK_PERCLASS_CONFIRM.map(c => {
-    const cur = cw[c.key] || {};
-    const n = parseInt(cur.n, 10);
-    const s = parseFloat(cur.seconds);
-    const nVal = Number.isFinite(n) ? n : c.defN;
-    const sVal = Number.isFinite(s) ? Math.round(s) : c.defS;
-    return `
-      <div class="erk-card">
-        <div class="two-col">
-          <div class="row">
-            <input type="range" name="confirm_${c.key}_n" min="1" max="10" step="1" value="${nVal}" />
-            <span class="val" id="erkCWN_${c.key}">${nVal} ×</span>
-          </div>
-          <div class="row">
-            <input type="range" name="confirm_${c.key}_s" min="2" max="20" step="1" value="${sVal}" />
-            <span class="val" id="erkCWS_${c.key}">${sVal} s</span>
-          </div>
-        </div>
-        <span class="lbl" id="erkCWL_${c.key}">${esc(c.label)} · ${nVal} in ${sVal} s</span>
-      </div>`;
-  }).join('');
-  _ERK_PERCLASS_CONFIRM.forEach(c => {
-    const nInp = wrap.querySelector(`[name="confirm_${c.key}_n"]`);
-    const sInp = wrap.querySelector(`[name="confirm_${c.key}_s"]`);
-    const nLbl = byId(`erkCWN_${c.key}`);
-    const sLbl = byId(`erkCWS_${c.key}`);
-    const cLbl = byId(`erkCWL_${c.key}`);
-    if (!nInp || !sInp) return;
-    const upd = () => {
-      if (nLbl) nLbl.textContent = nInp.value + ' ×';
-      if (sLbl) sLbl.textContent = sInp.value + ' s';
-      if (cLbl) cLbl.textContent = `${c.label} · ${nInp.value} in ${sInp.value} s`;
-    };
-    nInp.addEventListener('input', upd);
-    sInp.addEventListener('input', upd);
-  });
-}
-
-export function _bindErkConfirmPerClassToggle(){
-  const btn = byId('erkConfirmPerClassToggle');
-  const wrap = byId('erkConfirmPerClass');
-  const lbl = byId('erkConfirmPerClassToggleLbl');
-  if (!btn || !wrap || !lbl || btn.dataset.wired) return;
-  btn.dataset.wired = '1';
-  btn.addEventListener('click', () => {
-    const open = wrap.hidden;
-    wrap.hidden = !open;
-    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-    lbl.textContent = open ? 'Weniger anzeigen' : 'Pro Klasse anpassen';
-  });
-}
-
-// Read every confirm_<class>_n + confirm_<class>_s slider pair from
-// the form into the dict shape settings.json expects:
-//   { global: {n,seconds}, person: {n,seconds}, cat: {n,seconds}, … }
-// Existing entries with no UI slider in scope are merged from
-// existingCam — Phase 1's preservation pattern is unchanged here.
-export function _collectConfirmationWindow(form, existingCam){
-  const out = { ...(existingCam?.confirmation_window || {}) };
-  // Legacy hidden grid (compat — see #camConfirmGrid).
-  const grid = byId('camConfirmGrid');
-  grid?.querySelectorAll('[data-cw-cls]').forEach(row => {
-    const cls = row.dataset.cwCls;
-    const nIn = row.querySelector('[data-cw-n]');
-    const sIn = row.querySelector('[data-cw-s]');
-    const n = parseInt(nIn?.value, 10);
-    const s = parseFloat(sIn?.value);
-    if (cls && Number.isFinite(n) && Number.isFinite(s)){
-      out[cls] = { n: Math.max(1, n), seconds: Math.max(0.5, s) };
-    }
-  });
-  // Step-3 global slider.
-  const gn = parseInt(form.querySelector('[name="confirm_n"]')?.value, 10);
-  const gs = parseFloat(form.querySelector('[name="confirm_seconds"]')?.value);
-  if (Number.isFinite(gn) && Number.isFinite(gs)){
-    out.global = { n: Math.max(1, gn), seconds: Math.max(2, gs) };
-  }
-  // Per-class drilldown sliders — confirm_<key>_n / confirm_<key>_s.
-  // Only emit an entry when both inputs exist and parse as finite.
-  form.querySelectorAll('[name^="confirm_"][name$="_n"]').forEach(nInp => {
-    const m = nInp.name.match(/^confirm_(.+)_n$/);
-    if (!m) return;
-    const key = m[1];
-    if (!key || key === 'seconds' || key === 'global') return;
-    const sInp = form.querySelector(`[name="confirm_${key}_s"]`);
-    const n = parseInt(nInp.value, 10);
-    const s = parseFloat(sInp?.value);
-    if (Number.isFinite(n) && Number.isFinite(s)){
-      out[key] = { n: Math.max(1, n), seconds: Math.max(2, s) };
-    }
-  });
-  return out;
-}
-
-// "Erkennung jetzt simulieren" — the button below the 5 steps in the
-// Erkennung tab. Posts to /api/cameras/<id>/test-detection, animates
-// the icon while the request is in flight, then renders the snapshot
-// + bounding boxes inline. Click again to re-run; click × to dismiss.
-export function _bindErkSimulate(){
-  const btn = byId('erkSimulateBtn');
-  const close = byId('erkSimClose');
-  if (btn && !btn.dataset.wired){
-    btn.dataset.wired = '1';
-    btn.addEventListener('click', _onErkSimulateClick);
-  }
-  if (close && !close.dataset.wired){
-    close.dataset.wired = '1';
-    close.addEventListener('click', () => {
-      const wrap = byId('erkSimResult');
-      if (wrap) wrap.hidden = true;
-    });
-  }
-  _bindErkSimTabs();
-}
-
-// Tab strip wiring for the simulation sheet (Snapshot / Video). Click
-// + arrow-key navigation, ARIA states stay in sync. Idempotent — re-run
-// whenever a camera is opened in the editor; the dataset.wired guard
-// keeps it cheap.
-export function _bindErkSimTabs(){
-  const strip = document.querySelector('#erkSimResult .erk-sim-tabs');
-  if (!strip || strip.dataset.wired) return;
-  strip.dataset.wired = '1';
-  const tabs = Array.from(strip.querySelectorAll('[role="tab"]'));
-  tabs.forEach((tab) => {
-    tab.addEventListener('click', () => _activateErkSimTab(tab.id.replace('erkSimTabBtn-', '')));
-    tab.addEventListener('keydown', (e) => {
-      const idx = tabs.indexOf(tab);
-      let next = -1;
-      if (e.key === 'ArrowRight') next = (idx + 1) % tabs.length;
-      else if (e.key === 'ArrowLeft') next = (idx - 1 + tabs.length) % tabs.length;
-      else if (e.key === 'Home') next = 0;
-      else if (e.key === 'End') next = tabs.length - 1;
-      if (next < 0) return;
-      e.preventDefault();
-      tabs[next].focus();
-      _activateErkSimTab(tabs[next].id.replace('erkSimTabBtn-', ''));
-    });
-  });
-}
-
-// Switch the visible tab. `name` is one of 'snapshot' | 'video'. Caller
-// is responsible for ensuring the simulation sheet itself is visible
-// (the simulate button does that on a successful response).
-export function _activateErkSimTab(name){
-  const strip = document.querySelector('#erkSimResult .erk-sim-tabs');
-  if (!strip) return;
-  strip.querySelectorAll('[role="tab"]').forEach(t => {
-    const active = t.id === `erkSimTabBtn-${name}`;
-    t.classList.toggle('is-active', active);
-    t.setAttribute('aria-selected', active ? 'true' : 'false');
-    t.tabIndex = active ? 0 : -1;
-  });
-  document.querySelectorAll('#erkSimResult .erk-sim-tab-panel').forEach(p => {
-    p.hidden = (p.id !== `erkSimTab-${name}`);
-  });
-  // Notify any listener (e.g. tracking-sim.js) that the video tab just
-  // became visible so it can lazy-render its picker.
-  if (name === 'video'){
-    document.dispatchEvent(new CustomEvent('erk-sim-tab:video'));
-  }
-}
-
-async function _onErkSimulateClick(ev){
-  const btn = ev.currentTarget;
-  const camId = byId('cameraForm')?.elements?.['id']?.value;
-  if (!camId) return;
-  const lblEl = btn.querySelector('.erk-test-btn-lbl');
-  const originalLabel = lblEl?.textContent || '';
-  btn.disabled = true;
-  btn.classList.add('is-busy');
-  if (lblEl) lblEl.textContent = ' simuliere…';
-  try {
-    const r = await fetch(`/api/cameras/${encodeURIComponent(camId)}/test-detection`, { method: 'POST' });
-    let data = null;
-    try { data = await r.json(); } catch {}
-    if (!r.ok || !data?.ok){
-      const msg = (data && data.error) ? data.error : 'Fehler';
-      showToast('Test fehlgeschlagen · ' + msg, 'error');
-      return;
-    }
-    _renderErkSimResult(data);
-  } catch {
-    showToast('Test fehlgeschlagen · Netzwerk', 'error');
-  } finally {
-    btn.disabled = false;
-    btn.classList.remove('is-busy');
-    if (lblEl) lblEl.textContent = originalLabel;
-  }
-}
-
-const _ERK_VERDICT_TXT = {
-  'pass':         'würde Alarm auslösen',
-  'belowthresh':  '',
-  'filtered':     '',
-};
-
-function _renderErkSimResult(data){
-  const wrap = byId('erkSimResult');
-  if (!wrap) return;
-  // Always land on the Snapshot tab when the simulate button runs —
-  // the Video tab is opt-in and remembers its own selection separately.
-  _activateErkSimTab('snapshot');
-  const img  = byId('erkSimImg');
-  const ovl  = byId('erkSimOverlay');
-  const list = byId('erkSimList');
-  const ttl  = byId('erkSimTitle');
-  if (img) img.src = data.snapshot || '';
-  // viewBox in absolute frame pixel coordinates so backend bbox values
-  // (which are pixel-space) drop in unchanged. preserveAspectRatio in
-  // the inline element default is xMidYMid meet — but since the wrapper
-  // .erk-test-result-imgwrap forces a 16:9 aspect ratio and the <img>
-  // uses object-fit:contain, the SVG and the image scale identically.
-  const fs = data.frame_size || { w: 1920, h: 1080 };
-  if (ovl) ovl.setAttribute('viewBox', `0 0 ${Math.max(1, fs.w)} ${Math.max(1, fs.h)}`);
-
-  const dets = data.detections || [];
-  const passCount = dets.filter(d => d.verdict === 'pass').length;
-  if (ttl){
-    ttl.textContent = passCount > 0
-      ? `${passCount} Treffer würden Alarm auslösen`
-      : (dets.length === 0 ? 'Keine Erkennung' : 'Kein Treffer würde Alarm auslösen');
-  }
-  // Boxes — paint-order=stroke on the label so the dark halo stays
-  // readable above bright snapshot regions. font-size scales with the
-  // viewBox; an absolute "10 px" on a 1920-wide viewBox shows up as
-  // ~10 px in screen pixels regardless of how the wrapper scales.
-  if (ovl){
-    ovl.innerHTML = dets.map(d => {
-      const cls = `erk-det-box is-${d.verdict}`;
-      const labelText = `${d.label} ${Math.round(d.score * 100)}%`;
-      const fontSize = Math.max(10, Math.round(fs.w / 100));
-      const boxR = Math.max(2, Math.round(fs.w / 480));
-      return `
-        <rect class="${cls}" x="${d.bbox[0]}" y="${d.bbox[1]}" width="${d.bbox[2]}" height="${d.bbox[3]}" rx="${boxR}" vector-effect="non-scaling-stroke" />
-        <text class="erk-det-label" x="${d.bbox[0] + 4}" y="${d.bbox[1] + fontSize + 2}" font-size="${fontSize}">${esc(labelText)}</text>
-      `;
-    }).join('');
-  }
-  if (list){
-    if (dets.length === 0){
-      list.innerHTML = `<div class="erk-det-empty">Coral hat in diesem Frame nichts erkannt.</div>`;
-    } else {
-      list.innerHTML = dets.map(d => {
-        const verdictText = d.reason || _ERK_VERDICT_TXT[d.verdict] || '';
-        return `
-          <div class="erk-det-row is-${esc(d.verdict)}">
-            <span class="det-dot"></span>
-            <span class="det-name">${esc(d.label)}</span>
-            <span class="det-score">${Math.round(d.score * 100)}%</span>
-            <span class="det-verdict">${esc(verdictText)}</span>
-          </div>`;
-      }).join('');
-    }
-  }
-  wrap.hidden = false;
-  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  wrap.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
-}
-
-// Per-camera object-filter pills (Person/Cat/Bird/Car/Dog/Squirrel).
-// Same visual recipe as the Mediathek filter bar — active pill fills
-// with the object colour via --cb. _camObjectFilterState mirrors the
-// hidden #object_filter input so the existing save flow doesn't
-// change.
-const _CAM_OBJ_OPTIONS = [
-  { k: 'person',   label: 'Person',       cb: '#a855f7' },
-  { k: 'cat',      label: 'Katze',        cb: '#ec4899' },
-  { k: 'bird',     label: 'Vogel',        cb: '#06b6d4' },
-  { k: 'car',      label: 'Auto',         cb: '#f59e0b' },
-  { k: 'dog',      label: 'Hund',         cb: '#7c2d12' },
-  { k: 'squirrel', label: 'Eichhörnchen', cb: '#7c4a1f' },
-];
-let _camObjectFilterState = [];
-export function getCamObjectFilterState(){ return _camObjectFilterState.slice(); }
-export function setCamObjectFilterState(arr){
-  _camObjectFilterState = [...(arr || [])];
-}
-export function _renderCamObjectPills(){
-  const host = byId('camObjectFilter');
-  if (!host) return;
-  const active = new Set(_camObjectFilterState);
-  host.innerHTML = _CAM_OBJ_OPTIONS.map(o => {
-    const on = active.has(o.k);
-    return `<button type="button" class="cam-obj-pill${on ? ' active' : ''}" data-obj="${o.k}" style="--cb:${o.cb}"><span class="cop-ico">${objIconSvg(o.k, 16) || ''}</span><span>${o.label}</span></button>`;
-  }).join('');
-  host.querySelectorAll('.cam-obj-pill').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const k = btn.dataset.obj;
-      if (active.has(k)){ active.delete(k); btn.classList.remove('active'); }
-      else { active.add(k); btn.classList.add('active'); }
-      _camObjectFilterState = [..._CAM_OBJ_OPTIONS.map(o => o.k).filter(x => active.has(x))];
-      const hidden = byId('cameraForm').elements['object_filter'];
-      if (hidden) hidden.value = _camObjectFilterState.join(',');
-    });
-  });
-}
 
 // Erkennung-tab status strip — slim row with a coloured dot, an inline
 // Coral state label, the per-frame inference latency, and the seconds-
@@ -530,6 +168,7 @@ export function _fmtRelativeAgeS(s){
   return 'vor >1 Woche';
 }
 
+
 // Inline onclick="_scrollToCoralSettings(event)" used by the Erkennung
 // status-strip "Coral-Einstellungen öffnen" hyperlink.
 window._scrollToCoralSettings = function(ev){
@@ -544,46 +183,3 @@ window._scrollToCoralSettings = function(ev){
     section.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, 120);
 };
-
-// Per-class fallbacks for the legacy hidden confirmation-window UI grid
-// (#camConfirmGrid). Mirrors settings_store._CONFIRMATION_WINDOW_DEFAULTS
-// so the UI shows the same defaults the backend would apply. The Erk-
-// tab 5-step workflow uses a different, sliders-based UI (_renderErkPer
-// ClassConfirm above); this grid is kept for older templates that still
-// reference the data-cw-cls rows.
-const _CW_DEFAULTS = {
-  person:   { n: 3, seconds: 5.0 },
-  cat:      { n: 3, seconds: 5.0 },
-  bird:     { n: 2, seconds: 4.0 },
-  squirrel: { n: 2, seconds: 3.0 },
-  dog:      { n: 3, seconds: 5.0 },
-  car:      { n: 3, seconds: 5.0 },
-  motion:   { n: 2, seconds: 4.0 },
-};
-export function _renderCamConfirmGrid(c){
-  const grid = byId('camConfirmGrid');
-  if (!grid) return;
-  const filter = (c.object_filter || []).filter(Boolean);
-  const cw = c.confirmation_window || {};
-  if (!filter.length){
-    grid.innerHTML = `<div class="field-help" style="margin:0">Wähle oben Objekte aus, um Bestätigungs-Filter pro Klasse zu konfigurieren.</div>`;
-    return;
-  }
-  grid.innerHTML = filter.map(cls => {
-    const fb = _CW_DEFAULTS[cls] || { n: 3, seconds: 5.0 };
-    const cur = cw[cls] || {};
-    const n = parseInt(cur.n, 10);
-    const s = parseFloat(cur.seconds);
-    const nVal = Number.isFinite(n) ? n : fb.n;
-    const sVal = Number.isFinite(s) ? s : fb.seconds;
-    const lbl = (typeof OBJ_LABEL === 'object' && OBJ_LABEL[cls]) ? OBJ_LABEL[cls] : cls;
-    return `
-      <div class="cam-confirm-row" data-cw-cls="${esc(cls)}">
-        <span class="cam-confirm-cls">${esc(lbl)} bestätigen nach</span>
-        <input type="number" class="cam-confirm-n" data-cw-n min="1" max="10" step="1" value="${nVal}" inputmode="numeric"/>
-        <span class="cam-confirm-sep">Treffer in</span>
-        <input type="number" class="cam-confirm-s" data-cw-s min="0.5" max="30" step="0.5" value="${sVal}" inputmode="decimal"/>
-        <span class="cam-confirm-unit">Sek</span>
-      </div>`;
-  }).join('');
-}

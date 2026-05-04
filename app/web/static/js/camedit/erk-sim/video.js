@@ -1,4 +1,4 @@
-// ─── camedit/tracking-sim.js ───────────────────────────────────────────────
+// ─── camedit/erk-sim/video.js ──────────────────────────────────────────────
 // The Erkennung-tab "Video" sub-tab: pick a recent video event for the
 // current camera, render its tracks.json sidecar as an inline SVG
 // timeline, optionally re-trigger the worker to (re)build it. Mounts
@@ -8,8 +8,8 @@
 // This module never touches the Mediathek or the lightbox. It owns
 // nothing in the global state map; per-event tracks payloads are kept
 // in a session-scoped Map so switching back to a clip is instant.
-import { byId, esc } from '../core/dom.js';
-import { showToast } from '../core/toast.js';
+import { byId, esc } from '../../core/dom.js';
+import { showToast } from '../../core/toast.js';
 
 // session-scoped cache: event_id → tracks payload
 const _trackCache = new Map();
