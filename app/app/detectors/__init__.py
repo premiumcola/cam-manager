@@ -27,15 +27,12 @@ from ._wildlife_rules import (
 )
 from .draw import draw_detections
 
-# R02.2 moved CoralObjectDetector and BirdSpeciesClassifier into their
-# own modules. WildlifeClassifier + discover_wildlife_paths still live
-# in _legacy_classes.py until R02.3 finishes the carve-out.
+# R02.3 finished the carve-out — every detector class now lives in
+# its own module and `_legacy_classes.py` is gone.
 from .bird_species import BirdSpeciesClassifier
 from .coral_object import CoralObjectDetector
-from ._legacy_classes import (  # noqa: E402
-    WildlifeClassifier,
-    discover_wildlife_paths,
-)
+from .discovery import discover_wildlife_paths
+from .wildlife import WildlifeClassifier
 
 __all__ = [
     "BirdSpeciesClassifier",
