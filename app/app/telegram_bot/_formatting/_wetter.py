@@ -154,7 +154,7 @@ class _WetterMixin:
                 if sunset_dt > now:
                     delta_min = int((sunset_dt - now).total_seconds() / 60)
                     h, m = divmod(delta_min, 60)
-                    sun_extra = f" · Untergang in {h} h {m:02d} min" if h else f" · Untergang in {m} min"
+                    sun_extra = f" · sunset in {h} h {m:02d} min" if h else f" · sunset in {m} min"
         except Exception:
             pass
         if sun_alt is not None:

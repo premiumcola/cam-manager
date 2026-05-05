@@ -35,9 +35,9 @@ export const WEATHER_TYPES = {
   // render to "Untergang") and produce two filter pills with identical
   // visible text but different counts. Tooltip / aria stays the full
   // descriptive form via de_full.
-  sun_timelapse_rise: { de: 'Aufgang TL', de_full: 'Sonnenaufgang (Timelapse)', color: '#e89540',
+  sun_timelapse_rise: { de: 'sunrise', de_full: 'Sonnenaufgang (Timelapse)', color: '#e89540',
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="15" r="3.5"/><path d="M12 7v-4M5 11l-2-2M19 11l2-2M3 19h18"/><polyline points="9,5 12,2 15,5"/></svg>' },
-  sun_timelapse_set:  { de: 'Untergang TL', de_full: 'Sonnenuntergang (Timelapse)', color: '#d4823a',
+  sun_timelapse_set:  { de: 'sunset', de_full: 'Sonnenuntergang (Timelapse)', color: '#d4823a',
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="15" r="3.5"/><path d="M12 7v-4M5 11l-2-2M19 11l2-2M3 19h18"/><polyline points="9,1 12,4 15,1"/></svg>' },
   // Wetter-Ereignis-Timelapses — drei Trigger-Subtypen, ein gemeinsamer
   // 60-min-Capture-Mechanismus. Eigener event_type je Trigger, damit

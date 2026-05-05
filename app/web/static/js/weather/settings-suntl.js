@@ -141,7 +141,7 @@ function _renderWeatherCamPanel(c){
     if (!p.enabled) return '';
     if (!sunPreview.location_set) return '<span class="ws-sun-preview ws-sun-preview--err">Standort fehlt</span>';
     const ev = pre[phase] || {};
-    if (!ev.window_start) return '<span class="ws-sun-preview">Polartag — kein ' + (phase === 'sunrise' ? 'Aufgang' : 'Untergang') + ' heute</span>';
+    if (!ev.window_start) return '<span class="ws-sun-preview">Polartag — kein ' + (phase === 'sunrise' ? 'sunrise' : 'sunset') + ' heute</span>';
     // Day-label switches to "Morgen" once today's window is past and the
     // backend has rolled to tomorrow's event. The live ticker below keeps
     // both the clock and the countdown current to the second.
