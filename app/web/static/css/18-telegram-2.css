@@ -60,7 +60,11 @@
 .media-pill.cat-filter-btn.active .mp-count{background:rgba(0,0,0,.45)}
 .media-pill.cat-filter-btn.media-pill--empty{background:rgba(255,255,255,.05)!important;color:#6b7280!important;opacity:1;pointer-events:none;cursor:default;box-shadow:none!important}
 .media-pill.cat-filter-btn.media-pill--empty .cfb-icon{filter:grayscale(1) brightness(.75) contrast(1.1)}
-.moc-filter-bar{margin-bottom:14px}
+/* Section-rhythm gap between the chip strip and the cards grid. The
+   panel itself uses 12 px padding via .section, and section heads use
+   12 px margin-bottom — this picks up the same rhythm + a half-step
+   so the strip reads as a distinct row above the grid, not glued. */
+.moc-filter-bar{margin-bottom:18px}
 /* motion / car / timelapse used to have hand-tuned dark/light backgrounds
    that fought the canonical active/inactive contract — they end up almost
    indistinguishable from the inactive state on a glare-lit phone. The

@@ -33,7 +33,7 @@ button,[role="button"],a,input,select,textarea{-webkit-tap-highlight-color:trans
        toggles a `.is-end` class once the strip is scrolled all the
        way; matching :not() drops the mask so the last tab isn't
        cosmetically faded when fully visible. */
-:where(.set-tabs,.coral-tabs,.erk-sim-tabs,.cam-recovery-tabs){
+:where(.set-tabs,.coral-tabs,.erk-sim-tabs,.cam-recovery-tabs,.media-filter-bar){
   overflow-x:auto;
   overflow-y:hidden;
   touch-action:pan-x;
@@ -43,14 +43,14 @@ button,[role="button"],a,input,select,textarea{-webkit-tap-highlight-color:trans
   scroll-snap-type:x proximity;
   scrollbar-width:none;
 }
-:where(.set-tabs,.coral-tabs,.erk-sim-tabs,.cam-recovery-tabs)::-webkit-scrollbar{
+:where(.set-tabs,.coral-tabs,.erk-sim-tabs,.cam-recovery-tabs,.media-filter-bar)::-webkit-scrollbar{
   display:none;
 }
 /* Right-edge fade — visible only while there is more content to the
    right. The 24 px transparent ramp sits flush against the strip
    edge so it reads as "this scrolls" without obscuring tab labels.
    `.is-end` lands when JS detects the strip is at scrollLeft-max. */
-:where(.set-tabs,.coral-tabs,.erk-sim-tabs,.cam-recovery-tabs):not(.is-end){
+:where(.set-tabs,.coral-tabs,.erk-sim-tabs,.cam-recovery-tabs,.media-filter-bar):not(.is-end){
   -webkit-mask-image:linear-gradient(
     to right,
     #000 0,
@@ -123,14 +123,19 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   #lightboxImg{touch-action:pinch-zoom}
   #lightboxVideo{touch-action:manipulation}
 
-  /* Mediathek filter pill bar — single horizontal-scroll row with
-     scroll-snap on mobile. Avoids the 3-line stack on a busy day. */
+  /* Mediathek filter pill bar — horizontal-scroll row that aligns
+     with the section's content edges (no negative margin bleed,
+     which used to push the first pill past the section's left
+     padding on iPhone). The scroll-lock + right-edge fade come
+     from the shared :where() rule above this @media block, so we
+     only need the layout-specific bits here.
+     The 4 px vertical padding gives the pills clearance for the
+     focus ring without touching the bar's outer height. */
   .media-filter-bar{
-    flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;
-    scrollbar-width:none;scroll-snap-type:x proximity;
-    padding:4px 12px;margin:0 -12px;
+    flex-wrap:nowrap;
+    padding:4px 0;
+    margin:0;
   }
-  .media-filter-bar::-webkit-scrollbar{display:none}
   .media-pill{scroll-snap-align:start;flex-shrink:0}
 
   /* Pagination pills bumped from 32×32 to 40×40 with more gap so
