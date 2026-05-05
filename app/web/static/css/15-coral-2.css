@@ -102,7 +102,7 @@ select option{background:#1e1e1e;color:var(--text)}
 .ct-mr-chip--cpu{background:rgba(250,204,21,.14);color:#facc15}
 .ct-mr-chip--off{background:rgba(255,255,255,.06);color:var(--muted)}
 .ct-mr-ms{font-size:10px;color:var(--muted);font-family:ui-monospace,monospace;margin-left:auto}
-.ct-mr-file{font-size:10px;color:var(--muted);font-family:ui-monospace,monospace;display:block;margin-bottom:6px;word-break:break-all;background:none;padding:0;opacity:.75}
+.ct-mr-file{font-size:10px;color:var(--muted);font-family:ui-monospace,monospace;display:block;margin-bottom:6px;min-width:0;overflow-wrap:anywhere;word-break:normal;background:none;padding:0;opacity:.75}
 .ct-mr-file--missing{font-style:italic;opacity:.55}
 .ct-mr-empty{font-size:11px;color:var(--muted);font-style:italic;padding:4px 0}
 .ct-mr-empty--err{color:#fca5a5;font-style:normal}
@@ -125,7 +125,7 @@ select option{background:#1e1e1e;color:var(--text)}
 .mpair-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px}
 .mpair-name-block{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
 .mpair-name{font-family:ui-monospace,monospace;font-weight:700;font-size:12px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.mpair-files{font-family:ui-monospace,monospace;font-size:10px;color:var(--muted);opacity:.75;line-height:1.35;word-break:break-all}
+.mpair-files{font-family:ui-monospace,monospace;font-size:10px;color:var(--muted);opacity:.75;line-height:1.35;min-width:0;overflow-wrap:anywhere;word-break:normal}
 .mpair-labels{font-size:10px;color:var(--muted);font-family:ui-monospace,monospace;flex-shrink:0}
 .mpair-labels--missing{color:#f59e0b}
 .mpair-desc{font-size:11px;color:var(--muted);line-height:1.35;margin-bottom:8px}

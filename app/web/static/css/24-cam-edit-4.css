@@ -12,7 +12,8 @@
   text-transform:uppercase;letter-spacing:.08em}
 .cam-id-preview-value{
   font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  font-size:13px;color:#cfe1ee;word-break:break-all
+  font-size:13px;color:#cfe1ee;
+  min-width:0;overflow-wrap:anywhere;word-break:normal
 }
 .cam-id-preview-hint{font-size:10.5px;color:var(--muted);font-style:italic}
 
