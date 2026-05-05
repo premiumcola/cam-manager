@@ -14,11 +14,19 @@
 .cam-tab-recovery-btn{
   margin-left:auto;flex-shrink:0;position:sticky;right:0;
   display:inline-flex;align-items:center;justify-content:center;
-  width:44px;height:44px;border:none;background:transparent;
+  width:44px;height:44px;border:none;
+  /* Opaque background tracks the surrounding cam-item surface so when
+     "Alerting" / "Zonen" scroll past, they hide cleanly behind the
+     button instead of blending into a tangled mess at the right edge.
+     The .editing variant lifts the surface to #2a2a2a (matches the
+     active card hover) so the button stays cohesive there too. */
+  background:var(--surface);
   color:var(--muted);cursor:pointer;border-radius:10px;
   transition:color .2s,background .2s;align-self:center;
+  z-index:2;
   /* Sticky right pin so it stays visible while the tab list scrolls. */
 }
+.cam-item.editing .cam-tab-recovery-btn{background:#2a2a2a}
 .cam-tab-recovery-btn:hover{background:rgba(255,255,255,.05);color:var(--text)}
 .cam-tab-recovery-btn svg{position:relative;z-index:1}
 .cam-tab-recovery-btn .cam-tab-recovery-badge{display:none}

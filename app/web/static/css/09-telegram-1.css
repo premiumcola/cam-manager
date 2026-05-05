@@ -33,7 +33,13 @@
    normal text weight 700 with a 2px bottom border in the accent colour
    sitting on top of the shared divider line. Icons inside tabs inherit
    colour from the button so they tint automatically. */
-.cam-tab-bar{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;border-bottom:1px solid rgba(255,255,255,.06);padding:0;margin-bottom:14px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+/* Touch-scroll behaviour (overflow-x, pan-x lock, right-edge fade,
+   scroll-snap) lives in the shared :where() rule in 25-mobile.css;
+   we only carry the layout/visual bits here.
+   margin-top creates breathing room between the card-head row
+   (toggle / Verbinden / trash / chevron) and this strip — without
+   it, the two rows visually fuse on iPhone. */
+.cam-tab-bar{display:flex;gap:4px;flex-wrap:nowrap;border-bottom:1px solid rgba(255,255,255,.06);padding:0;margin:14px 0 14px}
 .cam-tab-bar::-webkit-scrollbar{display:none;width:0;height:0}
 .cam-tab-btn{display:inline-flex;align-items:center;gap:6px;padding:10px 14px;min-width:80px;border:none;border-bottom:2px solid transparent;background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:color .15s,background .15s,border-color .15s;margin-bottom:-1px;flex-shrink:0}
 .cam-tab-btn:hover{background:rgba(255,255,255,.03);color:var(--text)}

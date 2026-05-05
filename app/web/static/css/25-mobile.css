@@ -33,7 +33,7 @@ button,[role="button"],a,input,select,textarea{-webkit-tap-highlight-color:trans
        toggles a `.is-end` class once the strip is scrolled all the
        way; matching :not() drops the mask so the last tab isn't
        cosmetically faded when fully visible. */
-:where(.set-tabs,.coral-tabs,.erk-sim-tabs,.cam-recovery-tabs,.media-filter-bar){
+:where(.set-tabs,.coral-tabs,.erk-sim-tabs,.cam-recovery-tabs,.media-filter-bar,.cam-tab-bar){
   overflow-x:auto;
   overflow-y:hidden;
   touch-action:pan-x;
@@ -43,14 +43,14 @@ button,[role="button"],a,input,select,textarea{-webkit-tap-highlight-color:trans
   scroll-snap-type:x proximity;
   scrollbar-width:none;
 }
-:where(.set-tabs,.coral-tabs,.erk-sim-tabs,.cam-recovery-tabs,.media-filter-bar)::-webkit-scrollbar{
+:where(.set-tabs,.coral-tabs,.erk-sim-tabs,.cam-recovery-tabs,.media-filter-bar,.cam-tab-bar)::-webkit-scrollbar{
   display:none;
 }
 /* Right-edge fade — visible only while there is more content to the
    right. The 24 px transparent ramp sits flush against the strip
    edge so it reads as "this scrolls" without obscuring tab labels.
    `.is-end` lands when JS detects the strip is at scrollLeft-max. */
-:where(.set-tabs,.coral-tabs,.erk-sim-tabs,.cam-recovery-tabs,.media-filter-bar):not(.is-end){
+:where(.set-tabs,.coral-tabs,.erk-sim-tabs,.cam-recovery-tabs,.media-filter-bar,.cam-tab-bar):not(.is-end){
   -webkit-mask-image:linear-gradient(
     to right,
     #000 0,
