@@ -10,45 +10,44 @@
 }
 .hero-actions{display:flex;gap:10px}
 .hero button,.form button{padding:12px 16px;border:0;border-radius:14px;background:var(--accent);color:white;font-weight:700;min-height:40px}
+/* Title + subtitle now sit on a single row on desktop. The wrap is
+   row-flex with gap; the subtitle is a sibling of the title and
+   inherits its baseline. On narrow widths (≤ 480 px) the row wraps
+   so the subtitle drops below — desktop reads compact, iPhone
+   stays clean. */
 .hero-title-wrap{
   flex:1;min-width:0;
-  display:flex;flex-direction:column;gap:2px;
+  display:flex;flex-direction:row;align-items:baseline;
+  flex-wrap:wrap;
+  gap:6px 14px;
 }
 .hero-title{
   margin:0;
   font-size:30px;font-weight:800;
   letter-spacing:-.01em;line-height:1.0;
   color:#fff;
-  display:inline-flex;align-items:center;gap:0;
+  display:inline-flex;align-items:center;gap:8px;
 }
 .hero-tam,.hero-spy{ color:#fff; }
-/* The hyphen character stays in normal flow; the squirrel mini sits
-   above it via absolute positioning anchored to the .hero-hyphen
-   inline-block. */
 .hero-hyphen{
   color:#fff;
-  position:relative;
   display:inline-block;
   width:.42em;
   text-align:center;
 }
-.hero-squirrel-mini{
-  position:absolute;
-  left:50%;
-  top:-.55em;
-  transform:translateX(-50%);
-  width:.9em;height:.9em;
-  background-image:url('/static/squirrel-mini.svg');
-  background-size:contain;background-repeat:no-repeat;background-position:center;
-  pointer-events:none;
-  animation:heroSquirrelIdle 4s ease-in-out infinite;
+/* Brand glyph — inline SVG sized to the title's cap height. Uses
+   currentColor so the muted brand tone tracks any future title
+   recolour. flex-shrink:0 protects the icon when the row wraps. */
+.hero-brand-glyph{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:1em;height:1em;
+  color:rgba(255,255,255,.92);
+  flex-shrink:0;
 }
-@keyframes heroSquirrelIdle{
-  0%,100%{ transform:translate(-50%,0) rotate(0deg); }
-  50%   { transform:translate(-50%,-1.5px) rotate(-3deg); }
-}
-@media (prefers-reduced-motion: reduce){
-  .hero-squirrel-mini{ animation:none; }
+.hero-brand-glyph svg{
+  width:100%;height:100%;display:block;
 }
 .hero-subtitle{
   margin:0;
