@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     # Type-only imports — no runtime dependency, so blueprints that
     # `from . import app_state` don't drag the heavy submodules into
     # their import path.
+    from .bird_dossiers import BirdDossierService
     from .camera_runtime import CameraRuntime
     from .cat_identity import IdentityRegistry
     from .mqtt_service import MQTTService
@@ -50,6 +51,7 @@ settings: SettingsStore | None = None
 cat_registry: IdentityRegistry | None = None
 person_registry: IdentityRegistry | None = None
 timelapse_builder: TimelapseBuilder | None = None
+bird_dossiers: BirdDossierService | None = None
 
 # ── Services (mutable — rebuild_services() reassigns) ─────────────────────
 mqtt_service: MQTTService | None = None

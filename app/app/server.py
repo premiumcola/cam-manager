@@ -312,6 +312,11 @@ person_registry = IdentityRegistry(storage_root / "person_registry.json", thresh
 app_state.person_registry = person_registry
 timelapse_builder = TimelapseBuilder(storage_root)
 app_state.timelapse_builder = timelapse_builder
+# F08 dossier service — owns storage/bird_dossiers.json. Camera runtimes
+# call its on_new_species hook from the motion-finalize path; the API
+# layer reads via app_state.bird_dossiers and triggers manual refetches.
+from .bird_dossiers import BirdDossierService as _BirdDossierService
+app_state.bird_dossiers = _BirdDossierService(storage_root / "bird_dossiers.json")
 mqtt_service = None
 telegram_service = None
 weather_service = None

@@ -543,6 +543,27 @@ class RecordingMixin:
         except Exception as _qe:
             log.debug("[%s] quest re-eval skipped: %s", self.camera_id, _qe)
 
+        # Bird dossier hook (F08). For every detection in this event
+        # carrying a `species_latin`, register it with the dossier
+        # service — first sighting kicks off a Wikipedia + Xeno-canto
+        # fetch, repeats just bump the counter. Late-binding via
+        # app_state so the runtime keeps working when the service
+        # isn't wired (e.g. older configs).
+        try:
+            from .. import app_state as _app_state
+            svc = getattr(_app_state, "bird_dossiers", None)
+            if svc is not None:
+                seen_latin: set[str] = set()
+                for det in meta.get("detections") or []:
+                    latin = (det.get("species_latin") or "").strip()
+                    if not latin or latin in seen_latin:
+                        continue
+                    seen_latin.add(latin)
+                    common_de = det.get("species") or None
+                    svc.on_new_species(latin, common_de, event_id, self.camera_id)
+        except Exception as _de:
+            log.debug("[%s] dossier hook skipped: %s", self.camera_id, _de)
+
         # Telegram — gate the event through the same camera-level switches
         # the old code respected (armed, zone send_telegram, telegram_enabled,
         # notify-from-alarm-profile), then hand the event to the push system

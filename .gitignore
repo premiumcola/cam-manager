@@ -27,6 +27,10 @@ app/storage/person_registry.json
 storage/achievements.json
 app/storage/achievements.json
 
+# F08 bird dossiers - per-install personal field guide
+storage/bird_dossiers.json
+app/storage/bird_dossiers.json
+
 # Logs - may contain RTSP URLs with credentials, IPs, timestamps
 storage/logs/
 app/storage/logs/
