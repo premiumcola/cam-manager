@@ -95,7 +95,11 @@ class SunTimelapseMixin:
         try:
             return [
                 j.id for j in self._scheduler.get_jobs()
-                if j.id.startswith("sun_tl_capture_") or j.id.startswith("sun_tl_dnov_")
+                if (
+                    j.id.startswith("sun_tl_capture_")
+                    or j.id.startswith("sun_tl_dnov_")
+                    or j.id.startswith("sun_tl_dnrev_")
+                )
             ]
         except Exception:
             return []
@@ -153,15 +157,30 @@ class SunTimelapseMixin:
                 registered.append(
                     f"{cam_name} {phase} {sun_dt.strftime('%H:%M')} (window {window} min)"
                 )
-                # Optional day/night override: force the camera into Color
-                # mode N minutes before the capture starts so the cam's
-                # internal IR-cut decision doesn't snap-flip mid-window.
-                # Reverted to "Auto" (or "Black&White" if revert == "off")
-                # at the end of _run_sun_capture.
+                # Optional day/night override. Two scheduled jobs frame
+                # the capture window symmetrically:
+                #   - LEAD-IN at (start_dt - lead_min): force "Color"
+                #     so the camera's internal IR-cut doesn't sit in
+                #     Black&White when capture begins.
+                #   - REVERT at (end_dt + lead_min): restore "Auto" /
+                #     "Black&White" only AFTER the window has closed
+                #     plus the same lead buffer.
+                # Hard invariant: no day/night flip may fire inside the
+                # active recording window. Anchoring both jobs to
+                # window bounds (NOT to the sun event itself) is what
+                # guarantees this — anchoring to sun_dt would bracket
+                # only a 30-min slice of a 60-min window and let the
+                # camera flip mid-recording.
                 dnov = pcfg.get("daynight_override") or {}
                 if dnov.get("enabled"):
                     lead_min = max(1, min(15, int(dnov.get("lead_min", 5) or 5)))
                     override_at = start_dt - timedelta(minutes=lead_min)
+                    revert_at = _end_dt + timedelta(minutes=lead_min)
+                    revert_mode = (
+                        "Black&White"
+                        if dnov.get("revert", "auto") == "off"
+                        else "Auto"
+                    )
                     if not (cam.get("rtsp_url") or "").strip():
                         log.warning(
                             "[weather] %s %s: no rtsp_url, cannot infer Reolink host — daynight override skipped",
@@ -180,6 +199,17 @@ class SunTimelapseMixin:
                         )
                         registered.append(
                             f"{cam_name} {phase} daynight→Color @{override_at.strftime('%H:%M')}"
+                        )
+                        # Revert job anchored to window-end + lead_min.
+                        rv_key = f"sun_tl_dnrev_{cam_id}_{phase}_{today.isoformat()}"
+                        self._scheduler.add_job(
+                            self._apply_daynight_override,
+                            DateTrigger(run_date=revert_at),
+                            id=rv_key, replace_existing=True,
+                            args=[cam_id, revert_mode, phase, lead_min],
+                        )
+                        registered.append(
+                            f"{cam_name} {phase} daynight→{revert_mode} @{revert_at.strftime('%H:%M')}"
                         )
         if registered:
             log.info("[weather] Jobs registered: %s", " · ".join(registered))
@@ -255,22 +285,15 @@ class SunTimelapseMixin:
         ).start()
 
     def _run_sun_capture(self, cam_id: str, phase: str, sun_dt: datetime, pcfg: dict):
-        """Wrapper that guarantees the optional day/night override is
-        reverted on every exit path — normal completion, early bail-out,
-        encode crash. The revert call itself is best-effort; a failed
-        revert leaves the cam in Color until the next sun_tl run or a
-        manual reset, but never fails the just-completed timelapse."""
-        try:
-            self._run_sun_capture_inner(cam_id, phase, sun_dt, pcfg)
-        finally:
-            dnov = pcfg.get("daynight_override") or {}
-            if dnov.get("enabled"):
-                revert_mode = "Black&White" if dnov.get("revert", "auto") == "off" else "Auto"
-                try:
-                    self._apply_daynight_override(cam_id, revert_mode, phase=phase)
-                except Exception as e:
-                    log.warning("[weather] daynight revert crash %s %s: %s",
-                                cam_id, phase, e)
+        """Thin entry-point. The optional day/night revert used to live
+        here as a finally-block call that fired the moment capture
+        ended — but that violated the "no flip during recording window"
+        invariant on the boundary. The revert is now an APScheduler
+        DateTrigger registered alongside the lead-in (see
+        _register_sun_jobs), anchored to (window_end + lead_min).
+        That keeps the schedule symmetric and means a crashed capture
+        still gets a clean revert at the proper time."""
+        self._run_sun_capture_inner(cam_id, phase, sun_dt, pcfg)
 
     def _run_sun_capture_inner(self, cam_id: str, phase: str, sun_dt: datetime, pcfg: dict):
         from ..frame_helpers import CaptureStats, grab_valid_frame
