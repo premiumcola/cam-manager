@@ -357,6 +357,39 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
   img,video{max-width:100%;height:auto}
 }
 
+/* ── Mediathek header (mobile) ─────────────────────────────────────────
+   Desktop has the title and the action-button group on one row with
+   margin-left:auto pushing the buttons right. On iPhone the row
+   collapses: the .mst-text rule in 18-telegram-2.css keeps the title
+   on a single line with text-overflow:ellipsis (needed for the long
+   per-camera drilldown title), so when the buttons take their space
+   the title gets squeezed down to "M…". On mobile we stack the head
+   vertically — title in full, buttons row below — and relax the
+   ellipsis since wrapping is fine here. */
+@media (max-width:768px){
+  #media .section-head{flex-direction:column;align-items:stretch;gap:10px}
+  #media .media-section-title{max-width:100%;width:100%}
+  #media .media-section-title .mst-text{
+    white-space:normal;overflow:visible;text-overflow:clip;
+    word-break:normal;overflow-wrap:break-word;
+  }
+  .media-section-actions{
+    display:flex;gap:8px;flex-wrap:wrap;align-items:stretch;
+    margin-left:0;width:100%;
+  }
+  /* Touch-target floor: ≥44 px high, generous tap padding. The base
+     .btn-action min-height is 38 px which is below iOS HIG. */
+  .media-section-actions .btn,
+  .media-section-actions .btn-action{
+    min-height:44px;padding:10px 14px;flex:1 1 auto;justify-content:center;
+  }
+}
+/* Desktop / tablet: keep the inline-row layout the page used to have
+   when the inline style="margin-left:auto" lived on the div. */
+.media-section-actions{
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-left:auto;
+}
+
 /* Mobile perf — drop backdrop-filter on the high-density overlay pills.
    Each blur layer costs a compositor pass; on a card-heavy dashboard this
    adds up to dropped frames on iPhone SE. The pills stay readable as
