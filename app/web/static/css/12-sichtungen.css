@@ -66,16 +66,33 @@
 .ach-drill-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;padding:12px 14px 14px 14px}
 .ach-drill-more{display:flex;justify-content:center;padding:0 14px 14px}
 
-/* Mobile-dense Sichtungen grid: 6 base tracks, regular tiles span 2
-   (3 per row), XL squirrel medals span 3 (2 per row). Fixed columns
-   instead of auto-fill so we don't get half-empty rows. Desktop's
-   auto-fill layout above stays as-is. */
+/* Mobile-dense Sichtungen grid. iPhone-SE width (375 px) keeps the
+   3-per-row layout — at 4 cols the cell becomes ~78 px which still
+   fits a 64 px medal but leaves the label tight to read. From the
+   iPhone 15 Pro width up (≥390 px) the grid expands to 4 per row
+   with larger medals so the screen real estate that was previously
+   wasted on left/right margins becomes medal area instead.
+   Fixed columns (not auto-fill) so we never get half-empty rows. */
 @media (max-width:768px){
   .ach-cards-grid{grid-template-columns:repeat(6,1fr);gap:6px}
   .ach-card{grid-column:span 2;padding:6px 2px 4px}
   .ach-card--xl{grid-column:span 3}
   .medal-wrap{width:64px;height:64px;margin-top:6px}
   .ach-card--xl .medal-wrap{width:88px;height:88px}
+}
+/* iPhone 15 / 15 Pro / Pro Max width band — denser 4-per-row layout
+   so the lateral whitespace becomes medal area instead. Uses an 8-
+   track base so regular tiles span 2 (4 per row) and XL squirrel
+   tiles span 4 (2 per row) — keeps the existing "XL is twice the
+   width" relationship. iPhone SE (≤375 px) stays on the 6-track
+   3-per-row layout above so the 44 px touch-target floor isn't
+   risked by tighter cells. */
+@media (min-width:390px) and (max-width:768px){
+  .ach-cards-grid{grid-template-columns:repeat(8,1fr);gap:8px}
+  .ach-card{grid-column:span 2;padding:6px 2px 4px}
+  .ach-card--xl{grid-column:span 4}
+  .medal-wrap{width:72px;height:72px;margin-top:6px}
+  .ach-card--xl .medal-wrap{width:104px;height:104px}
   .medal-name{
     font-size:11px;
     width:100%;
