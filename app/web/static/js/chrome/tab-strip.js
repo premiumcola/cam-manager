@@ -12,7 +12,7 @@
 //   querySelectorAll at boot would miss the lazy ones, so the
 //   observer adopts strips as they appear.
 
-const SELECTOR = '.set-tabs, .coral-tabs, .erk-sim-tabs, .cam-recovery-tabs, .media-filter-bar, .cam-tab-bar';
+const SELECTOR = '.set-tabs, .coral-tabs, .erk-sim-tabs, .cam-recovery-tabs, .media-filter-bar, .cam-tab-bar, .ws-filter-bar';
 const _adopted = new WeakSet();
 
 function _updateEndState(strip){

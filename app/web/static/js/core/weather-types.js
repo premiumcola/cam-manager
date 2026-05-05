@@ -10,6 +10,10 @@
 // (sightings, chart, settings, map, recaps) stay in legacy.js until a
 // dedicated weather extraction stage.
 
+// `de`      = short label shown on chips, badges, and the gallery pill row
+// `de_full` = full German label, used for aria-label / title and any
+//             surface where space is not the constraint. The pill
+//             renderer falls back to `de` when `de_full` is absent.
 export const WEATHER_TYPES = {
   thunder:    { de: 'Gewitter',        color: '#7faec9',
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L3 14h7l-1 8 11-14h-7l0-6z"/></svg>' },
@@ -19,13 +23,13 @@ export const WEATHER_TYPES = {
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M5 7l14 10M5 17l14-10"/></svg>' },
   fog:        { de: 'Nebel',           color: '#6d7787',
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h16M3 12h18M5 16h14M7 20h10"/></svg>' },
-  sunset:     { de: 'Sonnenuntergang', color: '#d4823a',
+  sunset:     { de: 'Untergang',       de_full: 'Sonnenuntergang', color: '#d4823a',
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="4"/><path d="M12 4v3M5.6 7.6l2 2M2 14h3M19 14h3M16.4 9.6l2-2M3 20h18"/></svg>' },
   // Tägliche Sonnen-Timelapses — eigener Sub-Typ in der Wetter-Mediathek,
   // unabhängig vom score-gefilterten "sunset"-Wetter-Ereignis-Clip.
-  sun_timelapse_rise: { de: 'Sonnenaufgang', color: '#e89540',
+  sun_timelapse_rise: { de: 'Aufgang', de_full: 'Sonnenaufgang', color: '#e89540',
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="15" r="3.5"/><path d="M12 7v-4M5 11l-2-2M19 11l2-2M3 19h18"/><polyline points="9,5 12,2 15,5"/></svg>' },
-  sun_timelapse_set:  { de: 'Sonnenuntergang TL', color: '#d4823a',
+  sun_timelapse_set:  { de: 'Untergang', de_full: 'Sonnenuntergang (Timelapse)', color: '#d4823a',
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="15" r="3.5"/><path d="M12 7v-4M5 11l-2-2M19 11l2-2M3 19h18"/><polyline points="9,1 12,4 15,1"/></svg>' },
   // Wetter-Ereignis-Timelapses — drei Trigger-Subtypen, ein gemeinsamer
   // 60-min-Capture-Mechanismus. Eigener event_type je Trigger, damit

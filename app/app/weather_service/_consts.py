@@ -22,12 +22,16 @@ log = logging.getLogger("app.weather_service")
 
 # ── Public mappings (consumed by Phase-2 UI imports) ────────────────────────
 
+# Short labels chosen for terse display in Telegram chips, the
+# heartbeat status line, and the weather settings menu. Keep these
+# in sync with WEATHER_TYPES.de in app/web/static/js/core/weather-types.js
+# — the JS pill renderer also uses these as the visible chip text.
 EVENT_LABEL_DE: dict[str, str] = {
     "thunder":    "Gewitter",
     "heavy_rain": "Starkregen",
     "snow":       "Schnee",
     "fog":        "Nebel",
-    "sunset":     "Sonnenuntergang",
+    "sunset":     "Untergang",
 }
 
 EVENT_ICON_HEX: dict[str, str] = {

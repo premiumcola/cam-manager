@@ -95,7 +95,12 @@ function _renderWeatherFilterPills(){
     const active = sel.has(t);
     const cls = `media-pill cat-filter-btn${active ? ' active' : ''}${empty ? ' media-pill--empty' : ''}`;
     const cntChip = cnt > 0 ? `<span class="mp-count" style="pointer-events:none">${cnt}</span>` : '';
-    return `<button type="button" class="${cls}" data-type="weather" data-val="${esc(t)}" style="--cb:${meta.color}"${empty ? ' tabindex="-1" aria-disabled="true"' : ''}><span class="cfb-icon" style="pointer-events:none;color:${meta.color}">${meta.icon}</span><span style="pointer-events:none">${esc(meta.de)}</span>${cntChip}</button>`;
+    // Visible text: short `de` label. Tooltip + accessible name: full
+    // `de_full` (falls back to `de` when not set) so screen readers and
+    // hover tooltips keep the long form even when the chip itself is
+    // truncated for space.
+    const fullLbl = meta.de_full || meta.de;
+    return `<button type="button" class="${cls}" data-type="weather" data-val="${esc(t)}" title="${esc(fullLbl)}" aria-label="${esc(fullLbl)}${cnt > 0 ? `, ${cnt} Ereignisse` : ''}" style="--cb:${meta.color}"${empty ? ' tabindex="-1" aria-disabled="true"' : ''}><span class="cfb-icon" style="pointer-events:none;color:${meta.color}">${meta.icon}</span><span style="pointer-events:none">${esc(meta.de)}</span>${cntChip}</button>`;
   }).join('');
   if (sel.size === 0) {
     html += `<span class="media-pill media-pill--status" aria-disabled="true">alle Filter aus</span>`;
@@ -109,10 +114,25 @@ function _renderWeatherFilterPills(){
       if (!(state.weather.filter instanceof Set)) state.weather.filter = new Set();
       if (state.weather.filter.has(val)) state.weather.filter.delete(val);
       else state.weather.filter.add(val);
+      // Filter change can shrink the result set below the current
+      // page — reset to page 0 so the user sees the freshest items
+      // instead of an empty trailing page.
+      state.weather.page = 0;
       // No fetch needed — filtering is client-side now.
       renderWeatherSightings();
     });
   });
+}
+
+// Viewport-aware page size: tight on phones (4 = 2×2 mosaic that
+// matches the .ws-grid 2-col mobile layout), comfortable on tablets,
+// generous on desktop. Recomputed on every render so a window resize
+// adjusts the page count without a reload.
+function _weatherPageSize(){
+  const w = window.innerWidth || 1200;
+  if (w <= 768)  return 4;
+  if (w <= 1180) return 8;
+  return 12;
 }
 
 function _renderWeatherGrid(){
@@ -128,9 +148,26 @@ function _renderWeatherGrid(){
   if (!items.length) {
     grid.innerHTML = '';
     if (empty) empty.hidden = false;
+    _renderWeatherPagination(0, 0);
     return;
   }
   if (empty) empty.hidden = true;
+  // Slice the filtered list for the current page. The renderer below
+  // walks `items` so we replace it in-place; the original full list
+  // stays in state.weather.items for the next filter toggle.
+  const pageSize = _weatherPageSize();
+  const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
+  let page = Number.isInteger(state.weather.page) ? state.weather.page : 0;
+  if (page >= pageCount) page = pageCount - 1;
+  if (page < 0) page = 0;
+  state.weather.page = page;
+  const sliceStart = page * pageSize;
+  const visibleItems = items.slice(sliceStart, sliceStart + pageSize);
+  // The renderer expects the full `items` for click-into-lightbox idx
+  // semantics. Surface the visible slice here but preserve the full
+  // filtered list as state.weather.itemsFiltered for the lightbox to
+  // index into via the absolute idx attribute.
+  state.weather.itemsFiltered = items;
   // Pre-compute the active-camera id set so each sighting card can
   // decide whether to actually request its thumb. Sightings recorded
   // before a manuf/model edit carry the OLD canonical cam_id in their
@@ -140,7 +177,11 @@ function _renderWeatherGrid(){
   // clean — the card still renders with a placeholder so the user can
   // see the orphan exists and decide whether to delete it.
   const _activeCamIds = new Set((state.cameras || []).map(c => c.id));
-  grid.innerHTML = items.map((s, idx) => {
+  // Render only the visible slice for the current page; data-idx
+  // carries the absolute index in `items` (filtered list) so the
+  // lightbox can navigate prev/next across the whole filtered set.
+  grid.innerHTML = visibleItems.map((s, localIdx) => {
+    const idx = sliceStart + localIdx;
     const meta = WEATHER_TYPES[s.event_type] || { de: s.event_type, color: '#94a3b8', icon: '' };
     // For sun-timelapse sightings the user wants the actual sunrise /
     // sunset time on the card, not the window-end timestamp. sun_event_at
@@ -186,6 +227,7 @@ function _renderWeatherGrid(){
   grid.querySelectorAll('.ws-card').forEach(card => {
     card.addEventListener('click', () => openWeatherLightbox(parseInt(card.dataset.idx, 10)));
   });
+  _renderWeatherPagination(items.length, pageSize);
   // Score badges fire a toast with the metric explanation on tap —
   // title= alone is desktop-only. stopPropagation keeps the badge tap
   // from also opening the card lightbox.
@@ -200,10 +242,66 @@ function _renderWeatherGrid(){
   });
 }
 
+// Page-pill row underneath the grid. Re-uses the .media-pagination
+// look from the main Library so the visual rhythm matches. We render
+// numeric pills (max 5 visible) plus prev/next chevrons; for 1-page
+// lists the strip stays hidden via [hidden]. The page index lives on
+// state.weather.page and is read by _renderWeatherGrid on every call.
+function _renderWeatherPagination(totalItems, pageSize){
+  const pag = byId('weatherSightingsPagination');
+  if (!pag) return;
+  if (!totalItems || totalItems <= pageSize) {
+    pag.hidden = true;
+    pag.innerHTML = '';
+    return;
+  }
+  pag.hidden = false;
+  const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
+  const cur = Number.isInteger(state.weather.page) ? state.weather.page : 0;
+  // Window of up to 5 numeric pills around the current page.
+  const winStart = Math.max(0, Math.min(cur - 2, pageCount - 5));
+  const winEnd = Math.min(pageCount, winStart + 5);
+  const pills = [];
+  pills.push(`<button type="button" class="page-pill" data-act="prev" ${cur === 0 ? 'disabled' : ''} aria-label="Vorherige Seite">‹</button>`);
+  for (let i = winStart; i < winEnd; i++) {
+    pills.push(`<button type="button" class="page-pill${i === cur ? ' active' : ''}" data-go="${i}">${i + 1}</button>`);
+  }
+  pills.push(`<button type="button" class="page-pill" data-act="next" ${cur >= pageCount - 1 ? 'disabled' : ''} aria-label="Nächste Seite">›</button>`);
+  pag.innerHTML = pills.join('');
+  pag.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      const act = btn.dataset.act;
+      let next = state.weather.page || 0;
+      if (act === 'prev') next = Math.max(0, next - 1);
+      else if (act === 'next') next = Math.min(pageCount - 1, next + 1);
+      else if (btn.dataset.go !== undefined) next = parseInt(btn.dataset.go, 10);
+      if (next === state.weather.page) return;
+      state.weather.page = next;
+      _renderWeatherGrid();
+      // Scroll the grid back into view so the user sees the new page,
+      // not whatever scroll position the strip was at.
+      byId('weatherSightingsGrid')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+}
+
+// Window resize switches the page-size band (4 → 8 → 12). Re-render
+// the grid so the user sees the right column count immediately and
+// the page index gets clamped to the new page count.
+let _wsResizeTimer = null;
+window.addEventListener('resize', () => {
+  if (_wsResizeTimer) clearTimeout(_wsResizeTimer);
+  _wsResizeTimer = setTimeout(() => { _renderWeatherGrid(); }, 150);
+}, { passive: true });
+
 let _wsLbIdx = -1;
 
 function openWeatherLightbox(idx){
-  const items = state.weather.items || [];
+  // Cards carry an absolute index into the filtered list (the slice
+  // window for the current page is just a render concern). When no
+  // filter is active, itemsFiltered == items.
+  const items = state.weather.itemsFiltered || state.weather.items || [];
   if (idx < 0 || idx >= items.length) return;
   _wsLbIdx = idx;
   const s = items[idx];
@@ -234,11 +332,11 @@ function openWeatherLightbox(idx){
       if (action === 'prev') openWeatherLightbox(_wsLbIdx - 1);
       if (action === 'next') openWeatherLightbox(_wsLbIdx + 1);
       if (action === 'download') {
-        const cur = state.weather.items[_wsLbIdx];
+        const cur = (state.weather.itemsFiltered || state.weather.items)[_wsLbIdx];
         if (cur) window.open(`/api/weather/sightings/${encodeURIComponent(cur.id)}/clip`, '_blank');
       }
       if (action === 'delete') {
-        const cur = state.weather.items[_wsLbIdx];
+        const cur = (state.weather.itemsFiltered || state.weather.items)[_wsLbIdx];
         if (cur) {
           showConfirm('Wetter-Ereignis wirklich löschen?').then(ok => {
             if (!ok) return;

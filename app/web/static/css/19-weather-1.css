@@ -10,13 +10,22 @@
 .ws-title{display:inline-flex;align-items:center;gap:8px;font-size:18px;font-weight:700;color:#7faec9}
 .ws-title svg{flex-shrink:0;color:#7faec9}
 .ws-subtitle{font-size:12px;color:var(--muted);font-style:italic}
-.ws-filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+/* Filter pill row. Touch-scroll behaviour (overflow-x, pan-x lock,
+   right-edge fade, scroll-snap, hidden scrollbar) lives in the
+   shared :where() rule in 25-mobile.css — same component as the
+   main Library and Setup tab strips, so the visual+gesture
+   language stays consistent across the app. flex-wrap:nowrap is
+   required for the horizontal scroll to engage; without it the
+   pills would wrap across multiple rows on iPhone. */
+.ws-filter-bar{display:flex;flex-wrap:nowrap;gap:8px;margin-bottom:18px}
 .ws-empty{padding:18px 8px;text-align:center;color:var(--muted);font-size:13px;background:transparent}
 
-/* Galerie 3-spaltig auf Desktop, 2 auf Tablet, 1 auf iPhone */
+/* Galerie 3-spaltig auf Desktop, 2 auf Tablet, 2 auf iPhone (was 1).
+   The 2-column phone grid mirrors the main Library cadence — 4
+   thumbnails per page (2×2) feel like cards, not letterboxed full-
+   width tiles. */
 .ws-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-@media (max-width:980px){.ws-grid{grid-template-columns:repeat(2,1fr)}}
-@media (max-width:640px){.ws-grid{grid-template-columns:1fr}}
+@media (max-width:980px){.ws-grid{grid-template-columns:repeat(2,1fr);gap:10px}}
 
 .ws-card{cursor:pointer;border-radius:12px;overflow:hidden;background:rgba(255,255,255,0.03);transition:background .15s,transform .15s}
 .ws-card:hover{background:rgba(127,174,201,0.08)}
