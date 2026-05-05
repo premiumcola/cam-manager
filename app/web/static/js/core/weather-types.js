@@ -23,8 +23,11 @@ export const WEATHER_TYPES = {
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M5 7l14 10M5 17l14-10"/></svg>' },
   fog:        { de: 'Nebel',           color: '#6d7787',
                 icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h16M3 12h18M5 16h14M7 20h10"/></svg>' },
-  sunset:     { de: 'Untergang',       de_full: 'Sonnenuntergang', color: '#d4823a',
-                icon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="14" r="4"/><path d="M12 4v3M5.6 7.6l2 2M2 14h3M19 14h3M16.4 9.6l2-2M3 20h18"/></svg>' },
+  // `sunset` (the score-based raw event clip) was removed — sunrise +
+  // sunset content lives only in the sun_timelapse_* pipeline below.
+  // Old sightings on disk still render via the gallery's fallback
+  // ({ de: s.event_type, color: '#94a3b8', icon: '' }) so nothing
+  // 404s; they just don't surface in the filter pill row.
   // Tägliche Sonnen-Timelapses — eigener Sub-Typ in der Wetter-Mediathek,
   // unabhängig vom score-gefilterten "sunset"-Wetter-Ereignis-Clip.
   // The "TL" suffix on `de` is required: without it, sun_timelapse_set

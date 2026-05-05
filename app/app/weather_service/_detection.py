@@ -107,8 +107,15 @@ class DetectionMixin:
             return self._detect_rain_or_snow(cfg, d, "snow", "snowfall", scale=5.0)
         if evt == "fog":
             return self._detect_fog(cfg, d)
-        if evt == "sunset":
-            return self._detect_sunset(cfg, sun, d)
+        # The legacy `sunset` event-detector (raw clip when sun crossed
+        # an altitude band) is intentionally not dispatched. Sunrise +
+        # sunset content lives exclusively in the timelapse pipeline
+        # (_sun_tl) — score-based raw clips for the same astronomical
+        # events were duplicating work + producing two filter pills
+        # for one event. _detect_sunset is kept below for the moment
+        # in case a future toggle wants to re-enable it; the
+        # `sunset` constants in EVENT_LABEL_DE / WEATHER_TYPES were
+        # also dropped so no UI surfaces it.
         return False, 0.0
 
     def _detect_thunder(self, cfg: dict, d: dict) -> tuple[bool, float]:

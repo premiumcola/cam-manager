@@ -31,7 +31,10 @@ EVENT_LABEL_DE: dict[str, str] = {
     "heavy_rain": "Starkregen",
     "snow":       "Schnee",
     "fog":        "Nebel",
-    "sunset":     "Untergang",
+    # `sunset` removed — sunrise/sunset content lives only in the
+    # sun_timelapse pipeline (sun_timelapse_rise / sun_timelapse_set).
+    # The previous score-based raw "sunset event" produced a duplicate
+    # filter pill for the same astronomical event.
 }
 
 EVENT_ICON_HEX: dict[str, str] = {
@@ -39,7 +42,7 @@ EVENT_ICON_HEX: dict[str, str] = {
     "heavy_rain": "#38bdf8",  # sky-blue
     "snow":       "#e2e8f0",  # near-white
     "fog":        "#94a3b8",  # slate
-    "sunset":     "#fb923c",  # orange
+    # `sunset` color removed in lockstep with EVENT_LABEL_DE.
 }
 
 # ── History (Wetterstatistik chart backend) ────────────────────────────────
