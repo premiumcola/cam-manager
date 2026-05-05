@@ -14,10 +14,12 @@
    right-edge fade, scroll-snap, hidden scrollbar) lives in the
    shared :where() rule in 25-mobile.css — same component as the
    main Library and Setup tab strips, so the visual+gesture
-   language stays consistent across the app. flex-wrap:nowrap is
-   required for the horizontal scroll to engage; without it the
-   pills would wrap across multiple rows on iPhone. */
-.ws-filter-bar{display:flex;flex-wrap:nowrap;gap:8px;margin-bottom:18px}
+   language stays consistent across the app.
+   flex-wrap:wrap by default so the pill list reads as a normal
+   filter bar on desktop (Library parity) — the mobile override in
+   25-mobile.css flips this to flex-wrap:nowrap so the strip scrolls
+   horizontally on iPhone instead. */
+.ws-filter-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
 .ws-empty{padding:18px 8px;text-align:center;color:var(--muted);font-size:13px;background:transparent}
 
 /* Galerie 3-spaltig auf Desktop, 2 auf Tablet, 2 auf iPhone (was 1).
