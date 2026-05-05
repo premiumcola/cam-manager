@@ -232,25 +232,12 @@ function _isQuestVisible(q){
   return (Date.now() - t) < 30 * 24 * 3600 * 1000;
 }
 
-export async function reevaluateQuests(){
-  const btn = byId('questsReevalBtn');
-  if (btn){
-    btn.disabled = true;
-    btn.textContent = 'Re-Eval läuft…';
-  }
-  try {
-    await j('/api/achievements/quests/reevaluate', { method: 'POST' });
-  } catch (e) {
-    // Falls /api/-Aufruf scheitert: einfach reload und das ist gut so —
-    // der Eval-Job läuft dann beim nächsten Stundentakt wieder.
-  }
-  await loadAchievements();
-  if (btn){
-    btn.disabled = false;
-    btn.textContent = 'Re-Eval';
-  }
-}
-window.reevaluateQuests = reevaluateQuests;
+// Note: the manual "Re-Eval" button used to live in the pinboard head
+// here. Removed because users had no obvious reason to click it — the
+// hourly cron in server.py and the per-event hook in
+// _recording.py::_finalize_motion_clip already keep quest progress
+// fresh. The POST /api/achievements/quests/reevaluate route is kept
+// for ops (curl / scripts), it just no longer has a UI affordance.
 
 export function renderQuestsPinboard(){
   const wrap = byId('questsPinboard');
@@ -271,8 +258,6 @@ export function renderQuestsPinboard(){
     wrap.innerHTML = `
       <div class="quests-pinboard-head">
         <h4 class="quests-pinboard-title">🎯 Saison-Quests</h4>
-        <button type="button" id="questsReevalBtn" class="btn-action quests-reeval"
-          onclick="reevaluateQuests()">Re-Eval</button>
       </div>
       <div class="quests-pinboard-empty">Aktuell keine aktiven Quests.</div>`;
     return;
@@ -306,8 +291,6 @@ export function renderQuestsPinboard(){
   wrap.innerHTML = `
     <div class="quests-pinboard-head">
       <h4 class="quests-pinboard-title">🎯 Saison-Quests</h4>
-      <button type="button" id="questsReevalBtn" class="btn-action quests-reeval"
-        onclick="reevaluateQuests()">Re-Eval</button>
     </div>
     <div class="quests-pinboard-grid">${cards}</div>`;
 }

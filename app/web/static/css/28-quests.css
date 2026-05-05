@@ -27,17 +27,6 @@
   color:rgba(var(--acc),.9);
   letter-spacing:.02em;
 }
-.quests-reeval{
-  font-size:12px;
-  padding:6px 12px;
-  border-radius:8px;
-  min-height:32px;
-  /* Match other btn-action affordances; specific opacity so the
-     button reads as a secondary action, not a primary CTA. */
-  opacity:.85;
-}
-.quests-reeval:hover:not(:disabled){opacity:1}
-.quests-reeval:disabled{opacity:.5;cursor:wait}
 .quests-pinboard-empty{
   padding:14px 16px;
   border-radius:10px;
