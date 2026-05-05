@@ -128,8 +128,17 @@ class _WetterMixin:
                 thr_str = "—"
             else:
                 thr_str = (f"{thr:.1f}" if abs(thr) < 100 else f"{thr:.0f}")
+            # Precipitation row: append the DWD intensity band so a
+            # 0.1 mm/h reading reads as "Nieselregen" instead of being
+            # nameless. Single source of truth in
+            # weather_service.precipitation_label so the gallery + the
+            # Telegram menu agree on the wording.
+            band_suffix = ""
+            if evt == "heavy_rain" and v is not None and float(v) > 0:
+                from ...weather_service import precipitation_label as _pl
+                band_suffix = f" · {_pl(v)}"
             lines.append(
-                f"{label:<11s} {status_icon} {vstr} / {thr_str} {unit}  ({pct})"
+                f"{label:<11s} {status_icon} {vstr} / {thr_str} {unit}  ({pct}){band_suffix}"
             )
         # Wind + sun extras (no threshold concept).
         wind = cur.get("wind_gusts_10m")

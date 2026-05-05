@@ -10,6 +10,23 @@ import { byId, esc } from "../core/dom.js";
 import { state } from "../core/state.js";
 import { showToast, showConfirm } from "../core/toast.js";
 import { WEATHER_TYPES } from "../core/weather-types.js";
+import { precipitationLabel } from "../core/weather-precip.js";
+
+// Pick the right human-readable label for a sighting badge. For
+// `heavy_rain` we band the actual current precipitation reading
+// (api_snapshot.precipitation) — the static "Starkregen" from
+// WEATHER_TYPES is the *event-type* name and would mislabel a card
+// captured at e.g. 0.1 mm/h. For all other event types we fall back
+// to the static WEATHER_TYPES label.
+function _weatherSightingLabel(s, meta){
+  if (s && s.event_type === 'heavy_rain') {
+    const snap = s.api_snapshot || {};
+    if (snap.precipitation !== null && snap.precipitation !== undefined) {
+      return precipitationLabel(snap.precipitation);
+    }
+  }
+  return meta.de;
+}
 import { WEATHER_FIELD_LABEL_DE, WEATHER_FIELD_UNIT_DE } from "./stats.js";
 
 async function loadWeatherSightings(filter){
@@ -146,15 +163,16 @@ function _renderWeatherGrid(){
       : 'Stärke des Wetterereignisses';
     const camName = esc(s.cam_name || s.cam_id || '');
     const camActive = _activeCamIds.has(s.cam_id);
+    const displayLabel = _weatherSightingLabel(s, meta);
     const thumbHtml = camActive
-      ? `<img class="ws-card-thumb" loading="lazy" src="/api/weather/sightings/${encodeURIComponent(s.id)}/thumb" alt="${esc(meta.de)}" onerror="this.style.opacity=0.2"/>`
+      ? `<img class="ws-card-thumb" loading="lazy" src="/api/weather/sightings/${encodeURIComponent(s.id)}/thumb" alt="${esc(displayLabel)}" onerror="this.style.opacity=0.2"/>`
       : `<div class="ws-card-thumb ws-card-thumb--orphan" aria-hidden="true"></div>`;
     return `
       <div class="ws-card${camActive ? '' : ' ws-card--orphan'}" data-idx="${idx}" data-id="${esc(s.id)}">
         <div class="ws-card-thumb-wrap">
           ${thumbHtml}
           <span class="ws-card-badge ws-card-badge--type" style="background:${meta.color}cc">
-            <span class="ws-card-badge-icon">${meta.icon}</span>${esc(meta.de)}
+            <span class="ws-card-badge-icon">${meta.icon}</span>${esc(displayLabel)}
           </span>
           ${sevPct > 0 ? `<span class="ws-card-badge ws-card-badge--score" role="button" tabindex="0" title="${esc(scoreTip)}" aria-label="${sevPct} Prozent, ${esc(scoreTip)}" data-score-tip="${esc(scoreTip)}">${sevPct}%<span class="ws-score-info" aria-hidden="true">ⓘ</span></span>` : ''}
           <span class="ws-card-play">
@@ -273,9 +291,10 @@ function _renderWsLbMeta(s){
         .filter(([_k, v]) => v !== null && v !== undefined)
         .map(([k, v]) => `<div class="ws-lb-row"><span class="ws-lb-row-key">${k === 'altitude' ? 'Höhe' : 'Azimut'}</span><span class="ws-lb-row-val">${Number(v).toFixed(1)}°</span></div>`).join('')
     : '';
+  const displayLabel = _weatherSightingLabel(s, meta);
   return `
     <div class="ws-lb-headline">
-      <span class="ws-lb-type-badge" style="background:${meta.color}33;border:1px solid ${meta.color}66;color:${meta.color}">${meta.icon || ''} ${esc(meta.de)}</span>
+      <span class="ws-lb-type-badge" style="background:${meta.color}33;border:1px solid ${meta.color}66;color:${meta.color}">${meta.icon || ''} ${esc(displayLabel)}</span>
       <span class="ws-lb-date">${esc(fullDate)}</span>
     </div>
     <div class="ws-lb-cam">📷 ${esc(s.cam_name || s.cam_id || '')}</div>

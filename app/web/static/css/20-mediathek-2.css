@@ -16,11 +16,17 @@
 .ws-lb-date{font-size:14px;font-weight:600;color:var(--text)}
 .ws-lb-cam{font-size:12px;color:var(--muted)}
 .ws-lb-section-title{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-top:4px}
+/* Weather data rows in the lightbox detail card. The grid auto-fits as
+   many columns as the shell allows; on iPhone width that is normally
+   2 columns, but the row's flex children used to overflow because they
+   had no min-width:0 — long values like "0.1 mm/h" would push the
+   right edge past the grid track. Now: the key flexes and ellipsises
+   if needed, the value never shrinks but stays inside the cell. */
 .ws-lb-rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px}
-.ws-lb-row{display:flex;justify-content:space-between;gap:8px;padding:6px 10px;background:rgba(255,255,255,0.03);border-radius:8px}
+.ws-lb-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px;background:rgba(255,255,255,0.03);border-radius:8px;min-width:0;overflow:hidden}
 .ws-lb-row--empty{justify-content:center;color:var(--muted);font-style:italic}
-.ws-lb-row-key{color:var(--muted);font-size:12px}
-.ws-lb-row-val{font-weight:600;color:var(--text);font-size:12px;font-variant-numeric:tabular-nums}
+.ws-lb-row-key{color:var(--muted);font-size:12px;min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ws-lb-row-val{font-weight:600;color:var(--text);font-size:12px;font-variant-numeric:tabular-nums;text-align:right;flex-shrink:0;white-space:nowrap}
 .ws-lb-actions{display:flex;justify-content:flex-end;gap:8px;padding-top:4px}
 .ws-lb-actions .danger-btn{color:#ef4444}
 
@@ -30,5 +36,12 @@
   .ws-lb-close{top:8px;right:8px;width:34px;height:34px}
   .ws-lb-prev,.ws-lb-next{width:38px;height:38px;font-size:24px}
   .ws-lb-meta{font-size:12px}
+  /* On iPhone-SE-class widths force a single column. minmax(140,1fr)
+     fits two cols with each track ~165 px after gaps + shell padding,
+     and once the row borders + 10 px row padding are subtracted from
+     each track the value column has ~80 px — enough for "0.1 mm/h"
+     in normal text but it gets visually cramped. One column gives
+     each row the whole shell width. */
+  .ws-lb-rows{grid-template-columns:1fr}
 }
 

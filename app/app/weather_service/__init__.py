@@ -9,6 +9,7 @@ from ._consts import (
     HISTORY_UNITS,
     migrate_sun_timelapse_layout,
 )
+from ._precip_label import precipitation_label
 from .service import WeatherService
 
 __all__ = [
@@ -21,4 +22,5 @@ __all__ = [
     "HISTORY_MAXLEN",
     "HISTORY_UNITS",
     "migrate_sun_timelapse_layout",
+    "precipitation_label",
 ]
