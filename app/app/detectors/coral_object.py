@@ -242,8 +242,15 @@ class CoralObjectDetector:
         worth seeing. Decision tree:
           - kept ≥ 1 → "[det][cam:…] ✓ erkannt: … · ✗ verworfen: …"
           - kept == 0 AND drops > 0 → "[det][cam:…] ✗ verworfen: …"
-          - kept == 0 AND drops == 0 → DEBUG "[det][cam:…] inference empty (raw=0)"
+          - kept == 0 AND drops == 0 → silent (empty scene, no signal)
         ASCII check/cross markers stand out in `docker logs` greps.
+        The previously-emitted "inference empty (raw=0)" DEBUG line is
+        deliberately dropped: the inference loop runs at ~3 Hz per
+        camera and ~99 % of frames on a quiet scene return 0 raw
+        candidates, so the line was a per-frame heartbeat with zero
+        diagnostic value. The real heartbeat in server.py already
+        confirms each runtime is alive; if a camera silently stops
+        producing frames, the [cam:…] connection logs surface that.
         """
         if kept:
             if drops:
@@ -258,8 +265,6 @@ class CoralObjectDetector:
             ordered = sorted(drops, key=lambda x: x[0].score, reverse=True)
             log.info("[det][cam:%s] ✗ verworfen: %s",
                      cam_id, self._fmt_drops(ordered))
-            return
-        log.debug("[det][cam:%s] inference empty (raw=0)", cam_id)
 
     def detect_frame_raw(self, frame: np.ndarray, threshold: float = 0.20) -> list[Detection]:
         """Run inference and return the raw model output BEFORE label
