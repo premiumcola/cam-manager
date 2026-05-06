@@ -57,6 +57,13 @@
        Safari iOS form first per CLAUDE.md. */
     -webkit-mask-image:linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
     mask-image:linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+    /* Same iOS Safari compositing dance as the dock — html/body
+       overflow-x:hidden in 25-mobile.css collapses backdrop sampling
+       on fixed descendants. Forcing an own composited layer fixes
+       the empty-blur on the top fog band the same way. */
+    isolation:isolate;
+    will-change:backdrop-filter, transform;
+    transform:translateZ(0);
     pointer-events:none;
     z-index:91;
   }
@@ -117,6 +124,26 @@
     background:rgba(31,31,35,0.72);
     -webkit-backdrop-filter:blur(22px) saturate(1.05);
     backdrop-filter:blur(22px) saturate(1.05);
+    /* iOS Safari compositing dance — without these three the dock
+       rendered as a flat translucent plate with no visible blur on
+       iPhone, even though the rule pair above is correct. Root cause:
+       html/body in 25-mobile.css set overflow-x:hidden, which makes
+       <body> a clipped scroll container. WebKit then short-circuits
+       backdrop-filter sampling on any fixed-positioned descendant
+       because the sampled region collapses to the clipped body, not
+       the viewport. Promoting the dock to its own composited layer
+       forces an independent backdrop sample taken straight from the
+       viewport buffer:
+         - isolation:isolate establishes a fresh stacking context.
+         - will-change tells the compositor to allocate a layer up
+           front (Safari is conservative without the hint).
+         - translateZ(0) is the belt-and-braces GPU promotion that
+           older iOS versions (16.x) still rely on — newer iOS reads
+           will-change but the cost of the redundant transform is
+           zero. */
+    isolation:isolate;
+    will-change:backdrop-filter, transform;
+    transform:translateZ(0);
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.08),
       0 -4px 16px rgba(0,0,0,.40),
