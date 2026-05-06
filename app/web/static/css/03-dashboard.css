@@ -13,8 +13,13 @@
 /* Card = just the video frame */
 .cv-card{border-radius:18px;overflow:hidden;cursor:pointer;background:#0a0a0a;transition:transform .18s,box-shadow .18s;position:relative;min-width:0;contain:paint}
 .cv-card:hover{transform:scale(1.012);box-shadow:0 12px 40px rgba(0,0,0,.55);z-index:1}
-.cv-frame{position:relative;aspect-ratio:16/9;overflow:hidden;contain:paint;transform:translateZ(0);--cv-overlay-inset:10px}
-.cv-img-wrap{position:relative;width:100%;height:100%}.cv-img{width:100%;height:100%;object-fit:cover;display:block;background:#0a0a0a;opacity:0;transition:opacity .4s;position:absolute;inset:0}.cv-img.loaded{opacity:1}.cv-loading-placeholder{position:absolute;inset:0;height:100%;background:#0a0a0a}@keyframes spin{to{transform:rotate(360deg)}}
+/* Frame aspect-ratio is per-card via the --cv-aspect var. JS sets
+   the var to the stream's reported width/height once the snapshot
+   has decoded — until then we use 16/9 so the placeholder doesn't
+   look squashed during connect. With object-fit:contain (below)
+   the full frame is always visible; cropping is never used. */
+.cv-frame{position:relative;aspect-ratio:var(--cv-aspect, 16/9);overflow:hidden;contain:paint;transform:translateZ(0);--cv-overlay-inset:10px}
+.cv-img-wrap{position:relative;width:100%;height:100%}.cv-img{width:100%;height:100%;object-fit:contain;display:block;background:#0a0a0a;opacity:0;transition:opacity .4s;position:absolute;inset:0}.cv-img.loaded{opacity:1}.cv-loading-placeholder{position:absolute;inset:0;height:100%;background:#0a0a0a}@keyframes spin{to{transform:rotate(360deg)}}
 
 /* ── Monitoring-style camera placeholders (offline / connecting) ────────── */
 .cv-ph{position:absolute;inset:0;overflow:hidden;background:#0a0a0a;color:rgba(255,255,255,.8);font-family:ui-monospace,Menlo,Consolas,monospace}

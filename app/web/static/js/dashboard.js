@@ -64,6 +64,27 @@ export function _camImgRetry(img){
 }
 window._camImgRetry = _camImgRetry;
 
+// Snapshot loaded — fade in, hide the placeholder, and apply the
+// stream's actual aspect ratio to the parent .cv-frame so the
+// container matches the camera (4:3, 16:9, 16:10 …) instead of
+// being locked to a single 16:9 default. Combined with the
+// `object-fit:contain` rule on .cv-img this means the full sensor
+// frame is always visible — no cropping, no squashing. The frame
+// resizes once when the first snapshot decodes (the placeholder
+// hides at the same moment, so the resize is hidden behind that
+// transition and reads as the layout settling, not a snap).
+export function _cvImgLoaded(img){
+  img.classList.add('loaded');
+  const placeholder = img.previousElementSibling;
+  if (placeholder) placeholder.style.display = 'none';
+  const w = img.naturalWidth, h = img.naturalHeight;
+  if (w > 0 && h > 0) {
+    const frame = img.closest('.cv-frame');
+    if (frame) frame.style.setProperty('--cv-aspect', `${w} / ${h}`);
+  }
+}
+window._cvImgLoaded = _cvImgLoaded;
+
 // ── Camera-grid column class — picks the right cam-grid-N class so CSS
 //     can size tiles based on count without JS math. -n = generic flow. ─
 export function _camGridCols(n){
@@ -328,7 +349,7 @@ export function renderDashboard(){
     <div class="cv-img-wrap">
       <div class="cv-loading-placeholder">${isActive ? _makeConnectingPlaceholder() : _makeOfflinePlaceholder()}</div>
       <img class="cv-img cam-snap" src="${snapUrl}" alt="${esc(c.name)}" data-hd-mode="${hdOn ? '1' : '0'}"
-        onload="this.classList.add('loaded');this.previousElementSibling.style.display='none'"
+        onload="_cvImgLoaded(this)"
         onerror="_camImgRetry(this)" />
     </div>
     <div class="cv-grad-top"></div>
