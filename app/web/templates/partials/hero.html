@@ -1,32 +1,17 @@
       <section class="hero panel">
         <div class="hero-title-wrap">
           <h1 class="hero-title" aria-label="TAM-spy">
-            <!-- Brand glyph (variant A) — camera body with a small
-                 magnifier overlay, "detective camera" idiom. Replaces
-                 the squirrel-mini glyph; the SVG file at
-                 /static/squirrel-mini.svg stays in place so any other
-                 referencing surface keeps working.
-                 To switch to variant B (camera lens with iris-style
-                 detective pattern), comment out the variant-A <svg>
-                 below and uncomment the variant-B block. -->
-            <span class="hero-brand-glyph" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                <!-- variant A: camera + magnifier (default) -->
-                <path d="M3 7h3l1.5-2h6L15 7h3a2 2 0 0 1 2 2v6.5"/>
-                <circle cx="11" cy="13" r="3.4"/>
-                <circle cx="17.2" cy="17.2" r="2.6" stroke-width="1.6"/>
-                <line x1="19.3" y1="19.3" x2="21.5" y2="21.5" stroke-width="2"/>
-              </svg>
-              <!--
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                  variant B: camera lens with detective-iris pattern
-                  <circle cx="12" cy="12" r="9"/>
-                  <circle cx="12" cy="12" r="5.5"/>
-                  <circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/>
-                  <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>
-                </svg>
-              -->
-            </span>
+            <!-- Single source of truth — the same squirrel-with-camera
+                 PNG that powers the iOS PWA icon, sized down to fit
+                 the title row. The 192 px asset is plenty for a
+                 ~32 px display because it gets rasterised once and
+                 cached; serving the 1024 master would just bloat the
+                 first-paint payload. The launch-transition logic in
+                 chrome/launch-splash.js targets this <img> by id, so
+                 keep the id stable. -->
+            <img id="heroBrandLogo" class="hero-brand-glyph"
+                 src="/static/icons/icon-192.png?v={{ static_v('icons/icon-192.png') }}"
+                 alt="TAM-spy logo" width="32" height="32" />
             <span class="hero-tam">TAM</span><span class="hero-hyphen" aria-hidden="true">-</span><span class="hero-spy">spy</span>
           </h1>
           <p class="hero-subtitle">Reolink · Coral TPU · Telegram</p>

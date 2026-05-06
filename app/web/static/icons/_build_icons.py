@@ -32,8 +32,14 @@ def _bgr(hex_str: str) -> tuple[int, int, int]:
     return (b, g, r)
 
 
-PLATE_BG = _bgr("#0a0a0a")
-PLATE_GLOW = _bgr("#14314c")
+# Warm sand plate so the dark squirrel pops against typical iOS dark
+# wallpapers — the previous near-black plate (#0a0a0a) with a navy
+# centre glow disappeared into anything dark behind it. The new plate
+# stays in the same warm-earth family as the squirrel itself
+# (complementary, not competing) and the radial centre glow lifts
+# even brighter so the silhouette has a soft halo to read against.
+PLATE_BG = _bgr("#d4a76a")     # warm sand
+PLATE_GLOW = _bgr("#f1d7a3")   # bright cream centre
 SQUIRREL = _bgr("#8B5A2B")
 SQUIRREL_DK = _bgr("#5a3a18")
 SQUIRREL_LT = _bgr("#a06d35")
@@ -335,9 +341,13 @@ SPLASH_MEDIA: dict[tuple[int, int], tuple[int, int, int, str]] = {
 
 def render_splash(w: int, h: int, master_icon_512: np.ndarray) -> np.ndarray:
     """Compose a splash background sized w×h with the icon centered
-    at ~25% of the smaller dimension. background_color matches the
-    manifest #0a0a0a so iOS doesn't flash white between splash and app."""
-    canvas = np.full((h, w, 3), PLATE_BG, dtype=np.uint8)
+    at ~25% of the smaller dimension. background colour matches the
+    web app's first-paint #111 so iOS shows a single seamless
+    surface from native splash → web app — no flash, no colour
+    seam. The icon itself carries its own warm-sand plate so it
+    still pops against the dark splash background. */"""
+    SPLASH_BG_BGR = _bgr("#111111")
+    canvas = np.full((h, w, 3), SPLASH_BG_BGR, dtype=np.uint8)
     icon_size = max(64, int(min(w, h) * 0.25))
     icon = cv2.resize(master_icon_512, (icon_size, icon_size), interpolation=cv2.INTER_AREA)
     x0 = (w - icon_size) // 2
