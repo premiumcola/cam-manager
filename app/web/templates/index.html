@@ -4,6 +4,31 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <!-- Theme bootstrap — runs synchronously BEFORE the stylesheet so
+       the page's first paint already carries the right `data-theme`
+       attribute. Reading localStorage + matchMedia here prevents
+       any flash-of-wrong-theme; chrome/theme.js takes over after
+       module load to handle live changes. The `auto` mode resolves
+       against the OS preference; explicit hell/dunkel forces the
+       value verbatim. Wrapped in try/catch so a quota-blocked
+       localStorage (private mode) doesn't break the page. -->
+  <script>
+    (function(){
+      try {
+        var stored = localStorage.getItem('tamspy.theme') || 'auto';
+        var resolved;
+        if (stored === 'light' || stored === 'dark') {
+          resolved = stored;
+        } else {
+          var mq = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+          resolved = (mq && mq.matches) ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', resolved);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'dark');
+      }
+    })();
+  </script>
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

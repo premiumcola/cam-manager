@@ -4,6 +4,27 @@
           <h3>Einstellungen</h3>
         </div>
 
+        <!-- 0. Allgemein — first row in Setup. Theme picker now,
+             room for additional general preferences below. -->
+        <div class="set-section" id="set-allgemein" data-accent="143,158,181">
+          <button type="button" class="set-hd" onclick="toggleSetSection('set-allgemein')">
+            <span class="set-icon"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#9ba1a8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="14" y2="6"/><line x1="18" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="8" y2="12"/><line x1="12" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="16" y2="18"/><line x1="20" y1="18" x2="20" y2="18"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></span>
+            <span>Allgemein</span>
+            <svg class="set-chevron" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+          </button>
+          <div class="set-bd"><div class="set-inner">
+            <div class="theme-picker" id="themePicker">
+              <div class="theme-picker-label">Erscheinungsbild</div>
+              <div class="theme-picker-pills" role="radiogroup" aria-label="Erscheinungsbild">
+                <button type="button" class="theme-pill" data-theme-mode="auto" role="radio">Auto</button>
+                <button type="button" class="theme-pill" data-theme-mode="light" role="radio">Hell</button>
+                <button type="button" class="theme-pill" data-theme-mode="dark" role="radio">Dunkel</button>
+              </div>
+              <div class="theme-picker-hint" id="themePickerHint" aria-live="polite"></div>
+            </div>
+          </div></div>
+        </div>
+
         <!-- 1. App & Allgemein -->
         <div class="set-section" id="set-app" data-accent="143,158,181">
           <button type="button" class="set-hd" onclick="toggleSetSection('set-app')">

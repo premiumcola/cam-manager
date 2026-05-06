@@ -1,0 +1,55 @@
+/* Allgemein → Erscheinungsbild — three pills (Auto / Hell / Dunkel)
+   plus a one-line helper that surfaces the resolved mode when the
+   user is in Auto. Uses theme-tokens (var(--surface) / var(--accent))
+   so it themes itself when the user toggles. */
+
+.theme-picker{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  padding:4px 0;
+}
+.theme-picker-label{
+  font-size:12px;
+  font-weight:700;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.theme-picker-pills{
+  display:flex;
+  gap:8px;
+  /* Distribute pills evenly across the row so each one is the same
+     width regardless of label length. */
+}
+.theme-pill{
+  flex:1 1 0;
+  min-height:44px;
+  padding:10px 14px;
+  border:0;
+  outline:0;
+  border-radius:14px;
+  background:var(--surface);
+  color:var(--text);
+  font:inherit;
+  font-size:13px;
+  font-weight:600;
+  cursor:pointer;
+  transition:background .15s, color .15s, transform .12s;
+  -webkit-tap-highlight-color:transparent;
+}
+.theme-pill:hover{background:var(--soft-fill-strong)}
+.theme-pill:active{transform:scale(.97)}
+.theme-pill.is-active{
+  background:var(--accent);
+  color:#fff;
+  /* Bump font-weight a hair so the active pill reads stronger
+     without needing a separate border or shadow. */
+  font-weight:700;
+}
+.theme-picker-hint{
+  font-size:12px;
+  color:var(--muted);
+  font-style:italic;
+  min-height:1.3em;
+}

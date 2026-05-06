@@ -36,6 +36,8 @@ import { bindMergeModal } from './camera-merge.js';
 // Order matches the dependency graph: chrome shell → mediathek/lightbox
 // → weather → cam-edit subdomain → router. Each comment tags the stage
 // the module ships in so future archaeology stays cheap.
+import './chrome/theme.js';                              // resolve theme + matchMedia listener
+import './chrome/theme-picker.js';                       // Allgemein → Erscheinungsbild pills
 import './chrome/launch-splash.js';                     // first-paint zoom-out
 import './chrome/brand-logo.js';                         // random spy/acorn header pick
 import './chrome/settings-collapse.js';                 // stage 10
