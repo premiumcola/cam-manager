@@ -24,17 +24,35 @@
 .m-dock{display:none}
 @media (max-width:768px){
   .m-dock{
-    --m-dock-side-gap:12px;
-    --m-dock-bottom-gap:max(8px, env(safe-area-inset-bottom, 8px));
+    /* Concentric corner geometry — three nested radii.
+       --m-dock-margin     : equal on left, right, and floor of bottom.
+                             Bottom additionally clears the home-indicator
+                             via env(safe-area-inset-bottom).
+       --m-dock-radius     : bar's outer radius. iPhone 15 Pro / Pro Max
+                             outer screen radius ≈ 55 px; bar margin 8 px
+                             → bar radius 47 px nestles concentrically
+                             into the device curve. Smaller iPhones have
+                             a smaller screen radius; the same value
+                             still reads cleanly because the bar always
+                             appears as a visually self-similar curve.
+       --m-dock-inner-pad  : inner chrome between bar edge and the
+                             button cluster. Pill radius is derived as
+                             (bar_radius − inner_pad) so the active
+                             pill curve nests inside the bar curve. */
+    --m-dock-margin:8px;
+    --m-dock-radius:47px;
+    --m-dock-inner-pad:8px;
+    --m-dock-pill-radius:calc(var(--m-dock-radius) - var(--m-dock-inner-pad));
+    --m-dock-bottom-gap:max(var(--m-dock-margin), env(safe-area-inset-bottom, var(--m-dock-margin)));
     display:grid;
     grid-template-columns:repeat(5,1fr);
     gap:2px;
     position:fixed;
-    left:var(--m-dock-side-gap);
-    right:var(--m-dock-side-gap);
+    left:var(--m-dock-margin);
+    right:var(--m-dock-margin);
     bottom:var(--m-dock-bottom-gap);
-    padding:8px 6px;
-    border-radius:30px;
+    padding:var(--m-dock-inner-pad) var(--m-dock-inner-pad);
+    border-radius:var(--m-dock-radius);
     background:#1f1f23;
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.08),
@@ -47,7 +65,10 @@
     border:0;outline:0;
     background:transparent;
     -webkit-tap-highlight-color:transparent;
-    border-radius:18px;
+    /* Pill radius derived from bar radius − inner padding so the
+       active pill's curve sits concentrically inside the bar's curve.
+       At default values this resolves to 39 px (47 − 8). */
+    border-radius:var(--m-dock-pill-radius);
     display:flex;flex-direction:column;
     align-items:center;justify-content:center;
     gap:3px;
@@ -91,8 +112,9 @@
   }
   /* Reserve scroll-space at the bottom so the floating dock never
      overlaps the last bit of page content. Tracks the same
-     max(safe-area, 8px) formula as the dock's bottom-gap variable
-     so the two values move together if the design margin changes. */
+     `max(safe-area, --m-dock-margin)` formula as the dock's
+     bottom-gap variable so the two move together if the design
+     margin changes. */
   body{
     padding-bottom:calc(
       70px
