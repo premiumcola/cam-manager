@@ -1,12 +1,15 @@
-/* ── Hero panel ────────────────────────────────────────────────────────────
-   Compact "TAM-spy" lockup with a tiny squirrel sitting on the hyphen.
-   Replaces the previous left-aligned ASCII squirrel logo + multi-line
-   tagline. ~20 % less vertical height; no blue tint, no border. */
+/* ── Hero header ──────────────────────────────────────────────────────────
+   Title + subtitle render directly on the page background — no
+   surrounding card / panel / shadow. The previous .hero.panel wrap
+   was a dark capsule that read as a hero banner; the title now reads
+   as a section header above Live Feed. .hero is just a flex row that
+   keeps the brand-glyph + title + subtitle stack on the left and the
+   build-info chip on the right. */
 .hero{
-  padding:14px 20px;
+  padding:6px 0 4px;
   display:flex;align-items:center;
   gap:16px;
-  background:rgba(255,255,255,.025);
+  background:transparent;
 }
 .hero-actions{display:flex;gap:10px}
 .hero button,.form button{padding:12px 16px;border:0;border-radius:14px;background:var(--accent);color:white;font-weight:700;min-height:40px}
@@ -22,8 +25,11 @@
 }
 .hero-title{
   margin:0;
-  font-size:30px;font-weight:800;
-  letter-spacing:-.01em;line-height:1.0;
+  /* Section-header weight, not hero-banner. The previous 30 px /
+     800 lockup dominated the page; 22 px / 700 keeps the title
+     clearly above the muted-italic subtitle without screaming. */
+  font-size:22px;font-weight:700;
+  letter-spacing:-.01em;line-height:1.1;
   color:#fff;
   display:inline-flex;align-items:center;gap:8px;
 }
@@ -42,7 +48,7 @@
    icon when the title row wraps. */
 .hero-brand-glyph{
   display:inline-block;
-  height:40px;width:auto;
+  height:30px;width:auto;
   flex-shrink:0;
   vertical-align:middle;
 }
@@ -73,18 +79,17 @@ select option{background:#1e1e1e;color:#c8c8c8}
 .hero-build .hero-build-sep{color:rgba(255,255,255,.25)}
 @media(max-width:640px){.hero-build{font-size:10px;padding-left:8px}}
 
-/* Mobile-compact hero panel. The new layout's TAM-spy lockup is a
-   single line so it stays in row form even on small screens; only the
-   font-sizes and padding tighten. Build info hides below 540 px to
-   avoid line wraps that fight the title. */
+/* Mobile compact — slightly tighter title since the page-padding
+   is narrower and the build-info chip vanishes below 540 px. The
+   .hero now lives directly on the page background (no card), so
+   only the font-sizes need tweaking; the side padding inherits
+   from .main. */
 @media (max-width:540px){
-  .hero{ padding:12px 14px; }
-  .hero-title{ font-size:24px; }
+  .hero-title{ font-size:20px; }
   .hero-subtitle{ font-size:11px; }
   .hero-build{ display:none; }
 }
 @media (max-width:768px){
-  .hero-title{ font-size:26px; }
   .hero-build{
     font-size:10px;
   }
