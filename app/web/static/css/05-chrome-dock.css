@@ -39,20 +39,24 @@
     content:"";
     position:fixed;
     top:0;left:0;right:0;
-    /* env() inset + 6 px so the blur covers the status-bar region
-       and 6 px of the page just below it for the fade. On notch-
-       less devices safe-area-inset-top resolves to 0 and the
-       overlay collapses to just the 6 px fade band — still useful
-       there because the launch-splash logo and hero card sit
-       right at the top of the viewport. */
-    height:calc(env(safe-area-inset-top, 0px) + 6px);
+    /* env() inset + a 24 px fade-tail. The overlay needs enough
+       vertical real estate below the status-bar area for the
+       gradient to feel like a soft transition rather than ending
+       in a visible line. With the previous +6 tail and 30 % fade,
+       only ~20 px of the overlay actually faded — the user's eye
+       still read the bottom edge as a hard cutoff. The new +24
+       tail gives a meaningful gradient region. */
+    height:calc(env(safe-area-inset-top, 0px) + 24px);
     background:rgba(31,31,35,0.55);
     -webkit-backdrop-filter:blur(22px) saturate(1.05);
     backdrop-filter:blur(22px) saturate(1.05);
-    /* Soft fade-out at the bottom 30 % of the strip so the blur
-       dissolves into the page instead of ending in a hard line. */
-    -webkit-mask-image:linear-gradient(to bottom, #000 70%, transparent 100%);
-    mask-image:linear-gradient(to bottom, #000 70%, transparent 100%);
+    /* Top 55 % stays at full strength (covers the Dynamic Island /
+       status-bar region completely) and the bottom 45 % tapers to
+       transparent — natural ~40 px fade band on iPhone 15 Pro,
+       no banding. Both prefixed and unprefixed declarations,
+       Safari iOS form first per CLAUDE.md. */
+    -webkit-mask-image:linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+    mask-image:linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
     pointer-events:none;
     z-index:91;
   }
