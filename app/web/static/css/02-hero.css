@@ -10,16 +10,15 @@
 }
 .hero-actions{display:flex;gap:10px}
 .hero button,.form button{padding:12px 16px;border:0;border-radius:14px;background:var(--accent);color:white;font-weight:700;min-height:40px}
-/* Title + subtitle now sit on a single row on desktop. The wrap is
-   row-flex with gap; the subtitle is a sibling of the title and
-   inherits its baseline. On narrow widths (≤ 480 px) the row wraps
-   so the subtitle drops below — desktop reads compact, iPhone
-   stays clean. */
+/* Title + subtitle stack vertically — subtitle sits directly under
+   the title, left-aligned to its left edge. Same on desktop and
+   mobile; we deliberately give up the previous inline-on-desktop
+   variant because the stacked form reads cleaner and isn't viewport-
+   conditional. */
 .hero-title-wrap{
   flex:1;min-width:0;
-  display:flex;flex-direction:row;align-items:baseline;
-  flex-wrap:wrap;
-  gap:6px 14px;
+  display:flex;flex-direction:column;align-items:flex-start;
+  gap:4px;
 }
 .hero-title{
   margin:0;
@@ -50,7 +49,8 @@
 .hero-subtitle{
   margin:0;
   font-size:12px;font-weight:500;
-  color:rgba(255,255,255,.55);
+  font-style:italic;
+  color:var(--muted);
   letter-spacing:.02em;
 }
 .ghost{background:var(--surface)!important;border:none!important}.section{padding:12px}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.section-subtitle{font-size:12px;font-style:italic;color:var(--muted);font-weight:400;margin-left:auto}.toolbar{display:grid;grid-template-columns:240px 220px 160px;gap:12px;margin-bottom:18px}.toolbar select,.toolbar input,.form input,.form select{width:100%;padding:12px 40px 12px 14px;border-radius:14px;background:var(--surface);color:var(--text);border:none;outline:none}.toolbar select:focus,.toolbar input:focus,.form input:focus,.form select:focus{box-shadow:0 0 0 2px var(--accent)}
