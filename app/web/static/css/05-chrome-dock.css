@@ -22,6 +22,42 @@
    The half-step toward brighter gives the bar more contrast
    against the #111 page without re-introducing any hue. */
 .m-dock{display:none}
+
+/* ── Top fog overlay (mobile only) ──────────────────────────────────
+   Fixed-position frosted-glass band at the very top of the
+   viewport, sized to the safe-area-inset-top region (Dynamic
+   Island / status-bar / notch zone) plus a small fade tail so the
+   blur dissolves into the page rather than ending in a hard line.
+   The translucent fill matches the dock chrome family so the two
+   pieces of OS-style chrome read as one. pointer-events:none lets
+   taps near the status bar still reach the page elements
+   underneath; the bar exists for visual treatment only.
+   Mounted via body::before so no HTML wrapper is needed.
+   The mask-image gradient handles the soft fade at the bottom edge. */
+@media (max-width:768px){
+  body::before{
+    content:"";
+    position:fixed;
+    top:0;left:0;right:0;
+    /* env() inset + 6 px so the blur covers the status-bar region
+       and 6 px of the page just below it for the fade. On notch-
+       less devices safe-area-inset-top resolves to 0 and the
+       overlay collapses to just the 6 px fade band — still useful
+       there because the launch-splash logo and hero card sit
+       right at the top of the viewport. */
+    height:calc(env(safe-area-inset-top, 0px) + 6px);
+    background:rgba(31,31,35,0.55);
+    -webkit-backdrop-filter:blur(22px) saturate(1.05);
+    backdrop-filter:blur(22px) saturate(1.05);
+    /* Soft fade-out at the bottom 30 % of the strip so the blur
+       dissolves into the page instead of ending in a hard line. */
+    -webkit-mask-image:linear-gradient(to bottom, #000 70%, transparent 100%);
+    mask-image:linear-gradient(to bottom, #000 70%, transparent 100%);
+    pointer-events:none;
+    z-index:91;
+  }
+}
+
 @media (max-width:768px){
   .m-dock{
     /* Concentric corner geometry — three nested radii.
@@ -64,7 +100,19 @@
     bottom:var(--m-dock-bottom-gap);
     padding:var(--m-dock-inner-pad) var(--m-dock-inner-pad);
     border-radius:var(--m-dock-radius);
-    background:#1f1f23;
+    /* Translucent neutral fill + heavy backdrop blur. The blur is
+       what makes page content scrolling underneath unreadable
+       through the dock — without it the dock was a solid plate
+       that hid content, but couldn't fog it the way iOS native
+       chrome does. The 0.72 alpha keeps the dock visually neutral
+       grayscale instead of letting page colours bleed through too
+       strongly; saturate(1.05) is a near-no-op so the blur doesn't
+       amplify hues and re-introduce the old Blaustich risk. The
+       -webkit prefix comes first because Safari iOS (even 17+)
+       still consults the prefixed form. */
+    background:rgba(31,31,35,0.72);
+    -webkit-backdrop-filter:blur(22px) saturate(1.05);
+    backdrop-filter:blur(22px) saturate(1.05);
     box-shadow:
       inset 0 1px 0 rgba(255,255,255,.08),
       0 -4px 16px rgba(0,0,0,.40),
