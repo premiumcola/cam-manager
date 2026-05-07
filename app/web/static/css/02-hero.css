@@ -6,7 +6,10 @@
    keeps the brand-glyph + title + subtitle stack on the left and the
    build-info chip on the right. */
 .hero{
-  padding:6px 0 4px;
+  /* Top inset comes from .main (calc(12px + safe-area-inset-top)) — don't
+     re-add it here or the block sinks. 0 top-padding pulls the header
+     close to the safe-area for a tighter, more deliberate read. */
+  padding:0 0 4px;
   display:flex;align-items:center;
   gap:16px;
   background:transparent;
@@ -25,10 +28,12 @@
 }
 .hero-title{
   margin:0;
-  /* Section-header weight, not hero-banner. The previous 30 px /
-     800 lockup dominated the page; 22 px / 700 keeps the title
-     clearly above the muted-italic subtitle without screaming. */
-  font-size:22px;font-weight:700;
+  /* Brand-mark scale — one step above the section-header weight so
+     the squirrel + "TAM-spy" lockup reads as the page anchor without
+     re-introducing the old hero-banner card. 28 / 800 lands between
+     the previous 22 / 700 (too small) and the original 30 / 800
+     hero-banner (too loud) and pairs cleanly with the 40 px glyph. */
+  font-size:28px;font-weight:800;
   letter-spacing:-.01em;line-height:1.1;
   color:#fff;
   display:inline-flex;align-items:center;gap:8px;
@@ -48,16 +53,32 @@
    icon when the title row wraps. */
 .hero-brand-glyph{
   display:inline-block;
-  height:30px;width:auto;
+  /* Roughly title-cap-height tall — at title 28 px line-height 1.1
+     the cap-height sits at ~22 px and the line-box at ~31 px; 40 px
+     reads as a proper brand mark sitting on the line, not as an inline
+     icon. Width auto follows the chosen asset's aspect ratio
+     (Acorn Cam 50:64 → ~31 px; Spy Scout 80:70 → ~46 px). */
+  height:40px;width:auto;
   flex-shrink:0;
   vertical-align:middle;
 }
 .hero-subtitle{
   margin:0;
-  font-size:12px;font-weight:500;
+  /* One step bigger than before — clearly readable on a phone but
+     still subordinate to the 28 px / 800 title above. Italic + muted
+     keeps the visual hierarchy intact. */
+  font-size:14px;font-weight:500;
   font-style:italic;
   color:var(--muted);
   letter-spacing:.02em;
+  /* Indent past the title's left edge so the subtitle starts roughly
+     where the title TEXT begins (right of the glyph). Glyph height
+     is 40 px and the chosen SVGs land between ~31 and ~46 px wide,
+     plus the 8 px title-row gap → 48 px is just past the wider
+     variant, reads cleanly under both options without recomputing
+     per-asset. The subtitle stays stacked under the title (not
+     inline) — only the horizontal anchor moves. */
+  padding-left:48px;
 }
 .ghost{background:var(--surface)!important;border:none!important}.section{padding:12px}.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.section-subtitle{font-size:12px;font-style:italic;color:var(--muted);font-weight:400;margin-left:auto}.toolbar{display:grid;grid-template-columns:240px 220px 160px;gap:12px;margin-bottom:18px}.toolbar select,.toolbar input,.form input,.form select{width:100%;padding:12px 40px 12px 14px;border-radius:14px;background:var(--surface);color:var(--text);border:none;outline:none}.toolbar select:focus,.toolbar input:focus,.form input:focus,.form select:focus{box-shadow:0 0 0 2px var(--accent)}
 .toolbar select,.form select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14'%3E%3Cpath d='M3 5l4 4 4-4' stroke='%2391a4b8' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 13px center}
@@ -79,14 +100,15 @@ select option{background:#1e1e1e;color:#c8c8c8}
 .hero-build .hero-build-sep{color:rgba(255,255,255,.25)}
 @media(max-width:640px){.hero-build{font-size:10px;padding-left:8px}}
 
-/* Mobile compact — slightly tighter title since the page-padding
-   is narrower and the build-info chip vanishes below 540 px. The
-   .hero now lives directly on the page background (no card), so
-   only the font-sizes need tweaking; the side padding inherits
-   from .main. */
+/* Mobile compact — proportional shrink of glyph + title + subtitle
+   so the larger desktop scale doesn't crowd a 375 px iPhone SE. The
+   subtitle indent shrinks in lockstep with the glyph so the indent
+   keeps clearing the brand mark without floating too far right on
+   narrow widths. */
 @media (max-width:540px){
-  .hero-title{ font-size:20px; }
-  .hero-subtitle{ font-size:11px; }
+  .hero-brand-glyph{ height:34px; }
+  .hero-title{ font-size:24px; }
+  .hero-subtitle{ font-size:13px; padding-left:42px; }
   .hero-build{ display:none; }
 }
 @media (max-width:768px){
