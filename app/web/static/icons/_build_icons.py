@@ -1,9 +1,15 @@
 """PWA icon + iOS-splash builder for TAM-spy.
 
-Source: ``app/web/static/img/logos/logo-acorn-cam-dark.svg`` — single
-master SVG. We rasterise it onto a warm-cream square plate so the
-darker camera-lens body separates cleanly from typical iOS dark
-wallpapers, and emit the iOS-relevant icon sizes plus all the
+Source: ``app/web/static/img/logos/logo-squirrel-dark.svg`` — the
+standalone squirrel mark. The previous master was the acorn-cam
+combo (``logo-acorn-cam-dark.svg``); that file is kept in the repo
+as a backup variant and is no longer referenced by the build, the
+manifest, or the splash links. Switch ``MASTER_SVG`` below to swap
+back if needed.
+
+We rasterise the master onto a warm-cream square plate so the brown
+squirrel separates cleanly from typical iOS dark wallpapers, and
+emit the iOS-relevant icon sizes plus all the
 apple-touch-startup-image splash variants.
 
 Usage inside the container::
@@ -28,7 +34,9 @@ import cairosvg
 # ── Paths ─────────────────────────────────────────────────────────────
 THIS = Path(__file__).resolve()
 LOGO_DIR = THIS.parent.parent / "img" / "logos"
-MASTER_SVG = LOGO_DIR / "logo-acorn-cam-dark.svg"
+# Squirrel-only mark; backup variant ``logo-acorn-cam-dark.svg``
+# stays in the repo for future swaps.
+MASTER_SVG = LOGO_DIR / "logo-squirrel-dark.svg"
 OUT_DIR = THIS.parent
 SPLASH_DIR = OUT_DIR / "splash"
 SPLASH_PARTIAL = (

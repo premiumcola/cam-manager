@@ -24,6 +24,21 @@
 const SESSION_FLAG = 'tamspy.launchSplashShown';
 
 function _shouldRun(){
+  // PWA cold launch (added-to-home-screen, display-mode: standalone):
+  // iOS already shows the apple-touch-startup-image splash with the
+  // squirrel icon on the cream plate, then hands off to the web app.
+  // Running the in-app splash overlay on top of that produced the
+  // double-logo flicker the user reported — splash → brief app paint
+  // without a logo → second splash overlay re-appears centred → flips
+  // to the header. In standalone mode the hero header logo paints in
+  // place from frame one and the iOS native splash → app transition
+  // is one continuous motion. Browser-tab loads (no native splash)
+  // keep the in-app animation; that's why this only short-circuits
+  // for standalone display-mode, not unconditionally.
+  if (window.matchMedia?.('(display-mode: standalone)')?.matches ||
+      window.navigator.standalone === true /* iOS Safari legacy */) {
+    return false;
+  }
   // Soft-nav suppression: once per session.
   try {
     if (sessionStorage.getItem(SESSION_FLAG) === '1') return false;
