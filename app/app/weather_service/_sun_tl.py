@@ -91,6 +91,13 @@ class _SunTLTestSession:
     # path so a cancelled session never produces a sighting.
     cancel_requested: bool = False
     cancelled: bool = False
+    # Adaptive validator profile diagnostics — surfaced by the UI so
+    # the user can see whether their capture was treated as DAY /
+    # TWILIGHT / NIGHT. ``baseline_brightness`` is the median scene
+    # brightness from the 3-sample baseline (or None if no usable
+    # samples came back). Updated at the end of the capture loop.
+    validator_profile: str | None = None
+    baseline_brightness: float | None = None
     # Final stats snapshot — captured before scratch dir cleanup so the
     # post-completion status read still has accurate counters even
     # though `_stats.json` is gone with the scratch dir.
@@ -426,7 +433,12 @@ class SunTimelapseMixin:
 
     def _run_sun_capture_inner(self, cam_id: str, phase: str, sun_dt: datetime,
                                pcfg: dict, test_session: "_SunTLTestSession | None" = None):
-        from ..frame_helpers import CaptureStats, grab_valid_frame
+        from ..frame_helpers import (
+            CaptureStats,
+            DAY_PROFILE,
+            grab_valid_frame,
+            pick_profile_from_baseline,
+        )
         rt = self.runtimes.get(cam_id)
         if rt is None or not hasattr(rt, "snapshot_jpeg_hires"):
             log.warning("[weather] cam %s nicht verfügbar — capture abgebrochen", cam_id)
@@ -481,6 +493,55 @@ class SunTimelapseMixin:
         end_at = datetime.now() + timedelta(seconds=window_seconds)
         log.info("[%s] Capture start: %s %s (Fenster %ds, %ds-Intervall, %d fps)",
                  log_tag, cam_name, phase, window_seconds, interval_s, target_fps)
+        # ── Adaptive validator profile ─────────────────────────────────────
+        # Take 3 quick samples ~0.5 s apart to gauge actual scene
+        # brightness, then pick DAY/TWILIGHT/NIGHT thresholds. Without
+        # this a sunset capture started at midnight (real-world bug
+        # report) ran the daytime validators against a pure IR night
+        # scene and rejected most frames as "broken" when they were
+        # legitimately dark. Falls back to DAY when no usable samples
+        # come back — conservative against accidentally letting real
+        # corruption through with night-loose thresholds.
+        baseline_samples: list = []
+        for _bi in range(3):
+            try:
+                jpg = rt.snapshot_jpeg_hires(quality=85)
+                if jpg:
+                    baseline_samples.append(jpg)
+            except Exception:
+                pass
+            if _bi < 2:
+                time.sleep(0.5)
+        active_profile = pick_profile_from_baseline(baseline_samples)
+        baseline_med = None
+        if baseline_samples:
+            try:
+                import cv2 as _cv2_b  # noqa: PLC0415
+                import numpy as _np_b  # noqa: PLC0415
+                means = []
+                for s in baseline_samples:
+                    arr = _np_b.frombuffer(bytes(s), dtype=_np_b.uint8)
+                    img = _cv2_b.imdecode(arr, _cv2_b.IMREAD_COLOR)
+                    if img is not None and img.size > 0:
+                        means.append(float(img.mean()))
+                if means:
+                    means.sort()
+                    baseline_med = means[len(means) // 2]
+            except Exception:
+                pass
+        log.info(
+            "[%s] profile=%s brightness_med=%s cam=%s phase=%s",
+            log_tag, active_profile.name.upper(),
+            f"{baseline_med:.0f}" if baseline_med is not None else "?",
+            cam_name, phase,
+        )
+        if test_session is not None:
+            test_session.validator_profile = active_profile.name
+            test_session.baseline_brightness = baseline_med
+        # Re-pick every 5 minutes so a 75-min run that crosses civil
+        # twilight drifts to the right profile mid-run. Only one extra
+        # snapshot per 5-minute window, so the cost is bounded.
+        next_repick_at = datetime.now() + timedelta(minutes=5)
         expected_frames = int(window_seconds / max(1, interval_s))
         if test_session is not None:
             test_session.expected_frames = expected_frames
@@ -607,14 +668,39 @@ class SunTimelapseMixin:
                         test_session.cancelled = True
                 if test_session.cancelled:
                     break
+            # Periodic profile re-pick — production sun-tl windows span
+            # 75 min and cross civil twilight, so the right thresholds
+            # mid-window aren't necessarily the ones the start sample
+            # picked. One snapshot every 5 min keeps cost bounded.
+            now_dt = datetime.now()
+            if now_dt >= next_repick_at:
+                try:
+                    samp = rt.snapshot_jpeg_hires(quality=85)
+                    if samp:
+                        new_prof = pick_profile_from_baseline([samp])
+                        if new_prof is not active_profile:
+                            log.info(
+                                "[%s] profile-switch %s → %s mid-run",
+                                log_tag, active_profile.name.upper(),
+                                new_prof.name.upper(),
+                            )
+                            active_profile = new_prof
+                            if test_session is not None:
+                                test_session.validator_profile = active_profile.name
+                except Exception:
+                    pass
+                next_repick_at = now_dt + timedelta(minutes=5)
             # Long-running capture loop — uses grab_valid_frame defaults
             # (6 attempts × 0.4 s with a 5 s wall-clock cap). The hires
             # variant reads only from the main-stream buffer so
             # timelapses get the full sensor resolution rather than the
-            # 640x360 sub-stream the live preview path uses.
+            # 640x360 sub-stream the live preview path uses. The
+            # active validator profile flexes thresholds for the
+            # current lighting (DAY/TWILIGHT/NIGHT).
             jpg, attempt_used, last_reason = grab_valid_frame(
                 lambda: rt.snapshot_jpeg_hires(quality=92),
                 on_reject=save_reject_cb,
+                profile=active_profile,
             )
             if jpg:
                 out = frames_dir / f"{i:05d}.jpg"
@@ -675,6 +761,8 @@ class SunTimelapseMixin:
                 "invalid_frames": int(stats.invalid_frames),
                 "retry_recoveries": int(stats.retry_recoveries),
                 "rejected_by_reason": dict(stats.rejected_by_reason),
+                "validator_profile": active_profile.name,
+                "baseline_brightness": baseline_med,
             }
         # Cancellation: skip the encode path entirely — a half-length
         # cancelled capture should not produce a sighting. Don't
@@ -1033,6 +1121,12 @@ class SunTimelapseMixin:
             # in-flight tests before _finalise_scratch has renamed
             # the dir.
             "raw_dir": _raw_dir_relpath(session, self._sightings_dir()),
+            "validator_profile": session.validator_profile,
+            "baseline_brightness": (
+                round(session.baseline_brightness, 1)
+                if session.baseline_brightness is not None
+                else None
+            ),
         }
 
     def sun_times_today(self) -> dict:

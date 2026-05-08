@@ -293,7 +293,7 @@ class EventTimelapseMixin:
     def _run_event_tl_capture(self, cam_id: str, trigger: str, score: float,
                               api_now: dict, fc_snapshot: dict,
                               window_min: int, interval_s: int, fps: int):
-        from ..frame_helpers import CaptureStats, grab_valid_frame
+        from ..frame_helpers import CaptureStats, grab_valid_frame, pick_profile_from_baseline
         rt = self.runtimes.get(cam_id)
         if rt is None or not hasattr(rt, "snapshot_jpeg_hires"):
             log.warning("[weather] cam %s nicht verfügbar — capture abgebrochen", cam_id)
@@ -312,9 +312,41 @@ class EventTimelapseMixin:
         stats = CaptureStats(out_dir=frames_dir, expected_frames=expected_frames)
         n_written = 0
         i = 0
+        # Adaptive validator profile — same approach as the sun-tl
+        # capture: 3 quick samples → DAY/TWILIGHT/NIGHT. Event timelapses
+        # can run during any weather event (storm at noon vs midnight
+        # snowfall) so the profile-pick is just as relevant here.
+        baseline_samples = []
+        for _bi in range(3):
+            try:
+                _b = rt.snapshot_jpeg_hires(quality=85)
+                if _b:
+                    baseline_samples.append(_b)
+            except Exception:
+                pass
+            if _bi < 2:
+                time.sleep(0.5)
+        active_profile = pick_profile_from_baseline(baseline_samples)
+        log.info("[weather] event-tl profile=%s cam=%s trigger=%s",
+                 active_profile.name.upper(), cam_name, trigger)
+        next_repick_at = datetime.now() + timedelta(minutes=5)
         while datetime.now() < end_at:
+            now_dt = datetime.now()
+            if now_dt >= next_repick_at:
+                try:
+                    samp = rt.snapshot_jpeg_hires(quality=85)
+                    if samp:
+                        new_prof = pick_profile_from_baseline([samp])
+                        if new_prof is not active_profile:
+                            log.info("[weather] event-tl profile-switch %s → %s mid-run",
+                                     active_profile.name.upper(), new_prof.name.upper())
+                            active_profile = new_prof
+                except Exception:
+                    pass
+                next_repick_at = now_dt + timedelta(minutes=5)
             jpg, attempt_used, last_reason = grab_valid_frame(
                 lambda: rt.snapshot_jpeg_hires(quality=92),
+                profile=active_profile,
             )
             if jpg:
                 try:

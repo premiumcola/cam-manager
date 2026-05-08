@@ -301,10 +301,22 @@ class TimelapseMixin:
         - custom: fixed-duration rolling windows (period_seconds long each)
         - daily/weekly/monthly: one window per calendar day, encoded at day boundary
         """
-        from ..frame_helpers import CaptureStats as _CaptureStats, is_valid_frame as _fh_valid
+        from ..frame_helpers import (
+            CaptureStats as _CaptureStats,
+            DAY_PROFILE as _DAY_PROFILE,
+            is_valid_frame as _fh_valid,
+            pick_profile_from_baseline as _pick_profile,
+        )
         window_key: str | None = None
         window_start_t: float = 0.0
         _last_frame_ts: float = 0.0   # frame_ts at last capture — detects stale buffer
+        # Per-camera adaptive validator profile. Re-evaluated every 5 min
+        # using the most-recent shared frame buffer (no extra snapshot
+        # call — the camera_runtime main loop already keeps `self.frame`
+        # fresh). Defaults to DAY so the first iteration before any
+        # baseline pick keeps the historic behaviour.
+        active_profile = _DAY_PROFILE
+        next_profile_repick_t: float = 0.0
         # Per-window stats. Replaced when the window key rolls over so each
         # day/period gets its own _stats.json next to its frames.
         stats: _CaptureStats | None = None
@@ -418,13 +430,34 @@ class TimelapseMixin:
                             stats = _CaptureStats(out_dir=tl_dir,
                                                   expected_frames=int(period_s / max(0.5, interval_s)))
                             stats_window_key = window_key
+                        # Adaptive validator profile re-pick — every 5 min,
+                        # using the freshest shared frame as the baseline so
+                        # there's no extra capture cost. A camera that
+                        # transitions from DAY to TWILIGHT to NIGHT over a
+                        # full diurnal cycle gets the right thresholds at
+                        # each phase without manual config.
+                        _now_t = time.time()
+                        if _now_t >= next_profile_repick_t:
+                            try:
+                                new_prof = _pick_profile([frame])
+                                if new_prof is not active_profile:
+                                    log_tl.info(
+                                        "[timelapse] %s/%s profile-switch %s → %s",
+                                        self.camera_id, profile_name,
+                                        active_profile.name.upper(),
+                                        new_prof.name.upper(),
+                                    )
+                                    active_profile = new_prof
+                            except Exception:
+                                pass
+                            next_profile_repick_t = _now_t + 300.0
                         # Three-attempt validity check. The shared frame buffer
                         # is refreshed by the main RTSP loop, so a 0.7 s pause
                         # between attempts gives the decode loop time to
                         # produce a fresh frame past the hickup. We only
                         # attempt up to 3 times — past that the slot stays
                         # empty (gap-tolerant: ffmpeg concat just skips it).
-                        ok, reason = _fh_valid(frame)
+                        ok, reason = _fh_valid(frame, profile=active_profile)
                         attempt_used = 0
                         # For the daily profile we emit a per-rejection INFO
                         # line on every failed attempt — diagnostic to
@@ -443,7 +476,7 @@ class TimelapseMixin:
                                     cand = self.frame.copy() if self.frame is not None else None
                                 if cand is None:
                                     continue
-                                ok, reason = _fh_valid(cand)
+                                ok, reason = _fh_valid(cand, profile=active_profile)
                                 if not ok and profile_name == "daily":
                                     log_tl.info(
                                         "[timelapse] %s/daily reject @ %s (attempt %d): %s",

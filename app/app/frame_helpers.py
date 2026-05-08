@@ -581,6 +581,7 @@ def is_valid_frame(img, profile: FrameValidatorProfile = DAY_PROFILE) -> tuple[b
 def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
                      max_total_seconds: float = 5.0,
                      on_reject=None,
+                     profile: FrameValidatorProfile = DAY_PROFILE,
                      ) -> tuple[object, int, str]:
     """Call ``grab_fn`` up to ``attempts`` times OR
     ``max_total_seconds`` wall-clock, whichever comes first.
@@ -636,7 +637,7 @@ def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
             last_reason = f"grab_exception:{e}"
             frame = None
         if frame is not None:
-            ok, reason = is_valid_frame(frame)
+            ok, reason = is_valid_frame(frame, profile=profile)
             if ok:
                 return frame, attempt, ""
             last_reason = reason or last_reason or "invalid"
