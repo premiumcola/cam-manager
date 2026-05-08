@@ -6,31 +6,43 @@
    keeps the brand-glyph + title + subtitle stack on the left and the
    build-info chip on the right. */
 .hero{
-  /* Top inset comes from .main (calc(12px + safe-area-inset-top)) — don't
-     re-add it here or the block sinks. 0 top-padding pulls the header
-     close to the safe-area for a tighter, more deliberate read. */
-  padding:0 0 4px;
+  /* No top padding (the safe-area inset lives on .main) and no
+     bottom padding either — the hero now butts directly against
+     the .main grid gap. The previous 4 px below stacked with the
+     gap and the next panel's padding-top to ~30 px of background
+     between the title and the first content row. */
+  padding:0;
   display:flex;align-items:center;
   gap:16px;
   background:transparent;
+  /* Pull the next .main grid item up so the visible gap between
+     hero and Live Feed shrinks from 14 px to ~6 px. Negative
+     margin-bottom on a grid item reduces its track height, which
+     in turn moves every subsequent row up by the same amount —
+     the gap value itself stays untouched, so other panel-to-panel
+     spacing is unaffected. */
+  margin-bottom:-8px;
 }
 .hero-actions{display:flex;gap:10px}
 .hero button,.form button{padding:12px 16px;border:0;border-radius:14px;background:var(--accent);color:white;font-weight:700;min-height:40px}
-/* Title + subtitle as a TIGHT pair, vertically centred against the
-   logo. The glyph is positioned absolutely inside the title-wrap
-   (which is the relative anchor) so it doesn't contribute to flex
-   flow — without that escape hatch, the inline-flex title row
-   would inherit the glyph's 88 px height and centre the wordmark
-   text against the glyph's midline, leaving the subtitle stranded
-   far below in a fat empty band. With the glyph out of flow, the
-   wrap reserves horizontal space for it via padding-left, sets a
-   min-height equal to the glyph height, and uses justify-content:
-   center so the (wordmark + 4 px gap + subtitle) pair sits as one
-   compact block centred on the glyph's vertical midline. */
+/* Title + subtitle as a TIGHT pair, hugging the bottom of the
+   wrap so there is NO empty band between the subtitle and the
+   first content panel below. The glyph is positioned absolutely
+   inside the title-wrap (which is the relative anchor) so it
+   doesn't contribute to flex flow — without that escape hatch,
+   the inline-flex title row would inherit the glyph's 88 px
+   height and centre the wordmark against the glyph's midline,
+   leaving the subtitle stranded in a fat empty band. With the
+   glyph out of flow, the wrap reserves horizontal space for it
+   via padding-left and sets min-height equal to the glyph
+   height; justify-content:flex-end then anchors the pair at the
+   wrap's bottom so the wrap's spare 35 px sits ABOVE the pair
+   (invisible — the glyph fills that area) instead of below it
+   (where it would push Live Feed away from the title). */
 .hero-title-wrap{
   flex:1;min-width:0;
   display:flex;flex-direction:column;
-  align-items:flex-start;justify-content:center;
+  align-items:flex-start;justify-content:flex-end;
   gap:4px;
   position:relative;
   /* Reserve space for the absolutely-positioned glyph: 88 px tall
