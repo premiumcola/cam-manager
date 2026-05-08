@@ -321,7 +321,7 @@ class SunTimelapseMixin:
         """
         from urllib.parse import urlparse
 
-        from . import reolink_api
+        from .. import reolink_api
         cam = next((c for c in self._cfg_cameras() if c.get("id") == cam_id), None)
         if cam is None:
             log.warning("[weather] daynight override: cam %s not in config", cam_id)
