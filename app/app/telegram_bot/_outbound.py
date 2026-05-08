@@ -396,6 +396,19 @@ class OutboundMixin:
         if not pcfg.get("enabled", True):
             log.debug("[tg] push: disabled")
             return
+        # Observability marker — lands BEFORE every gate so a missing
+        # push can be diagnosed by checking whether this line fires:
+        #   • absent → live pipeline never produced an event for this
+        #     cam (capture/motion/confirm upstream); not a notify gate
+        #   • present + a "[tg] skip:" line for the same cam → that
+        #     gate is the cause
+        #   • present + no skip and no "[tg] event alert:" → bot init
+        #     or transport issue; check Polling/HTTP errors above
+        _labels_preview = meta.get("labels") or []
+        log.info("[tg] notify-attempt cam=%s label=%s sev=%s",
+                 camera_id,
+                 most_specific_label(_labels_preview) if _labels_preview else "—",
+                 (meta.get("severity") or "—"))
         # Global + per-camera mute. Both gates honour the same "_until"
         # epoch contract: 0 / past = no mute, future = active. Daily
         # reports / highlights / watchdog go through their own jobs and
