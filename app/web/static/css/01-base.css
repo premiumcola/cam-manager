@@ -3,30 +3,36 @@
 html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@media (max-width:768px){html{scroll-padding-top:8px}}
 .shell{display:flex;gap:12px;max-width:1900px;margin:0 auto;padding:8px 14px 18px 14px}
 .panel{background:var(--panel);border-radius:24px;box-shadow:0 8px 32px rgba(0,0,0,.35)}
-.sidebar{padding:12px 6px;position:sticky;top:8px;height:max-content;flex-shrink:0;width:260px;transition:width .35s cubic-bezier(0.4,0,0.2,1),padding .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}
-.sidebar.collapsed{width:52px;padding:10px 6px}
-.sidebar.collapsed .brand{height:0;margin-bottom:0;overflow:hidden;opacity:0}
-.sidebar.collapsed .nav a{padding:10px 0;justify-content:center;gap:0}
-/* `max-width` animates in both directions (unlike auto-width), so
-   labels glide closed in time with the .sidebar width transition
-   instead of popping out instantly. The 240 px ceiling exceeds every
-   nav label currently in use; max-width only constrains, never
-   expands, so the rendered width still tracks label content when
-   the sidebar is open. */
-.sidebar.collapsed .nav-label,.sidebar.collapsed .nav-chev{opacity:0;max-width:0;overflow:hidden;pointer-events:none}
-.brand{display:flex;gap:10px;align-items:center;margin-bottom:0;transition:height .35s cubic-bezier(0.4,0,0.2,1),margin .35s cubic-bezier(0.4,0,0.2,1),opacity .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}.brand-text{flex:1;min-width:0;max-width:240px;transition:opacity .35s cubic-bezier(0.4,0,0.2,1),max-width .35s cubic-bezier(0.4,0,0.2,1)}
-.sidebar.collapsed .brand-text{max-width:0}
+/* Sidebar collapse model: only the WIDTH animates (260 → 52 px and
+   back). Icons stay anchored at the same fixed left padding in both
+   states — the .nav a base rule (padding:8px 10px) applies whether
+   the sidebar is open or collapsed, so the icon's centre never
+   shifts horizontally. Labels and the brand text fade out via
+   opacity-only transitions while the box shrinks; the sidebar's
+   overflow:hidden clips them as the right edge slides in. The
+   sidebar's vertical layout is INVARIANT between states — section
+   labels and the brand block keep their height/padding so nav
+   items never reflow up or down on toggle. */
+.sidebar{padding:12px 6px;position:sticky;top:8px;height:max-content;flex-shrink:0;width:260px;transition:width .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}
+.sidebar.collapsed{width:52px}
+.sidebar.collapsed .brand{opacity:0;pointer-events:none}
+.sidebar.collapsed .nav-label,.sidebar.collapsed .nav-chev{opacity:0;pointer-events:none}
+.brand{display:flex;gap:10px;align-items:center;margin-bottom:0;transition:opacity .35s cubic-bezier(0.4,0,0.2,1)}.brand-text{flex:1;min-width:0}
 .logo{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:#14314c;flex-shrink:0}
 .nav{display:grid;gap:2px}
-.nav a{padding:8px 10px;border-radius:12px;background:transparent;display:flex;align-items:center;justify-content:flex-start;gap:10px;white-space:nowrap;min-height:44px;color:#cbd5e1;transition:background .15s ease,color .15s ease,padding .35s cubic-bezier(0.4,0,0.2,1),gap .35s cubic-bezier(0.4,0,0.2,1);-webkit-tap-highlight-color:transparent;border:none;width:100%;font:inherit;text-align:left;cursor:pointer}
+.nav a{padding:8px 10px;border-radius:12px;background:transparent;display:flex;align-items:center;justify-content:flex-start;gap:10px;white-space:nowrap;min-height:44px;color:#cbd5e1;transition:background .15s ease,color .15s ease;-webkit-tap-highlight-color:transparent;border:none;width:100%;font:inherit;text-align:left;cursor:pointer}
 .nav a:hover{background:rgba(255,255,255,.05)}
 .nav a.nav-active{background:rgba(255,255,255,.10);color:#fff}
 .nav-icon{flex-shrink:0;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center}
 .nav-icon svg{width:20px;height:20px;display:block;transition:stroke .15s ease}
-.nav-label{max-width:240px;transition:opacity .35s cubic-bezier(0.4,0,0.2,1),max-width .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}
-.nav-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);opacity:.55;font-weight:700;padding:14px 10px 4px;user-select:none;pointer-events:none}
+/* Labels + chevrons fade slightly faster than the .sidebar width
+   transition so the text disappears before the box finishes
+   closing — keeps the impression of "the right side slides in" and
+   never of "letters get squashed by the moving edge". */
+.nav-label,.nav-chev{opacity:1;transition:opacity .18s ease}
+.nav-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);opacity:.55;font-weight:700;padding:14px 10px 4px;user-select:none;pointer-events:none;transition:opacity .18s ease}
 .nav-section-label:first-child{padding-top:4px}
-.sidebar.collapsed .nav-section-label{opacity:0;height:0;padding:0;overflow:hidden}
+.sidebar.collapsed .nav-section-label{opacity:0;pointer-events:none}
 /* Symmetric horizontal margin so the line stays inset from both edges in
    any sidebar width — collapsed and expanded read the same. */
 .nav-divider{height:1px;background:rgba(255,255,255,.06);margin:5px 8px;border:none}
