@@ -382,7 +382,15 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
      flex collapses on phone to give each select full width. */
   #logs .section-head{flex-direction:column;align-items:stretch;gap:8px}
   #logs .section-head > div{flex-wrap:wrap}
-  #logs .log-level-select{flex:1;min-width:0}
+  /* Proportional widths: the level select auto-sizes to its widest
+     option ("WARNING" ≈ 7 chars), the subsystem select grabs all
+     remaining space so "Alle Subsysteme" / "camera_runtime.timelapse"
+     render in full instead of being clipped to a single character.
+     The shared .log-level-select flex:1 used to give both equal
+     halves, which wasted the level select and clipped the subsystem
+     one. */
+  #logs #logLevelFilter{flex:0 0 auto;min-width:0}
+  #logs #logSubsystemFilter{flex:1 1 0;min-width:0}
 }
 
 /* ── Cam-card stream containment ──────────────────────────────────────────
