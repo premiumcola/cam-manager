@@ -208,6 +208,40 @@ def api_weather_status():
     return jsonify(ws.status())
 
 
+@bp.post('/api/weather/sun-tl/test')
+def api_weather_sun_tl_test_start():
+    """Start an ad-hoc sunrise/sunset capture (60/120/300 s) for live
+    diagnostic observation. Re-uses the production capture path so the
+    bug we're chasing reproduces; surfaces frame counters and the
+    daynight-override result via /api/weather/sun-tl/test/status."""
+    ws = app_state.weather_service
+    if ws is None:
+        return jsonify({"ok": False, "error": "weather service not available"}), 503
+    body = request.get_json(silent=True) or {}
+    cam_id = (body.get("cam_id") or "").strip()
+    phase = (body.get("phase") or "").strip()
+    try:
+        duration_s = int(body.get("duration_s", 120))
+    except (TypeError, ValueError):
+        duration_s = 120
+    if not cam_id or not phase:
+        return jsonify({"ok": False, "error": "cam_id and phase required"}), 400
+    res = ws.start_sun_tl_test(cam_id, phase, duration_s)
+    if not res.get("ok"):
+        return jsonify(res), 409
+    return jsonify(res)
+
+
+@bp.get('/api/weather/sun-tl/test/status')
+def api_weather_sun_tl_test_status():
+    """Live snapshot of the active (or most recently completed)
+    sun-tl test session. Polled by the UI every ~2 s while running."""
+    ws = app_state.weather_service
+    if ws is None:
+        return jsonify({"running": False, "session": None})
+    return jsonify(ws.get_sun_tl_test_status())
+
+
 @bp.get('/api/weather/history')
 def api_weather_history():
     """Backing endpoint for the Wetterstatistik chart. `hours` clamped

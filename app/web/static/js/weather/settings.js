@@ -24,13 +24,14 @@ import { WEATHER_TYPES } from "../core/weather-types.js";
 import { _renderWeatherCamList, tickSunTlPreview } from "./settings-suntl.js";
 import { _initWeatherMap, _bindWsLocationInputs } from "./settings-location.js";
 import { _renderWeatherEventsList, bindWeatherTypesHandlers } from "./settings-types.js";
+import { renderSunTlTestPanel, stopSunTlTestPolling } from "./settings-suntltest.js";
 // Side-effect: settings-eventtl.js registers delegated document listeners
 // for the Event-TL chips on import.
 import "./settings-eventtl.js";
 
 function initWeatherTabs(){
   const bar = document.querySelector('.ws-tab-bar'); if (!bar) return;
-  const allPanels = ['ws-panel-cams', 'ws-panel-location', 'ws-panel-events', 'ws-panel-status'];
+  const allPanels = ['ws-panel-cams', 'ws-panel-location', 'ws-panel-events', 'ws-panel-status', 'ws-panel-suntltest'];
   bar.querySelectorAll('.set-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       bar.querySelectorAll('.set-tab').forEach(b => b.classList.remove('active'));
@@ -39,6 +40,8 @@ function initWeatherTabs(){
       allPanels.forEach(id => { const p = byId(id); if (p) p.hidden = (id !== target); });
       if (target === 'ws-panel-status') _refreshWeatherStatus();
       if (target === 'ws-panel-location') _initWeatherMap();
+      if (target === 'ws-panel-suntltest') renderSunTlTestPanel();
+      else stopSunTlTestPolling();
     });
   });
 }

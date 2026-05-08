@@ -12,6 +12,7 @@ import subprocess
 import threading
 import time
 from collections import deque
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
@@ -52,6 +53,83 @@ _SUN_PRE_BIAS = 0.70
 # ones bloat the file without adding visible content. Per the F-task
 # spec the user-facing slider was removed — fewer knobs to mis-set.
 _SUN_TL_LOCKED_WINDOW_MIN = 75
+
+
+@dataclass
+class _SunTLTestSession:
+    """In-memory state for an ad-hoc Sun-Timelapse capture fired from
+    Settings → Wetter-Ereignisse → Test. One session at a time; the
+    HTTP layer reads this back via get_sun_tl_test_status() while the
+    daemon thread populates it. The frames_dir reference lets the
+    status endpoint pull live counters directly from the same
+    `_stats.json` the production capture path writes."""
+    cam_id: str
+    phase: str
+    duration_s: int
+    started_at: datetime
+    expected_frames: int
+    interval_s: int = 3
+    fps: int = 25
+    frames_dir: Path | None = None
+    # Final stats snapshot — captured before scratch dir cleanup so the
+    # post-completion status read still has accurate counters even
+    # though `_stats.json` is gone with the scratch dir.
+    final_stats: dict | None = None
+    daynight_color_set: bool | None = None  # None = skipped (disabled / no rtsp)
+    daynight_revert_set: bool | None = None
+    result_clip_path: str | None = None
+    result_sighting_id: str | None = None
+    error: str | None = None
+    finished: bool = False
+    # Ring buffer of recent log lines tagged [sun-tl-test], [weather]
+    # or [capture-stats] — surfaces the in-flight rejection clusters
+    # without re-parsing docker logs. 200 lines is plenty for a 5-min
+    # window even at WARN-heavy capture.
+    log_lines: deque = field(default_factory=lambda: deque(maxlen=200))
+    # Guards log_lines and the bool result fields — the daemon thread
+    # writes them while the HTTP thread reads them.
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+
+class _SunTLTestLogHandler(logging.Handler):
+    """Captures matching log lines into a session's ring buffer.
+
+    Filters on the three tags we need to diagnose the duplicate-frame
+    bug ([sun-tl-test], [weather], [capture-stats]); everything else
+    propagates to the regular handlers untouched. Attached to the
+    root logger when a test starts and detached when it finishes."""
+
+    _TAGS = ("[sun-tl-test]", "[weather]", "[capture-stats]")
+
+    def __init__(self, session: "_SunTLTestSession"):
+        super().__init__()
+        self.setFormatter(logging.Formatter(
+            "%(asctime)s %(levelname)s %(message)s",
+            datefmt="%H:%M:%S",
+        ))
+        self.session = session
+
+    def emit(self, record: logging.LogRecord):
+        try:
+            msg = record.getMessage()
+            if not any(t in msg for t in self._TAGS):
+                return
+            line = self.format(record)
+            with self.session.lock:
+                self.session.log_lines.append(line)
+        except Exception:
+            pass
+
+
+# Module-level singleton — survives WeatherService rebuilds (settings
+# saves spawn a fresh instance via rebuild_services), so a poll that
+# arrives after the service was swapped still finds the session it
+# fired against the old instance. The daemon thread holds its own
+# direct reference into the dataclass, so the GC chain stays intact
+# even when these globals are replaced by a subsequent test.
+_active_test_session: "_SunTLTestSession | None" = None
+_active_test_handler: "_SunTLTestLogHandler | None" = None
+_test_session_lock = threading.Lock()
 
 
 def _sun_window_bounds(sun_dt: datetime, window_min: int) -> tuple[datetime, datetime, int, int]:
@@ -311,13 +389,25 @@ class SunTimelapseMixin:
         still gets a clean revert at the proper time."""
         self._run_sun_capture_inner(cam_id, phase, sun_dt, pcfg)
 
-    def _run_sun_capture_inner(self, cam_id: str, phase: str, sun_dt: datetime, pcfg: dict):
+    def _run_sun_capture_inner(self, cam_id: str, phase: str, sun_dt: datetime,
+                               pcfg: dict, test_session: "_SunTLTestSession | None" = None):
         from ..frame_helpers import CaptureStats, grab_valid_frame
         rt = self.runtimes.get(cam_id)
         if rt is None or not hasattr(rt, "snapshot_jpeg_hires"):
             log.warning("[weather] cam %s nicht verfügbar — capture abgebrochen", cam_id)
+            if test_session is not None:
+                test_session.error = "camera runtime not available"
             return
-        window_min = _SUN_TL_LOCKED_WINDOW_MIN
+        # Test mode shortens the window from minutes to seconds. The
+        # rest of the pipeline (frame grab loop, validity gating,
+        # encoder) runs unchanged so the test reproduces the real
+        # bug — only the duration and the on-disk stem differ.
+        if test_session is not None:
+            window_seconds = max(15, int(test_session.duration_s))
+            log_tag = "sun-tl-test"
+        else:
+            window_seconds = _SUN_TL_LOCKED_WINDOW_MIN * 60
+            log_tag = "weather"
         interval_s = max(1, int(pcfg.get("interval_s", 3) or 3))
         target_fps = max(1, int(pcfg.get("fps", 25) or 25))
         cam_name = self._cam_name(cam_id)
@@ -330,20 +420,35 @@ class SunTimelapseMixin:
         out_dir = self._sightings_dir() / cam_id / phase_dir
         out_dir.mkdir(parents=True, exist_ok=True)
         date_label = sun_dt.strftime("%Y-%m-%d")
-        stem = f"{date_label}_{phase}"
+        # Test captures get a `_test_<HHMMSS>_` prefix so they show up
+        # in Sichtungen alongside real captures but are trivially
+        # identifiable (and bulk-deletable) by the user.
+        if test_session is not None:
+            stem = f"_test_{datetime.now().strftime('%H%M%S')}_{date_label}_{phase}"
+        else:
+            stem = f"{date_label}_{phase}"
         mp4_path = out_dir / f"{stem}.mp4"
         thumb_path = out_dir / f"{stem}.jpg"
         # Frames go to a temporary scratch dir; deleted after encode.
         frames_dir = out_dir / f".scratch_{stem}"
         frames_dir.mkdir(parents=True, exist_ok=True)
+        if test_session is not None:
+            # Status endpoint reads _stats.json from this path each
+            # poll, so wire it up before the loop starts emitting
+            # counters.
+            test_session.frames_dir = frames_dir
+            test_session.interval_s = interval_s
+            test_session.fps = target_fps
         # Sun snapshot at start (to compare with end).
         sun_at_start = self._sun_position()
         # Wetter-Snapshot zum Trigger-Zeitpunkt (für Score + Recap-Picker).
         api_snapshot = self._latest_api_snapshot_safe()
-        end_at = datetime.now() + timedelta(minutes=window_min)
-        log.info("[weather] Capture start: %s %s (Fenster %d min, %ds-Intervall, %d fps)",
-                 cam_name, phase, window_min, interval_s, target_fps)
-        expected_frames = int((window_min * 60) / max(1, interval_s))
+        end_at = datetime.now() + timedelta(seconds=window_seconds)
+        log.info("[%s] Capture start: %s %s (Fenster %ds, %ds-Intervall, %d fps)",
+                 log_tag, cam_name, phase, window_seconds, interval_s, target_fps)
+        expected_frames = int(window_seconds / max(1, interval_s))
+        if test_session is not None:
+            test_session.expected_frames = expected_frames
         stats = CaptureStats(out_dir=frames_dir, expected_frames=expected_frames)
         n_written = 0
         i = 0
@@ -376,9 +481,30 @@ class SunTimelapseMixin:
                 time.sleep(0.5)
                 slept += 0.5
         sun_at_end = self._sun_position()
-        log.info("[weather] Capture done: %s %s · %d Frames erfasst", cam_name, phase, n_written)
-        if n_written < target_fps * 2:
-            log.warning("[weather] Zu wenige Frames (%d) — Encode übersprungen", n_written)
+        log.info("[%s] Capture done: %s %s · %d Frames erfasst",
+                 log_tag, cam_name, phase, n_written)
+        if test_session is not None:
+            # Stats snapshot — taken once the loop ends so every
+            # early-return branch below (too-few-frames, encode-fail,
+            # encode-crash) still leaves accurate counters on the
+            # session for the UI to read after cleanup.
+            test_session.final_stats = {
+                "expected_frames": int(stats.expected_frames),
+                "captured_frames": int(stats.captured_frames),
+                "invalid_frames": int(stats.invalid_frames),
+                "retry_recoveries": int(stats.retry_recoveries),
+                "rejected_by_reason": dict(stats.rejected_by_reason),
+            }
+        # The "≥ 2 s of video" guard fits 75-min real captures fine
+        # but kills 60-s tests at 3-s intervals (only ~20 frames).
+        # Drop the guard to a static minimum during test so a short
+        # window still produces a verifiable MP4.
+        min_frames = 4 if test_session is not None else target_fps * 2
+        if n_written < min_frames:
+            log.warning("[%s] Zu wenige Frames (%d) — Encode übersprungen",
+                        log_tag, n_written)
+            if test_session is not None:
+                test_session.error = f"too few frames ({n_written})"
             self._cleanup_sun_scratch(frames_dir)
             return
         # Re-use the existing TimelapseBuilder._write_video logic — same
@@ -392,11 +518,15 @@ class SunTimelapseMixin:
             target_seconds = min(target_seconds, 60)  # cap at 60s safety
             written = tb._write_video(images, mp4_path, target_seconds, target_fps)
             if not written or not mp4_path.exists():
-                log.warning("[weather] Encode failed for %s %s", cam_name, phase)
+                log.warning("[%s] Encode failed for %s %s", log_tag, cam_name, phase)
+                if test_session is not None:
+                    test_session.error = "encode failed"
                 self._cleanup_sun_scratch(frames_dir)
                 return
         except Exception as e:
-            log.warning("[weather] Encode crash %s %s: %s", cam_name, phase, e)
+            log.warning("[%s] Encode crash %s %s: %s", log_tag, cam_name, phase, e)
+            if test_session is not None:
+                test_session.error = f"encode crash: {e}"
             self._cleanup_sun_scratch(frames_dir)
             return
         # Write thumb from the middle JPEG (~halfway through the sun event).
@@ -417,6 +547,7 @@ class SunTimelapseMixin:
             "cam_name":     cam_name,
             "event_type":   "sun_timelapse",
             "sun_phase":    phase,
+            "is_test":      test_session is not None,
             "started_at":   datetime.now().isoformat(timespec="seconds"),
             # Actual sun event (sunrise/sunset) time. Distinct from
             # started_at, which is the moment the encode finished —
@@ -425,7 +556,8 @@ class SunTimelapseMixin:
             "sun_event_at": sun_dt.isoformat(timespec="seconds"),
             "score":        round(float(score), 3),
             "severity":     round(float(score), 3),
-            "window_min":   window_min,
+            "window_min":   round(window_seconds / 60.0, 2),
+            "window_seconds": window_seconds,
             "interval_s":   interval_s,
             "fps":          target_fps,
             "api_snapshot": _safe_subset(api_snapshot or {}, [
@@ -453,8 +585,15 @@ class SunTimelapseMixin:
             pass
         (out_dir / f"{stem}.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-        log.info("[weather] Manifest geschrieben: %s · score=%.2f", manifest["id"], score)
+        log.info("[%s] Manifest geschrieben: %s · score=%.2f",
+                 log_tag, manifest["id"], score)
+        if test_session is not None:
+            test_session.result_clip_path = manifest["clip_path"]
+            test_session.result_sighting_id = manifest["id"]
         self._cleanup_sun_scratch(frames_dir)
+        if test_session is not None:
+            # Test runs never push to Telegram — diagnostic only.
+            return
         # Per-event Telegram push reuses the existing weather pipeline —
         # _maybe_push_telegram already gates on push.weather.events[<type>].
         # But our new event types ("sun_timelapse_rise"/"_set") are NOT in
@@ -472,6 +611,185 @@ class SunTimelapseMixin:
             shutil.rmtree(scratch, ignore_errors=True)
         except Exception:
             pass
+
+    # ── Sun-Timelapse TEST runner (Settings → Wetter-Ereignisse → Test) ──
+    # The user fires a 60/120/300 s capture from the UI to reproduce the
+    # twilight rejection bug live: a real sunrise/sunset is too rare to
+    # iterate against, but the SAME _run_sun_capture_inner code path
+    # underneath. The runner attaches a logging.Handler that mirrors
+    # matching log lines into a per-session ring buffer so the status
+    # endpoint can return a live tail without reparsing docker logs.
+    _SUN_TL_TEST_DURATIONS = (60, 120, 300)
+
+    def start_sun_tl_test(self, cam_id: str, phase: str, duration_s: int) -> dict:
+        """Spawn a daemon thread that runs a parameterised sun-tl capture.
+        Returns {"ok": bool, "error": str|None}. Idempotent against a
+        running session — a second start while one is still active
+        returns ok=False with an explanatory error."""
+        global _active_test_session, _active_test_handler
+        if phase not in ("sunrise", "sunset"):
+            return {"ok": False, "error": "phase must be sunrise or sunset"}
+        try:
+            duration_s = int(duration_s)
+        except (TypeError, ValueError):
+            duration_s = 120
+        if duration_s not in self._SUN_TL_TEST_DURATIONS:
+            duration_s = 120
+        with _test_session_lock:
+            existing = _active_test_session
+            if existing is not None and not existing.finished:
+                age = (datetime.now() - existing.started_at).total_seconds()
+                if age < existing.duration_s + 60:
+                    return {"ok": False, "error": "test already running"}
+        rt = self.runtimes.get(cam_id)
+        if rt is None:
+            return {"ok": False, "error": "camera not running"}
+        cam = next((c for c in self._cfg_cameras() if c.get("id") == cam_id), None)
+        if cam is None:
+            return {"ok": False, "error": "camera not in config"}
+
+        pcfg_user = (((cam.get("weather") or {}).get("sun_timelapse") or {}).get(phase) or {})
+        interval_s = max(1, int(pcfg_user.get("interval_s", 3) or 3))
+        target_fps = max(1, int(pcfg_user.get("fps", 25) or 25))
+        # Carry the daynight_override block forward so the test
+        # exercises the same Color/Auto flip the real schedule does.
+        pcfg = {
+            "interval_s": interval_s,
+            "fps": target_fps,
+            "daynight_override": dict(pcfg_user.get("daynight_override") or {}),
+        }
+        expected = int(duration_s / max(1, interval_s))
+        session = _SunTLTestSession(
+            cam_id=cam_id, phase=phase, duration_s=duration_s,
+            started_at=datetime.now(), expected_frames=expected,
+            interval_s=interval_s, fps=target_fps,
+        )
+        handler = _SunTLTestLogHandler(session)
+        handler.setLevel(logging.INFO)
+        # Tear down any handler from a prior session before attaching the
+        # new one so the root logger doesn't accumulate dead handlers
+        # across runs.
+        with _test_session_lock:
+            if _active_test_handler is not None:
+                try:
+                    logging.getLogger().removeHandler(_active_test_handler)
+                except Exception:
+                    pass
+            logging.getLogger().addHandler(handler)
+            _active_test_session = session
+            _active_test_handler = handler
+        log.info(
+            "[sun-tl-test] %s · %s · %ds · interval=%ds fps=%d",
+            self._cam_name(cam_id), phase, duration_s, interval_s, target_fps,
+        )
+        threading.Thread(
+            target=self._run_sun_tl_test_thread,
+            args=(cam_id, phase, pcfg, session),
+            daemon=True,
+            name=f"sun-tl-test-{cam_id}-{phase}",
+        ).start()
+        return {"ok": True}
+
+    def _run_sun_tl_test_thread(self, cam_id: str, phase: str,
+                                pcfg: dict, session: "_SunTLTestSession"):
+        """Daemon body: apply daynight override, run the same capture
+        path the real schedule uses, revert daynight, mark finished.
+        All exceptions are swallowed onto session.error so the status
+        endpoint always has a story to tell."""
+        global _active_test_handler
+        cam = next((c for c in self._cfg_cameras() if c.get("id") == cam_id), None)
+        rtsp_url = (cam or {}).get("rtsp_url") or ""
+        dnov = pcfg.get("daynight_override") or {}
+        try:
+            if dnov.get("enabled") and rtsp_url:
+                log.info("[sun-tl-test] applying daynight override → Color")
+                session.daynight_color_set = self._apply_daynight_override(
+                    cam_id, "Color", phase, 0)
+            else:
+                log.info(
+                    "[sun-tl-test] daynight override skipped (enabled=%s rtsp=%s)",
+                    bool(dnov.get("enabled")), bool(rtsp_url),
+                )
+                session.daynight_color_set = None
+            # Pretend "now" is the sun event so the existing pre-bias
+            # math + the manifest's sun_event_at field still resolve
+            # to a valid timestamp.
+            sun_dt = datetime.now()
+            self._run_sun_capture_inner(cam_id, phase, sun_dt, pcfg,
+                                        test_session=session)
+        except Exception as e:
+            log.warning("[sun-tl-test] crashed: %s", e)
+            session.error = str(e)
+        finally:
+            try:
+                if dnov.get("enabled") and rtsp_url and session.daynight_color_set:
+                    revert_mode = ("Black&White"
+                                   if dnov.get("revert", "auto") == "off"
+                                   else "Auto")
+                    log.info("[sun-tl-test] reverting daynight → %s", revert_mode)
+                    session.daynight_revert_set = self._apply_daynight_override(
+                        cam_id, revert_mode, phase, 0)
+            except Exception as e:
+                log.warning("[sun-tl-test] revert crashed: %s", e)
+            session.finished = True
+            log.info("[sun-tl-test] done")
+            # Detach the log handler so a fresh test starts clean.
+            with _test_session_lock:
+                if _active_test_handler is not None:
+                    try:
+                        logging.getLogger().removeHandler(_active_test_handler)
+                    except Exception:
+                        pass
+                    _active_test_handler = None
+
+    def get_sun_tl_test_status(self) -> dict:
+        """Snapshot for the UI's live panel. Counters come from
+        `_stats.json` written by CaptureStats.flush(); buffered log
+        lines come from the in-memory ring populated by
+        _SunTLTestLogHandler. Returns {running:false, session:null}
+        when no session has ever run in this process — the
+        module-level singleton (not the WeatherService instance)
+        backs this so a service rebuild mid-run can't drop a live
+        session."""
+        from ..frame_helpers import read_capture_stats
+        with _test_session_lock:
+            session = _active_test_session
+        if session is None:
+            return {"running": False, "session": None}
+        elapsed = (datetime.now() - session.started_at).total_seconds()
+        running = (not session.finished) and (elapsed < session.duration_s + 60)
+        # Prefer the final snapshot taken just before scratch cleanup;
+        # while the capture is still running, read the live _stats.json.
+        if session.final_stats is not None:
+            stats = dict(session.final_stats)
+        elif session.frames_dir is not None:
+            stats = read_capture_stats(session.frames_dir) or {}
+        else:
+            stats = {}
+        with session.lock:
+            log_tail = list(session.log_lines)
+        return {
+            "running": bool(running),
+            "cam_id": session.cam_id,
+            "phase": session.phase,
+            "started_at": session.started_at.isoformat(timespec="seconds"),
+            "elapsed_s": int(elapsed),
+            "target_s": session.duration_s,
+            "interval_s": session.interval_s,
+            "fps": session.fps,
+            "expected_frames": int(stats.get("expected_frames", session.expected_frames) or 0),
+            "captured_frames": int(stats.get("captured_frames", 0) or 0),
+            "retry_recoveries": int(stats.get("retry_recoveries", 0) or 0),
+            "invalid_frames": int(stats.get("invalid_frames", 0) or 0),
+            "rejected_by_reason": dict(stats.get("rejected_by_reason", {}) or {}),
+            "daynight_color_set": session.daynight_color_set,
+            "daynight_revert_set": session.daynight_revert_set,
+            "result_clip_path": session.result_clip_path,
+            "result_sighting_id": session.result_sighting_id,
+            "error": session.error,
+            "finished": bool(session.finished),
+            "last_log_lines": log_tail,
+        }
 
     def sun_times_today(self) -> dict:
         """Used by the /api/weather/sun-times endpoint to power the

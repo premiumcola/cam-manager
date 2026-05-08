@@ -134,3 +134,84 @@
   .ws-explainer-list dt:first-of-type{margin-top:0}
 }
 
+/* ── Sun-Timelapse Test subtab ─────────────────────────────────────────────
+   Diagnostic panel under Wetter-Ereignisse → 🌅 Test. Surfaces in real
+   time the signals needed to chase the twilight monochrome / duplicate-
+   frame bug: daynight-override result, frame counters, per-reason
+   rejection breakdown, log tail. Depth via background tone + an inset
+   accent stripe — no thin borders. All controls ≥44 px tall on mobile;
+   the rejection list and log box scroll vertically without horizontal
+   overflow on a 375 px iPhone width. */
+.suntltest-panel{padding-top:8px;display:grid;gap:14px}
+.suntltest-form{display:grid;gap:12px;padding:14px;border-radius:14px;background:rgba(127,174,201,0.08);box-shadow:inset 4px 0 0 #7faec9}
+.suntltest-form-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.suntltest-form-row--start{justify-content:flex-end}
+.suntltest-lbl{font-size:13px;color:var(--muted);font-weight:700;min-width:62px}
+.suntltest-sel{flex:1;min-width:200px;min-height:44px;padding:10px 36px 10px 12px;border-radius:12px}
+.suntltest-phase-row,.suntltest-dur-row{display:flex;flex-wrap:wrap;gap:8px;flex:1}
+.suntltest-chip{
+  min-height:44px;padding:8px 14px;border-radius:12px;border:0;
+  background:rgba(255,255,255,0.06);color:var(--text);font-weight:600;font-size:14px;
+  cursor:pointer;transition:background 120ms ease, color 120ms ease
+}
+.suntltest-chip:hover{background:rgba(255,255,255,0.10)}
+.suntltest-chip.is-active{background:#7faec9;color:#0b1320}
+.suntltest-start{min-height:48px;padding:10px 22px;font-size:15px;border-radius:14px}
+.suntltest-start:disabled{opacity:.55;cursor:not-allowed}
+.suntltest-hint{margin:0}
+
+.suntltest-live{display:grid;gap:14px;padding:14px;border-radius:14px;background:rgba(127,174,201,0.06);box-shadow:inset 4px 0 0 rgba(127,174,201,0.6)}
+.suntltest-live.is-running{box-shadow:inset 4px 0 0 #7faec9}
+.suntltest-live.is-done{box-shadow:inset 4px 0 0 #34d399}
+.suntltest-live-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px}
+.suntltest-live-title{font-weight:700;font-size:15px;color:var(--text)}
+.suntltest-live-status{font-size:13px;color:var(--muted);font-weight:600}
+.suntltest-live-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.suntltest-tile{padding:10px 12px;border-radius:12px;background:rgba(255,255,255,0.04);display:grid;gap:4px}
+.suntltest-tile-label{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.suntltest-tile-val{font-size:15px;color:var(--text);font-weight:600}
+.suntltest-tile-val b{font-weight:800;color:#fff}
+.suntltest-tile-sub{font-size:11px;color:var(--muted)}
+.suntltest-progress{height:4px;border-radius:4px;background:rgba(255,255,255,0.08);overflow:hidden;margin-top:4px}
+.suntltest-progress > span{display:block;height:100%;background:#7faec9;transition:width 250ms ease}
+.suntltest-live.is-done .suntltest-progress > span{background:#34d399}
+
+.suntltest-badge{display:inline-block;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700}
+.suntltest-badge--ok{background:rgba(52,211,153,0.18);color:#7af1c1}
+.suntltest-badge--err{background:rgba(251,113,133,0.18);color:#fca5b5}
+.suntltest-badge--mute{background:rgba(255,255,255,0.06);color:var(--muted)}
+
+.suntltest-section{display:grid;gap:8px}
+.suntltest-section-title{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.suntltest-rej-list{display:grid;gap:4px}
+.suntltest-rej-row{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;border-radius:10px;background:rgba(251,113,133,0.10);font-size:13px}
+.suntltest-rej-key{color:var(--text);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+.suntltest-rej-val{color:#fca5b5;font-weight:700;font-variant-numeric:tabular-nums}
+.suntltest-rej-empty{padding:8px 12px;border-radius:10px;background:rgba(255,255,255,0.04);font-size:13px;color:var(--muted)}
+
+.suntltest-log-box{
+  max-height:240px;overflow-y:auto;overflow-x:auto;
+  padding:10px 12px;border-radius:10px;background:rgba(0,0,0,0.35);
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:11.5px;line-height:1.5;
+  white-space:pre;color:#cfe7ff
+}
+.suntltest-log-line{white-space:pre}
+.suntltest-log-line.muted{color:var(--muted);white-space:normal}
+
+.suntltest-result-card{padding:14px;border-radius:14px;display:grid;gap:8px}
+.suntltest-result-card--ok{background:rgba(52,211,153,0.10);box-shadow:inset 4px 0 0 #34d399}
+.suntltest-result-card--err{background:rgba(251,113,133,0.10);box-shadow:inset 4px 0 0 #fb7185}
+.suntltest-result-title{font-weight:700;font-size:15px;color:var(--text)}
+.suntltest-result-msg{font-size:13px;color:var(--muted)}
+.suntltest-result-msg code{background:rgba(255,255,255,0.06);padding:1px 6px;border-radius:6px;color:#cfe7ff}
+.suntltest-result-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:4px}
+
+@media (max-width:540px){
+  .suntltest-form-row{flex-direction:column;align-items:stretch}
+  .suntltest-form-row--start{align-items:flex-end}
+  .suntltest-lbl{min-width:0}
+  .suntltest-live-grid{grid-template-columns:1fr;gap:8px}
+  .suntltest-log-box{max-height:200px;font-size:11px}
+  .suntltest-result-actions .btn-action{width:100%;text-align:center}
+}
+

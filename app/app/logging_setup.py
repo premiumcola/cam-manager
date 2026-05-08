@@ -8,16 +8,17 @@ the web UI keeps its existing shape so the API doesn't change.
 
 Tag conventions (placed in the message body, not the logger name):
 
-    [boot]      server bootstrap, migration, runtime build
-    [cam:<id>]  per-camera runtime (capture, motion, recording)
-    [det]       object / bird / wildlife detection
-    [tg]        Telegram bot
-    [weather]   WeatherService
-    [storage]   EventStore + media scan + cleanup
-    [migration] storage_migration
-    [timelapse] timelapse capture + builder
-    [mqtt]      MQTTService
-    [heartbeat] periodic summaries
+    [boot]         server bootstrap, migration, runtime build
+    [cam:<id>]     per-camera runtime (capture, motion, recording)
+    [det]          object / bird / wildlife detection
+    [tg]           Telegram bot
+    [weather]      WeatherService
+    [sun-tl-test]  ad-hoc sunrise/sunset timelapse test runner
+    [storage]      EventStore + media scan + cleanup
+    [migration]    storage_migration
+    [timelapse]    timelapse capture + builder
+    [mqtt]         MQTTService
+    [heartbeat]    periodic summaries
 """
 from __future__ import annotations
 
