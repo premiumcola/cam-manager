@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 
 import cv2
 import numpy as np
@@ -40,6 +41,18 @@ class CoralObjectDetector:
         self.detect = None
         self._cpu_mode = False  # True when using tflite-runtime instead of pycoral
         self.device = self.cfg.get("device")
+        # Serialise set_tensor → invoke → get_tensor. The interpreter is
+        # NOT thread-safe — when the runtime loop and the simulate-now
+        # endpoint hit it concurrently, two effects collide:
+        #   1. tflite raises "There is at least 1 reference to internal
+        #      data in the interpreter …" because a numpy view from a
+        #      previous get_tensor() is still live when set_tensor() runs.
+        #   2. EdgeTPU invokes can produce inconsistent output if a
+        #      second invoke starts before the previous one's output
+        #      tensors are read.
+        # The lock covers the entire read-from-output phase so callers
+        # always observe a consistent snapshot.
+        self._infer_lock = threading.Lock()
         if not self.enabled:
             return
         # Startup diagnostic: log the label file path + first 25 entries so
@@ -284,31 +297,55 @@ class CoralObjectDetector:
         return self._detect_coral(frame, threshold)
 
     def _detect_coral(self, frame: np.ndarray, threshold: float | None = None) -> list[Detection]:
-        """Inference via pycoral + EdgeTPU."""
+        """Inference via pycoral + EdgeTPU.
+
+        Wrapped in ``_infer_lock`` so a concurrent simulate-now call
+        can't start a second invoke while an outstanding get_objects()
+        view is still tied to the previous run.
+        """
         score_threshold = threshold if threshold is not None else self.min_score
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        width, height = self.common.input_size(self.interpreter)
-        resized = cv2.resize(rgb, (width, height))
-        self.common.set_input(self.interpreter, resized)
-        self.interpreter.invoke()
-        objs = self.detect.get_objects(self.interpreter, score_threshold=score_threshold)
+        with self._infer_lock:
+            width, height = self.common.input_size(self.interpreter)
+            resized = cv2.resize(rgb, (width, height))
+            self.common.set_input(self.interpreter, resized)
+            self.interpreter.invoke()
+            # Materialise pycoral results into a plain list of (id, score, bbox)
+            # tuples while still inside the lock so the underlying tensor
+            # references are released before the next caller can run set_input.
+            objs = self.detect.get_objects(self.interpreter, score_threshold=score_threshold)
+            snapshot = [
+                (int(o.id), float(o.score),
+                 (float(o.bbox.xmin), float(o.bbox.ymin),
+                  float(o.bbox.xmax), float(o.bbox.ymax)))
+                for o in objs
+            ]
         h, w = frame.shape[:2]
-        out: list[Detection] = []
         sx = w / float(width)
         sy = h / float(height)
-        for obj in objs:
-            bbox = obj.bbox
-            x1 = max(0, int(bbox.xmin * sx))
-            y1 = max(0, int(bbox.ymin * sy))
-            x2 = min(w, int(bbox.xmax * sx))
-            y2 = min(h, int(bbox.ymax * sy))
-            cid = int(obj.id)
+        out: list[Detection] = []
+        for cid, score, (xmin, ymin, xmax, ymax) in snapshot:
+            x1 = max(0, int(xmin * sx))
+            y1 = max(0, int(ymin * sy))
+            x2 = min(w, int(xmax * sx))
+            y2 = min(h, int(ymax * sy))
             label = self.labels.get(cid, str(cid))
-            out.append(Detection(label=label, score=float(obj.score), bbox=(x1, y1, x2, y2), raw_cls_id=cid))
+            out.append(Detection(label=label, score=score, bbox=(x1, y1, x2, y2), raw_cls_id=cid))
         return _apply_region_filter(out, self._region_filter)
 
     def _detect_cpu(self, frame: np.ndarray, threshold: float | None = None) -> list[Detection]:
-        """Inference via tflite-runtime on CPU (SSD MobileNet layout)."""
+        """Inference via tflite-runtime on CPU (SSD MobileNet layout).
+
+        Both the lock AND ``np.copy()`` on the output tensors are
+        required:
+          • the lock prevents a parallel ``set_tensor`` call (from the
+            simulate-now endpoint) from clashing with this thread's
+            outstanding numpy views;
+          • the copy detaches our return values from the interpreter's
+            internal buffer so a downstream consumer can hold the
+            arrays past the lock release without keeping the
+            interpreter pinned.
+        """
         score_threshold = threshold if threshold is not None else self.min_score
         input_details = self.interpreter.get_input_details()
         output_details = self.interpreter.get_output_details()
@@ -319,12 +356,13 @@ class CoralObjectDetector:
         inp = np.expand_dims(resized, axis=0)
         if input_details[0]['dtype'] == np.float32:
             inp = (inp.astype(np.float32) - 127.5) / 127.5
-        self.interpreter.set_tensor(input_details[0]['index'], inp)
-        self.interpreter.invoke()
-        # Standard SSD output order: boxes [N,4], classes [N], scores [N], count
-        boxes   = self.interpreter.get_tensor(output_details[0]['index'])[0]
-        classes = self.interpreter.get_tensor(output_details[1]['index'])[0]
-        scores  = self.interpreter.get_tensor(output_details[2]['index'])[0]
+        with self._infer_lock:
+            self.interpreter.set_tensor(input_details[0]['index'], inp)
+            self.interpreter.invoke()
+            # Standard SSD output order: boxes [N,4], classes [N], scores [N], count
+            boxes   = np.copy(self.interpreter.get_tensor(output_details[0]['index'])[0])
+            classes = np.copy(self.interpreter.get_tensor(output_details[1]['index'])[0])
+            scores  = np.copy(self.interpreter.get_tensor(output_details[2]['index'])[0])
         h, w = frame.shape[:2]
         out: list[Detection] = []
         for i in range(len(scores)):
