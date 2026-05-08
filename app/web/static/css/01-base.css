@@ -4,20 +4,24 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@me
 .shell{display:flex;gap:12px;max-width:1900px;margin:0 auto;padding:8px 14px 18px 14px}
 .panel{background:var(--panel);border-radius:24px;box-shadow:0 8px 32px rgba(0,0,0,.35)}
 /* Sidebar collapse model: only the WIDTH animates (260 → 52 px and
-   back). Icons stay anchored at the same fixed left padding in both
-   states — the .nav a base rule (padding:8px 10px) applies whether
-   the sidebar is open or collapsed, so the icon's centre never
-   shifts horizontally. Labels and the brand text fade out via
-   opacity-only transitions while the box shrinks; the sidebar's
-   overflow:hidden clips them as the right edge slides in. The
-   sidebar's vertical layout is INVARIANT between states — section
-   labels and the brand block keep their height/padding so nav
-   items never reflow up or down on toggle. */
+   back). Icons sit at fixed left padding in both states (the
+   .nav a base rule's padding:8px 10px never changes), and there
+   is no vertical reflow at any point. Section labels and the
+   brand block are intentionally hidden — visual grouping comes
+   from the .nav-divider lines between groups, branding lives in
+   the hero up top. The previous "reserve their height with
+   opacity:0" approach kept icons stable but left visible empty
+   placeholders in the collapsed state; dropping them out of flow
+   entirely is the only way to satisfy "no empty boxes AND icons
+   never move". The markup stays — only CSS hides them — so a
+   future a11y pass can keep aria-hidden semantics if needed. */
 .sidebar{padding:12px 6px;position:sticky;top:8px;height:max-content;flex-shrink:0;width:260px;transition:width .35s cubic-bezier(0.4,0,0.2,1);overflow:hidden}
 .sidebar.collapsed{width:52px}
-.sidebar.collapsed .brand{opacity:0;pointer-events:none}
 .sidebar.collapsed .nav-label,.sidebar.collapsed .nav-chev{opacity:0;pointer-events:none}
-.brand{display:flex;gap:10px;align-items:center;margin-bottom:0;transition:opacity .35s cubic-bezier(0.4,0,0.2,1)}.brand-text{flex:1;min-width:0}
+/* Sidebar brand block — redundant with the hero header, dropped
+   from the sidebar entirely so the first nav item sits at the
+   very top in both states. */
+.sidebar .brand{display:none}
 .logo{width:46px;height:46px;border-radius:14px;display:grid;place-items:center;background:#14314c;flex-shrink:0}
 .nav{display:grid;gap:2px}
 .nav a{padding:8px 10px;border-radius:12px;background:transparent;display:flex;align-items:center;justify-content:flex-start;gap:10px;white-space:nowrap;min-height:44px;color:#cbd5e1;transition:background .15s ease,color .15s ease;-webkit-tap-highlight-color:transparent;border:none;width:100%;font:inherit;text-align:left;cursor:pointer}
@@ -30,9 +34,12 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@me
    closing — keeps the impression of "the right side slides in" and
    never of "letters get squashed by the moving edge". */
 .nav-label,.nav-chev{opacity:1;transition:opacity .18s ease}
-.nav-section-label{font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--muted);opacity:.55;font-weight:700;padding:14px 10px 4px;user-select:none;pointer-events:none;transition:opacity .18s ease}
-.nav-section-label:first-child{padding-top:4px}
-.sidebar.collapsed .nav-section-label{opacity:0;pointer-events:none}
+/* Section labels (Kameras / Medien / System) are hidden in BOTH
+   states — visual grouping comes from .nav-divider lines, not
+   from text headers. Keeping them in flow shifted icons between
+   states; removing them entirely is what makes the icon y-position
+   identical collapsed vs expanded. */
+.nav-section-label{display:none}
 /* Symmetric horizontal margin so the line stays inset from both edges in
    any sidebar width — collapsed and expanded read the same. */
 .nav-divider{height:1px;background:rgba(255,255,255,.06);margin:5px 8px;border:none}
