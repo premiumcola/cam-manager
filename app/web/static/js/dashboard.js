@@ -369,7 +369,7 @@ ${isActive ? `
             <div class="cv-pdot"></div>
             <span>Live</span>
             ${previewFps ? `<span class="cv-live-fps">${previewFps} fps</span>` : ''}
-            <svg width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="rgba(200,245,224,.55)" stroke-width="1.8" stroke-linecap="round" style="margin-left:auto;margin-right:2px;flex-shrink:0"><path d="M3 4.5l3 3 3-3"/></svg>
+            <svg class="cv-live-arrow" width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="rgba(200,245,224,.85)" stroke-width="1.8" stroke-linecap="round"><path d="M3 4.5l3 3 3-3"/></svg>
           </div>
           <div class="cv-live-expanded">
             <div class="cv-live-exp-header">
@@ -377,9 +377,9 @@ ${isActive ? `
               <span>Livestream aktiv</span>
             </div>
             <div class="cv-lp-row"><span>Stream-Modus</span><strong class="cv-stream-mode ${hdOn ? 'cv-mode-hd' : (streamMode === 'live' ? 'cv-mode-live' : 'cv-mode-base')}">${hdOn ? '● HD-Stream' : (streamMode === 'live' ? '● Live' : '○ Vorschau')}</strong></div>
-            <div class="cv-lp-row"><span>Preview-FPS<br><small class="cv-lp-fps-sub">${hdOn ? 'Analyse läuft im Sub-Stream weiter' : 'Gemessen (Sub-Stream)'}</small></span><strong class="cv-lp-fps-val">${hdOn ? (previewFps != null ? previewFps + ' fps' : '—') : (previewFps != null ? previewFps + ' fps' : '—')}</strong></div>
+            <div class="cv-lp-row"><span>Preview-FPS</span><strong class="cv-lp-fps-val">${previewFps != null ? previewFps + ' fps' : '—'}</strong></div>
             <div class="cv-lp-row"><span>Auflösung</span><strong class="cv-lp-res-val">${hdOn ? esc(c.main_resolution || c.preview_resolution || c.resolution || '—') : esc(c.preview_resolution || c.resolution || '—')}</strong></div>
-            <div class="cv-lp-row"><span>Analyse-Framerate<br><small>Wie oft TAM-spy analysiert</small></span><strong>${fps != null ? fps + ' fps' : '—'}</strong></div>
+            <div class="cv-lp-row"><span>Analyse-Framerate</span><strong>${fps != null ? fps + ' fps' : '—'}</strong></div>
           </div>
         </div>
       </div>

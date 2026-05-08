@@ -108,13 +108,20 @@
    the flex shape can grow up to the open-state width (230 px). The
    .cv-lp-open rule on line 103 still flips max-width explicitly to
    --lp-expanded-w so the open transition hits the same end state. */
-.cv-pill-live-wrap{--lp-collapsed-w:max-content;--lp-expanded-w:230px;position:relative;border-radius:999px;border:1.5px solid rgba(34,197,94,.55);background:rgba(34,197,94,.18);color:#c8f5e0;font-size:10.5px;font-weight:700;cursor:default;overflow:hidden;backdrop-filter:blur(8px);min-width:100px;width:var(--lp-collapsed-w);max-width:var(--lp-expanded-w);max-height:22px;transition:max-width .28s ease,max-height .28s ease,border-radius .28s ease;margin-left:auto}
-.cv-pill-live-wrap.cv-lp-open{border-radius:14px;max-width:var(--lp-expanded-w);max-height:200px}
+.cv-pill-live-wrap{--lp-collapsed-w:max-content;--lp-expanded-w:220px;position:relative;border-radius:999px;border:1.5px solid rgba(34,197,94,.55);background:rgba(34,197,94,.18);color:#c8f5e0;font-size:10.5px;font-weight:700;cursor:default;overflow:hidden;backdrop-filter:blur(8px);min-width:118px;width:var(--lp-collapsed-w);max-width:var(--lp-expanded-w);max-height:22px;transition:max-width .28s ease,max-height .28s ease,border-radius .28s ease;margin-left:auto}
+.cv-pill-live-wrap.cv-lp-open{border-radius:14px;max-width:var(--lp-expanded-w);max-height:130px}
 .cv-live-off{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.35)}
 /* Slimmer collapsed row — 3 px vertical padding, 10.5 px font, 1.2 line-
    height. The 22 px max-height on the wrap clips any overflow but the
    inner padding has been tightened so nothing visually clips. */
+/* Collapsed row spacing — gap defaults to 6 px (dot → "Live"). The
+   "Live" → fps and fps → arrow gaps are bumped to 8 px via per-child
+   margins so the pill hugs its content (no margin-left:auto on the
+   arrow — that pushed it to a free-floating right edge and caused
+   the workshop-tile clip). Width is driven entirely by content +
+   the parent's min-width floor. */
 .cv-live-collapsed{display:flex;align-items:center;gap:6px;padding:3px 10px;white-space:nowrap;font-size:10.5px;line-height:1.2;min-height:0;box-sizing:border-box;opacity:1;transform:translateY(0);transition:opacity .18s ease,transform .28s ease}
+.cv-live-collapsed .cv-live-arrow{margin-left:2px;flex-shrink:0;opacity:.55}
 /* FPS suffix inside the live pill — same colour family as the
    "Live" word so the whole pill reads as one cohesive shape. The
    slight opacity drop + lighter font-weight differentiates it from
@@ -126,24 +133,29 @@
   opacity:.78;
   font-size:10px;
   font-weight:600;
-  margin-left:1px;
+  /* +2 px on top of the row's 6 px gap → 8 px effective spacing
+     between "Live" and the fps reading. */
+  margin-left:2px;
 }
 .cv-pill-live-wrap.cv-lp-open .cv-live-collapsed{opacity:0;transform:translateY(-4px);pointer-events:none;max-height:0;padding:0;overflow:hidden}
 .cv-live-expanded{padding:0 12px;max-height:0;opacity:0;overflow:hidden;transition:max-height .3s ease,opacity .25s ease,padding .3s ease;width:100%;min-width:0}
-.cv-pill-live-wrap.cv-lp-open .cv-live-expanded{max-height:160px;opacity:1;padding:8px 12px 10px}
+.cv-pill-live-wrap.cv-lp-open .cv-live-expanded{max-height:110px;opacity:1;padding:6px 10px 7px}
 /* Tighter popover header — was 10 px top + 8 px bottom + 6 px margin =
    24 px before the dot. Now 8 px above the title and 8 px below the
    border, eliminating the empty band the user saw at the top of the
    expanded popover. */
-.cv-live-exp-header{display:flex;align-items:center;gap:10px;font-size:11.5px;font-weight:700;color:#c8f5e0;padding:0 0 6px 0;border-bottom:1px solid rgba(34,197,94,.2);margin:0 0 8px}
+.cv-live-exp-header{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;color:#c8f5e0;padding:0 0 4px 0;border-bottom:1px solid rgba(34,197,94,.2);margin:0 0 5px}
 /* Belt-and-braces — strip any inherited top margin from the popover's
    first child so a future content tweak can't reintroduce the empty
    band above the dot. */
 .cv-pill-live-wrap.cv-lp-open .cv-live-expanded > *:first-child{margin-top:0}
 .cv-pill-live-wrap.cv-live-active .cv-pdot{background:#22c55e;animation:cv-pulse-green 2s ease-in-out infinite}
 .cv-pill-live-wrap.cv-live-off .cv-pdot{background:rgba(255,255,255,.3);animation:none}
-.cv-lp-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:5px;font-size:10px;padding:0 10px}
-.cv-lp-row span{color:rgba(220,252,231,.75);line-height:1.4}
+.cv-lp-row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:3px;font-size:10px;padding:0 6px}
+.cv-lp-row:last-child{margin-bottom:0}
+.cv-lp-row span{color:rgba(220,252,231,.75);line-height:1.3}
+/* Sub-labels under the row spans were dropped from the dashboard
+   template — keep the rule in case a future caller re-adds them. */
 .cv-lp-row small{font-size:9px;color:rgba(220,252,231,.5);display:block}
 .cv-lp-row strong{color:#fff;font-weight:700;white-space:nowrap}
 /* HD badge — primary control next to the Live pill. */
