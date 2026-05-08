@@ -16,10 +16,14 @@ if _pkg_root not in sys.path:
     sys.path.insert(0, _pkg_root)
 
 from app.frame_helpers import (  # noqa: E402
+    DAY_PROFILE,
+    NIGHT_PROFILE,
+    TWILIGHT_PROFILE,
     dead_area_score,
     grab_valid_frame,
     is_grey_frame,
     is_valid_frame,
+    pick_profile_from_baseline,
 )
 
 
@@ -290,3 +294,29 @@ class TestGrabValidFrameOnReject:
         assert result is None
         assert attempts_used == 3
         assert last_reason
+
+
+class TestPickProfileFromBaseline:
+    def test_dark_frame_picks_night(self):
+        """An IR-night sample (uniform luma ~30) maps to NIGHT."""
+        dark = np.full((240, 320, 3), 30, dtype=np.uint8)
+        prof = pick_profile_from_baseline([dark, dark])
+        assert prof is NIGHT_PROFILE, f"got {prof.name}"
+
+    def test_midgrey_frame_picks_twilight(self):
+        """A mid-grey sample (luma ~80) maps to TWILIGHT."""
+        mid = np.full((240, 320, 3), 80, dtype=np.uint8)
+        prof = pick_profile_from_baseline([mid, mid, mid])
+        assert prof is TWILIGHT_PROFILE, f"got {prof.name}"
+
+    def test_daylight_frame_picks_day(self):
+        """A bright sample (luma ~180) maps to DAY."""
+        bright = np.full((240, 320, 3), 180, dtype=np.uint8)
+        prof = pick_profile_from_baseline([bright, bright])
+        assert prof is DAY_PROFILE, f"got {prof.name}"
+
+    def test_no_samples_falls_back_to_day(self):
+        """No usable samples → DAY (conservative — never accidentally
+        let real corruption through with night-loose thresholds)."""
+        assert pick_profile_from_baseline([]) is DAY_PROFILE
+        assert pick_profile_from_baseline([None, None]) is DAY_PROFILE

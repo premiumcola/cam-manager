@@ -133,6 +133,105 @@ _GREY_TONED_LUMA_MAX = 160.0
 _GREY_TONED_CHROMA_STD_MAX = 8.0
 
 
+# ── Validator profiles (DAY / TWILIGHT / NIGHT) ──────────────────────────────
+# A real night IR scene legitimately has dead_area ≈ 95-100 %, std_sum
+# ≈ 8-11, gray_std ≈ 1.5 — none of which is corruption, just a quiet
+# dark scene. Running the daytime thresholds against IR night frames
+# rejected 8/23 frames in the November test capture even though every
+# frame was a perfectly valid empty terrace at midnight.
+#
+# A FrameValidatorProfile freezes every threshold is_valid_frame reads
+# into one frozen-dataclass-shaped bundle. Three named profiles cover
+# the three clusters — DAY (current daytime tunings, no behavioural
+# change), TWILIGHT (sunset/sunrise mid-band), NIGHT (true IR night).
+# The default is DAY so callers that don't opt in keep the existing
+# behaviour bit-identical to before this change.
+@dataclass(frozen=True)
+class FrameValidatorProfile:
+    """Bundle of every threshold ``is_valid_frame`` reads. The defaults
+    mirror the existing module-level constants so DAY_PROFILE is a
+    pure no-op for daytime callers."""
+    name: str = "day"
+    # Brightness gates (unchanged across profiles — too dark = too dark
+    # regardless of which profile we picked).
+    brightness_floor: float = _BRIGHTNESS_FLOOR
+    brightness_ceil: float  = _BRIGHTNESS_CEIL
+    # Pink/magenta gates — corruption looks the same at any time of day.
+    pink_full_r_min: float = _PINK_FULL_R_MIN
+    pink_full_ratio: float = _PINK_FULL_RATIO
+    pink_quad_r_min: float = _PINK_QUAD_R_MIN
+    pink_quad_ratio: float = _PINK_QUAD_RATIO
+    # Patterned-magenta detector.
+    pattern_magenta_area_frac: float = _PATTERN_MAGENTA_AREA_FRAC
+    # Spatial-detail floor (relaxed at night because IR sensor noise
+    # produces less variance than a daytime scene).
+    flat_gray_std_floor: float = _FLAT_GRAY_STD_FLOOR
+    # Grey-hickup heuristic.
+    grey_channel_std_sum: float = _GREY_CHANNEL_STD_SUM
+    grey_midband_total_std: float = _GREY_MIDBAND_TOTAL_STD
+    # Tile-based dead-area scoring (relaxed at twilight + night because
+    # legitimate dark scenes legitimately have many empty tiles).
+    tile_dead_fraction: float = _TILE_DEAD_FRACTION
+    # Frame-level grey-toned mid-luma gate.
+    grey_toned_chroma_std_max: float = _GREY_TONED_CHROMA_STD_MAX
+    # Colorbar — same shape regardless of time of day.
+    colorbar_per_row_std: float = _COLORBAR_PER_ROW_STD
+    colorbar_between_row_std: float = _COLORBAR_BETWEEN_ROW_STD
+
+
+DAY_PROFILE = FrameValidatorProfile(name="day")
+TWILIGHT_PROFILE = FrameValidatorProfile(
+    name="twilight",
+    flat_gray_std_floor=1.2,
+    tile_dead_fraction=0.55,
+    grey_midband_total_std=8.0,
+)
+NIGHT_PROFILE = FrameValidatorProfile(
+    name="night",
+    flat_gray_std_floor=0.8,
+    tile_dead_fraction=0.85,
+    grey_midband_total_std=5.0,
+)
+
+
+def pick_profile_from_baseline(samples) -> FrameValidatorProfile:
+    """Pick a validator profile based on the median scene brightness
+    of 2-3 reference frames. The capture loop takes a few quick
+    snapshots before the slot loop starts so the chosen profile
+    matches the actual lighting regardless of clock-vs-real-sun
+    drift.
+
+    Bands:
+      median brightness < 50  → NIGHT
+      50 ≤ median < 110       → TWILIGHT
+      median ≥ 110            → DAY
+
+    ``samples`` may contain decoded BGR ndarrays or raw JPEG bytes;
+    each is decoded via the module-private ``_decode`` helper.
+    Falls back to DAY when no usable samples were supplied — a
+    no-signal callsite shouldn't accidentally inherit night-loose
+    thresholds and let real corruption through.
+    """
+    means: list[float] = []
+    for s in samples or []:
+        img = _decode(s)
+        if img is None or img.size == 0 or img.ndim < 2:
+            continue
+        try:
+            means.append(float(img.mean()))
+        except Exception:
+            continue
+    if not means:
+        return DAY_PROFILE
+    means.sort()
+    med = means[len(means) // 2]
+    if med < 50.0:
+        return NIGHT_PROFILE
+    if med < 110.0:
+        return TWILIGHT_PROFILE
+    return DAY_PROFILE
+
+
 # ── Decoding helper ──────────────────────────────────────────────────────────
 def _decode(img_or_bytes) -> np.ndarray | None:
     """Accept either a decoded BGR ndarray or JPEG bytes; return ndarray or None."""
@@ -148,9 +247,12 @@ def _decode(img_or_bytes) -> np.ndarray | None:
 
 
 # ── Individual heuristics ────────────────────────────────────────────────────
-def is_grey_frame(img) -> tuple[bool, str]:
+def is_grey_frame(img, profile: "FrameValidatorProfile | None" = None) -> tuple[bool, str]:
     """True when the frame is a uniform mid-grey hickup. False on real imagery
     (including IR/night frames, which have plenty of noise across channels).
+    ``profile`` lets the caller relax the mid-grey total-std threshold for
+    night/twilight scenes where legitimate IR frames have less channel
+    variance than a daytime scene.
 
     Reolink date OSDs render in the top-right corner and add enough
     channel std to push an otherwise-uniform-grey frame above the
@@ -177,11 +279,17 @@ def is_grey_frame(img) -> tuple[bool, str]:
     std_g = float(work[:, :, 1].std())
     std_r = float(work[:, :, 2].std())
     std_sum = std_b + std_g + std_r
-    if std_sum < _GREY_CHANNEL_STD_SUM:
+    grey_channel_std_sum = (
+        profile.grey_channel_std_sum if profile is not None else _GREY_CHANNEL_STD_SUM
+    )
+    grey_midband_total_std = (
+        profile.grey_midband_total_std if profile is not None else _GREY_MIDBAND_TOTAL_STD
+    )
+    if std_sum < grey_channel_std_sum:
         return True, f"grey_uniform(std_sum={std_sum:.1f})"
     mean_brightness = float((img[:, :, 0].mean() + img[:, :, 1].mean() + img[:, :, 2].mean()) / 3.0)
     if (_GREY_MIDBAND_MIN <= mean_brightness <= _GREY_MIDBAND_MAX
-            and std_sum < _GREY_MIDBAND_TOTAL_STD):
+            and std_sum < grey_midband_total_std):
         return True, f"grey_midband(brightness={mean_brightness:.0f},std_sum={std_sum:.1f})"
     return False, ""
 
@@ -331,13 +439,18 @@ def is_colorbar(img) -> tuple[bool, str]:
     return False, ""
 
 
-def is_valid_frame(img) -> tuple[bool, str]:
+def is_valid_frame(img, profile: FrameValidatorProfile = DAY_PROFILE) -> tuple[bool, str]:
     """Bundled validity check used by every timelapse capture and build path.
 
     Returns (True, "") when the frame is suitable for inclusion in a
     timelapse, otherwise (False, "<reason>"). Conservative: night/dark/IR
     frames pass, only truly broken inputs (null, too small, blown-out
-    brightness, pink corruption, flat fill, mid-grey hickup, colorbar) fail."""
+    brightness, pink corruption, flat fill, mid-grey hickup, colorbar) fail.
+
+    ``profile`` lets the capture loop swap thresholds for IR-night /
+    twilight scenes — the default keeps the historic daytime tunings.
+    Per-call (not module-level) so a single process can run different
+    profiles for different cameras at the same time."""
     img = _decode(img)
     if img is None or img.size == 0:
         return False, "null/empty"
@@ -349,13 +462,13 @@ def is_valid_frame(img) -> tuple[bool, str]:
     g = float(img[:, :, 1].mean())
     r = float(img[:, :, 2].mean())
     brightness = (b + g + r) / 3.0
-    if brightness < _BRIGHTNESS_FLOOR:
+    if brightness < profile.brightness_floor:
         return False, f"too_dark(brightness={brightness:.1f})"
-    if brightness > _BRIGHTNESS_CEIL:
+    if brightness > profile.brightness_ceil:
         return False, f"too_bright(brightness={brightness:.1f})"
 
     # Full-frame pink/magenta H.265 artifact
-    if r > _PINK_FULL_R_MIN and r > g * _PINK_FULL_RATIO and r > b * _PINK_FULL_RATIO:
+    if r > profile.pink_full_r_min and r > g * profile.pink_full_ratio and r > b * profile.pink_full_ratio:
         return False, f"pink_artifact(r={r:.0f},g={g:.0f},b={b:.0f})"
     # Quadrant-level partial pink check
     qh, qw = h // 2, w // 2
@@ -367,7 +480,7 @@ def is_valid_frame(img) -> tuple[bool, str]:
         sb = float(sub[:, :, 0].mean())
         sg = float(sub[:, :, 1].mean())
         sr = float(sub[:, :, 2].mean())
-        if sr > _PINK_QUAD_R_MIN and sr > sg * _PINK_QUAD_RATIO and sr > sb * _PINK_QUAD_RATIO:
+        if sr > profile.pink_quad_r_min and sr > sg * profile.pink_quad_ratio and sr > sb * profile.pink_quad_ratio:
             return False, f"partial_pink_q{qi}(r={sr:.0f},g={sg:.0f},b={sb:.0f})"
 
     # Patterned-magenta detector — counts the *fraction* of pixels in
@@ -397,18 +510,18 @@ def is_valid_frame(img) -> tuple[bool, str]:
     total = mask.size
     if total > 0:
         mfrac = float(mask.sum()) / float(total)
-        if mfrac >= _PATTERN_MAGENTA_AREA_FRAC:
+        if mfrac >= profile.pattern_magenta_area_frac:
             return False, f"patterned_magenta(area={mfrac:.0%})"
 
     # Truly flat frame (any solid color)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray_std = float(gray.std())
-    if gray_std < _FLAT_GRAY_STD_FLOOR:
+    if gray_std < profile.flat_gray_std_floor:
         return False, f"no_detail(std={gray_std:.2f})"
 
     # Mid-grey hickup specifically (catches encoder/IR-cut artefacts that
     # have just enough JPEG noise to clear gray_std but no real imagery).
-    grey, grey_reason = is_grey_frame(img)
+    grey, grey_reason = is_grey_frame(img, profile=profile)
     if grey:
         return False, grey_reason
 
@@ -416,7 +529,7 @@ def is_valid_frame(img) -> tuple[bool, str]:
     # only a thin strip carries real imagery (the rest is mid-grey or
     # macroblock noise).
     dead_frac, dead_n, total_n = dead_area_score(img)
-    if total_n > 0 and dead_frac > _TILE_DEAD_FRACTION:
+    if total_n > 0 and dead_frac > profile.tile_dead_fraction:
         return False, f"dead_area({dead_n}/{total_n}={dead_frac:.0%})"
 
     # Split-frame heuristic — catches the half-corrupt cluster where
@@ -453,7 +566,7 @@ def is_valid_frame(img) -> tuple[bool, str]:
         return float(kept.std())
     chroma_std = (_trimmed_std(diff_bg) + _trimmed_std(diff_br)) / 2.0
     if (_GREY_TONED_LUMA_MIN <= luma <= _GREY_TONED_LUMA_MAX
-            and chroma_std < _GREY_TONED_CHROMA_STD_MAX):
+            and chroma_std < profile.grey_toned_chroma_std_max):
         return False, (f"grey_toned(luma={luma:.0f},chroma_std={chroma_std:.1f})")
 
     # Test-pattern colorbar
