@@ -224,9 +224,16 @@ def api_weather_sun_tl_test_start():
         duration_s = int(body.get("duration_s", 120))
     except (TypeError, ValueError):
         duration_s = 120
+    target_duration_s = body.get("target_duration_s")
+    if target_duration_s is not None:
+        try:
+            target_duration_s = int(target_duration_s)
+        except (TypeError, ValueError):
+            target_duration_s = None
     if not cam_id or not phase:
         return jsonify({"ok": False, "error": "cam_id and phase required"}), 400
-    res = ws.start_sun_tl_test(cam_id, phase, duration_s)
+    res = ws.start_sun_tl_test(cam_id, phase, duration_s,
+                               target_duration_s=target_duration_s)
     if not res.get("ok"):
         return jsonify(res), 409
     return jsonify(res)

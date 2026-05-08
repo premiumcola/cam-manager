@@ -70,6 +70,12 @@ class _SunTLTestSession:
     expected_frames: int
     interval_s: int = 3
     fps: int = 25
+    # Final encoded video length (seconds). Drives the encoder
+    # directly via _write_video(target_duration_s, target_fps) so
+    # the resulting MP4 plays for exactly this long instead of the
+    # implicit n_written / target_fps clamp the production schedule
+    # uses. None falls back to the legacy auto math.
+    target_duration_s: int | None = None
     frames_dir: Path | None = None
     # Final stats snapshot — captured before scratch dir cleanup so the
     # post-completion status read still has accurate counters even
@@ -452,6 +458,17 @@ class SunTimelapseMixin:
         stats = CaptureStats(out_dir=frames_dir, expected_frames=expected_frames)
         n_written = 0
         i = 0
+        # Last successfully-grabbed JPEG. When grab_valid_frame's retry
+        # budget is exhausted on a slot (typical for `dead_area` /
+        # `grey_uniform` bursts that persist past the 5 s wall-clock
+        # cap), we still write a frame into the slot so the encoder
+        # gets a continuous sequence — without this the resulting MP4
+        # would have implicit gaps that ffmpeg pads at output-fps,
+        # which is what produces the "single frame held for many
+        # seconds" artefact the user reported. The slot is still
+        # counted as invalid in CaptureStats so the per-reason
+        # breakdown stays diagnostic.
+        last_valid_jpg: bytes | None = None
         while datetime.now() < end_at:
             # Long-running capture loop — uses grab_valid_frame defaults
             # (6 attempts × 0.4 s with a 5 s wall-clock cap). The hires
@@ -467,12 +484,30 @@ class SunTimelapseMixin:
                     out.write_bytes(jpg)
                     n_written += 1
                     stats.record_capture(attempt_used=attempt_used)
+                    last_valid_jpg = jpg
                 except Exception:
                     pass
             else:
                 stats.record_invalid(last_reason)
-                log.info("[weather] %s slot %05d: invalid grabs, leaving slot empty (%s)",
-                         cam_name, i, last_reason)
+                if last_valid_jpg is not None:
+                    # Backfill with the most recent valid frame so the
+                    # slot index sequence stays gap-free for the
+                    # encoder. Counter still bumps invalid_frames for
+                    # diagnostic visibility.
+                    out = frames_dir / f"{i:05d}.jpg"
+                    try:
+                        out.write_bytes(last_valid_jpg)
+                        log.info("[%s] %s slot %05d: invalid grab, "
+                                 "filled with last valid frame (%s)",
+                                 log_tag, cam_name, i, last_reason)
+                    except Exception:
+                        log.info("[%s] %s slot %05d: invalid grab and "
+                                 "backfill write failed (%s)",
+                                 log_tag, cam_name, i, last_reason)
+                else:
+                    log.info("[%s] %s slot %05d: invalid grabs, "
+                             "leaving slot empty (%s)",
+                             log_tag, cam_name, i, last_reason)
             stats.flush()
             i += 1
             # Sleep in short chunks so we react quickly to stop signals.
@@ -514,8 +549,16 @@ class SunTimelapseMixin:
             from ..timelapse import TimelapseBuilder
             tb = TimelapseBuilder(self._sightings_dir().parent.parent)
             images = sorted(frames_dir.glob("*.jpg"))
-            target_seconds = max(8, n_written // target_fps) if target_fps else 24
-            target_seconds = min(target_seconds, 60)  # cap at 60s safety
+            # Test runs let the user pick the final encoded MP4 length
+            # explicitly; production captures still use the legacy
+            # implicit math (n_written/fps clamped to [8, 60]). This
+            # keeps the existing schedule unchanged while giving the
+            # diagnostic Test panel deterministic playback length.
+            if test_session is not None and test_session.target_duration_s:
+                target_seconds = int(test_session.target_duration_s)
+            else:
+                target_seconds = max(8, n_written // target_fps) if target_fps else 24
+                target_seconds = min(target_seconds, 60)  # cap at 60s safety
             written = tb._write_video(images, mp4_path, target_seconds, target_fps)
             if not written or not mp4_path.exists():
                 log.warning("[%s] Encode failed for %s %s", log_tag, cam_name, phase)
@@ -613,15 +656,19 @@ class SunTimelapseMixin:
             pass
 
     # ── Sun-Timelapse TEST runner (Settings → Wetter-Ereignisse → Test) ──
-    # The user fires a 60/120/300 s capture from the UI to reproduce the
+    # The user fires a 60-s … 40-min capture from the UI to reproduce the
     # twilight rejection bug live: a real sunrise/sunset is too rare to
     # iterate against, but the SAME _run_sun_capture_inner code path
     # underneath. The runner attaches a logging.Handler that mirrors
     # matching log lines into a per-session ring buffer so the status
     # endpoint can return a live tail without reparsing docker logs.
-    _SUN_TL_TEST_DURATIONS = (60, 120, 300)
+    # The longer durations (30 / 40 min) span enough real twilight to
+    # produce a usable MP4 that mirrors what a live sunset would write.
+    _SUN_TL_TEST_DURATIONS = (60, 120, 300, 1800, 2400)
+    _SUN_TL_TEST_TARGET_LENGTHS = (10, 15, 20, 30, 45)
 
-    def start_sun_tl_test(self, cam_id: str, phase: str, duration_s: int) -> dict:
+    def start_sun_tl_test(self, cam_id: str, phase: str, duration_s: int,
+                          target_duration_s: int | None = None) -> dict:
         """Spawn a daemon thread that runs a parameterised sun-tl capture.
         Returns {"ok": bool, "error": str|None}. Idempotent against a
         running session — a second start while one is still active
@@ -635,6 +682,15 @@ class SunTimelapseMixin:
             duration_s = 120
         if duration_s not in self._SUN_TL_TEST_DURATIONS:
             duration_s = 120
+        # Target encoded MP4 length — None means "let the legacy math
+        # decide". Validated against the same allowlist the UI exposes.
+        if target_duration_s is not None:
+            try:
+                target_duration_s = int(target_duration_s)
+            except (TypeError, ValueError):
+                target_duration_s = None
+            if target_duration_s not in self._SUN_TL_TEST_TARGET_LENGTHS:
+                target_duration_s = None
         with _test_session_lock:
             existing = _active_test_session
             if existing is not None and not existing.finished:
@@ -663,6 +719,7 @@ class SunTimelapseMixin:
             cam_id=cam_id, phase=phase, duration_s=duration_s,
             started_at=datetime.now(), expected_frames=expected,
             interval_s=interval_s, fps=target_fps,
+            target_duration_s=target_duration_s,
         )
         handler = _SunTLTestLogHandler(session)
         handler.setLevel(logging.INFO)
@@ -777,6 +834,7 @@ class SunTimelapseMixin:
             "target_s": session.duration_s,
             "interval_s": session.interval_s,
             "fps": session.fps,
+            "target_duration_s": session.target_duration_s,
             "expected_frames": int(stats.get("expected_frames", session.expected_frames) or 0),
             "captured_frames": int(stats.get("captured_frames", 0) or 0),
             "retry_recoveries": int(stats.get("retry_recoveries", 0) or 0),

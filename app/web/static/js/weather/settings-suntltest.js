@@ -24,15 +24,27 @@ import { state } from "../core/state.js";
 import { showToast } from "../core/toast.js";
 
 const _DURATIONS = [
-  { s: 60,  label: "1 min" },
-  { s: 120, label: "2 min" },
-  { s: 300, label: "5 min" },
+  { s: 60,   label: "1 min" },
+  { s: 120,  label: "2 min" },
+  { s: 300,  label: "5 min" },
+  { s: 1800, label: "30 min" },
+  { s: 2400, label: "40 min" },
+];
+
+// Final MP4 length picker — mirrors the regular weather sun-timelapse
+// length options so the test reproduces the same encode behaviour.
+const _TARGET_LENGTHS = [
+  { s: 10, label: "10 s" },
+  { s: 15, label: "15 s" },
+  { s: 20, label: "20 s" },
+  { s: 30, label: "30 s" },
 ];
 
 // Local UI state — survives re-renders within a single tab visit.
 let _selCam = null;
 let _selPhase = "sunset";
 let _selDuration = 120;
+let _selTargetLength = 20;
 let _pollTimer = null;
 
 function _weatherCams(){
@@ -45,6 +57,9 @@ function _renderHeader(cams){
   ).join('');
   const durChips = _DURATIONS.map(d =>
     `<button type="button" class="suntltest-chip${d.s === _selDuration ? ' is-active' : ''}" data-suntltest-dur="${d.s}">${d.label}</button>`
+  ).join('');
+  const tgtChips = _TARGET_LENGTHS.map(d =>
+    `<button type="button" class="suntltest-chip${d.s === _selTargetLength ? ' is-active' : ''}" data-suntltest-tgt="${d.s}">${d.label}</button>`
   ).join('');
   return `
     <div class="suntltest-form">
@@ -60,8 +75,12 @@ function _renderHeader(cams){
         </div>
       </div>
       <div class="suntltest-form-row">
-        <span class="suntltest-lbl">Dauer</span>
-        <div class="suntltest-dur-row" role="radiogroup" aria-label="Dauer">${durChips}</div>
+        <span class="suntltest-lbl">Aufnahme-Dauer</span>
+        <div class="suntltest-dur-row" role="radiogroup" aria-label="Aufnahme-Dauer">${durChips}</div>
+      </div>
+      <div class="suntltest-form-row">
+        <span class="suntltest-lbl">Video-Länge</span>
+        <div class="suntltest-dur-row" role="radiogroup" aria-label="Video-Länge">${tgtChips}</div>
       </div>
       <div class="suntltest-form-row suntltest-form-row--start">
         <button type="button" id="suntltestStart" class="btn-action accent suntltest-start">▶ Jetzt starten</button>
@@ -91,6 +110,13 @@ function _bindForm(root){
         b.classList.toggle('is-active', parseInt(b.dataset.suntltestDur, 10) === _selDuration));
     });
   });
+  root.querySelectorAll('[data-suntltest-tgt]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _selTargetLength = parseInt(btn.dataset.suntltestTgt, 10) || 20;
+      root.querySelectorAll('[data-suntltest-tgt]').forEach(b =>
+        b.classList.toggle('is-active', parseInt(b.dataset.suntltestTgt, 10) === _selTargetLength));
+    });
+  });
   byId('suntltestStart')?.addEventListener('click', _startTest);
 }
 
@@ -102,7 +128,11 @@ async function _startTest(){
     const r = await fetch('/api/weather/sun-tl/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cam_id: _selCam, phase: _selPhase, duration_s: _selDuration }),
+      body: JSON.stringify({
+        cam_id: _selCam, phase: _selPhase,
+        duration_s: _selDuration,
+        target_duration_s: _selTargetLength,
+      }),
     });
     const j = await r.json().catch(() => ({}));
     if (!r.ok || !j.ok) {
