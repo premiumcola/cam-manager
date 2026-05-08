@@ -53,7 +53,7 @@ async function loadWeatherSightings(filter){
       state.weather.filter = new Set(present);
     }
     renderWeatherSightings();
-  }catch(e){
+  }catch(_err){
     // silently degrade — section stays empty
   }
   // Phase 3 — Recaps live next to sightings; loading them here keeps the
@@ -369,7 +369,7 @@ function closeWeatherLightbox(){
   const modal = byId('wsLightbox'); if (!modal) return;
   modal.classList.remove('open');
   document.body.style.overflow = '';
-  const v = byId('wsLbVideo'); if (v) { try { v.pause(); v.src = ''; } catch (e) {} }
+  const v = byId('wsLbVideo'); if (v) { try { v.pause(); v.src = ''; } catch (_err) {} }
 }
 
 function _renderWsLbMeta(s){
@@ -412,7 +412,7 @@ async function loadWeatherRecaps(){
     const d = await r.json();
     state.weather.recaps = d.items || [];
     _renderWeatherRecaps();
-  }catch(e){ /* silent */ }
+  }catch(_err){ /* silent */ }
 }
 
 function _renderWeatherRecaps(){

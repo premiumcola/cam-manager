@@ -607,7 +607,7 @@ async function updateSystemPanel(){
         <div class="app-info-row"><span class="app-info-row-label">Public Base URL</span><span class="app-info-row-val">${publicUrl?`<code>${esc(publicUrl)}</code>`:'—'}</span></div>
         <div class="app-info-row"><span class="app-info-row-label">Discovery-Subnet</span><span class="app-info-row-val">${subnet?`<code>${esc(subnet)}</code>`:'—'}</span></div>
       </div>`;
-  }catch(e){/* silent — system info optional */}
+  }catch(_err){/* silent — system info optional */}
 }
 
 
@@ -657,7 +657,7 @@ byId('exportYamlBtn').onclick=()=>download('/api/settings/export?format=yaml');
 byId('clearImportBtn').onclick=()=>{byId('importBox').value='';};
 byId('importJsonBtn').onclick=async()=>{await importConfig('json');};
 byId('importYamlBtn').onclick=async()=>{await importConfig('yaml');};
-async function importConfig(format){ const content=byId('importBox').value.trim(); if(!content){showToast('Bitte Inhalt einfügen.','warn');return;} const r=await j('/api/settings/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({format,content})}); byId('importBox').value=''; await loadAll(); showToast('Import erfolgreich.','success'); }
+async function importConfig(format){ const content=byId('importBox').value.trim(); if(!content){showToast('Bitte Inhalt einfügen.','warn');return;} await j('/api/settings/import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({format,content})}); byId('importBox').value=''; await loadAll(); showToast('Import erfolgreich.','success'); }
 
 // ── Inline-onclick bridges (template + JS-rendered HTML handlers) ──────────
 // Only names read by `onclick="..."` strings (template-side or

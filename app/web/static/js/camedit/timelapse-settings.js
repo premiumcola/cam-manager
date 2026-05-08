@@ -154,8 +154,6 @@ function _renderTlCameraList(cameras){
   if(!cameras.length) return '<div class="small muted" style="padding:10px 2px">Keine Kameras konfiguriert.</div>';
   const firstCam=cameras[0];
   const tabs=cameras.map((cam,i)=>{
-    const profs=(cam.timelapse||{}).profiles||{};
-    const anyOn=_TL_PROFILES_DEF.some(p=>profs[p.key]?.enabled);
     return `<button type="button" class="set-tab${i===0?' active':''}" id="tlTab_${esc(cam.id)}" onclick="selectTlCam('${esc(cam.id)}')">
       ${getCameraIcon(cam.name)} ${esc(cam.name)}
     </button>`;
@@ -330,7 +328,7 @@ async function loadTlStatus(){
   try{
     window._tlStatus=await j('/api/timelapse/status');
     renderTlStatusBar();
-  }catch(e){ /* silent */ }
+  }catch(_err){ /* silent */ }
 }
 function renderTlStatusBar(){
   const bar=byId('tlStatusBar'); if(!bar) return;

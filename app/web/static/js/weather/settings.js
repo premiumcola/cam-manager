@@ -245,7 +245,7 @@ async function _refreshWeatherStatus(){
       <div class="ws-status-row"><span class="ws-status-key">Standort</span><span class="ws-status-val">${d.location?.lat != null ? `${d.location.lat}, ${d.location.lon}` : '— nicht gesetzt —'}</span></div>
       <div class="ws-status-row" style="flex-direction:column;align-items:flex-start;gap:6px"><span class="ws-status-key">Aktuelle Trigger</span><div style="display:flex;flex-wrap:wrap;gap:6px">${stateRows}</div></div>
     `;
-  } catch (e) {
+  } catch (_err) {
     wrap.innerHTML = '<div class="field-help">Status nicht erreichbar.</div>';
   }
   clearTimeout(_wsStatusTimer);

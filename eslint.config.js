@@ -49,6 +49,7 @@ export default [
         IntersectionObserver: 'readonly',
         ResizeObserver: 'readonly',
         MutationObserver: 'readonly',
+        performance: 'readonly',
         // Timers
         setTimeout: 'readonly',
         setInterval: 'readonly',
@@ -82,7 +83,15 @@ export default [
       'prefer-const': 'warn',
 
       // Bugs catch:
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-unused-vars': ['warn', {
+        argsIgnorePattern: '^_',
+        varsIgnorePattern: '^_',
+        // ESLint 9's default caughtErrors='all' lints every catch
+        // binding; pair it with the same `_` opt-out the args/vars
+        // patterns use so `catch (_)` and `catch (_err)` stay silent
+        // without weakening the rule for everything else.
+        caughtErrorsIgnorePattern: '^_',
+      }],
       'no-undef': 'error',
       'no-empty': ['warn', { allowEmptyCatch: true }],
 

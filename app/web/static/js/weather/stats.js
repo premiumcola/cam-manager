@@ -53,7 +53,7 @@ export async function loadWeatherStats(){
     const r = await fetch('/api/weather/history?hours=' + _wsStatsState.hours);
     _wsStatsState.data = await r.json();
     renderWeatherStats();
-  } catch (e) {
+  } catch (_err) {
     /* leave the previous render up — single transient error shouldn't blank the chart */
   } finally {
     _wsStatsState.inFlight = false;

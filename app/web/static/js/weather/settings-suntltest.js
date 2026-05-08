@@ -163,7 +163,7 @@ async function _pollOnce(){
   try {
     const r = await fetch('/api/weather/sun-tl/test/status');
     d = await r.json();
-  } catch (e) {
+  } catch (_err) {
     return;
   }
   _renderLive(d);

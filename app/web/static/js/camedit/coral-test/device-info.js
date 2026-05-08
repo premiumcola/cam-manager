@@ -14,5 +14,5 @@ export async function _updateCoralDeviceInfo(){
     }else{
       panel.innerHTML='';
     }
-  }catch(e){panel.innerHTML='';}
+  }catch(_err){panel.innerHTML='';}
 }

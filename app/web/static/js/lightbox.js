@@ -164,7 +164,7 @@ export function _renderLbLabels(){
           // Re-pull timeline + storage stats so badges and dots reflect the retag.
           refreshTimelineAndStats();
         }
-      } catch (e){ showToast('Label-Änderung fehlgeschlagen', 'error'); }
+      } catch (_err){ showToast('Label-Änderung fehlgeschlagen', 'error'); }
     };
   });
 }

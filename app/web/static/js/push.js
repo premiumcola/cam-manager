@@ -275,7 +275,6 @@ function hydratePushDeps(){
   const wrap = byId('pushDepsList');
   if (!wrap) return;
   const tg = state.config?.telegram || {};
-  const proc = state.config?.processing || {};
   const srv = state.config?.server || {};
   const cams = state.cameras || [];
   const someCoral = cams.some(c => c.coral_available);

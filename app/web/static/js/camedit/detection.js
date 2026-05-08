@@ -76,7 +76,7 @@ export function _initErkSliders(form){
   ];
   for (const [name, valId, fmt] of map){
     const inp = form.querySelector(`[name="${name}"]`);
-    const lbl = document.getElementById(valId);
+    const lbl = document.querySelector('#' + valId);
     if (!inp || !lbl) continue;
     const upd = () => { lbl.textContent = fmt(parseFloat(inp.value)); };
     inp.addEventListener('input', upd);

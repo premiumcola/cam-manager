@@ -15,7 +15,7 @@ import { getCameraIcon } from "../core/icons.js";
 import { loadAll } from "../live-update.js";
 import { RTSP_PATH_OPTS, _rtspEnc, _unmaskUrlsForSubmit } from "./rtsp.js";
 import { getWhitelistState } from "./whitelist.js";
-import { panelState, _restoreEditWrapper } from "./panel.js";
+import { _restoreEditWrapper } from "./panel.js";
 import { openWizard } from "./wizard.js";
 import { _collectClassSeverity, _collectAlertCooldown } from "../alerting.js";
 import { _collectLabelThresholds, _collectConfirmationWindow } from "./detection.js";
@@ -38,7 +38,6 @@ function _defaultRtspPath(x){
 }
 function _renderDiscoveryResults(){
   const hideConfigured=!!byId('discoveryHideConfigured')?.checked;
-  const pathOpts=RTSP_PATHS.map(p=>`<option value="${esc(p.value)}">${esc(p.label)}</option>`).join('');
   // Collect IPs that already belong to a configured camera. Source of truth
   // is the rtsp_url / snapshot_url hostname — we never mix in camera IDs
   // (those are slugs like "cam-werkstatt", not IPs, and only added noise
@@ -79,7 +78,6 @@ function _renderDiscoveryResults(){
     const uid=x.ip.replaceAll('.','_');
     const already=allConfigured.has(x.ip);
     const vendor=x.guess==='Unbekannte Kamera'?`Unbekannte Kamera (${x.ip})`:esc(x.guess||'Unbekannte Kamera');
-    const computedId=x.hostname?_hostnameToId(x.hostname):'cam-'+x.ip.replaceAll('.','-');
     const displayName=x.hostname?esc(x.hostname.charAt(0).toUpperCase()+x.hostname.slice(1)):'';
     const defaultPath=_defaultRtspPath(x);
     const pathOptsForCam=RTSP_PATHS.map(p=>`<option value="${esc(p.value)}"${p.value===defaultPath?' selected':''}>${esc(p.label)}</option>`).join('');

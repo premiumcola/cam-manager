@@ -343,7 +343,7 @@ function _startRafLoop(){
 // with the inline styles below; pulling it into a CSS partial would
 // mean threading the bottom-offset constant across two files.
 function _ensureChipStyles(){
-  if (document.getElementById('lbTrackingChipStyles')) return;
+  if (document.querySelector('#lbTrackingChipStyles')) return;
   const s = document.createElement('style');
   s.id = 'lbTrackingChipStyles';
   // Desktop hit-area 36×36; mobile bumps to 44×44 per CLAUDE.md touch-target

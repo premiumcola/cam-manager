@@ -2,6 +2,12 @@
 // Minimal DOM helpers used everywhere. Kept tiny: byId is the most-
 // hit function in the codebase (>2000 references) and esc is the
 // HTML-escape used in every innerHTML template string.
+// getElementById, NOT querySelector('#id'): some callers pass IDs
+// containing CSS special chars (`:` in cam-ids, `.` in build hashes)
+// which break a `#`-prefixed selector but are valid arguments to
+// getElementById. eslint-disable for the unicorn rule on this one
+// line is intentional.
+// eslint-disable-next-line unicorn/prefer-query-selector
 export const byId = (id) => document.getElementById(id);
 
 // Escape a string for safe insertion into an innerHTML template.

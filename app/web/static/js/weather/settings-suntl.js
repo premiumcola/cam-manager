@@ -190,12 +190,6 @@ function _bindWeatherCamPanel(wrap, c){
   if (!c) return;
   const block = wrap.querySelector('.ws-cam-block'); if (!block) return;
   const camId = c.id;
-  // Helper: read the current target_duration_s for a phase from the
-  // in-memory state — fall back to the default if unset.
-  const targetFor = (phase) => {
-    const p = (((c.weather || {}).sun_timelapse || {})[phase] || {});
-    return parseInt(p.target_duration_s, 10) || _WS_DEFAULT_LENGTH_S;
-  };
   // Phase enable toggle.
   block.querySelectorAll('[data-sun-toggle]').forEach(cb => {
     cb.addEventListener('change', () => _saveSunPhase(camId, cb.dataset.sunToggle, { enabled: cb.checked }));

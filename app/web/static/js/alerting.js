@@ -77,7 +77,7 @@ export function _renderSeverityMatrix(form, cam){
 // Read the matrix back into the dict shape settings.json expects.
 // Drops unset rows silently (every row has exactly one is-on cell after
 // render so the .is-on selector is the source of truth).
-export function _collectClassSeverity(form){
+export function _collectClassSeverity(_form){
   const wrap = byId('alertSeverityMatrix');
   const out = {};
   if (!wrap) return out;

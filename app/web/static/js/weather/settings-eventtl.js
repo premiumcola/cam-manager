@@ -13,7 +13,7 @@ import { _renderWeatherCamList } from "./settings-suntl.js";
 
 const _EVENT_TL_TRIGGERS = ['thunder_rising', 'front_passing', 'storm_front'];
 
-export function _renderEventTLBlock(cam, sun){
+export function _renderEventTLBlock(cam, _sun){
   const evt = (cam.weather && cam.weather.event_timelapse) || {};
   const enabled = !!evt.enabled;
   const triggers = evt.triggers || {};
