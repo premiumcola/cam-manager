@@ -761,6 +761,7 @@ class SunTimelapseMixin:
                 "invalid_frames": int(stats.invalid_frames),
                 "retry_recoveries": int(stats.retry_recoveries),
                 "rejected_by_reason": dict(stats.rejected_by_reason),
+                "scene_skips_by_reason": dict(stats.scene_skips_by_reason),
                 "validator_profile": active_profile.name,
                 "baseline_brightness": baseline_med,
             }
@@ -1107,6 +1108,7 @@ class SunTimelapseMixin:
             "retry_recoveries": int(stats.get("retry_recoveries", 0) or 0),
             "invalid_frames": int(stats.get("invalid_frames", 0) or 0),
             "rejected_by_reason": dict(stats.get("rejected_by_reason", {}) or {}),
+            "scene_skips_by_reason": dict(stats.get("scene_skips_by_reason", {}) or {}),
             "daynight_color_set": session.daynight_color_set,
             "daynight_revert_set": session.daynight_revert_set,
             "result_clip_path": session.result_clip_path,

@@ -250,11 +250,22 @@ class TestDeadAreaScore:
 
 
 class TestGrabValidFrameOnReject:
-    def test_on_reject_fired_per_attempt(self):
+    """Patches ``is_valid_frame`` to a deterministic transient reject
+    so the test focuses on the callback-firing contract without being
+    tangled with the per-class retry policy. A flat-zero / too_dark
+    fixture would also work but trips the fail-fast cap from
+    TestRetryFailFast (2 attempts only) — that's covered separately."""
+
+    def _grey_frame(self):
+        return np.full((480, 640, 3), 120, dtype=np.uint8)
+
+    def test_on_reject_fired_per_attempt(self, monkeypatch):
         """Every retry that ends in a rejected frame must invoke the
-        callback once with the right attempt index. Uses a flat all-zero
-        ndarray which is_valid_frame rejects as ``too_dark``."""
-        flat = np.zeros((480, 640, 3), dtype=np.uint8)
+        callback once with the right attempt index."""
+        from app import frame_helpers as _fh
+        monkeypatch.setattr(_fh, "is_valid_frame",
+                            lambda *a, **kw: (False, "grey_uniform(std_sum=4.2)"))
+        flat = self._grey_frame()
         calls: list[tuple[object, str, int]] = []
 
         def grab():
@@ -263,8 +274,6 @@ class TestGrabValidFrameOnReject:
         def cb(frame, reason, attempt_idx):
             calls.append((frame, reason, attempt_idx))
 
-        # Tight timing so the test runs fast — sleep_s 0 keeps it sub-ms;
-        # max_total_seconds 5 (default) is far above what 4 calls need.
         result, attempts_used, last_reason = grab_valid_frame(
             grab, attempts=4, sleep_s=0, on_reject=cb,
         )
@@ -277,10 +286,13 @@ class TestGrabValidFrameOnReject:
             assert reason, "callback reason must be non-empty"
             assert idx == i, f"attempt_idx mismatch at call {i}: got {idx}"
 
-    def test_on_reject_callback_exception_is_swallowed(self):
+    def test_on_reject_callback_exception_is_swallowed(self, monkeypatch):
         """A raising callback must never abort the retry loop — the
         diagnostic save path is documented as best-effort."""
-        flat = np.zeros((480, 640, 3), dtype=np.uint8)
+        from app import frame_helpers as _fh
+        monkeypatch.setattr(_fh, "is_valid_frame",
+                            lambda *a, **kw: (False, "grey_uniform(std_sum=4.2)"))
+        flat = self._grey_frame()
 
         def grab():
             return flat
@@ -294,6 +306,27 @@ class TestGrabValidFrameOnReject:
         assert result is None
         assert attempts_used == 3
         assert last_reason
+
+
+class TestRetryFailFast:
+    """A scene-level reject (dead_area / no_detail / too_dark /
+    too_bright) caps the retry budget at 2 attempts because retrying
+    won't make texture appear."""
+
+    def test_too_dark_scene_caps_at_two_attempts(self):
+        flat = np.zeros((480, 640, 3), dtype=np.uint8)
+
+        def grab():
+            return flat
+
+        result, attempts_used, last_reason = grab_valid_frame(
+            grab, attempts=6, sleep_s=0,
+        )
+        assert result is None
+        assert attempts_used == 2, (
+            f"scene reject should cap at 2 attempts, got {attempts_used}"
+        )
+        assert "too_dark" in last_reason
 
 
 class TestPickProfileFromBaseline:

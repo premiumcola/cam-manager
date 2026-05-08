@@ -577,6 +577,48 @@ def is_valid_frame(img, profile: FrameValidatorProfile = DAY_PROFILE) -> tuple[b
     return True, ""
 
 
+# ── Retry classification ─────────────────────────────────────────────────────
+# Two reason buckets drive the retry strategy:
+#   transient — encoder hickups, partial corruption, codec-state bugs.
+#               Retrying ~0.4 s later genuinely helps because the next
+#               frame is a fresh decode that won't carry the hickup.
+#   scene     — the actual scene is empty / dark / blown out. Retrying
+#               doesn't make texture appear; the camera is fine, the
+#               scene is just like that. Cap retries at 2 for these so
+#               an empty terrace at midnight doesn't burn the full
+#               6-attempt budget for every slot.
+_TRANSIENT_REASONS: frozenset[str] = frozenset({
+    "grey_uniform", "grey_midband", "colorbar",
+    "pink_artifact", "patterned_magenta",
+    "split_left_dead", "split_right_dead",
+    "split_top_dead", "split_bottom_dead",
+    "grey_toned",
+})
+_SCENE_REASONS: frozenset[str] = frozenset({
+    "dead_area", "no_detail", "too_dark", "too_bright",
+})
+
+
+def _classify_reason(reason: str) -> str:
+    """Return ``"transient"`` / ``"scene"`` / ``"other"`` for a
+    rejection reason. Strips diagnostic detail before lookup. ``other``
+    covers grab_exception / grab_returned_none / null/empty / too_small
+    — these get the full retry budget so a flaky single-shot grab can
+    still recover."""
+    if not reason:
+        return "other"
+    # Inline the head-extraction (also done by _normalise_rejection_reason
+    # further down) so this helper can be called before that one is
+    # defined in the module — both are module-level and resolved
+    # lazily at call time, but inlining keeps the read-order intuitive.
+    head = reason.split("|", 1)[0].split("(", 1)[0].strip()
+    if head in _SCENE_REASONS:
+        return "scene"
+    if head in _TRANSIENT_REASONS:
+        return "transient"
+    return "other"
+
+
 # ── Retry wrapper ────────────────────────────────────────────────────────────
 def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
                      max_total_seconds: float = 5.0,
@@ -624,7 +666,12 @@ def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
     last_reason = ""
     attempt = 0
     n = max(1, attempts)
-    while attempt < n:
+    # Per-call effective cap. Starts at the caller's `attempts` value;
+    # gets clamped down to 2 the moment a scene-level reject is observed
+    # because retrying scene rejects (empty terrace, too dark, no detail)
+    # never makes texture appear. Transient rejects keep the full budget.
+    effective_cap = n
+    while attempt < effective_cap:
         if time.monotonic() - t0 >= max_total_seconds:
             last_reason = (
                 (last_reason + "|" if last_reason else "")
@@ -653,8 +700,14 @@ def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
                 on_reject(frame, last_reason, attempt)
             except Exception as cb_exc:
                 log.debug("[frame_helpers] on_reject callback raised: %s", cb_exc)
+        # Scene-level rejects get capped at total=2 — one more attempt
+        # past the first reject in case the camera was mid-AGC, then
+        # we give up. The wall-clock cap still applies; this just
+        # prevents a per-slot 5 s burn on empty IR night scenes.
+        if _classify_reason(last_reason) == "scene":
+            effective_cap = min(effective_cap, 2)
         attempt += 1
-        if attempt < n:
+        if attempt < effective_cap:
             time.sleep(sleep_s)
     return None, attempt, last_reason
 
@@ -696,6 +749,13 @@ class CaptureStats:
     # cluster dominated this window?" without re-parsing the raw
     # log lines.
     rejected_by_reason: dict = field(default_factory=dict)
+    # Same shape, but sub-tally for slots that gave up early because the
+    # reject was scene-level (dead_area / no_detail / too_dark /
+    # too_bright). These don't represent camera failure — the scene
+    # genuinely had nothing worth keeping. Surface separately so the
+    # operator can read "23 dead_area" vs "23 dead_area (all scene-skip)"
+    # at a glance.
+    scene_skips_by_reason: dict = field(default_factory=dict)
 
     def record_capture(self, attempt_used: int = 0):
         """attempt_used==0 means first try succeeded; >0 means a retry saved it."""
@@ -706,11 +766,18 @@ class CaptureStats:
     def record_invalid(self, reason: str | None = None):
         """Record a frame the capture loop gave up on. Optionally pass
         the last is_valid_frame reason so it aggregates into the
-        per-reason breakdown."""
+        per-reason breakdown. Scene-level rejects (dead_area /
+        no_detail / too_dark / too_bright) also bump the
+        ``scene_skips_by_reason`` mirror so the UI can distinguish
+        "validator threw it away" from "scene was genuinely empty"."""
         self.invalid_frames += 1
         if reason:
             key = _normalise_rejection_reason(reason)
             self.rejected_by_reason[key] = self.rejected_by_reason.get(key, 0) + 1
+            if _classify_reason(reason) == "scene":
+                self.scene_skips_by_reason[key] = (
+                    self.scene_skips_by_reason.get(key, 0) + 1
+                )
 
     def flush(self):
         try:
@@ -723,6 +790,7 @@ class CaptureStats:
                 "invalid_frames": int(self.invalid_frames),
                 "retry_recoveries": int(self.retry_recoveries),
                 "rejected_by_reason": dict(self.rejected_by_reason),
+                "scene_skips_by_reason": dict(self.scene_skips_by_reason),
             }
             path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         except Exception as e:
@@ -732,10 +800,11 @@ class CaptureStats:
         # window to close. Compact format keeps it grep-friendly.
         try:
             log.info(
-                "[capture-stats] %s · captured=%d retries=%d invalid=%d rejected=%s",
+                "[capture-stats] %s · captured=%d retries=%d invalid=%d rejected=%s scene_skips=%s",
                 Path(self.out_dir).name,
                 self.captured_frames, self.retry_recoveries,
                 self.invalid_frames, dict(self.rejected_by_reason),
+                dict(self.scene_skips_by_reason),
             )
         except Exception:
             pass
