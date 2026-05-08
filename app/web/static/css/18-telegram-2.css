@@ -52,7 +52,12 @@
   padding:4px 10px;min-height:32px;letter-spacing:0.02em;cursor:default;
   border:1px dashed rgba(255,255,255,0.12);
 }
-.media-section-title{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%}
+/* margin:0 kills the UA-default h3 margin-block ≈ 21 px so the gap
+   above the filter pills is governed only by .section-head's
+   margin-bottom and the storage-bar's margin-bottom — the section
+   was reading with ~33 px above the filter and ~22 px below,
+   visibly asymmetric. */
+.media-section-title{display:inline-flex;align-items:center;gap:8px;min-width:0;max-width:100%;margin:0}
 .media-section-title svg{flex-shrink:0;opacity:.85}
 .media-section-title .mst-cam-icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:20px;line-height:1}
 .media-section-title .mst-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
@@ -61,11 +66,12 @@
 .media-pill.cat-filter-btn.media-pill--empty{background:rgba(255,255,255,.05)!important;color:#6b7280!important;opacity:1;pointer-events:none;cursor:default;box-shadow:none!important}
 .media-pill.cat-filter-btn.media-pill--empty .cfb-icon{filter:grayscale(1) brightness(.75) contrast(1.1)}
 /* Section-rhythm gap between the chip strip and the cards grid.
-   The panel itself uses 12 px padding via .section and section
-   heads use 12 px margin-bottom; this row sits one level deeper
-   so it gets nearly twice the gap, making the strip read as a
-   clearly separate row above the cards instead of crowding them. */
-.moc-filter-bar{margin-bottom:22px}
+   Tightened from 22 → 14 px so the gap below the filter row
+   roughly mirrors the gap above it (section-head 12 + collapsed
+   storage-bar). The strip still reads as a separate row from the
+   cards, just without the lopsided "lots of air below, glued
+   above" feel reported in the redesign brief. */
+.moc-filter-bar{margin-bottom:14px}
 /* motion / car / timelapse used to have hand-tuned dark/light backgrounds
    that fought the canonical active/inactive contract — they end up almost
    indistinguishable from the inactive state on a glare-lit phone. The

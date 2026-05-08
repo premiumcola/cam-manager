@@ -231,11 +231,18 @@ const _ARCHIVE_ICON = `<svg width="13" height="12" viewBox="0 0 13 12" fill="non
 // blue family, flat fill, ≥ 8 px corner radius per CLAUDE.md design
 // rules. Container CSS centers + pads it so the mark sits with
 // comfortable breathing room on all four sides of the tile.
+// Composite bounding box of the three rects spans x=14-70, y=10-54
+// (centre 42,32). The 80×80 viewBox centre is 40,40 — so the
+// composite is 2 px right and 8 px above where it should sit. The
+// translate(-2,8) on the wrapping <g> pulls the whole stack back
+// onto the geometric centre with equal padding on all four sides.
 export const _MOC_ALL_SVG = `<svg width="96" height="96" viewBox="0 0 80 80" fill="none" aria-hidden="true">
-  <rect x="14" y="22" width="44" height="32" rx="6" fill="#3a5878" opacity=".55"/>
-  <rect x="20" y="16" width="44" height="32" rx="6" fill="#4a7090" opacity=".8"/>
-  <rect x="26" y="10" width="44" height="32" rx="6" fill="#7faec9"/>
-  <polygon points="44,18 44,34 58,26" fill="#1a2535"/>
+  <g transform="translate(-2, 8)">
+    <rect x="14" y="22" width="44" height="32" rx="6" fill="#3a5878" opacity=".55"/>
+    <rect x="20" y="16" width="44" height="32" rx="6" fill="#4a7090" opacity=".8"/>
+    <rect x="26" y="10" width="44" height="32" rx="6" fill="#7faec9"/>
+    <polygon points="44,18 44,34 58,26" fill="#1a2535"/>
+  </g>
 </svg>`;
 
 // Count chips for media overview cards

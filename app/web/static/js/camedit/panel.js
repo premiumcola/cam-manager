@@ -46,9 +46,14 @@ export function _closeEditPanel(){
   if (!panelState.camId) return;
   const w = byId('cameraEditWrapper');
   w?.classList.remove('slide-open');
-  _reparkRecoveryBtnInTabBar();
   document.querySelectorAll('.cam-item.editing').forEach(el => el.classList.remove('editing'));
   setTimeout(() => {
+    // Reparent the recovery button back into the tab bar AFTER the
+    // slide-out finishes. Doing it earlier (before the animation)
+    // briefly re-rendered the button inside the still-collapsing
+    // wrapper, visible as a one-frame flash through the closing
+    // tab strip.
+    _reparkRecoveryBtnInTabBar();
     if (!w) return;
     const sec = byId('cameras');
     if (sec) sec.appendChild(w);

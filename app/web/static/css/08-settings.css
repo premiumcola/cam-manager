@@ -19,6 +19,11 @@
 .sidebar.collapsed .nav-sub,.sidebar.collapsed .nav-settings-chev{display:none}
 /* ── Task 2: Media storage bar ──────────────────────────────────────────────── */
 .media-storage-bar{margin-bottom:10px}
+/* Collapse to 0 when the bar has no rendered content. storage-stats.js
+   sets innerHTML='' between loads but the element's margin still
+   applied — landed as a phantom 10 px above the filter pills. The
+   :empty pseudo-class strips that space until the bar repopulates. */
+.media-storage-bar:empty{margin-bottom:0}
 .storage-bar-inner{display:flex;flex-wrap:wrap;gap:8px}
 .storage-cam-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:10px;background:var(--surface);font-size:12px}
 .storage-cam-name{font-weight:600}
