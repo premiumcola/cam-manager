@@ -17,6 +17,7 @@ if _pkg_root not in sys.path:
 
 from app.frame_helpers import (  # noqa: E402
     dead_area_score,
+    grab_valid_frame,
     is_grey_frame,
     is_valid_frame,
 )
@@ -242,3 +243,50 @@ class TestDeadAreaScore:
         # Bottom 88 % is dead → score should comfortably exceed the
         # 50 % rejection threshold.
         assert score > 0.6, f"partial-grey only scored {score:.0%}"
+
+
+class TestGrabValidFrameOnReject:
+    def test_on_reject_fired_per_attempt(self):
+        """Every retry that ends in a rejected frame must invoke the
+        callback once with the right attempt index. Uses a flat all-zero
+        ndarray which is_valid_frame rejects as ``too_dark``."""
+        flat = np.zeros((480, 640, 3), dtype=np.uint8)
+        calls: list[tuple[object, str, int]] = []
+
+        def grab():
+            return flat
+
+        def cb(frame, reason, attempt_idx):
+            calls.append((frame, reason, attempt_idx))
+
+        # Tight timing so the test runs fast — sleep_s 0 keeps it sub-ms;
+        # max_total_seconds 5 (default) is far above what 4 calls need.
+        result, attempts_used, last_reason = grab_valid_frame(
+            grab, attempts=4, sleep_s=0, on_reject=cb,
+        )
+        assert result is None
+        assert attempts_used == 4
+        assert last_reason, "expected a non-empty rejection reason"
+        assert len(calls) == 4, f"expected 4 callback firings, got {len(calls)}"
+        for i, (frame, reason, idx) in enumerate(calls):
+            assert frame is flat, "callback must receive the raw grab_fn return value"
+            assert reason, "callback reason must be non-empty"
+            assert idx == i, f"attempt_idx mismatch at call {i}: got {idx}"
+
+    def test_on_reject_callback_exception_is_swallowed(self):
+        """A raising callback must never abort the retry loop — the
+        diagnostic save path is documented as best-effort."""
+        flat = np.zeros((480, 640, 3), dtype=np.uint8)
+
+        def grab():
+            return flat
+
+        def cb(_frame, _reason, _attempt_idx):
+            raise RuntimeError("disk full")
+
+        result, attempts_used, last_reason = grab_valid_frame(
+            grab, attempts=3, sleep_s=0, on_reject=cb,
+        )
+        assert result is None
+        assert attempts_used == 3
+        assert last_reason

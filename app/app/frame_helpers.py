@@ -466,7 +466,8 @@ def is_valid_frame(img) -> tuple[bool, str]:
 
 # ── Retry wrapper ────────────────────────────────────────────────────────────
 def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
-                     max_total_seconds: float = 5.0
+                     max_total_seconds: float = 5.0,
+                     on_reject=None,
                      ) -> tuple[object, int, str]:
     """Call ``grab_fn`` up to ``attempts`` times OR
     ``max_total_seconds`` wall-clock, whichever comes first.
@@ -493,7 +494,18 @@ def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
     the returned ``last_reason`` into a CaptureStats via
     ``stats.record_invalid(reason)`` so per-reason breakdowns
     bookkeep through a single path regardless of whether the caller
-    uses this retry helper or its own loop."""
+    uses this retry helper or its own loop.
+
+    ``on_reject`` (optional) is fired once per rejected attempt with
+    ``(frame, reason, attempt_idx)`` — the raw value returned by
+    ``grab_fn`` (ndarray or JPEG bytes), the validator's reason
+    string, and the zero-based attempt index. The callback is
+    invoked for every retry that fails, including the final one.
+    Default ``None`` keeps the current behaviour bit-identical for
+    callers that don't opt in. Exceptions raised inside the
+    callback are caught and logged at DEBUG so a flaky disk save
+    can never abort the capture loop — the diagnostic save path is
+    best-effort by design."""
     t0 = time.monotonic()
     last_reason = ""
     attempt = 0
@@ -517,6 +529,16 @@ def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
             last_reason = reason or last_reason or "invalid"
         else:
             last_reason = last_reason or "grab_returned_none"
+        # Best-effort diagnostic save — fire AFTER last_reason has been
+        # finalised for this attempt so the caller sees the same string
+        # we'd return at the end of the loop. ``frame`` may be None
+        # (grab_fn returned None or raised) — the callback decides
+        # whether None is worth persisting.
+        if on_reject is not None:
+            try:
+                on_reject(frame, last_reason, attempt)
+            except Exception as cb_exc:
+                log.debug("[frame_helpers] on_reject callback raised: %s", cb_exc)
         attempt += 1
         if attempt < n:
             time.sleep(sleep_s)
