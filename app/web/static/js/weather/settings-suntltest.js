@@ -235,10 +235,37 @@ function _renderLive(d){
       <div class="suntltest-section-title">Log-Tail</div>
       <div class="suntltest-log-box" id="suntltestLog">${logBlock || '<div class="suntltest-log-line muted">— kein Log —</div>'}</div>
     </div>
+    ${d.raw_dir ? `
+    <div class="suntltest-section suntltest-rawdir">
+      <span class="suntltest-rawdir-label">Roh-Frames:</span>
+      <code class="suntltest-rawdir-path">${esc(d.raw_dir)}</code>
+      <button type="button" class="suntltest-rawdir-copy" data-suntltest-copy="${esc(d.raw_dir)}" title="Pfad kopieren" aria-label="Pfad kopieren">⧉ kopieren</button>
+    </div>` : ''}
   `;
   // Auto-stick the log to the bottom while it grows.
   const logBox = byId('suntltestLog');
   if (logBox) logBox.scrollTop = logBox.scrollHeight;
+  // Wire the copy button. Falls back to a transient text-selection
+  // when navigator.clipboard is unavailable (older Safari, http
+  // contexts) so the path is still selectable manually.
+  const copyBtn = wrap.querySelector('[data-suntltest-copy]');
+  if (copyBtn){
+    copyBtn.addEventListener('click', async () => {
+      const path = copyBtn.getAttribute('data-suntltest-copy') || '';
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText){
+          await navigator.clipboard.writeText(path);
+        } else {
+          const sel = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(wrap.querySelector('.suntltest-rawdir-path'));
+          sel?.removeAllRanges(); sel?.addRange(range);
+        }
+        copyBtn.textContent = '✓ kopiert';
+        setTimeout(() => { copyBtn.textContent = '⧉ kopieren'; }, 1500);
+      } catch (_e){ /* noop — selection fallback already ran */ }
+    });
+  }
 }
 
 function _dnBadge(v){

@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -77,6 +78,12 @@ class _SunTLTestSession:
     # uses. None falls back to the legacy auto math.
     target_duration_s: int | None = None
     frames_dir: Path | None = None
+    # In TEST mode the scratch dir is not deleted — instead it's
+    # renamed to <stem>_raw/ (visible to normal file listings) so the
+    # operator can audit raw frames + the per-reason _rejected/ tree
+    # that the on_reject hook builds during the slot loop. Production
+    # captures stay None and keep the original cleanup behaviour.
+    raw_dir: Path | None = None
     # Final stats snapshot — captured before scratch dir cleanup so the
     # post-completion status read still has accurate counters even
     # though `_stats.json` is gone with the scratch dir.
@@ -136,6 +143,21 @@ class _SunTLTestLogHandler(logging.Handler):
 _active_test_session: "_SunTLTestSession | None" = None
 _active_test_handler: "_SunTLTestLogHandler | None" = None
 _test_session_lock = threading.Lock()
+
+
+def _raw_dir_relpath(session: "_SunTLTestSession", sightings_dir: Path) -> str | None:
+    """Return ``session.raw_dir`` as a path string relative to the
+    storage root (i.e. starting with ``weather/...``) so the UI can
+    render a copyable hint. None when the session has no raw_dir yet
+    (in-flight test before _finalise_scratch landed) or when the path
+    sits outside the storage tree (defensive guard — unexpected)."""
+    if session.raw_dir is None:
+        return None
+    try:
+        # storage_root = sightings_dir.parent (sightings_dir == .../storage/weather)
+        return str(session.raw_dir.relative_to(sightings_dir.parent))
+    except Exception:
+        return str(session.raw_dir)
 
 
 def _sun_window_bounds(sun_dt: datetime, window_min: int) -> tuple[datetime, datetime, int, int]:
@@ -458,6 +480,99 @@ class SunTimelapseMixin:
         stats = CaptureStats(out_dir=frames_dir, expected_frames=expected_frames)
         n_written = 0
         i = 0
+        # ── Test-mode reject sink ─────────────────────────────────────────
+        # Production runs pass on_reject=None below so behaviour is
+        # bit-identical to before this change. In test mode, every
+        # rejected attempt (including all 6 retries when they all fail)
+        # gets written to a per-reason subfolder under _rejected/ so the
+        # operator can audit what the validators threw away. Encoding
+        # errors in the lambda are caught at DEBUG by grab_valid_frame —
+        # the diagnostic save path is best-effort by design.
+        rejects_dir: Path | None = None
+        save_reject_cb = None
+        if test_session is not None:
+            rejects_dir = frames_dir / "_rejected"
+            try:
+                rejects_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as _e:
+                log.debug("[sun-tl-test] could not create rejects_dir: %s", _e)
+                rejects_dir = None
+        if rejects_dir is not None:
+            import cv2 as _cv2  # noqa: PLC0415 — lazy, avoids extra boot cost
+            def _save_reject(frame, reason, attempt_idx):
+                # No frame to persist (grab_fn returned None or raised) — skip.
+                if frame is None:
+                    return
+                # reason head = part before first '(' — sanitised for FS:
+                head = reason.split("(", 1)[0].strip() or "unknown"
+                head = re.sub(r"[^a-z0-9_]+", "_", head.lower())[:40] or "unknown"
+                bucket = rejects_dir / head
+                bucket.mkdir(parents=True, exist_ok=True)
+                # Detail tail (the part inside parens) for filename — keeps
+                # std/area/score values in the filename so a directory
+                # listing tells the story without opening every file.
+                detail = ""
+                if "(" in reason and reason.endswith(")"):
+                    detail = reason[reason.index("(") + 1:-1]
+                    detail = re.sub(r"[^a-z0-9._=-]+", "_", detail.lower())[:60]
+                fname = f"slot{i:05d}_a{attempt_idx}{('_' + detail) if detail else ''}.jpg"
+                # Encode ndarray → JPEG bytes if needed; bytes pass through.
+                try:
+                    if isinstance(frame, (bytes, bytearray, memoryview)):
+                        (bucket / fname).write_bytes(bytes(frame))
+                    else:
+                        ok, buf = _cv2.imencode(".jpg", frame,
+                                                [int(_cv2.IMWRITE_JPEG_QUALITY), 85])
+                        if ok:
+                            (bucket / fname).write_bytes(buf.tobytes())
+                except Exception as e:
+                    log.debug("[sun-tl-test] reject-save encode failed: %s", e)
+            save_reject_cb = _save_reject
+
+        def _finalise_scratch():
+            """Single-call finaliser run from every return path. In
+            production: rmtree the scratch dir (current behaviour).
+            In test mode: rename `.scratch_<stem>` → `<stem>_raw/`
+            (visible name) and write the _rejected/_README.txt
+            documenting the layout. Idempotent — second call is a
+            no-op."""
+            if test_session is None:
+                self._cleanup_sun_scratch(frames_dir)
+                return
+            if test_session.raw_dir is not None:
+                return  # already renamed by an earlier return path
+            if not frames_dir.exists():
+                return
+            target = out_dir / f"{stem}_raw"
+            n = 2
+            while target.exists():
+                target = out_dir / f"{stem}_raw_{n}"
+                n += 1
+            try:
+                frames_dir.rename(target)
+            except Exception as e:
+                log.warning("[sun-tl-test] could not rename %s → %s: %s",
+                            frames_dir, target, e)
+                return
+            test_session.raw_dir = target
+            # Status endpoint reads stats from frames_dir on every poll —
+            # update it so post-rename polls find the renamed location.
+            test_session.frames_dir = target
+            rej = target / "_rejected"
+            if rej.exists():
+                try:
+                    (rej / "_README.txt").write_text(
+                        "Layout: <reason_head>/slotNNNNN_aN_<detail>.jpg\n"
+                        "\n"
+                        "Each file is one rejected JPEG attempt. Multiple\n"
+                        "files per slot mean the retry helper hit several\n"
+                        "rejects before giving up or recovering. See\n"
+                        "../_stats.json for the per-reason counters that\n"
+                        "produced these buckets.\n",
+                        encoding="utf-8",
+                    )
+                except Exception as e:
+                    log.debug("[sun-tl-test] README write failed: %s", e)
         # Last successfully-grabbed JPEG. When grab_valid_frame's retry
         # budget is exhausted on a slot (typical for `dead_area` /
         # `grey_uniform` bursts that persist past the 5 s wall-clock
@@ -477,6 +592,7 @@ class SunTimelapseMixin:
             # 640x360 sub-stream the live preview path uses.
             jpg, attempt_used, last_reason = grab_valid_frame(
                 lambda: rt.snapshot_jpeg_hires(quality=92),
+                on_reject=save_reject_cb,
             )
             if jpg:
                 out = frames_dir / f"{i:05d}.jpg"
@@ -540,7 +656,7 @@ class SunTimelapseMixin:
                         log_tag, n_written)
             if test_session is not None:
                 test_session.error = f"too few frames ({n_written})"
-            self._cleanup_sun_scratch(frames_dir)
+            _finalise_scratch()
             return
         # Re-use the existing TimelapseBuilder._write_video logic — same
         # JPEG-on-disk → ffmpeg pipeline as the regular timelapse builder
@@ -564,13 +680,13 @@ class SunTimelapseMixin:
                 log.warning("[%s] Encode failed for %s %s", log_tag, cam_name, phase)
                 if test_session is not None:
                     test_session.error = "encode failed"
-                self._cleanup_sun_scratch(frames_dir)
+                _finalise_scratch()
                 return
         except Exception as e:
             log.warning("[%s] Encode crash %s %s: %s", log_tag, cam_name, phase, e)
             if test_session is not None:
                 test_session.error = f"encode crash: {e}"
-            self._cleanup_sun_scratch(frames_dir)
+            _finalise_scratch()
             return
         # Write thumb from the middle JPEG (~halfway through the sun event).
         try:
@@ -633,7 +749,7 @@ class SunTimelapseMixin:
         if test_session is not None:
             test_session.result_clip_path = manifest["clip_path"]
             test_session.result_sighting_id = manifest["id"]
-        self._cleanup_sun_scratch(frames_dir)
+        _finalise_scratch()
         if test_session is not None:
             # Test runs never push to Telegram — diagnostic only.
             return
@@ -847,6 +963,13 @@ class SunTimelapseMixin:
             "error": session.error,
             "finished": bool(session.finished),
             "last_log_lines": log_tail,
+            # Test-mode raw frames + per-reason _rejected/ tree —
+            # surfaced as a path string relative to /app/storage so
+            # the UI can build a copy-able link. None on production
+            # runs (no scratch dir is preserved there) and on
+            # in-flight tests before _finalise_scratch has renamed
+            # the dir.
+            "raw_dir": _raw_dir_relpath(session, self._sightings_dir()),
         }
 
     def sun_times_today(self) -> dict:
