@@ -46,14 +46,20 @@
      default content width when the probe-button label would otherwise
      push the row past the cam-edit-inner right edge. Plain 1fr held
      a min-width:auto floor and produced the overflow seen in the
-     redesign brief. */
-  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) max-content;gap:8px;align-items:end
+     redesign brief.
+     align-items:start so the button top-edges with the input
+     top-edges — the .field-wrap cells contain input + .field-label
+     underneath, so end-alignment placed the button below the input
+     baseline. The labels still render below their inputs (same
+     .field-wrap flex container, unaffected by grid alignment). */
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) max-content;gap:8px;align-items:start
 }
 .cam-probe-btn{
-  /* Carries the .btn-action.action-green base (radius, font). We
-     override padding + min-height so the geometry matches the
-     adjacent input fields. */
-  min-height:41px;padding:6px 12px;font-size:13px;flex-shrink:0
+  /* Carries the .btn-action.action-green base (radius, font). Height
+     pinned to 40 px so the button baseline matches the cam-edit-inner
+     input height (also 40 px) — start-alignment makes any difference
+     visible at the top edge, so they have to be equal. */
+  height:40px;min-height:40px;padding:6px 12px;font-size:13px;flex-shrink:0
 }
 .cam-probe-btn.is-busy{opacity:.55;pointer-events:none}
 .cam-probe-btn.is-busy svg{animation:cam-probe-spin .9s linear infinite}
@@ -85,6 +91,6 @@
   .cam-id-row{grid-template-columns:1fr 1fr;grid-template-areas:'a b' 'c c';gap:6px}
   .cam-id-row .field-wrap:first-of-type{grid-area:a}
   .cam-id-row .field-wrap:nth-of-type(2){grid-area:b}
-  .cam-id-row .cam-probe-btn{grid-area:c;width:100%;justify-content:center;min-height:44px}
+  .cam-id-row .cam-probe-btn{grid-area:c;width:100%;justify-content:center;height:auto;min-height:44px}
 }
 
