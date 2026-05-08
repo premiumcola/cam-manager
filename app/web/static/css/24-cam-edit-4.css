@@ -30,19 +30,26 @@
 
 /* Manuf + model + labelled probe button row. The probe button shares
    the .btn-action.action-green token with the Netzwerk-Discovery
-   button up top so its purpose ("Hersteller & Modell abfragen") reads
-   at a glance — the previous tiny icon-only square left users
-   guessing. Grid: two equal input columns plus an auto column for
-   the labelled button. iPhone-narrow widths drop the button to a full
-   second row so the two inputs keep usable widths. */
+   button up top so its purpose reads at a glance. Three coordinated
+   sizing rules below align it cleanly with the inputs in the same
+   row:
+     - height matches the .field-wrap input height (input is 10/14
+       padding + 14 px font ≈ 41 px, so 41 px min-height keeps top
+       and bottom edges flush).
+     - tighter horizontal padding (10 px) so the row no longer
+       extends past the tab underline above.
+     - max-content column so the button cell sizes to its label
+       instead of stretching with the inputs.
+   iPhone-narrow widths drop the button to a full second row so the
+   two inputs keep usable widths; the label stays visible there. */
 .cam-id-row{
-  display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end
+  display:grid;grid-template-columns:1fr 1fr max-content;gap:8px;align-items:end
 }
 .cam-probe-btn{
-  /* Carries the .btn-action.action-green base (padding, radius, font).
-     We only add the iOS touch-target floor and the busy-spinner
-     animation hooks here. */
-  min-height:44px;flex-shrink:0
+  /* Carries the .btn-action.action-green base (radius, font). We
+     override padding + min-height so the geometry matches the
+     adjacent input fields. */
+  min-height:41px;padding:6px 12px;font-size:13px;flex-shrink:0
 }
 .cam-probe-btn.is-busy{opacity:.55;pointer-events:none}
 .cam-probe-btn.is-busy svg{animation:cam-probe-spin .9s linear infinite}
@@ -74,6 +81,6 @@
   .cam-id-row{grid-template-columns:1fr 1fr;grid-template-areas:'a b' 'c c';gap:6px}
   .cam-id-row .field-wrap:first-of-type{grid-area:a}
   .cam-id-row .field-wrap:nth-of-type(2){grid-area:b}
-  .cam-id-row .cam-probe-btn{grid-area:c;width:100%;justify-content:center}
+  .cam-id-row .cam-probe-btn{grid-area:c;width:100%;justify-content:center;min-height:44px}
 }
 

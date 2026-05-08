@@ -177,15 +177,34 @@ window._reconnectCam=function(camId,btn){
   setTimeout(()=>btn.classList.remove('spinning'),520);
   reloadCamera(camId);
 };
-window._quickDeleteCamera=async function(camId,camName){
+// Delete-with-confirm — shared between the cam-row trash icon
+// (window._quickDeleteCamera) and the in-panel "Kamera löschen"
+// button. Both entry points need the SAME confirm dialog and
+// success path, so we factor the body into one helper and wire two
+// thin callers around it.
+async function _deleteCameraWithConfirm(camId,camName){
   if(!await showConfirm(`Kamera "${camName}" wirklich löschen?\n\nDie Kamera wird aus der Konfiguration entfernt. Medien bleiben im Speicher erhalten und erscheinen unter "Archivierte Kameras".`)) return;
   try{
     const r=await j(`/api/settings/cameras/${encodeURIComponent(camId)}`,{method:'DELETE'});
     if(r.event_count>0) showToast(`${r.event_count} gespeicherte Ereignisse bleiben im Archiv erhalten.`,'warn');
     if(panelState.camId===camId) _restoreEditWrapper();
     await loadAll();
-  }catch(e){showToast('Fehler beim Löschen: '+(e.message||e),'error');}
-};
+  }catch(_err){showToast('Fehler beim Löschen: '+(_err.message||_err),'error');}
+}
+window._quickDeleteCamera=_deleteCameraWithConfirm;
+// In-panel "Kamera löschen" button. The form-template puts the
+// button in the DOM at boot time (it's static markup), so we bind
+// once here. The current camId is stamped onto the button's
+// dataset by editCamera(), and the camera name comes from the
+// live state lookup so a rename between edit-open and delete-click
+// still picks the latest label.
+byId('deleteCameraBtn')?.addEventListener('click',()=>{
+  const btn=byId('deleteCameraBtn');
+  const camId=btn?.dataset.camId;
+  if(!camId){showToast('Keine Kamera ausgewählt.','error');return;}
+  const cam=(state.cameras||[]).find(c=>c.id===camId)||(state.config?.cameras||[]).find(c=>c.id===camId);
+  _deleteCameraWithConfirm(camId,cam?.name||camId);
+});
 
 function editCamera(camId){
   // Defensive: if the cam-edit form isn't in the DOM yet (rare but

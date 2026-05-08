@@ -173,8 +173,14 @@
 .cam-edit-inner{
   overflow:hidden;min-height:0;
   padding:0 16px;
-  transition:padding .38s cubic-bezier(.4,0,.2,1);
-  background:#212940;scrollbar-width:none
+  transition:padding .38s cubic-bezier(.4,0,.2,1),background .38s cubic-bezier(.4,0,.2,1);
+  /* Expanded panel reads as a light-grey CARD lifted out of the dark
+     page chrome — the cam-row header above stays dark (#222), and
+     the moment the panel opens the inner surface flips to a neutral
+     light grey with no blue cast. All descendant text/inputs/labels
+     get scoped overrides further down so the global dark theme
+     doesn't leak into this island of light. */
+  background:#e5e7eb;scrollbar-width:none
 }
 .cam-edit-wrapper.slide-open .cam-edit-inner{padding:4px 16px 16px;overflow:hidden}
 /* Pull the tab bar's top margin to zero inside the cam-edit shell so
@@ -197,7 +203,15 @@
 .mmc-tl{border:none}.mmc-tl .mmc-img-wrap{background:#110a1e}.mmc-play-btn{width:36px;height:36px;border-radius:50%;background:rgba(168,85,247,.7);border:2px solid rgba(216,180,254,.6);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:transform .18s ease,filter .18s ease}.mmc-img-wrap:hover .mmc-play-btn{transform:scale(1.15);filter:brightness(1.25)}.mmc-tl-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;backdrop-filter:blur(10px);background:rgba(0,0,0,.65);border:1.5px solid rgba(168,85,247,.6);color:#d8b4fe;text-shadow:0 1px 3px rgba(0,0,0,.8);line-height:1.3}
 .cam-toggles{display:flex;flex-wrap:wrap;gap:10px 20px;align-items:center;padding:6px 2px}
 .cam-toggle{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;background:none;border:none;padding:0;color:var(--text)}.cam-toggle .switch{width:42px;height:24px;flex-shrink:0}.cam-toggle .switch input:checked + .slider:before{transform:translateX(18px)}.cam-toggle .slider:before{width:18px;height:18px;top:2px;left:2px}
-.cam-edit-toggle{background:var(--accent)!important;color:#fff!important;border:none;border-radius:10px;padding:7px 14px;font-weight:600;font-size:13px;cursor:pointer}.cam-edit-toggle:hover{background:#2563eb!important}.cam-form-actions{display:grid;gap:8px;margin-top:16px}.cam-save-btn{width:100%;min-height:44px;padding:12px 16px;background:var(--accent);color:#fff;font-weight:700;border:none;border-radius:14px;font-size:15px;cursor:pointer}.cam-save-btn:hover{background:#2563eb}.cam-delete-btn{padding:8px 14px;background:transparent;border:none;border-radius:12px;color:var(--danger);font-size:13px;font-weight:500;cursor:pointer;width:100%}.cam-delete-btn:hover{background:rgba(239,68,68,.1)}
+.cam-edit-toggle{background:var(--accent)!important;color:#fff!important;border:none;border-radius:10px;padding:7px 14px;font-weight:600;font-size:13px;cursor:pointer}.cam-edit-toggle:hover{background:#2563eb!important}.cam-form-actions{display:grid;gap:8px;margin-top:16px}
+/* Save button — solid green (matches the action-green family the
+   probe + recovery buttons use, but bumped to a primary fill).
+   White text + 14 px radius + full-width + 44 px touch-target. The
+   green pops out of the new light-grey panel surface in a way the
+   old blue could not. */
+.cam-save-btn{width:100%;min-height:44px;padding:12px 16px;background:#16a34a;color:#fff;font-weight:700;border:none;border-radius:14px;font-size:15px;cursor:pointer;transition:background .15s ease}
+.cam-save-btn:hover{background:#15803d}
+.cam-delete-btn{padding:8px 14px;background:transparent;border:none;border-radius:12px;color:var(--danger);font-size:13px;font-weight:500;cursor:pointer;width:100%}.cam-delete-btn:hover{background:rgba(239,68,68,.1)}
 .cam-sched{background:var(--surface);border-radius:14px;padding:10px 12px}.cam-sched summary{cursor:pointer;color:var(--muted);font-size:13px;font-weight:600}
 @media (max-width:1200px){.cam-2col{grid-template-columns:1fr}}
 .toggle-row{margin-bottom:0}
@@ -1004,4 +1018,92 @@
 .cv-livebtn-hd:hover{border-color:var(--accent);color:var(--text)}
 .cv-livebtn-hd.cv-livebtn-active{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,.1)}
 
+
+/* ────────────────────────────────────────────────────────────────────────
+   Camera-edit panel · LIGHT-GREY reskin (scoped to .cam-edit-inner)
+
+   The expanded camera-edit body is a light-grey island lifted out of
+   the dark page chrome. Every override below is anchored on
+   .cam-edit-inner so the global dark theme keeps applying everywhere
+   else (sidebar, hero, dashboard, mediathek, settings sections, the
+   collapsed cam-row header itself). Strict rule: NO blue tint on
+   text, fills, hints, accents — neutral greys only inside this
+   scope. Depth via background contrast (light surface, white inputs,
+   slightly darker secondary tiles), never thin grey borders.
+   ──────────────────────────────────────────────────────────────────── */
+.cam-edit-inner{color:#1f2937}
+.cam-edit-inner .field-label{color:#374151}
+.cam-edit-inner .field-help{color:#4b5563}
+.cam-edit-inner .field-help code{background:#d1d5db;color:#1f2937}
+.cam-edit-inner .field-wrap input:not([type=range]):not([type=number]):not([type=checkbox]),
+.cam-edit-inner .field-wrap input[type=number],
+.cam-edit-inner .field-wrap select,
+.cam-edit-inner .field-wrap textarea{
+  background:#ffffff;color:#1f2937;
+  border:0;
+  box-shadow:inset 0 0 0 1px rgba(31,41,55,.08)
+}
+.cam-edit-inner .field-wrap input:focus,
+.cam-edit-inner .field-wrap select:focus,
+.cam-edit-inner .field-wrap textarea:focus{
+  box-shadow:inset 0 0 0 1px rgba(31,41,55,.18),0 0 0 3px rgba(22,163,74,.18)
+}
+.cam-edit-inner .field-wrap input::placeholder,
+.cam-edit-inner .field-wrap textarea::placeholder{color:#9ca3af}
+/* Native chevron in selects gets a darker stroke so it reads on
+   white. Re-emit the bg-image with a near-black arrow. */
+.cam-edit-inner .field-wrap select{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%231f2937' d='M6 8L1 3h10z'/%3E%3C/svg%3E")
+}
+/* Section + ID-preview tiles use a darker grey so they sit a step
+   below the panel surface and read as nested groups. */
+.cam-edit-inner .cam-id-preview{
+  background:#d1d5db;border:0;box-shadow:inset 0 0 0 1px rgba(31,41,55,.06)
+}
+.cam-edit-inner .cam-id-preview-label{color:#374151}
+.cam-edit-inner .cam-id-preview-value{color:#1f2937;background:transparent}
+.cam-edit-inner .cam-id-preview-hint{color:#4b5563}
+.cam-edit-inner .cam-autodetected-hint{color:#15803d}
+.cam-edit-inner .cam-icon-microlabel{color:#374151}
+.cam-edit-inner .cam-field-label{color:#374151}
+.cam-edit-inner .settings-divider{color:#374151}
+.cam-edit-inner .cam-sep{background:rgba(31,41,55,.10)}
+.cam-edit-inner .toggle-row{background:#f3f4f6}
+.cam-edit-inner .toggle-row-label{color:#1f2937}
+.cam-edit-inner .toggle-row-sublabel{color:#4b5563}
+/* Tab bar on the light surface — dark text, dark active underline,
+   no blue cast. Hover surface is the same darker grey the nested
+   tiles use so tabs sit consistently below the panel. */
+.cam-edit-inner .cam-tab-bar{border-bottom-color:rgba(31,41,55,.12)}
+.cam-edit-inner .cam-tab-btn{color:#4b5563}
+.cam-edit-inner .cam-tab-btn:hover{background:#d1d5db;color:#111827}
+.cam-edit-inner .cam-tab-btn.active{color:#111827;border-bottom-color:#111827}
+/* Whitelist chips switch to a darker grey on light surface. */
+.cam-edit-inner .wl-chip{background:#d1d5db;color:#1f2937}
+.cam-edit-inner .wl-chip:hover{background:#9ca3af;color:#111827}
+.cam-edit-inner .wl-chip.selected{background:#16a34a;color:#fff}
+/* Schedule + tl-panel + sched details — keep them visually nested. */
+.cam-edit-inner .cam-sched{background:#f3f4f6}
+.cam-edit-inner .cam-sched summary{color:#374151}
+.cam-edit-inner .tl-panel{background:#f3f4f6}
+.cam-edit-inner .tl-preset{background:#e5e7eb}
+.cam-edit-inner .tl-preset-head{color:#374151}
+.cam-edit-inner .tl-val{color:#16a34a}
+.cam-edit-inner .muted{color:#4b5563}
+/* Erkennungs-Modus + status rows — neutralise the bluish-green/grey
+   palette so they read on light. */
+.cam-edit-inner .cam-gs-row{background:#f3f4f6;border-color:rgba(31,41,55,.08);color:#1f2937}
+.cam-edit-inner .cam-gs-row--off{background:#e5e7eb;color:#4b5563}
+.cam-edit-inner .cam-gs-tag{background:#d1d5db;color:#374151}
+/* Headline above the form (.cam-edit-header is hidden, but if a
+   future change re-enables it the colour stays in scope). */
+.cam-edit-inner h3,.cam-edit-inner h4{color:#1f2937}
+
+/* The cam-row header (.cam-item.editing) keeps its dark surface so
+   the seam with the light panel below reads as deliberate
+   contrast. Round only the OUTER corners of the .cam-edit-inner so
+   the inner surface meets the dark header on a flat horizontal
+   line — without this the inner's corners poke into the header at
+   the bottom of the .cam-item radius. */
+.cam-item.editing .cam-edit-inner{border-radius:0 0 14px 14px}
 
