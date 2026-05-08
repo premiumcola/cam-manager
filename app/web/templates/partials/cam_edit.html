@@ -385,6 +385,17 @@
                       <svg id="erkSimOverlay" preserveAspectRatio="none"></svg>
                     </div>
                     <div class="erk-test-result-list" id="erkSimList"></div>
+                    <!-- Decision-trace log: green-on-black terminal block
+                         walking every gate from capture → final push.
+                         Hidden until the first run; populated from
+                         data.decision_trace by snapshot.js. -->
+                    <div class="erk-sim-log" id="erkSimLog" hidden>
+                      <div class="erk-sim-log-head">
+                        <span class="erk-sim-log-title">⏱ Decision Trace</span>
+                        <button type="button" class="erk-sim-log-clear" id="erkSimLogClear" aria-label="Log leeren">leeren</button>
+                      </div>
+                      <pre class="erk-sim-log-body" id="erkSimLogBody"></pre>
+                    </div>
                   </div>
                   <div class="erk-sim-tab-panel" id="erkSimTab-video" role="tabpanel" aria-labelledby="erkSimTabBtn-video" hidden></div>
                 </div>

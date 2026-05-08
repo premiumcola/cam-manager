@@ -33,6 +33,18 @@ export function bindErkSimulate(){
       if (wrap) wrap.hidden = true;
     });
   }
+  // "leeren" button on the decision-trace log block — clears the
+  // text but keeps the block visible so the next simulate writes
+  // into an empty pre. Click outside the log doesn't reset it;
+  // closing the whole sheet (× button) re-hides everything.
+  const logClear = byId('erkSimLogClear');
+  if (logClear && !logClear.dataset.wired){
+    logClear.dataset.wired = '1';
+    logClear.addEventListener('click', () => {
+      const body = byId('erkSimLogBody');
+      if (body) body.textContent = '';
+    });
+  }
   bindErkSimTabs();
 }
 

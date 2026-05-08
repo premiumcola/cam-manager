@@ -638,9 +638,103 @@ def api_test_detection(cam_id: str):
         log.warning("[test-detection] %s encode failed: %s", cam_id, e)
         snapshot = None
     h, w = frame.shape[:2]
+    # ── Decision trace ──────────────────────────────────────────
+    # Walk every gate from capture → telegram and record a one-line
+    # human-readable verdict for each. The frontend renders this list
+    # verbatim in a green-on-black terminal block so the user can iterate
+    # on settings without grepping container logs. We evaluate the
+    # downstream gates (matrix / armed / schedule_notify / cooldown)
+    # even when nothing passed — "what WOULD have happened if a hit
+    # passed" is often the actual debugging question.
+    from ..event_logic import compute_severity_from_matrix, is_schedule_window_active
+    trace: list[str] = []
+    trace.append(f"[capture] frame {w}×{h} · interval ≤{cam.get('frame_interval_ms', 350)} ms")
+    trace.append(
+        f"[coral] threshold floor {global_floor:.2f} · per-class: "
+        f"{dict(per_class) if per_class else '(none)'}"
+    )
+    trace.append(
+        f"[coral] object_filter: {sorted(obj_filter) if obj_filter else '(none — all classes accepted)'}"
+    )
+    trace.append(f"[coral] raw detections: {len(raw)}")
+    for d in out:
+        pct = int(round(d["score"] * 100))
+        if d["verdict"] == "pass":
+            trace.append(f"[det] {d['label']} {pct}% → PASS (above class threshold)")
+        elif d["verdict"] == "belowthresh":
+            trace.append(f"[det] {d['label']} {pct}% → REJECTED ({d['reason']})")
+        elif d["verdict"] == "filtered":
+            trace.append(f"[det] {d['label']} {pct}% → FILTERED ({d['reason']})")
+    pass_dets = [d for d in out if d["verdict"] == "pass"]
+    if not pass_dets:
+        trace.append("[verdict] no detection survived the threshold/filter gates · alarm pipeline NOT triggered")
+    class_sev_cfg = cam.get("class_severity") or {}
+    trace.append(
+        f"[matrix] class_severity: "
+        f"{class_sev_cfg if class_sev_cfg else '(empty — falling back to legacy alarm_profile)'}"
+    )
+    severity = "—"
+    if pass_dets:
+        labels_pass = sorted({d["label"] for d in pass_dets})
+        if class_sev_cfg:
+            severity = compute_severity_from_matrix(class_sev_cfg, labels_pass)
+        else:
+            severity = "alarm"
+        trace.append(f"[matrix] resolved severity for {labels_pass}: {severity}")
+    trace.append(f"[armed] camera armed={bool(cam.get('armed', True))}")
+    trace.append(f"[telegram_enabled] cam.telegram_enabled={bool(cam.get('telegram_enabled', True))}")
+    sch_notify = cam.get("schedule_notify") or {}
+    if sch_notify:
+        try:
+            active_now = is_schedule_window_active(sch_notify)
+        except Exception as e:
+            active_now = f"(eval failed: {e})"
+        trace.append(
+            f"[schedule_notify] enabled={bool(sch_notify.get('enabled', False))} "
+            f"window={sch_notify.get('from','?')}→{sch_notify.get('to','?')} · active_now={active_now}"
+        )
+    else:
+        trace.append("[schedule_notify] (none — falling back to legacy schedule)")
+    # Cooldown peek — best-effort. Mirrors the keying + lookup in
+    # telegram_bot/_outbound.py so the trace matches what would actually
+    # happen at notify-time. Swallows any structural drift between the
+    # notifier internals and this read-only inspection.
+    notifier = getattr(app_state, "telegram_service", None)
+    try:
+        if notifier is not None and pass_dets:
+            top_label = pass_dets[0]["label"]
+            key = (cam_id, top_label)
+            last_mono = getattr(notifier, "_last_notify", {}).get(key, 0.0)
+            cd_cfg = cam.get("notification_cooldown") or {}
+            cd_seconds = int(cd_cfg.get(top_label, 60))
+            if last_mono:
+                import time as _t
+                elapsed = _t.monotonic() - last_mono
+                if elapsed < cd_seconds:
+                    trace.append(
+                        f"[cooldown] {top_label}@{cam_id}: last push {int(elapsed)}s ago · "
+                        f"{int(cd_seconds - elapsed)}s remaining → would SKIP"
+                    )
+                else:
+                    trace.append(
+                        f"[cooldown] {top_label}@{cam_id}: idle (last {int(elapsed)}s ago, "
+                        f"threshold {cd_seconds}s) → would PASS"
+                    )
+            else:
+                trace.append(f"[cooldown] {top_label}@{cam_id}: never pushed → would PASS")
+    except Exception as e:
+        trace.append(f"[cooldown] lookup failed: {e}")
+    if not pass_dets:
+        trace.append("[final] no push (no detection passed)")
+    else:
+        trace.append(
+            f"[final] {len(pass_dets)} detection(s) would route through the push pipeline "
+            f"(subject to gates above)"
+        )
     return jsonify({
-        "ok":         True,
-        "snapshot":   snapshot,
-        "frame_size": {"w": int(w), "h": int(h)},
-        "detections": out,
+        "ok":             True,
+        "snapshot":       snapshot,
+        "frame_size":     {"w": int(w), "h": int(h)},
+        "detections":     out,
+        "decision_trace": trace,
     })

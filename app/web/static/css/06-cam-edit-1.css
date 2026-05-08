@@ -1176,3 +1176,49 @@
    base .wl-chip per-class colours (purple/pink/cyan/orange/brown/
    teal) paint again on the dark body. */
 
+/* ── Erkennung-Simulator: decision-trace log ─────────────────────────────
+   Green-on-black terminal block sitting under the detection list inside
+   #erkSimTab-snapshot. Same aesthetic family as the System-Logs Matrix
+   surface (#logs.panel) — monospace, classic green text, sharp dark
+   background — so the user reads it as "what would land in the logs"
+   without context-switch. Header strip stays subtle; the body is the
+   surface that actually shows trace lines. */
+.erk-sim-log{
+  margin-top:12px;
+  border-radius:10px;
+  background:#0c1014;
+  border:1px solid rgba(255,255,255,.06);
+  overflow:hidden;
+}
+.erk-sim-log-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 12px;
+  background:rgba(255,255,255,.025);
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+.erk-sim-log-title{
+  font-size:11px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;color:#9aa4b0;
+}
+.erk-sim-log-clear{
+  background:transparent;border:1px solid rgba(255,255,255,.12);
+  color:#9aa4b0;font-size:10.5px;font-weight:600;
+  padding:3px 9px;border-radius:6px;cursor:pointer;
+}
+.erk-sim-log-clear:hover{
+  background:rgba(255,255,255,.04);color:#cbd5e1;
+}
+.erk-sim-log-body{
+  margin:0;
+  padding:10px 14px;
+  max-height:240px;
+  overflow:auto;
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  font-size:11.5px;
+  line-height:1.55;
+  color:#86efac;
+  background:#0c1014;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+

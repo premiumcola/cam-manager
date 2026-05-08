@@ -12,6 +12,14 @@ const _ERK_VERDICT_TXT = {
   'filtered':     '',
 };
 
+// Module-scoped abort controller. A second click while the first
+// request is in flight aborts the prior fetch and starts fresh.
+// Without this, the first response could arrive after the second
+// and overwrite the panel with a stale snapshot, OR the loading
+// state never clears because both promises resolve out of order
+// (the previous symptom: "panel hangs on rapid re-clicks").
+let _erkSimAbort = null;
+
 
 export async function _onErkSimulateClick(ev){
   const btn = ev.currentTarget;
@@ -22,8 +30,19 @@ export async function _onErkSimulateClick(ev){
   btn.disabled = true;
   btn.classList.add('is-busy');
   if (lblEl) lblEl.textContent = ' simuliere…';
+  // Supersede any in-flight request — the controller below is the
+  // ONLY one we care about for the rest of this handler. Stale
+  // resolutions (AbortError) are swallowed silently.
+  if (_erkSimAbort){
+    try { _erkSimAbort.abort(); } catch { /* ignore */ }
+  }
+  _erkSimAbort = new AbortController();
+  const controller = _erkSimAbort;
   try {
-    const r = await fetch(`/api/cameras/${encodeURIComponent(camId)}/test-detection`, { method: 'POST' });
+    const r = await fetch(
+      `/api/cameras/${encodeURIComponent(camId)}/test-detection`,
+      { method: 'POST', signal: controller.signal },
+    );
     let data = null;
     try { data = await r.json(); } catch {}
     if (!r.ok || !data?.ok){
@@ -32,12 +51,21 @@ export async function _onErkSimulateClick(ev){
       return;
     }
     _renderErkSimResult(data);
-  } catch {
+  } catch (e) {
+    // AbortError = a newer click superseded this request. Stay
+    // silent; the newer click owns the UI feedback now.
+    if (e?.name === 'AbortError') return;
     showToast('Test fehlgeschlagen · Netzwerk', 'error');
   } finally {
-    btn.disabled = false;
-    btn.classList.remove('is-busy');
-    if (lblEl) lblEl.textContent = originalLabel;
+    // Only reset the loading state if THIS request is still the
+    // current one — otherwise we'd flip the button enabled while
+    // the newer request is still running.
+    if (_erkSimAbort === controller){
+      _erkSimAbort = null;
+      btn.disabled = false;
+      btn.classList.remove('is-busy');
+      if (lblEl) lblEl.textContent = originalLabel;
+    }
   }
 }
 
@@ -98,6 +126,18 @@ export function _renderErkSimResult(data){
           </div>`;
       }).join('');
     }
+  }
+  // Decision-trace log — green-on-black terminal block walking every
+  // gate from capture → final push verdict. Rendered only when the
+  // backend included the array (older responses are forward-compatible).
+  const logWrap = byId('erkSimLog');
+  const logBody = byId('erkSimLogBody');
+  if (logWrap && logBody && Array.isArray(data.decision_trace)){
+    const ts = new Date().toLocaleTimeString('de-DE');
+    const passCount = (data.detections || []).filter(d => d.verdict === 'pass').length;
+    const header = `[${ts}] simulate → ${(data.detections || []).length} dets, ${passCount} pass`;
+    logBody.textContent = header + '\n' + data.decision_trace.join('\n');
+    logWrap.hidden = false;
   }
   wrap.hidden = false;
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
