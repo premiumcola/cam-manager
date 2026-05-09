@@ -852,6 +852,14 @@ class CaptureStats:
     # the UI can show a concrete number under the bare key. Populated
     # on the first hit per head; subsequent hits are ignored.
     rejected_by_reason_examples: dict = field(default_factory=dict)
+    # Number of times the slot loop discarded its ``last_valid_jpg``
+    # backfill cache because a strict re-validation flagged it after
+    # > 3 consecutive uses — a self-defence guard against a corrupt
+    # frame that slipped through the validator becoming the reference
+    # for many adjacent slots. Surfaced on the live test panel so
+    # the operator sees "we caught one" rather than wondering why a
+    # block of slots ended up empty.
+    backfill_cache_drops: int = 0
     # Optional capture-context metadata. Populated by the caller right
     # before flush() lands to ``_stats.json`` and surfaces in the UI.
     # All optional so the existing call sites that don't set them
@@ -901,6 +909,7 @@ class CaptureStats:
                 "rejected_by_reason": dict(self.rejected_by_reason),
                 "scene_skips_by_reason": dict(self.scene_skips_by_reason),
                 "rejected_by_reason_examples": dict(self.rejected_by_reason_examples),
+                "backfill_cache_drops": int(self.backfill_cache_drops),
                 "validator_profile": self.validator_profile,
                 "baseline_brightness": self.baseline_brightness,
                 "phase_drift_min": self.phase_drift_min,

@@ -459,9 +459,22 @@ class SunTimelapseMixin:
         from ..frame_helpers import (
             CaptureStats,
             DAY_PROFILE,
+            NIGHT_PROFILE,
+            TWILIGHT_PROFILE,
             grab_valid_frame,
+            is_valid_frame,
             pick_profile_from_baseline,
         )
+
+        def _stricter_profile(p):
+            """Bump the active profile one step toward strict for the
+            backfill re-validation. NIGHT → TWILIGHT → DAY; DAY stays
+            DAY (already the tightest tunings)."""
+            if p is NIGHT_PROFILE:
+                return TWILIGHT_PROFILE
+            if p is TWILIGHT_PROFILE:
+                return DAY_PROFILE
+            return DAY_PROFILE
         rt = self.runtimes.get(cam_id)
         if rt is None or not hasattr(rt, "snapshot_jpeg_hires"):
             log.warning("[weather] cam %s nicht verfügbar — capture abgebrochen", cam_id)
@@ -719,6 +732,14 @@ class SunTimelapseMixin:
         # counted as invalid in CaptureStats so the per-reason
         # breakdown stays diagnostic.
         last_valid_jpg: bytes | None = None
+        # ``n_consecutive_backfills`` tracks how many slots in a row
+        # have been backfilled from the same ``last_valid_jpg``. After
+        # > 3 consecutive uses the cache gets a strict re-validation
+        # pass (one notch tighter profile) — if that rejects, drop
+        # the cache so a frame that slipped through the main gate
+        # can't infect 5–10 adjacent slots. The counter resets on
+        # every fresh successful grab.
+        n_consecutive_backfills = 0
         while datetime.now() < end_at:
             # Cancellation polling at the slot boundary — the user-
             # facing Abbrechen button sets ``cancel_requested`` via
@@ -776,10 +797,34 @@ class SunTimelapseMixin:
                     n_written += 1
                     stats.record_capture(attempt_used=attempt_used)
                     last_valid_jpg = jpg
+                    # Fresh successful grab → reset the consecutive-
+                    # backfill counter. The next backfill, if any,
+                    # starts the chain over from zero.
+                    n_consecutive_backfills = 0
                 except Exception:
                     pass
             else:
                 stats.record_invalid(last_reason)
+                # Self-defence: re-validate the cached jpg under a
+                # tighter profile after > 3 consecutive uses. If even
+                # the stricter gate accepts it, keep using it; if it
+                # now fails, drop the cache so a corrupt frame that
+                # snuck through can't infect adjacent slots.
+                if (last_valid_jpg is not None
+                        and n_consecutive_backfills >= 3):
+                    strict = _stricter_profile(active_profile)
+                    ok_strict, strict_reason = is_valid_frame(
+                        last_valid_jpg, profile=strict,
+                    )
+                    if not ok_strict:
+                        log.info(
+                            "[%s] dropped backfill cache after %d consecutive "
+                            "uses — re-validation flagged %s",
+                            log_tag, n_consecutive_backfills, strict_reason,
+                        )
+                        last_valid_jpg = None
+                        n_consecutive_backfills = 0
+                        stats.backfill_cache_drops += 1
                 if last_valid_jpg is not None:
                     # Backfill with the most recent valid frame so the
                     # slot index sequence stays gap-free for the
@@ -788,6 +833,7 @@ class SunTimelapseMixin:
                     out = frames_dir / f"{i:05d}.jpg"
                     try:
                         out.write_bytes(last_valid_jpg)
+                        n_consecutive_backfills += 1
                         log.info("[%s] %s slot %05d: invalid grab, "
                                  "filled with last valid frame (%s)",
                                  log_tag, cam_name, i, last_reason)
@@ -830,6 +876,7 @@ class SunTimelapseMixin:
                 "rejected_by_reason": dict(stats.rejected_by_reason),
                 "scene_skips_by_reason": dict(stats.scene_skips_by_reason),
                 "rejected_by_reason_examples": dict(stats.rejected_by_reason_examples),
+                "backfill_cache_drops": int(stats.backfill_cache_drops),
                 "validator_profile": active_profile.name,
                 "baseline_brightness": baseline_med,
                 "phase_drift_min": test_session.phase_drift_min,
@@ -1180,6 +1227,7 @@ class SunTimelapseMixin:
             "rejected_by_reason": dict(stats.get("rejected_by_reason", {}) or {}),
             "scene_skips_by_reason": dict(stats.get("scene_skips_by_reason", {}) or {}),
             "rejected_by_reason_examples": dict(stats.get("rejected_by_reason_examples", {}) or {}),
+            "backfill_cache_drops": int(stats.get("backfill_cache_drops", 0) or 0),
             "daynight_color_set": session.daynight_color_set,
             "daynight_revert_set": session.daynight_revert_set,
             "result_clip_path": session.result_clip_path,
