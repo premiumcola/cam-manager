@@ -571,9 +571,16 @@ def api_test_detection(cam_id: str):
     exactly what Coral found and which filter dropped what.
 
     No fresh capture: we read the runtime's last cached frame
-    (rt.frame). That frame is at most one frame_interval_ms old and
-    avoids the cost / racing of a second RTSP open. Inference runs at
-    a low 0.20 threshold so even almost-rejected hits surface in the
+    (rt.frame). The main loop refills that buffer on every successful
+    grab (~frame_interval_ms cadence). To guarantee the simulation
+    actually reflects the CURRENT scene — the user-visible bug was
+    snapshots 2+ minutes old when the stream had stalled — the
+    handler does a fresh-frame check: if the cached frame is older
+    than ~1.5 s OR 3× the camera's frame_interval_ms, it waits up to
+    2 s for the main loop to advance ``frame_ts``. If the buffer
+    never moves, returns 503 so the operator sees a clear "stream
+    stuck" instead of inferring on a stale frame. Inference runs at a
+    low 0.20 threshold so even almost-rejected hits surface in the
     visualisation; the user's actual thresholds are applied afterwards
     to compute the per-detection verdict.
     """
@@ -585,9 +592,53 @@ def api_test_detection(cam_id: str):
     rt = runtimes.get(cam_id)
     if rt is None:
         return jsonify({"error": "Kamera-Runtime nicht aktiv (deaktiviert?)"}), 503
-    frame = rt.frame.copy() if rt.frame is not None else None
+
+    # ── Fresh-frame guarantee ─────────────────────────────────────────
+    # Pair-read frame + frame_ts under the runtime's lock so we never
+    # see a torn pair (frame from one moment, ts from the next). If
+    # the cached frame is stale, poll until the main loop advances
+    # ``frame_ts`` — the loop already refills the buffer continuously,
+    # so we wait rather than racing to open a fresh RTSP handle here.
+    interval_ms = int(cam.get("frame_interval_ms", 350) or 350)
+    # Threshold for "this is stale": 1.5 s floor OR 3× the camera's
+    # configured interval. The 3× factor lets a cam with a long
+    # interval (1500 ms) avoid a false "stale" right after a
+    # legitimate single missed frame.
+    stale_threshold_s = max(1.5, 3.0 * (interval_ms / 1000.0))
+    wait_deadline = _time.monotonic() + 2.0
+    with rt.lock:
+        frame = rt.frame.copy() if rt.frame is not None else None
+        frame_ts_initial = float(getattr(rt, "frame_ts", 0.0) or 0.0)
     if frame is None:
         return jsonify({"error": "Noch kein Frame vorhanden — Kamera startet?"}), 503
+    frame_age_s = (_time.time() - frame_ts_initial) if frame_ts_initial > 0 else 0.0
+    if frame_age_s > stale_threshold_s:
+        # Wait for the main loop to advance frame_ts.
+        log.info(
+            "[test-detection] %s frame stale (%.1fs > %.1fs threshold) — "
+            "waiting up to 2.0s for main loop to refresh",
+            cam_id, frame_age_s, stale_threshold_s,
+        )
+        while _time.monotonic() < wait_deadline:
+            _time.sleep(0.05)
+            with rt.lock:
+                cur_ts = float(getattr(rt, "frame_ts", 0.0) or 0.0)
+                if cur_ts > frame_ts_initial and rt.frame is not None:
+                    frame = rt.frame.copy()
+                    frame_ts_initial = cur_ts
+                    break
+        # Final age after the wait — still computed against the
+        # observed frame_ts so the response reflects reality.
+        frame_age_s = (_time.time() - frame_ts_initial) if frame_ts_initial > 0 else 0.0
+        if frame_age_s > stale_threshold_s:
+            return jsonify({
+                "error": (
+                    f"Kamera-Stream steckt fest (letzter Frame vor "
+                    f"{frame_age_s:.0f}s) — Simulation abgebrochen"
+                ),
+                "frame_age_ms": int(frame_age_s * 1000),
+            }), 503
+    frame_age_ms = int(frame_age_s * 1000)
     detector = getattr(rt, "detector", None)
     if not detector or not getattr(detector, "available", False):
         return jsonify({"error": "Coral nicht verfügbar (motion-only?)"}), 503
@@ -648,7 +699,10 @@ def api_test_detection(cam_id: str):
     # passed" is often the actual debugging question.
     from ..event_logic import compute_severity_from_matrix, is_schedule_window_active
     trace: list[str] = []
-    trace.append(f"[capture] frame {w}×{h} · interval ≤{cam.get('frame_interval_ms', 350)} ms")
+    trace.append(
+        f"[capture] frame {w}×{h} · age {frame_age_ms} ms · "
+        f"interval ≤{cam.get('frame_interval_ms', 350)} ms"
+    )
     trace.append(
         f"[coral] threshold floor {global_floor:.2f} · per-class: "
         f"{dict(per_class) if per_class else '(none)'}"
@@ -735,6 +789,7 @@ def api_test_detection(cam_id: str):
         "ok":             True,
         "snapshot":       snapshot,
         "frame_size":     {"w": int(w), "h": int(h)},
+        "frame_age_ms":   frame_age_ms,
         "detections":     out,
         "decision_trace": trace,
     })
