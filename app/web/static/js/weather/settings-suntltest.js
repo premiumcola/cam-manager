@@ -406,6 +406,7 @@ const _REJECT_HINT_DE = {
   too_bright: 'Belichtung außerhalb des gültigen Bereichs',
   bottom_strip_white: 'H.265-Decoder hat unteren Bildbereich mit weißem Füllmuster ersetzt — RTSP-Paketverlust oder defekter Slice',
   bottom_strip_bright: 'Unterer Bildbereich deutlich heller als Szene — wahrscheinlich Macroblock-Korruption',
+  flat_gray_full_frame: 'Vollbild flach-grau — H.265-Decoder-Ausgabe ohne Szeneninhalt',
 };
 function _rejectHintDe(key){
   if (!key) return '';

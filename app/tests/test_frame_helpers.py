@@ -22,6 +22,7 @@ from app.frame_helpers import (  # noqa: E402
     dead_area_score,
     grab_valid_frame,
     is_bottom_strip_anomaly,
+    is_flat_gray_full_frame,
     is_grey_frame,
     is_valid_frame,
     pick_profile_from_baseline,
@@ -452,3 +453,52 @@ class TestBottomStripAnomaly:
         ok, reason = is_valid_frame(img, profile=NIGHT_PROFILE)
         assert not ok
         assert "bottom_strip_" in reason
+
+
+class TestFlatGrayFullFrame:
+    """Whole-frame mid-grey decoder corruption (H.265 dumped a
+    uniform buffer with no scene structure). Distinct reason head
+    from dead_area so the rejected/ folder splits the two failure
+    modes."""
+
+    def test_uniform_grey_rejected(self):
+        img = np.full((480, 640, 3), 130, dtype=np.uint8)
+        ok, reason = is_flat_gray_full_frame(img)
+        assert ok
+        assert "flat_gray_full_frame" in reason
+
+    def test_dark_scene_passes(self):
+        rng = np.random.default_rng(0)
+        h, w = 480, 640
+        img = np.clip(
+            np.full((h, w, 3), 30, dtype=np.int16)
+            + rng.integers(-15, 16, size=(h, w, 3), dtype=np.int16),
+            0, 255,
+        ).astype(np.uint8)
+        ok, _ = is_flat_gray_full_frame(img)
+        assert not ok
+
+    def test_textured_grey_passes(self):
+        """A genuinely grey scene with real texture (std ≥ 10) must
+        not trip the detector — it's only the no-structure case we
+        want to flag. Noise range needs head-room because BGR→GRAY
+        averaging cuts std by ~33 % relative to the per-channel
+        noise."""
+        rng = np.random.default_rng(1)
+        h, w = 480, 640
+        img = np.clip(
+            np.full((h, w, 3), 130, dtype=np.int16)
+            + rng.integers(-35, 36, size=(h, w, 3), dtype=np.int16),
+            0, 255,
+        ).astype(np.uint8)
+        ok, _ = is_flat_gray_full_frame(img)
+        assert not ok
+
+    def test_is_valid_frame_routes_via_flat_gray(self):
+        """is_valid_frame must emit ``flat_gray_full_frame`` as the
+        reason (not ``dead_area``) so the rejected/ folder splits
+        cleanly."""
+        img = np.full((480, 640, 3), 130, dtype=np.uint8)
+        ok, reason = is_valid_frame(img, profile=NIGHT_PROFILE)
+        assert not ok
+        assert "flat_gray_full_frame" in reason

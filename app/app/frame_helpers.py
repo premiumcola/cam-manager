@@ -497,6 +497,35 @@ def is_colorbar(img) -> tuple[bool, str]:
     return False, ""
 
 
+# ── Flat-gray full-frame corruption ──────────────────────────────────────────
+# Whole-frame mid-grey decoder corruption: H.265 outputs a uniform
+# mid-grey buffer (mean ∈ [115, 145], std < 10). dead_area also
+# catches this case in practice — every tile passes the dead-tile
+# test on a uniform frame — but giving it its own reason head means
+# the per-reason _rejected/ folder splits the two failure modes
+# cleanly. The thresholds match the picker's _is_flat_gray_corruption_sample
+# so a sample that the picker treats as corruption is also rejected
+# by the validator.
+def is_flat_gray_full_frame(img) -> tuple[bool, str]:
+    """Whole frame is flat mid-grey decoder corruption — H.265
+    output a uniform mid-grey buffer with no scene structure.
+    Distinct from dead_area because there's no spatial information
+    at all, not just thin texture."""
+    img = _decode(img)
+    if img is None or img.size == 0:
+        return False, ""
+    try:
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
+        m = float(gray.mean())
+        s = float(gray.std())
+    except Exception:
+        return False, ""
+    if (_FLAT_GRAY_BAND_MIN <= m <= _FLAT_GRAY_BAND_MAX
+            and s < _FLAT_GRAY_STD_MAX):
+        return True, f"flat_gray_full_frame(mean={m:.0f},std={s:.1f})"
+    return False, ""
+
+
 # ── Bottom-strip anomaly thresholds ──────────────────────────────────────────
 # H.265 decode failures on Reolink streams produce a near-white-saturated
 # horizontal band across the bottom 10–25 % of a dark frame, sometimes
@@ -648,6 +677,16 @@ def is_valid_frame(img, profile: FrameValidatorProfile = DAY_PROFILE) -> tuple[b
         if mfrac >= profile.pattern_magenta_area_frac:
             return False, f"patterned_magenta(area={mfrac:.0%})"
 
+    # Whole-frame flat-grey decoder corruption — H.265 dumped a
+    # uniform mid-grey buffer with no scene structure. Catch this
+    # FIRST so it gets its own reason head ("flat_gray_full_frame")
+    # in the per-reason _rejected/ folder instead of being lumped
+    # in with dead_area. dead_area would otherwise also fire on
+    # this frame because every tile is uniform.
+    fg, fg_reason = is_flat_gray_full_frame(img)
+    if fg:
+        return False, fg_reason
+
     # Localised bottom-strip corruption — H.265 NAL/slice loss produces
     # a near-white saturation band OR a bright macroblock smear glued
     # to the bottom of an otherwise dark scene. Has to run BEFORE the
@@ -742,6 +781,9 @@ _TRANSIENT_REASONS: frozenset[str] = frozenset({
     # next frame is usually clean, so retrying within the wall-clock
     # budget genuinely helps.
     "bottom_strip_white", "bottom_strip_bright",
+    # Whole-frame flat-grey corruption — same encoder/decoder
+    # hickup family, retry within budget can recover.
+    "flat_gray_full_frame",
 })
 _SCENE_REASONS: frozenset[str] = frozenset({
     "dead_area", "no_detail", "too_dark", "too_bright",
