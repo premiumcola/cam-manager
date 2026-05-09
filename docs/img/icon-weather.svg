@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Weather">
+  <defs>
+    <linearGradient id="wea-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1f2937"/>
+      <stop offset="100%" stop-color="#0d2a1f"/>
+    </linearGradient>
+    <linearGradient id="wea-cloud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#cbd5e1"/>
+      <stop offset="100%" stop-color="#94a3b8"/>
+    </linearGradient>
+    <linearGradient id="wea-sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#wea-bg)" stroke="#2d6a4f" stroke-width="1.5"/>
+  <!-- sun behind cloud -->
+  <circle cx="22" cy="22" r="9" fill="url(#wea-sun)"/>
+  <g stroke="#fbbf24" stroke-width="1.4" stroke-linecap="round">
+    <line x1="22" y1="9" x2="22" y2="6"/>
+    <line x1="9" y1="22" x2="6" y2="22"/>
+    <line x1="13" y1="13" x2="11" y2="11"/>
+    <line x1="31" y1="13" x2="33" y2="11"/>
+  </g>
+  <!-- cloud -->
+  <path d="M 22 38 Q 14 38 14 32 Q 14 26 22 26 Q 26 20 34 22 Q 42 22 44 28 Q 50 28 50 35 Q 50 41 44 41 L 22 41 Z" fill="url(#wea-cloud)" stroke="#475569" stroke-width="1"/>
+  <!-- rain drops -->
+  <g fill="#4cc9f0">
+    <path d="M 22 47 Q 22 52 24 52 Q 26 52 26 47 Q 24 44 22 47 Z"/>
+    <path d="M 32 49 Q 32 54 34 54 Q 36 54 36 49 Q 34 46 32 49 Z"/>
+    <path d="M 42 47 Q 42 52 44 52 Q 46 52 46 47 Q 44 44 42 47 Z"/>
+  </g>
+  <!-- lightning -->
+  <path d="M 30 41 L 27 48 L 31 48 L 28 56 L 35 46 L 31 46 L 33 41 Z" fill="#fbbf24" stroke="#7a4a26" stroke-width="0.6"/>
+</svg>

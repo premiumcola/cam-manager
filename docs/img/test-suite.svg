@@ -1,0 +1,201 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 560" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Test Suite — 83 tests across 8 modules">
+  <defs>
+    <linearGradient id="ts-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d141d"/>
+      <stop offset="100%" stop-color="#142631"/>
+    </linearGradient>
+    <linearGradient id="ts-card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1f2937"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="ts-accentGreen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#52b788"/>
+      <stop offset="100%" stop-color="#2d6a4f"/>
+    </linearGradient>
+    <filter id="ts-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="560" fill="url(#ts-bg)"/>
+
+  <!-- Header strip -->
+  <g font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+    <text x="60" y="60" fill="#fff" font-size="32" font-weight="700">Test Suite</text>
+    <text x="60" y="88" fill="#94a3b8" font-size="15" font-weight="500">pytest · 8 modules · 83 test functions · all green on every commit</text>
+
+    <!-- Big counter pill -->
+    <g transform="translate(1080, 40)">
+      <rect x="0" y="0" width="140" height="60" rx="14" fill="#1c2a3a" stroke="#52b788" stroke-width="2"/>
+      <text x="70" y="32" fill="#52b788" font-size="28" font-weight="700" text-anchor="middle">83</text>
+      <text x="70" y="50" fill="#94a3b8" font-size="11" font-weight="600" text-anchor="middle" letter-spacing="1.2">TESTS · 8 FILES</text>
+    </g>
+  </g>
+
+  <!-- Grid of 8 test cards (4×2) -->
+  <!-- Card layout: 60px margin, 4 cards × 290 wide + 3 gaps × 16 = 1208, fits in 1160 -->
+  <!-- Recompute: viewBox 1280, side margin 60, available 1160, 4 cards + 3 gaps. Card 270, gap 16 → 4*270+3*16=1128. Centers at x = 60 + i*286 -->
+
+  <!-- Row 1 -->
+  <!-- Card 1 — frame_helpers — 23 tests -->
+  <g transform="translate(60, 130)" filter="url(#ts-shadow)">
+    <rect width="270" height="180" rx="14" fill="url(#ts-card)" stroke="#2d6a4f" stroke-width="1.5"/>
+    <!-- icon: tile grid -->
+    <g transform="translate(20, 20)" stroke="#52b788" stroke-width="1.4" fill="none">
+      <rect x="0" y="0" width="34" height="22" rx="2" fill="#1b4332"/>
+      <line x1="11" y1="0" x2="11" y2="22"/>
+      <line x1="22" y1="0" x2="22" y2="22"/>
+      <line x1="0" y1="11" x2="34" y2="11"/>
+    </g>
+    <text x="64" y="32" fill="#fff" font-size="15" font-weight="700">frame_helpers</text>
+    <text x="64" y="49" fill="#94a3b8" font-size="11" font-weight="500">test_frame_helpers.py</text>
+    <text x="20" y="92" fill="#52b788" font-size="44" font-weight="700">23</text>
+    <text x="80" y="92" fill="#94a3b8" font-size="13" font-weight="500">tests</text>
+    <line x1="20" y1="108" x2="250" y2="108" stroke="#1c2a3a" stroke-width="1"/>
+    <text x="20" y="130" fill="#cbd5e1" font-size="12" font-weight="500">Validator profiles · tile-grid</text>
+    <text x="20" y="148" fill="#cbd5e1" font-size="12" font-weight="500">dead-area · split-frame · grey</text>
+    <text x="20" y="166" fill="#cbd5e1" font-size="12" font-weight="500">band detector · IR night gates</text>
+  </g>
+
+  <!-- Card 2 — camera_id — 14 tests -->
+  <g transform="translate(346, 130)" filter="url(#ts-shadow)">
+    <rect width="270" height="180" rx="14" fill="url(#ts-card)" stroke="#2d6a4f" stroke-width="1.5"/>
+    <!-- icon: ID tag -->
+    <g transform="translate(20, 20)">
+      <path d="M 2 2 L 24 2 L 32 11 L 24 20 L 2 20 Z" fill="#1b4332" stroke="#52b788" stroke-width="1.4"/>
+      <circle cx="22" cy="11" r="2.5" fill="#52b788"/>
+    </g>
+    <text x="64" y="32" fill="#fff" font-size="15" font-weight="700">camera_id</text>
+    <text x="64" y="49" fill="#94a3b8" font-size="11" font-weight="500">test_camera_id.py</text>
+    <text x="20" y="92" fill="#52b788" font-size="44" font-weight="700">14</text>
+    <text x="80" y="92" fill="#94a3b8" font-size="13" font-weight="500">tests</text>
+    <line x1="20" y1="108" x2="250" y2="108" stroke="#1c2a3a" stroke-width="1"/>
+    <text x="20" y="130" fill="#cbd5e1" font-size="12" font-weight="500">build_camera_id is total</text>
+    <text x="20" y="148" fill="#cbd5e1" font-size="12" font-weight="500">vendor / model / IP-octet</text>
+    <text x="20" y="166" fill="#cbd5e1" font-size="12" font-weight="500">tokens always 4-tuple</text>
+  </g>
+
+  <!-- Card 3 — storage_migration — 13 tests -->
+  <g transform="translate(632, 130)" filter="url(#ts-shadow)">
+    <rect width="270" height="180" rx="14" fill="url(#ts-card)" stroke="#2d6a4f" stroke-width="1.5"/>
+    <!-- icon: folder swap -->
+    <g transform="translate(20, 18)">
+      <path d="M 2 6 L 10 6 L 13 10 L 32 10 L 32 24 L 2 24 Z" fill="#1b4332" stroke="#52b788" stroke-width="1.4"/>
+      <path d="M 18 16 L 28 16 M 26 14 L 28 16 L 26 18" stroke="#52b788" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="64" y="32" fill="#fff" font-size="15" font-weight="700">storage_migration</text>
+    <text x="64" y="49" fill="#94a3b8" font-size="11" font-weight="500">test_storage_migration.py</text>
+    <text x="20" y="92" fill="#52b788" font-size="44" font-weight="700">13</text>
+    <text x="80" y="92" fill="#94a3b8" font-size="13" font-weight="500">tests</text>
+    <line x1="20" y1="108" x2="250" y2="108" stroke="#1c2a3a" stroke-width="1"/>
+    <text x="20" y="130" fill="#cbd5e1" font-size="12" font-weight="500">Dual-folder pattern resolved</text>
+    <text x="20" y="148" fill="#cbd5e1" font-size="12" font-weight="500">cam-&lt;ip&gt; + cam-&lt;name&gt; merge</text>
+    <text x="20" y="166" fill="#cbd5e1" font-size="12" font-weight="500">idempotent rebind on boot</text>
+  </g>
+
+  <!-- Card 4 — schema — 13 tests -->
+  <g transform="translate(918, 130)" filter="url(#ts-shadow)">
+    <rect width="270" height="180" rx="14" fill="url(#ts-card)" stroke="#2d6a4f" stroke-width="1.5"/>
+    <!-- icon: shield / validate -->
+    <g transform="translate(20, 18)">
+      <path d="M 17 2 L 30 6 L 30 16 Q 30 24 17 28 Q 4 24 4 16 L 4 6 Z" fill="#1b4332" stroke="#52b788" stroke-width="1.4"/>
+      <path d="M 11 14 L 16 19 L 24 11" stroke="#52b788" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="64" y="32" fill="#fff" font-size="15" font-weight="700">schema</text>
+    <text x="64" y="49" fill="#94a3b8" font-size="11" font-weight="500">test_schema.py</text>
+    <text x="20" y="92" fill="#52b788" font-size="44" font-weight="700">13</text>
+    <text x="80" y="92" fill="#94a3b8" font-size="13" font-weight="500">tests</text>
+    <line x1="20" y1="108" x2="250" y2="108" stroke="#1c2a3a" stroke-width="1"/>
+    <text x="20" y="130" fill="#cbd5e1" font-size="12" font-weight="500">validate_and_coerce()</text>
+    <text x="20" y="148" fill="#cbd5e1" font-size="12" font-weight="500">type checks · range checks</text>
+    <text x="20" y="166" fill="#cbd5e1" font-size="12" font-weight="500">404 vs 422 boundary</text>
+  </g>
+
+  <!-- Row 2 -->
+  <!-- Card 5 — rebuild_runtimes — 12 tests -->
+  <g transform="translate(60, 340)" filter="url(#ts-shadow)">
+    <rect width="270" height="180" rx="14" fill="url(#ts-card)" stroke="#2d6a4f" stroke-width="1.5"/>
+    <!-- icon: refresh -->
+    <g transform="translate(20, 18)">
+      <circle cx="17" cy="15" r="13" fill="#1b4332" stroke="#52b788" stroke-width="1.4"/>
+      <path d="M 17 7 A 8 8 0 1 1 11 11 L 7 9 L 9 14 L 14 12" stroke="#52b788" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <text x="64" y="32" fill="#fff" font-size="15" font-weight="700">rebuild_runtimes</text>
+    <text x="64" y="49" fill="#94a3b8" font-size="11" font-weight="500">test_rebuild_runtimes.py</text>
+    <text x="20" y="92" fill="#52b788" font-size="44" font-weight="700">12</text>
+    <text x="80" y="92" fill="#94a3b8" font-size="13" font-weight="500">tests</text>
+    <line x1="20" y1="108" x2="250" y2="108" stroke="#1c2a3a" stroke-width="1"/>
+    <text x="20" y="130" fill="#cbd5e1" font-size="12" font-weight="500">Live diff-based reload</text>
+    <text x="20" y="148" fill="#cbd5e1" font-size="12" font-weight="500">add · remove · update paths</text>
+    <text x="20" y="166" fill="#cbd5e1" font-size="12" font-weight="500">no-op on identical config</text>
+  </g>
+
+  <!-- Card 6 — timelapse_unification — 5 tests -->
+  <g transform="translate(346, 340)" filter="url(#ts-shadow)">
+    <rect width="270" height="180" rx="14" fill="url(#ts-card)" stroke="#2d6a4f" stroke-width="1.5"/>
+    <!-- icon: film strip -->
+    <g transform="translate(20, 18)">
+      <rect x="2" y="6" width="30" height="20" rx="2" fill="#1b4332" stroke="#52b788" stroke-width="1.4"/>
+      <rect x="5" y="9" width="3" height="3" fill="#52b788"/>
+      <rect x="5" y="20" width="3" height="3" fill="#52b788"/>
+      <rect x="26" y="9" width="3" height="3" fill="#52b788"/>
+      <rect x="26" y="20" width="3" height="3" fill="#52b788"/>
+      <line x1="11" y1="10" x2="23" y2="22" stroke="#52b788" stroke-width="1.2"/>
+      <line x1="23" y1="10" x2="11" y2="22" stroke="#52b788" stroke-width="1.2"/>
+    </g>
+    <text x="64" y="32" fill="#fff" font-size="15" font-weight="700">timelapse_unification</text>
+    <text x="64" y="49" fill="#94a3b8" font-size="11" font-weight="500">test_timelapse_unification.py</text>
+    <text x="20" y="92" fill="#52b788" font-size="44" font-weight="700">5</text>
+    <text x="50" y="92" fill="#94a3b8" font-size="13" font-weight="500">tests</text>
+    <line x1="20" y1="108" x2="250" y2="108" stroke="#1c2a3a" stroke-width="1"/>
+    <text x="20" y="130" fill="#cbd5e1" font-size="12" font-weight="500">Sun-TL · Event-TL · Daily-TL</text>
+    <text x="20" y="148" fill="#cbd5e1" font-size="12" font-weight="500">all share is_valid_frame</text>
+    <text x="20" y="166" fill="#cbd5e1" font-size="12" font-weight="500">single _write_video helper</text>
+  </g>
+
+  <!-- Card 7 — settings_store — 2 tests -->
+  <g transform="translate(632, 340)" filter="url(#ts-shadow)">
+    <rect width="270" height="180" rx="14" fill="url(#ts-card)" stroke="#2d6a4f" stroke-width="1.5"/>
+    <!-- icon: gear -->
+    <g transform="translate(20, 18)">
+      <circle cx="17" cy="15" r="11" fill="#1b4332" stroke="#52b788" stroke-width="1.4"/>
+      <circle cx="17" cy="15" r="4" fill="none" stroke="#52b788" stroke-width="1.4"/>
+      <line x1="17" y1="2" x2="17" y2="6" stroke="#52b788" stroke-width="1.4"/>
+      <line x1="17" y1="24" x2="17" y2="28" stroke="#52b788" stroke-width="1.4"/>
+      <line x1="4" y1="15" x2="8" y2="15" stroke="#52b788" stroke-width="1.4"/>
+      <line x1="26" y1="15" x2="30" y2="15" stroke="#52b788" stroke-width="1.4"/>
+    </g>
+    <text x="64" y="32" fill="#fff" font-size="15" font-weight="700">settings_store</text>
+    <text x="64" y="49" fill="#94a3b8" font-size="11" font-weight="500">test_settings_store.py</text>
+    <text x="20" y="92" fill="#52b788" font-size="44" font-weight="700">2</text>
+    <text x="50" y="92" fill="#94a3b8" font-size="13" font-weight="500">tests</text>
+    <line x1="20" y1="108" x2="250" y2="108" stroke="#1c2a3a" stroke-width="1"/>
+    <text x="20" y="130" fill="#cbd5e1" font-size="12" font-weight="500">upsert_camera id-rebuild</text>
+    <text x="20" y="148" fill="#cbd5e1" font-size="12" font-weight="500">empty Hersteller/Modell</text>
+    <text x="20" y="166" fill="#cbd5e1" font-size="12" font-weight="500">never collapses canonical id</text>
+  </g>
+
+  <!-- Card 8 — sun_tl_unbound_regression — 1 test -->
+  <g transform="translate(918, 340)" filter="url(#ts-shadow)">
+    <rect width="270" height="180" rx="14" fill="url(#ts-card)" stroke="#fbbf24" stroke-width="1.5"/>
+    <!-- icon: bug -->
+    <g transform="translate(20, 18)">
+      <ellipse cx="17" cy="16" rx="9" ry="11" fill="#1b4332" stroke="#fbbf24" stroke-width="1.4"/>
+      <line x1="13" y1="6" x2="11" y2="3" stroke="#fbbf24" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="21" y1="6" x2="23" y2="3" stroke="#fbbf24" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="8" y1="13" x2="3" y2="13" stroke="#fbbf24" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="26" y1="13" x2="31" y2="13" stroke="#fbbf24" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="8" y1="20" x2="3" y2="22" stroke="#fbbf24" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="26" y1="20" x2="31" y2="22" stroke="#fbbf24" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="17" y1="11" x2="17" y2="23" stroke="#fbbf24" stroke-width="0.8"/>
+    </g>
+    <text x="64" y="32" fill="#fff" font-size="15" font-weight="700">sun_tl_regression</text>
+    <text x="64" y="49" fill="#94a3b8" font-size="11" font-weight="500">test_sun_tl_unbound_regression.py</text>
+    <text x="20" y="92" fill="#fbbf24" font-size="44" font-weight="700">1</text>
+    <text x="50" y="92" fill="#94a3b8" font-size="13" font-weight="500">test</text>
+    <line x1="20" y1="108" x2="250" y2="108" stroke="#1c2a3a" stroke-width="1"/>
+    <text x="20" y="130" fill="#fbbf24" font-size="11" font-weight="600" letter-spacing="0.8">REGRESSION GUARD</text>
+    <text x="20" y="148" fill="#cbd5e1" font-size="12" font-weight="500">UnboundLocalError on stats</text>
+    <text x="20" y="166" fill="#cbd5e1" font-size="12" font-weight="500">in sun-tl baseline phase</text>
+  </g>
+</svg>

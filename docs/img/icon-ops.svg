@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Operations">
+  <defs>
+    <linearGradient id="ops-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1f2937"/>
+      <stop offset="100%" stop-color="#0d2a1f"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#ops-bg)" stroke="#2d6a4f" stroke-width="1.5"/>
+  <!-- terminal window — slightly smaller and shifted up so the gear can sit cleanly below -->
+  <rect x="10" y="10" width="44" height="32" rx="3" fill="#0a0a0a" stroke="#52b788" stroke-width="1.4"/>
+  <rect x="10" y="10" width="44" height="6" rx="3" fill="#15191E"/>
+  <!-- traffic lights -->
+  <circle cx="14.5" cy="13" r="1.4" fill="#ef4444"/>
+  <circle cx="19" cy="13" r="1.4" fill="#fbbf24"/>
+  <circle cx="23.5" cy="13" r="1.4" fill="#22c55e"/>
+  <!-- log lines (3 lines, monospace) -->
+  <g font-family="monospace" font-size="5.5">
+    <text x="13" y="24" fill="#52b788">[boot] OK</text>
+    <text x="13" y="32" fill="#fbbf24">[cam:01] reconnect</text>
+    <text x="13" y="40" fill="#cbd5e1">[det] confirmed</text>
+  </g>
+  <!-- gear standalone, BELOW the terminal — clearly separated, no overlap -->
+  <g transform="translate(32, 53)" fill="#52b788">
+    <!-- gear teeth, 8-tooth -->
+    <g>
+      <rect x="-1.2" y="-7.5" width="2.4" height="2.6" rx="0.4"/>
+      <rect x="-1.2" y="4.9" width="2.4" height="2.6" rx="0.4"/>
+      <rect x="-7.5" y="-1.2" width="2.6" height="2.4" rx="0.4"/>
+      <rect x="4.9" y="-1.2" width="2.6" height="2.4" rx="0.4"/>
+      <rect x="3.7" y="-5.4" width="2.4" height="2.6" rx="0.4" transform="rotate(45 5 -4)"/>
+      <rect x="-6.1" y="-5.4" width="2.4" height="2.6" rx="0.4" transform="rotate(-45 -5 -4)"/>
+      <rect x="3.7" y="2.8" width="2.4" height="2.6" rx="0.4" transform="rotate(-45 5 4)"/>
+      <rect x="-6.1" y="2.8" width="2.4" height="2.6" rx="0.4" transform="rotate(45 -5 4)"/>
+    </g>
+    <circle r="5"/>
+    <circle r="2.2" fill="#0d2a1f"/>
+  </g>
+</svg>

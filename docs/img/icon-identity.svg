@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Identity and Dossiers">
+  <defs>
+    <linearGradient id="id-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1f2937"/>
+      <stop offset="100%" stop-color="#0d2a1f"/>
+    </linearGradient>
+    <linearGradient id="id-card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#52b788"/>
+      <stop offset="100%" stop-color="#2d6a4f"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#id-bg)" stroke="#2d6a4f" stroke-width="1.5"/>
+  <!-- dossier card -->
+  <rect x="12" y="14" width="40" height="36" rx="3" fill="#1b4332" stroke="#52b788" stroke-width="1.4"/>
+  <!-- avatar circle (bird silhouette) -->
+  <circle cx="22" cy="26" r="6" fill="url(#id-card)"/>
+  <!-- bird silhouette inside avatar -->
+  <g fill="#0a0a0a" transform="translate(22, 26)">
+    <ellipse cx="0" cy="0" rx="3.5" ry="2.5"/>
+    <circle cx="2" cy="-1.5" r="1.8"/>
+    <path d="M 3.5 -2 L 5.5 -2.5 L 3.5 -1 Z"/>
+  </g>
+  <!-- text lines -->
+  <g fill="#cbd5e1">
+    <rect x="32" y="22" width="14" height="2" rx="1"/>
+    <rect x="32" y="27" width="11" height="2" rx="1"/>
+  </g>
+  <g fill="#94a3b8">
+    <rect x="16" y="36" width="32" height="1.5" rx="0.7"/>
+    <rect x="16" y="40" width="28" height="1.5" rx="0.7"/>
+    <rect x="16" y="44" width="22" height="1.5" rx="0.7"/>
+  </g>
+  <!-- audio waveform indicator (xeno-canto recording) -->
+  <g transform="translate(46, 50)" stroke="#fbbf24" stroke-width="1.2" stroke-linecap="round">
+    <line x1="0" y1="0" x2="0" y2="-3"/>
+    <line x1="3" y1="1" x2="3" y2="-5"/>
+    <line x1="6" y1="0" x2="6" y2="-2"/>
+    <line x1="9" y1="0" x2="9" y2="-4"/>
+  </g>
+</svg>

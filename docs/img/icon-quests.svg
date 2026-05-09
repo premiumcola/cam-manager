@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Quests and Achievements">
+  <defs>
+    <linearGradient id="qst-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1f2937"/>
+      <stop offset="100%" stop-color="#0d2a1f"/>
+    </linearGradient>
+    <linearGradient id="qst-medal" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+    <linearGradient id="qst-ribbon-l" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#dc2626"/>
+      <stop offset="100%" stop-color="#7f1d1d"/>
+    </linearGradient>
+    <linearGradient id="qst-ribbon-r" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="100%" stop-color="#1e3a8a"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#qst-bg)" stroke="#2d6a4f" stroke-width="1.5"/>
+  <!-- ribbons -->
+  <path d="M 18 12 L 26 12 L 30 28 L 22 30 Z" fill="url(#qst-ribbon-l)"/>
+  <path d="M 38 12 L 46 12 L 42 30 L 34 28 Z" fill="url(#qst-ribbon-r)"/>
+  <!-- medal disk -->
+  <circle cx="32" cy="40" r="14" fill="url(#qst-medal)" stroke="#92400e" stroke-width="1.5"/>
+  <circle cx="32" cy="40" r="10" fill="none" stroke="#92400e" stroke-width="0.8"/>
+  <!-- star inside -->
+  <path d="M 32 32 L 34 38 L 40 38 L 35 42 L 37 48 L 32 44 L 27 48 L 29 42 L 24 38 L 30 38 Z" fill="#92400e"/>
+</svg>

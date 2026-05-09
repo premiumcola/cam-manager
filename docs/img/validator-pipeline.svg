@@ -1,0 +1,187 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 600" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Frame validation pipeline — adaptive validator profiles guard every timelapse capture">
+  <defs>
+    <linearGradient id="vp-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0d141d"/>
+      <stop offset="100%" stop-color="#142631"/>
+    </linearGradient>
+    <linearGradient id="vp-card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1f2937"/>
+      <stop offset="100%" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="vp-day" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fde68a"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+    <linearGradient id="vp-twi" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fda4af"/>
+      <stop offset="100%" stop-color="#f472b6"/>
+    </linearGradient>
+    <linearGradient id="vp-night" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7faec9"/>
+      <stop offset="100%" stop-color="#475569"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#52b788"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#ef4444"/>
+    </marker>
+    <filter id="vp-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="600" fill="url(#vp-bg)"/>
+
+  <!-- Header -->
+  <g font-family="-apple-system, system-ui, 'Segoe UI', sans-serif">
+    <text x="60" y="55" fill="#fff" font-size="28" font-weight="700">Frame Validation Pipeline</text>
+    <text x="60" y="80" fill="#94a3b8" font-size="14" font-weight="500">Every timelapse frame passes the same adaptive gate · profile picker self-corrects every 2 min</text>
+  </g>
+
+  <!-- Step 1: Frame input from RTSP -->
+  <g transform="translate(50, 130)" filter="url(#vp-shadow)">
+    <rect width="170" height="80" rx="12" fill="url(#vp-card)" stroke="#52b788" stroke-width="1.5"/>
+    <g transform="translate(15, 20)" stroke="#52b788" fill="none" stroke-width="1.5">
+      <rect x="0" y="0" width="36" height="22" rx="3" fill="#1b4332"/>
+      <circle cx="18" cy="11" r="6" fill="#0a0a0a" stroke="#52b788"/>
+      <circle cx="18" cy="11" r="3" fill="#4cc9f0"/>
+      <line x1="36" y1="6" x2="42" y2="3" stroke="#52b788" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="36" y1="11" x2="44" y2="11" stroke="#52b788" stroke-width="1.4" stroke-linecap="round"/>
+      <line x1="36" y1="16" x2="42" y2="19" stroke="#52b788" stroke-width="1.4" stroke-linecap="round"/>
+    </g>
+    <text x="85" y="32" fill="#fff" font-size="14" font-weight="700">RTSP Snapshot</text>
+    <text x="85" y="48" fill="#94a3b8" font-size="11">Reolink HD main</text>
+    <text x="85" y="62" fill="#94a3b8" font-size="11">3840 × 2160</text>
+  </g>
+
+  <!-- Arrow to baseline / picker -->
+  <line x1="220" y1="170" x2="280" y2="170" stroke="#52b788" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Step 2: Baseline + Picker -->
+  <g transform="translate(280, 110)" filter="url(#vp-shadow)">
+    <rect width="220" height="120" rx="12" fill="url(#vp-card)" stroke="#52b788" stroke-width="1.5"/>
+    <text x="20" y="28" fill="#fff" font-size="14" font-weight="700">Baseline Picker</text>
+    <text x="20" y="44" fill="#94a3b8" font-size="11">3 samples · median brightness</text>
+    <line x1="20" y1="55" x2="200" y2="55" stroke="#1c2a3a" stroke-width="1"/>
+    <!-- 3 sample dots representing the 3 baseline frames -->
+    <g transform="translate(20, 70)">
+      <circle cx="8" cy="8" r="6" fill="#fbbf24" stroke="#7a4a26" stroke-width="0.8"/>
+      <circle cx="28" cy="8" r="6" fill="#f472b6" stroke="#7a4a26" stroke-width="0.8"/>
+      <circle cx="48" cy="8" r="6" fill="#7faec9" stroke="#7a4a26" stroke-width="0.8"/>
+      <text x="70" y="11" fill="#cbd5e1" font-size="11">→ median →</text>
+    </g>
+    <text x="20" y="105" fill="#52b788" font-size="11" font-weight="600">+ corruption sanity-gate</text>
+  </g>
+
+  <!-- Three branching arrows to profile cards -->
+  <line x1="500" y1="160" x2="600" y2="100" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="500" y1="170" x2="600" y2="270" stroke="#f472b6" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="500" y1="180" x2="600" y2="450" stroke="#7faec9" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Step 3a: DAY profile -->
+  <g transform="translate(600, 60)" filter="url(#vp-shadow)">
+    <rect width="280" height="100" rx="12" fill="url(#vp-card)" stroke="#fbbf24" stroke-width="1.8"/>
+    <circle cx="28" cy="32" r="14" fill="url(#vp-day)"/>
+    <text x="60" y="32" fill="#fff" font-size="16" font-weight="700">DAY</text>
+    <text x="60" y="50" fill="#94a3b8" font-size="11" font-weight="500">median brightness ≥ 110</text>
+    <text x="60" y="80" fill="#fbbf24" font-size="12" font-weight="600">tile_dead_fraction = 0.35</text>
+    <text x="20" y="92" fill="#94a3b8" font-size="10">strict — full-light scenes need real texture everywhere</text>
+  </g>
+
+  <!-- Step 3b: TWILIGHT -->
+  <g transform="translate(600, 230)" filter="url(#vp-shadow)">
+    <rect width="280" height="100" rx="12" fill="url(#vp-card)" stroke="#f472b6" stroke-width="1.8"/>
+    <circle cx="28" cy="32" r="14" fill="url(#vp-twi)"/>
+    <text x="60" y="32" fill="#fff" font-size="16" font-weight="700">TWILIGHT</text>
+    <text x="60" y="50" fill="#94a3b8" font-size="11" font-weight="500">50 ≤ median &lt; 110</text>
+    <text x="60" y="80" fill="#f472b6" font-size="12" font-weight="600">tile_dead_fraction = 0.55</text>
+    <text x="20" y="92" fill="#94a3b8" font-size="10">balanced — mixed texture and dark sky tolerated</text>
+  </g>
+
+  <!-- Step 3c: NIGHT -->
+  <g transform="translate(600, 410)" filter="url(#vp-shadow)">
+    <rect width="280" height="100" rx="12" fill="url(#vp-card)" stroke="#7faec9" stroke-width="1.8"/>
+    <circle cx="28" cy="32" r="14" fill="url(#vp-night)"/>
+    <text x="60" y="32" fill="#fff" font-size="16" font-weight="700">NIGHT</text>
+    <text x="60" y="50" fill="#94a3b8" font-size="11" font-weight="500">median brightness &lt; 50</text>
+    <text x="60" y="80" fill="#7faec9" font-size="12" font-weight="600">tile_dead_fraction = 0.85</text>
+    <text x="20" y="92" fill="#94a3b8" font-size="10">loose — IR scenes legitimately have flat dark areas</text>
+  </g>
+
+  <!-- Arrows to validator stack -->
+  <line x1="880" y1="110" x2="940" y2="285" stroke="#52b788" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="880" y1="280" x2="940" y2="290" stroke="#52b788" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="880" y1="460" x2="940" y2="295" stroke="#52b788" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Step 4: Validator stack — center column -->
+  <g transform="translate(940, 130)" filter="url(#vp-shadow)">
+    <rect width="290" height="320" rx="12" fill="url(#vp-card)" stroke="#52b788" stroke-width="1.5"/>
+    <text x="20" y="32" fill="#fff" font-size="15" font-weight="700">Validator Stack</text>
+    <text x="20" y="50" fill="#94a3b8" font-size="11">runs in this order, first reject wins</text>
+    <line x1="20" y1="60" x2="270" y2="60" stroke="#1c2a3a" stroke-width="1"/>
+    <!-- list of validators -->
+    <g font-family="-apple-system, system-ui, 'Segoe UI', sans-serif" font-size="12">
+      <g transform="translate(20, 78)">
+        <rect x="0" y="-10" width="14" height="14" rx="3" fill="#1b4332" stroke="#52b788" stroke-width="1"/>
+        <text x="22" y="0" fill="#cbd5e1">brightness gates · too_dark / too_bright</text>
+      </g>
+      <g transform="translate(20, 105)">
+        <rect x="0" y="-10" width="14" height="14" rx="3" fill="#1b4332" stroke="#52b788" stroke-width="1"/>
+        <text x="22" y="0" fill="#cbd5e1">horizontal_anomaly_band · H.265 corruption</text>
+      </g>
+      <g transform="translate(20, 132)">
+        <rect x="0" y="-10" width="14" height="14" rx="3" fill="#1b4332" stroke="#52b788" stroke-width="1"/>
+        <text x="22" y="0" fill="#cbd5e1">flat_gray_full_frame · decoder grey</text>
+      </g>
+      <g transform="translate(20, 159)">
+        <rect x="0" y="-10" width="14" height="14" rx="3" fill="#1b4332" stroke="#52b788" stroke-width="1"/>
+        <text x="22" y="0" fill="#cbd5e1">grey_uniform · sensor stuck</text>
+      </g>
+      <g transform="translate(20, 186)">
+        <rect x="0" y="-10" width="14" height="14" rx="3" fill="#1b4332" stroke="#52b788" stroke-width="1"/>
+        <text x="22" y="0" fill="#cbd5e1">no_detail · global no-texture</text>
+      </g>
+      <g transform="translate(20, 213)">
+        <rect x="0" y="-10" width="14" height="14" rx="3" fill="#1b4332" stroke="#52b788" stroke-width="1"/>
+        <text x="22" y="0" fill="#cbd5e1">dead_area · 8×5 tile-grid threshold</text>
+      </g>
+      <g transform="translate(20, 240)">
+        <rect x="0" y="-10" width="14" height="14" rx="3" fill="#1b4332" stroke="#52b788" stroke-width="1"/>
+        <text x="22" y="0" fill="#cbd5e1">split_left/right_dead · half-corrupt</text>
+      </g>
+      <g transform="translate(20, 267)">
+        <rect x="0" y="-10" width="14" height="14" rx="3" fill="#1b4332" stroke="#52b788" stroke-width="1"/>
+        <text x="22" y="0" fill="#cbd5e1">grey_midband · macroblock smear</text>
+      </g>
+      <text x="20" y="298" fill="#52b788" font-size="11" font-weight="600">retry up to 6× · 0.4 s spacing</text>
+    </g>
+  </g>
+
+  <!-- Pass / Reject outputs -->
+  <line x1="1085" y1="450" x2="1085" y2="510" stroke="#52b788" stroke-width="2"/>
+  <line x1="1085" y1="510" x2="1145" y2="510" stroke="#52b788" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="1085" y1="510" x2="1025" y2="510" stroke="#ef4444" stroke-width="2" marker-end="url(#arrow-red)"/>
+
+  <g transform="translate(940, 480)" filter="url(#vp-shadow)">
+    <rect width="80" height="60" rx="12" fill="#7f1d1d" stroke="#ef4444" stroke-width="1.5"/>
+    <text x="40" y="34" fill="#fff" font-size="13" font-weight="700" text-anchor="middle">REJECT</text>
+    <text x="40" y="50" fill="#fca5a5" font-size="9" text-anchor="middle">reason head</text>
+  </g>
+  <g transform="translate(1150, 480)" filter="url(#vp-shadow)">
+    <rect width="80" height="60" rx="12" fill="#14532d" stroke="#22c55e" stroke-width="1.5"/>
+    <text x="40" y="34" fill="#fff" font-size="13" font-weight="700" text-anchor="middle">PASS</text>
+    <text x="40" y="50" fill="#86efac" font-size="9" text-anchor="middle">→ slot N.jpg</text>
+  </g>
+
+  <!-- Re-pick loop annotation (bottom strip) -->
+  <g transform="translate(50, 540)">
+    <rect x="0" y="0" width="1180" height="48" rx="10" fill="#0d2a1f" stroke="#2d6a4f" stroke-width="1"/>
+    <g transform="translate(20, 24)" stroke="#52b788" fill="none" stroke-width="1.6" stroke-linecap="round">
+      <circle cx="10" cy="0" r="9"/>
+      <path d="M 10 -7 A 7 7 0 1 1 5 -3 L 1 -5 L 3 0 L 7 -2"/>
+    </g>
+    <text x="50" y="22" fill="#fff" font-size="13" font-weight="700">Mid-run re-pick</text>
+    <text x="50" y="38" fill="#94a3b8" font-size="11">every 2 min · plus immediate re-pick when current profile triggers a slot-level retry exhaustion · corruption samples are filtered out</text>
+  </g>
+</svg>
