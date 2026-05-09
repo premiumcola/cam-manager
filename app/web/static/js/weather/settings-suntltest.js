@@ -406,14 +406,25 @@ const _REJECT_HINT_DE = {
   too_bright: 'Belichtung außerhalb des gültigen Bereichs',
   bottom_strip_white: 'H.265-Decoder hat unteren Bildbereich mit weißem Füllmuster ersetzt — RTSP-Paketverlust oder defekter Slice',
   bottom_strip_bright: 'Unterer Bildbereich deutlich heller als Szene — wahrscheinlich Macroblock-Korruption',
+  horizontal_anomaly_band: 'Horizontales Korruptions-Band im Bild — H.265-Decoder-Fehler, Slice unvollständig oder Macroblock-Verlust',
   flat_gray_full_frame: 'Vollbild flach-grau — H.265-Decoder-Ausgabe ohne Szeneninhalt',
 };
 function _rejectHintDe(key){
   if (!key) return '';
-  // Strip split-direction suffix (split_left_dead → split) so the four
-  // split variants share one hint.
-  const base = key.startsWith('split_') ? 'split' : key;
-  return _REJECT_HINT_DE[base] || _REJECT_HINT_DE[key] || '';
+  // Normalise the key:
+  //   • strip everything from the first '(' so a parameterised
+  //     reason head ("horizontal_anomaly_band(y=55%,h=2%,score=3.6)")
+  //     matches the bare "horizontal_anomaly_band" entry
+  //   • strip the _yNN_hNN band-location suffix that the test-mode
+  //     reject sink appends to the folder name
+  //   • collapse split_*_dead → "split" so the four split variants
+  //     share one hint
+  let bare = key;
+  const lp = bare.indexOf('(');
+  if (lp >= 0) bare = bare.slice(0, lp);
+  bare = bare.replace(/_y\d+_h\d+$/, '');
+  if (bare.startsWith('split_')) bare = 'split';
+  return _REJECT_HINT_DE[bare] || _REJECT_HINT_DE[key] || '';
 }
 
 function _renderResult(d){

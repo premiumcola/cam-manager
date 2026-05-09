@@ -655,6 +655,8 @@ class SunTimelapseMixin:
                 rejects_dir = None
         if rejects_dir is not None:
             import cv2 as _cv2  # noqa: PLC0415 — lazy, avoids extra boot cost
+            _BAND_Y_RE = re.compile(r"y=(\d+)%")
+            _BAND_H_RE = re.compile(r"h=(\d+)%")
             def _save_reject(frame, reason, attempt_idx):
                 # No frame to persist (grab_fn returned None or raised) — skip.
                 if frame is None:
@@ -662,6 +664,17 @@ class SunTimelapseMixin:
                 # reason head = part before first '(' — sanitised for FS:
                 head = reason.split("(", 1)[0].strip() or "unknown"
                 head = re.sub(r"[^a-z0-9_]+", "_", head.lower())[:40] or "unknown"
+                # When the reason carries band-location info (y=NN%,
+                # h=NN% — emitted by horizontal_anomaly_band and the
+                # legacy bottom_strip_* heads), append it to the
+                # folder name so an audit run separates "y=55 mid-band
+                # corruption" from "y=90 bottom-band corruption" at a
+                # glance: _rejected/horizontal_anomaly_band_y55_h2/…
+                m_y = _BAND_Y_RE.search(reason)
+                m_h = _BAND_H_RE.search(reason)
+                if m_y and m_h:
+                    head = f"{head}_y{m_y.group(1)}_h{m_h.group(1)}"
+                    head = head[:60]  # filesystem-friendly cap
                 bucket = rejects_dir / head
                 bucket.mkdir(parents=True, exist_ok=True)
                 # Detail tail (the part inside parens) for filename — keeps
