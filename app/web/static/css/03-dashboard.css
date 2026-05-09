@@ -119,8 +119,9 @@
    "Live" → fps and fps → arrow gaps are bumped to 8 px via per-child
    margins so the pill hugs its content (no margin-left:auto on the
    arrow — that pushed it to a free-floating right edge and caused
-   the workshop-tile clip). Width is driven entirely by content +
-   the parent's min-width floor. */
+   the workshop-tile clip). Width is driven entirely by content; the
+   wrap's width:max-content + no min-width means the pill sizes to
+   exactly what it shows. */
 .cv-live-collapsed{display:flex;align-items:center;gap:6px;padding:3px 10px;white-space:nowrap;font-size:10.5px;line-height:1.2;min-height:0;box-sizing:border-box;opacity:1;transform:translateY(0);transition:opacity .18s ease,transform .28s ease}
 .cv-live-collapsed .cv-live-arrow{margin-left:2px;flex-shrink:0;opacity:.55}
 /* FPS suffix inside the live pill — same colour family as the

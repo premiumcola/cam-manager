@@ -204,9 +204,11 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
 
 @media (max-width:480px){
   .cv-name{font-size:13px}
-  /* Live pill — collapsed shrinks; expanded width caps to viewport so the
-     pill never overflows a 375 px card. */
-  .cv-pill-live-wrap{--lp-collapsed-w:max-content;--lp-expanded-w:min(210px,calc(100vw - 32px));font-size:10px;max-height:20px;min-width:108px}
+  /* Live pill — collapsed shrinks to its content (no width floor, same as
+     desktop); expanded width caps to viewport so the pill never overflows
+     a 375 px card. The .cv-tr cluster's 10 px inset and the 22 px row
+     height keep the touch target comfortable without a min-width. */
+  .cv-pill-live-wrap{--lp-collapsed-w:max-content;--lp-expanded-w:min(210px,calc(100vw - 32px));font-size:10px;max-height:20px}
   .cv-pill-live-wrap.cv-lp-open{max-height:124px}
   .cv-live-collapsed{padding:2px 8px;font-size:10px}
   .cv-pill-tl{font-size:10px;padding:2px 7px}
