@@ -106,22 +106,25 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@me
 }
 .sidebar.collapsed .nav a{padding:4px 0;gap:0;justify-content:center;background:transparent}
 .sidebar.collapsed .nav a:hover{background:transparent}
-.sidebar.collapsed .nav a:hover .nav-icon{background:rgba(255,255,255,.08)}
+.sidebar.collapsed:not(:hover) .nav a:hover .nav-icon{background:rgba(255,255,255,.08)}
 .sidebar.collapsed .nav a.nav-active{background:transparent;color:#fff}
-.sidebar.collapsed .nav a.nav-active .nav-icon{background:rgba(255,255,255,.16)}
-/* Variant colour overrides — same rule shape, variant-specific tint. */
+.sidebar.collapsed:not(:hover) .nav a.nav-active .nav-icon{background:rgba(255,255,255,.16)}
+/* Variant colour overrides — same rule shape, variant-specific tint.
+   Scoped with :not(:hover) so the icon tint only paints when the rail
+   is truly closed; in the hover-expanded state the row-wide pill below
+   takes over and the icon stays transparent. */
 .sidebar.collapsed .nav a.nav-achievements-item:hover{background:transparent}
-.sidebar.collapsed .nav a.nav-achievements-item:hover .nav-icon{background:rgba(251,191,36,.10)}
+.sidebar.collapsed:not(:hover) .nav a.nav-achievements-item:hover .nav-icon{background:rgba(251,191,36,.10)}
 .sidebar.collapsed .nav a.nav-achievements-item.nav-active{background:transparent}
-.sidebar.collapsed .nav a.nav-achievements-item.nav-active .nav-icon{background:rgba(251,191,36,.20)}
+.sidebar.collapsed:not(:hover) .nav a.nav-achievements-item.nav-active .nav-icon{background:rgba(251,191,36,.20)}
 .sidebar.collapsed .nav a.nav-weather-item:hover{background:transparent}
-.sidebar.collapsed .nav a.nav-weather-item:hover .nav-icon{background:rgba(127,174,201,.10)}
+.sidebar.collapsed:not(:hover) .nav a.nav-weather-item:hover .nav-icon{background:rgba(127,174,201,.10)}
 .sidebar.collapsed .nav a.nav-weather-item.nav-active{background:transparent}
-.sidebar.collapsed .nav a.nav-weather-item.nav-active .nav-icon{background:rgba(127,174,201,.20)}
+.sidebar.collapsed:not(:hover) .nav a.nav-weather-item.nav-active .nav-icon{background:rgba(127,174,201,.20)}
 .sidebar.collapsed .nav a.nav-logs-item:hover{background:transparent}
-.sidebar.collapsed .nav a.nav-logs-item:hover .nav-icon{background:rgba(0,255,65,.07)}
+.sidebar.collapsed:not(:hover) .nav a.nav-logs-item:hover .nav-icon{background:rgba(0,255,65,.07)}
 .sidebar.collapsed .nav a.nav-logs-item.nav-active{background:transparent}
-.sidebar.collapsed .nav a.nav-logs-item.nav-active .nav-icon{background:rgba(0,255,65,.16)}
+.sidebar.collapsed:not(:hover) .nav a.nav-logs-item.nav-active .nav-icon{background:rgba(0,255,65,.16)}
 /* When the user hovers the rail (04-coral-1.css re-expands it back to
    260 px), restore the full-pill behaviour: revert the icon halo, the
    anchor centring, and reapply the original variant tints to the row
