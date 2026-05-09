@@ -215,6 +215,9 @@ class TimelapseBuilder:
         dup_count = 0
         dup_first: str | None = None
         dup_last: str | None = None
+        macroblock_drops = 0
+        macroblock_first: str | None = None
+        macroblock_last: str | None = None
         ref_size: tuple[int, int] | None = None
         # Audit counter for the magenta-pattern detector — surfaces in
         # the build summary so we can spot corruption-burst trends
@@ -234,6 +237,11 @@ class TimelapseBuilder:
                     if magenta_first is None:
                         magenta_first = img_path.name
                     magenta_last = img_path.name
+                if reason.startswith("macroblock_anomaly"):
+                    macroblock_drops += 1
+                    if macroblock_first is None:
+                        macroblock_first = img_path.name
+                    macroblock_last = img_path.name
                 if img is not None:
                     del img
                 continue
@@ -288,6 +296,12 @@ class TimelapseBuilder:
                 "[timelapse] %s: %d magenta-corruption frame(s) dropped, first=%s last=%s",
                 out_path.name, magenta_drops,
                 magenta_first or "?", magenta_last or "?",
+            )
+        if macroblock_drops > 0:
+            log.info(
+                "[timelapse] %s: %d macroblock-corruption frame(s) dropped, first=%s last=%s",
+                out_path.name, macroblock_drops,
+                macroblock_first or "?", macroblock_last or "?",
             )
         if skipped > 0:
             log.info("timelapse: skipped %d/%d corrupt frames for %s",
