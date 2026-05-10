@@ -202,15 +202,30 @@ function _relocateActionsTo(parentId){
 
 // Apply the full-screen video chrome for `item`. Idempotent — calling
 // it twice in a row leaves the DOM in the same state.
+// "2026-05-10T21:10:26" → "10.05.2026 · 21:10:26". Falls back to the
+// raw string when parsing fails so a malformed timestamp still shows
+// _something_ instead of an empty bar.
+function _fmtVideoTimeDE(raw){
+  if (!raw) return '';
+  const m = String(raw).match(
+    /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (!m) return String(raw);
+  const [, y, mo, d, h, mi, s] = m;
+  const time = s ? `${h}:${mi}:${s}` : `${h}:${mi}`;
+  return `${d}.${mo}.${y} · ${time}`;
+}
+
 function _setupVideoChrome(item){
   const modal = byId('lightboxModal');
   if (!modal) return;
   modal.classList.add('lb-fs-video');
-  // Top bar text
+  // Top bar text — camera display name (falls back to camera_id only
+  // when the event JSON predates the camera_name field) + a formatted
+  // German timestamp. The raw ISO never reaches the UI.
   const camEl = byId('lightboxTopCam');
   const tsEl  = byId('lightboxTopTime');
-  if (camEl) camEl.textContent = item?.camera_id || '';
-  if (tsEl)  tsEl.textContent  = item?.time || '';
+  if (camEl) camEl.textContent = item?.camera_name || item?.camera_id || '';
+  if (tsEl)  tsEl.textContent  = _fmtVideoTimeDE(item?.time || '');
   byId('lightboxTopBar').hidden = false;
   byId('lightboxScrubber').hidden = false;
   // Reveal the unified play cursor in the bottom stack — JS positions

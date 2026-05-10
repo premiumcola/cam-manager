@@ -220,6 +220,11 @@ export async function lbLoadTracksForItem(item){
 
   lbRenderTrackTimeline(item);
   _lbDrawDetections();
+  // Kick the meter the moment tracks land. The RAF loop normally
+  // updates it, but on a paused / pre-play video the loop hasn't
+  // started yet — without this, the user sees no meter until they
+  // hit play even though a track might already be active at t=0.
+  _renderConfidenceMeter();
 
   if (!haveAnyTracks){
     _logDiag(
@@ -1447,15 +1452,19 @@ export function lbRenderSettingsPanel(item){
       </div>
     </div>`;
 
+  // Default-collapsed — the chevron points right (CSS rotates -90°)
+  // and the body sits hidden until the user taps the header. Keeps
+  // the bottom of the lightbox quiet when the user just wants to
+  // watch the clip; tapping the chip surfaces the full breakdown.
   host.innerHTML = `
-    <button type="button" class="lbset-header" aria-expanded="true" aria-controls="lightboxSettingsBody">
+    <button type="button" class="lbset-header" aria-expanded="false" aria-controls="lightboxSettingsBody">
       <span class="lbset-header-icon">${_SET_HEADER_ICON}</span>
       <span class="lbset-header-title">Erkennung · gesetzt vs. erreicht</span>
       <span class="lbset-header-chevron" aria-hidden="true">
         <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5l3 3 3-3"/></svg>
       </span>
     </button>
-    <div class="lbset-body" id="lightboxSettingsBody">
+    <div class="lbset-body" id="lightboxSettingsBody" hidden>
       ${stepsHtml}
       ${extrasHtml}
       <button type="button" class="lbset-edit-btn" data-cam="${camId}">
@@ -1526,9 +1535,12 @@ window.lbStopTrackingPlayback = lbStopTrackingPlayback;
     videoEl.addEventListener('loadedmetadata', () => {
       // The duration just became known — re-render the timeline so
       // bars rescale from the (possibly approximate) maxT estimate to
-      // the real clip duration.
+      // the real clip duration. Also kick the confidence meter so it
+      // appears as soon as a track is active at t=0; without this,
+      // the meter only surfaces once the user starts playback.
       if (lbState.item) lbRenderTrackTimeline(lbState.item);
       _lbDrawDetections();
+      _renderConfidenceMeter();
     });
     videoEl.addEventListener('play',     () => { _startRafLoop(); _lbDrawDetections(); });
     videoEl.addEventListener('playing',  () => { _startRafLoop(); _lbDrawDetections(); });

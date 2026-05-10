@@ -1,21 +1,23 @@
-/* ── Lightbox · video full-screen layout ────────────────────────────────────
+/* ── Lightbox · video full-screen layout (v3 corrections) ───────────────────
    The .lb-fs-video class is added to #lightboxModal by openLightbox()
    when the active media item is a video (or timelapse). Without the
    class, #lightboxModal keeps the historical centred-modal geometry
-   the photo branch still uses; with the class, the modal becomes a
-   full-page overlay split into two vertical regions:
+   the photo branch still uses.
 
-       Top bar  (~48 px)            — cam name + ts + Confirm/Delete/Close
-       Bottom stack (flex:1)        — scrubber row + video region +
-                                       track timeline (flush, no gaps)
+   In video full-screen mode the layout is a single flex column with
+   FOUR primary sections, all snug against each other (no spacers):
 
-   The bottom stack is the positioning context for the unified play
-   cursor (#lightboxPlayCursor): one 1 px white line that sweeps top-
-   to-bottom across the whole stack as the video plays, with a 16 px
-   invisible hit-area sibling for drag-to-scrub.
+       Top bar  (~48 px)        — cam name + ts + Confirm/Delete/Close
+       Video region (flex:1)    — flush against top bar above + scrubber below
+       Bottom stack (auto)      — scrubber + timeline + ticks, cursor parent
+       Settings (auto, hidden)  — wizard-mirror panel, only when content
 
-   Class colours come from data (inline style); chrome is monochrome
-   per design spec — no light-blue accents on neutral surfaces. */
+   The unified play cursor lives inside the bottom stack — its 1 px
+   line + 8 px head start at the top of the scrubber row and extend
+   down through every timeline row to the tick axis. It NEVER crosses
+   into the video region above or the settings panel below.
+
+   Chrome is monochrome; class colours come from data only. */
 
 #lightboxModal.lb-fs-video{
   padding:0!important;
@@ -42,33 +44,41 @@
   min-height:48px;
   background:#000;
   color:#e2e8f0;
-  border-bottom:1px solid rgba(255,255,255,.06);
   z-index:10;
 }
 #lightboxTopBar[hidden]{ display:none; }
+/* Two-line meta — camera display name on the first line, formatted
+   German timestamp ("DD.MM.YYYY · HH:MM:SS") on the second line.
+   Mono numeric for the timestamp so day/month/year align across
+   events when the user navigates with prev/next. */
 #lightboxTopMeta{
-  display:flex;align-items:center;gap:10px;
+  display:flex;flex-direction:column;
+  gap:1px;
   min-width:0;flex:1 1 auto;overflow:hidden;
 }
 #lightboxTopCam{
-  font-size:13px;font-weight:700;letter-spacing:.01em;
+  font-size:12px;font-weight:500;letter-spacing:.01em;
   color:#f1f5f9;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 #lightboxTopTime{
-  font-size:11px;font-weight:500;
-  color:rgba(226,232,240,.62);
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10px;font-weight:500;
+  color:rgba(226,232,240,.55);
   font-variant-numeric:tabular-nums;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 #lightboxTopActions{
   display:flex;align-items:center;gap:8px;flex-shrink:0;
 }
+/* All three action buttons share the same translucent dark surface —
+   Confirm + Delete pick up a coloured stroke from the inner SVG, X-
+   close stays neutral white. NO solid green / red fills. */
 #lightboxTopActions > button{
   position:static!important;
   top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;
-  width:40px;height:40px;
-  min-width:40px;min-height:40px;
+  width:32px;height:32px;
+  min-width:32px;min-height:32px;
   border-radius:50%;
   border:none;cursor:pointer;
   display:inline-flex;align-items:center;justify-content:center;
@@ -77,52 +87,109 @@
   transition:background .15s,transform .12s;
 }
 #lightboxTopActions #lightboxConfirm{
-  background:rgba(22,163,74,.92);color:#fff;
+  background:rgba(34,197,94,.16);color:#4ade80;
 }
-#lightboxTopActions #lightboxConfirm:hover{ background:#16a34a; }
+#lightboxTopActions #lightboxConfirm:hover{
+  background:rgba(34,197,94,.28);
+}
+#lightboxTopActions #lightboxConfirm svg{ stroke:#4ade80; }
 #lightboxTopActions #lightboxDelete{
-  background:rgba(220,38,38,.88);color:#fff;
+  background:rgba(239,68,68,.16);color:#f87171;
 }
-#lightboxTopActions #lightboxDelete:hover{ background:#dc2626; }
+#lightboxTopActions #lightboxDelete:hover{
+  background:rgba(239,68,68,.28);
+}
+#lightboxTopActions #lightboxDelete svg{ stroke:#f87171; }
 #lightboxTopActions #lightboxClose{
-  background:rgba(40,40,40,.88);color:#fff;font-size:18px;
+  background:rgba(255,255,255,.12);color:#f1f5f9;font-size:16px;
 }
-#lightboxTopActions #lightboxClose:hover{ background:rgba(60,60,60,1); }
+#lightboxTopActions #lightboxClose:hover{
+  background:rgba(255,255,255,.22);
+}
 @media (max-width:480px){
-  #lightboxTopActions > button{ width:44px;height:44px;min-width:44px;min-height:44px; }
-  #lightboxTopCam{ font-size:12px; }
-  #lightboxTopTime{ font-size:10.5px; }
+  /* Mobile bumps to the iOS 44 × 44 touch floor; the inner glyph
+     scales with the larger button so it doesn't drown in white space. */
+  #lightboxTopActions > button{ width:40px;height:40px;min-width:40px;min-height:40px; }
+  #lightboxTopCam{ font-size:11.5px; }
+  #lightboxTopTime{ font-size:9.5px; }
 }
 
-/* ── Bottom stack wrapper ──────────────────────────────────────────────── */
+/* ── Video region ──────────────────────────────────────────────────────── */
+/* flex:1 so it absorbs the column space between the top bar and the
+   scrubber/timeline cluster below; no border-radius / margins in
+   full-screen mode so the video butts directly against neighbours. */
+#lightboxModal.lb-fs-video #lightboxMediaWrap{
+  flex:1 1 auto!important;
+  width:100%!important;
+  border-radius:0!important;
+  min-height:0!important;
+  background:#000!important;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+#lightboxModal.lb-fs-video #lightboxImg,
+#lightboxModal.lb-fs-video #lightboxVideo{
+  width:100%!important;
+  height:100%!important;
+  max-height:none!important;
+  object-fit:contain;
+  background:#000!important;
+  border-radius:0!important;
+}
+#lightboxModal.lb-fs-video #lightboxMeta{ display:none!important; }
+#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxConfirm,
+#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxDelete,
+#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxClose{
+  display:none!important;
+}
+#lightboxModal.lb-fs-video #lightboxLabels{ display:none!important; }
+#lightboxModal.lb-fs-video #lightboxPrev,
+#lightboxModal.lb-fs-video #lightboxNext{
+  z-index:7;
+  width:48px;height:48px;
+  background:rgba(0,0,0,.55);
+  backdrop-filter:blur(4px);
+}
+#lightboxModal.lb-fs-video #lightboxPrev{ left:14px; right:auto; }
+#lightboxModal.lb-fs-video #lightboxNext{ right:14px; left:auto; }
+@media (max-width:480px){
+  #lightboxModal.lb-fs-video #lightboxPrev,
+  #lightboxModal.lb-fs-video #lightboxNext{ width:44px;height:44px; }
+}
+
+/* ── Bottom stack (scrubber + timeline + cursor) ───────────────────────── */
 /* Only the video full-screen mode applies layout to #lightboxBottomStack.
-   Photo events render inside the wrapper too but the wrapper has no
-   styling beyond default flex behaviour, so the centred-modal geometry
-   stays intact. */
+   Photo events keep the wrapper present-but-empty so the photo-mode
+   centred geometry stays intact. The play cursor lives INSIDE this
+   wrapper, so its vertical extent is exactly the stack height —
+   scrubber row down through tick axis. */
 #lightboxModal.lb-fs-video #lightboxBottomStack{
-  flex:1 1 auto;
+  flex-shrink:0;
   display:flex;
   flex-direction:column;
   align-items:stretch;
   position:relative;     /* anchors #lightboxPlayCursor */
-  min-height:0;
   background:#000;
 }
 
 /* ── Scrubber row (top of bottom stack) ────────────────────────────────── */
+/* Snug against the video bottom edge — no top border, no top margin.
+   Play button is the leading control INSIDE the row, height ~32 px
+   matches the row so everything reads as one strip. */
 #lightboxScrubber{
   flex-shrink:0;
-  display:flex;align-items:center;gap:12px;
-  padding:8px 14px;
+  display:flex;align-items:center;gap:10px;
+  padding:6px 14px;
   background:#000;
   z-index:6;
+  height:32px;min-height:32px;
 }
 #lightboxScrubber[hidden]{ display:none; }
 #lbScrubPlay{
   flex-shrink:0;
-  width:40px;height:40px;min-width:40px;min-height:40px;
+  width:24px;height:24px;min-width:24px;min-height:24px;
   border-radius:50%;
-  border:none;background:rgba(255,255,255,.12);
+  border:none;background:rgba(255,255,255,.14);
   color:#f1f5f9;
   cursor:pointer;
   display:inline-flex;align-items:center;justify-content:center;
@@ -130,8 +197,8 @@
   -webkit-tap-highlight-color:transparent;
   transition:background .15s;
 }
-#lbScrubPlay:hover{ background:rgba(255,255,255,.20); }
-#lbScrubPlay svg{ width:18px;height:18px; }
+#lbScrubPlay:hover{ background:rgba(255,255,255,.24); }
+#lbScrubPlay svg{ width:12px;height:12px; }
 #lbScrubSlider{
   flex:1 1 auto;min-width:0;
   -webkit-appearance:none;appearance:none;
@@ -139,7 +206,7 @@
   background:linear-gradient(to right,#e2e8f0 var(--lb-scrub-fill,0%),rgba(255,255,255,.18) var(--lb-scrub-fill,0%));
   border-radius:2px;
   outline:none;cursor:pointer;
-  padding:20px 0;
+  padding:14px 0;
   background-clip:content-box;
 }
 #lbScrubSlider::-webkit-slider-thumb{
@@ -167,7 +234,7 @@
 #lbScrubTime{
   flex-shrink:0;
   font-family:ui-monospace,Menlo,Consolas,monospace;
-  font-size:11px;font-weight:600;
+  font-size:10px;font-weight:600;
   color:rgba(226,232,240,.72);
   letter-spacing:.02em;
   font-variant-numeric:tabular-nums;
@@ -175,64 +242,15 @@
 }
 @media (max-width:480px){
   #lbScrubTime{ display:none; }
-  #lbScrubPlay{ width:44px;height:44px;min-width:44px;min-height:44px; }
+  #lbScrubPlay{ width:28px;height:28px;min-width:28px;min-height:28px; }
+  #lbScrubPlay svg{ width:14px;height:14px; }
 }
 
-/* ── Video region (middle of bottom stack) ─────────────────────────────── */
-#lightboxModal.lb-fs-video #lightboxMediaWrap{
-  flex:1 1 auto!important;
-  width:100%!important;
-  border-radius:0!important;
-  min-height:0!important;
-  background:#000!important;
-  display:flex;align-items:center;justify-content:center;
-  position:relative;
-}
-#lightboxModal.lb-fs-video #lightboxImg,
-#lightboxModal.lb-fs-video #lightboxVideo{
-  width:100%!important;
-  height:100%!important;
-  max-height:none!important;
-  object-fit:contain;
-  background:#000!important;
-  border-radius:0!important;
-}
-/* Footer (#lightboxMeta) is redundant in video mode — the cam name +
-   timestamp are already in the top bar. Photo events keep their
-   footer untouched. */
-#lightboxModal.lb-fs-video #lightboxMeta{ display:none!important; }
-/* Hide the in-media-wrap action buttons (Confirm/Delete/Close) — they
-   live in the top bar in video mode. JS relocates them at openLightbox
-   time, but if any of them stays in the wrap (e.g. transitional state),
-   force-hide so we never paint two copies. */
-#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxConfirm,
-#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxDelete,
-#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxClose{
-  display:none!important;
-}
-#lightboxModal.lb-fs-video #lightboxLabels{ display:none!important; }
-#lightboxModal.lb-fs-video #lightboxPrev,
-#lightboxModal.lb-fs-video #lightboxNext{
-  z-index:7;
-  width:48px;height:48px;
-  background:rgba(0,0,0,.55);
-  backdrop-filter:blur(4px);
-}
-#lightboxModal.lb-fs-video #lightboxPrev{ left:14px; right:auto; }
-#lightboxModal.lb-fs-video #lightboxNext{ right:14px; left:auto; }
-@media (max-width:480px){
-  #lightboxModal.lb-fs-video #lightboxPrev,
-  #lightboxModal.lb-fs-video #lightboxNext{ width:44px;height:44px; }
-}
-
-/* ── Track timeline panel (flush under video) ──────────────────────────── */
+/* ── Track timeline panel (flush under scrubber) ───────────────────────── */
 #lightboxTrackTimeline{
   flex-shrink:0;
   position:relative;
-  /* Flush against the video bottom edge — no top border, no top
-     padding. The badge column sits at left:14px so the strip starts
-     at 14 + 78 + 8 = 100 px from the stack's left edge. */
-  padding:6px 14px 8px 14px;
+  padding:8px 14px 10px 14px;
   background:#000;
   z-index:5;
 }
@@ -242,30 +260,35 @@
   position:relative;
 }
 #lightboxTrackTimeline .lbtt-row{
-  display:flex;align-items:center;gap:8px;
-  /* Slightly larger than the previous 32 px so the bar + #N tag pair
-     reads at iPhone density without crowding. Tap target is the badge
-     button which has its own 44 px floor. */
-  min-height:40px;
+  display:flex;align-items:center;gap:7px;
+  /* 48 px so the badge + bar + #N tag are all readable at desktop
+     density without crowding. The whole row stays tappable for the
+     toggle (44 px floor honoured by the badge's own padding). */
+  min-height:48px;
 }
 #lightboxTrackTimeline .lbtt-badge{
-  flex:0 0 auto;width:78px;
-  display:inline-flex;align-items:center;gap:6px;
+  flex:0 0 auto;
+  /* Badge column is 30 px circle + 7 px gap + label (~59 px) = 96 px. */
+  width:96px;
+  display:inline-flex;align-items:center;gap:7px;
   background:transparent;border:0;
   padding:6px 4px 6px 0;
   min-height:44px;
   cursor:pointer;color:#e2e8f0;
-  font-size:12px;font-weight:600;letter-spacing:.01em;
+  font-size:13px;font-weight:500;letter-spacing:.01em;
   text-align:left;
   -webkit-tap-highlight-color:transparent;
   transition:opacity .15s;
 }
 #lightboxTrackTimeline .lbtt-badge .lbtt-avatar{
-  width:22px;height:22px;border-radius:50%;
+  /* Larger circle so the inner SVG (18 px) sits comfortably with
+     class-coloured tint behind it. */
+  width:30px;height:30px;border-radius:50%;
   display:inline-flex;align-items:center;justify-content:center;
   flex-shrink:0;
   background:color-mix(in srgb,var(--c,#fff) 28%,#000 0);
 }
+#lightboxTrackTimeline .lbtt-badge .lbtt-avatar svg{ width:18px; height:18px; }
 #lightboxTrackTimeline .lbtt-badge .lbtt-name{
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   min-width:0;
@@ -279,9 +302,7 @@
 #lightboxTrackTimeline .lbtt-strip{
   flex:1 1 auto;min-width:0;
   position:relative;
-  /* Bumped from 18 → 24 px so the per-track 14 px bars have visible
-     padding and the row reads as a band rather than a thin stripe. */
-  height:24px;
+  height:28px;       /* taller so bars at 16 px sit with breathing room */
   border-radius:8px;
   background:rgba(255,255,255,.04);
 }
@@ -289,38 +310,39 @@
   opacity:.30;
 }
 #lightboxTrackTimeline .lbtt-bar{
-  position:absolute;top:5px;bottom:5px;
+  position:absolute;top:6px;bottom:6px;
   border:0;padding:0;
-  border-radius:4px;
+  border-radius:5px;
   cursor:pointer;
   -webkit-tap-highlight-color:transparent;
 }
 #lightboxTrackTimeline .lbtt-bar:hover{ filter:brightness(1.15); }
 #lightboxTrackTimeline .lbtt-bar-num{
-  position:absolute;top:-13px;left:0;
+  position:absolute;top:-14px;left:0;
   font-family:ui-monospace,Menlo,Consolas,monospace;
-  font-size:10px;font-weight:700;letter-spacing:.02em;
+  font-size:10px;font-weight:500;letter-spacing:.02em;
   pointer-events:none;
 }
 #lightboxTrackTimeline .lbtt-bar-end{
   position:absolute;top:50%;transform:translate(0,-50%);
-  width:10px;height:10px;
-  font-size:11px;line-height:10px;font-weight:700;
+  font-size:13px;line-height:13px;font-weight:700;
   color:#ef4444;
-  pointer-events:none;
+  pointer-events:auto;
   text-align:left;
+  cursor:help;
 }
+/* Tick row sits flush below the last timeline row. Indented to the
+   strip's left edge — badge column 96 + gap 7 + 3 px nudge = 106. */
 #lightboxTrackTimeline .lbtt-ticks{
   position:relative;
   margin-top:6px;
   height:12px;
-  /* Aligns with the strip's left edge (badge col 78 + gap 8 = 86 px). */
-  padding-left:86px;
+  padding-left:106px;
 }
 #lightboxTrackTimeline .lbtt-tick{
   position:absolute;top:0;
   font-family:ui-monospace,Menlo,Consolas,monospace;
-  font-size:10px;font-weight:600;
+  font-size:10px;font-weight:500;
   color:rgba(226,232,240,.45);
   letter-spacing:.02em;
   font-variant-numeric:tabular-nums;
@@ -331,10 +353,7 @@
   font-style:italic;
 }
 
-/* Track-loss × tooltip — singleton popover, anchored above/below the
-   × marker. Mirrors the erk-sim tooltip pattern's placement clamp +
-   scroll-dismiss; the visual is dark and minimal so the class colours
-   in the underlying timeline aren't competing for attention. */
+/* Track-loss × tooltip (unchanged from v3 except for the larger ×). */
 .lbtt-end-tip{
   position:fixed;z-index:1300;
   padding:8px 12px;
@@ -376,7 +395,127 @@
   max-width:240px;
 }
 
-/* ── Settings panel that mirrors cam-edit wizard ───────────────────────── */
+/* ── Live confidence meter (overlaid on the video) ─────────────────────── */
+/* Bottom-left inside #lightboxMediaWrap. Stays hidden when no track
+   is active at currentTime. pointer-events:none so the prev/next
+   buttons that sit at the same corner still register taps. */
+#lightboxConfidenceMeter{
+  position:absolute;
+  bottom:8px;left:8px;
+  max-width:158px;
+  z-index:5;
+  pointer-events:none;
+  background:rgba(0,0,0,.78);
+  color:#e2e8f0;
+  border-radius:6px;
+  padding:6px 8px;
+  backdrop-filter:blur(4px);
+  display:flex;flex-direction:column;gap:6px;
+}
+#lightboxConfidenceMeter[hidden]{ display:none; }
+#lightboxConfidenceMeter .lbcm-track{
+  display:flex;flex-direction:column;gap:4px;
+}
+#lightboxConfidenceMeter .lbcm-track + .lbcm-track{
+  margin-top:4px;padding-top:6px;
+  border-top:1px solid rgba(255,255,255,.06);
+}
+#lightboxConfidenceMeter .lbcm-track-head{
+  font-size:10px;font-weight:700;letter-spacing:.02em;
+}
+#lightboxConfidenceMeter .lbcm-row{
+  display:flex;flex-direction:column;gap:1px;
+}
+#lightboxConfidenceMeter .lbcm-row-head{
+  display:flex;align-items:baseline;justify-content:space-between;
+  gap:6px;
+}
+#lightboxConfidenceMeter .lbcm-row-label{
+  font-size:10px;color:rgba(226,232,240,.78);
+  font-weight:600;letter-spacing:.01em;
+}
+#lightboxConfidenceMeter .lbcm-row-pct{
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:9px;font-weight:700;
+  color:#f1f5f9;
+  font-variant-numeric:tabular-nums;
+}
+#lightboxConfidenceMeter .lbcm-row-bar{
+  position:relative;
+  height:3px;
+  background:rgba(255,255,255,.10);
+  border-radius:1.5px;
+  margin-top:6px;
+}
+#lightboxConfidenceMeter .lbcm-row-fill{
+  position:absolute;
+  top:0;left:0;height:100%;
+  border-radius:1.5px;
+}
+#lightboxConfidenceMeter .lbcm-row-tick{
+  position:absolute;
+  top:-1px;bottom:-1px;
+  width:1px;background:#fff;
+  pointer-events:none;
+  transform:translateX(-0.5px);
+}
+#lightboxConfidenceMeter .lbcm-row-tick-num{
+  position:absolute;
+  top:-12px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:8px;font-weight:600;
+  color:rgba(255,255,255,.72);
+  letter-spacing:.01em;
+  transform:translateX(-50%);
+  pointer-events:none;
+}
+#lightboxConfidenceMeter .lbcm-more{
+  font-size:9.5px;color:rgba(226,232,240,.55);
+  font-style:italic;
+}
+
+/* ── Unified play cursor ───────────────────────────────────────────────── */
+/* Parent: #lightboxBottomStack — so the cursor spans scrubber + timeline
+   + ticks ONLY. Never crosses the video region above or the settings
+   panel below. */
+#lightboxPlayCursor{
+  position:absolute;
+  top:0;bottom:0;
+  width:0;
+  z-index:8;
+  pointer-events:none;
+  /* JS sets `style.left` in pixels, aligned to the timeline strip's
+     coordinate system (so bars and cursor agree on x positions). */
+}
+#lightboxPlayCursor[hidden]{ display:none; }
+#lightboxPlayCursor .lbpc-line{
+  position:absolute;
+  top:0;bottom:0;left:0;
+  width:2px;
+  background:#fff;
+  box-shadow:0 0 4px rgba(255,255,255,.5);
+  pointer-events:none;
+}
+#lightboxPlayCursor .lbpc-line::before{
+  content:'';
+  position:absolute;
+  top:-2px;left:-4px;
+  width:10px;height:10px;
+  border-radius:50%;
+  background:#fff;
+  box-shadow:0 0 4px rgba(255,255,255,.6);
+}
+#lightboxPlayCursor .lbpc-hit{
+  position:absolute;
+  top:0;bottom:0;left:-7px;
+  width:16px;
+  pointer-events:auto;
+  cursor:ew-resize;
+  touch-action:none;
+  background:transparent;
+}
+
+/* ── Settings panel — wizard mirror ────────────────────────────────────── */
 #lightboxSettings{
   flex-shrink:0;
   padding:8px 14px 14px 14px;
@@ -390,18 +529,16 @@
   font-style:italic;
   padding:4px 0 0;
 }
-
-/* Header — clickable, chevron rotates when expanded. Mirrors the
-   cam-edit erk-flow visual but with a single line + caret. */
 #lightboxSettings .lbset-header{
   display:flex;align-items:center;gap:8px;
   width:100%;
   background:transparent;border:0;
-  padding:6px 4px;
+  padding:8px 4px;
   color:#e2e8f0;
   font-size:12.5px;font-weight:700;letter-spacing:.01em;
   cursor:pointer;-webkit-tap-highlight-color:transparent;
   border-radius:8px;
+  min-height:44px;     /* iOS-friendly tap target */
 }
 #lightboxSettings .lbset-header:hover{ background:rgba(255,255,255,.04); }
 #lightboxSettings .lbset-header-icon{
@@ -423,15 +560,11 @@
 #lightboxSettings .lbset-header[aria-expanded="false"] .lbset-header-chevron{
   transform:rotate(-90deg);
 }
-
 #lightboxSettings .lbset-body{
   display:flex;flex-direction:column;gap:6px;
   margin-top:6px;
 }
 #lightboxSettings .lbset-body[hidden]{ display:none; }
-
-/* Per-step row mirrors the cam-edit step block: numeric circle, icon,
-   title, hint. Body is a 2-col grid Gesetzt / Erreicht. */
 #lightboxSettings .lbset-step{
   padding:6px 8px 8px 8px;
   background:rgba(255,255,255,.035);
@@ -494,30 +627,15 @@
   color:rgba(226,232,240,.45);
   font-style:italic;
 }
-
-/* Step 2 — per-class peaks. Each peak chip uses inline class colour
-   set by the JS, so the row reads at a glance which class hit which
-   peak without the user having to map colour to label. */
 #lightboxSettings .lbset-peak{
   display:inline-block;
   font-family:ui-monospace,Menlo,Consolas,monospace;
 }
-
-/* Step 3 — confirmation checkmarks. Green ✓ for confirmed; muted ○
-   for tracks that never hit the N-of-window window. */
 #lightboxSettings .lbset-ok{ color:#4ade80; font-weight:700; }
 #lightboxSettings .lbset-no{ color:rgba(226,232,240,.4); }
-
-/* Step 4 — inference value tone. The cam-edit "CPU-Notfall" red maps
-   to orange here so it pops against the dark surface; "elevated"
-   warns without screaming. */
 #lightboxSettings .lbset-infer{ color:#f1f5f9; }
 #lightboxSettings .lbset-infer.is-elevated{ color:#fbbf24; }
 #lightboxSettings .lbset-infer.is-emergency{ color:#f97316; font-weight:700; }
-
-/* Trailing "+" row — Nachlauf + Min Bbox. Sits below the 5-step
-   block as a compact list so the user knows these are policy not
-   wizard-editable. */
 #lightboxSettings .lbset-extras{
   padding:6px 8px;
   background:rgba(255,255,255,.025);
@@ -538,10 +656,6 @@
   color:#f1f5f9;
   font-variant-numeric:tabular-nums;
 }
-
-/* "Aktuelle Settings dieser Kamera bearbeiten →" — full-width button
-   at the bottom of the panel. Same dark-surface treatment as the
-   action buttons in the top bar so the chrome stays monochrome. */
 #lightboxSettings .lbset-edit-btn{
   display:block;width:100%;
   margin-top:4px;
@@ -557,139 +671,18 @@
 }
 #lightboxSettings .lbset-edit-btn:hover{ background:rgba(255,255,255,.10); }
 
-/* ── Live confidence meter (overlaid on the video) ─────────────────────── */
-/* Bottom-left pill inside #lightboxMediaWrap. Ticks per-gate
-   confidence + bbox fractions for every track active at currentTime.
-   Hidden when nothing is active — never sits on the video as dead
-   chrome. pointer-events:none so the meter can't block a tap on the
-   prev/next buttons that sit at the same corner. */
-#lightboxConfidenceMeter{
-  position:absolute;
-  bottom:14px;left:14px;
-  width:158px;
-  z-index:5;
-  pointer-events:none;
-  background:rgba(0,0,0,.78);
-  color:#e2e8f0;
-  border-radius:6px;
-  padding:6px 8px;
-  backdrop-filter:blur(4px);
-  display:flex;flex-direction:column;gap:6px;
-}
-#lightboxConfidenceMeter[hidden]{ display:none; }
-#lightboxConfidenceMeter .lbcm-track{
-  display:flex;flex-direction:column;gap:4px;
-}
-#lightboxConfidenceMeter .lbcm-track + .lbcm-track{
-  margin-top:4px;padding-top:6px;
-  border-top:1px solid rgba(255,255,255,.06);
-}
-#lightboxConfidenceMeter .lbcm-track-head{
-  font-size:10px;font-weight:700;letter-spacing:.02em;
-}
-#lightboxConfidenceMeter .lbcm-row{
-  display:flex;flex-direction:column;gap:1px;
-}
-#lightboxConfidenceMeter .lbcm-row-head{
-  display:flex;align-items:baseline;justify-content:space-between;
-  gap:6px;
-}
-#lightboxConfidenceMeter .lbcm-row-label{
-  font-size:10px;color:rgba(226,232,240,.78);
-  font-weight:600;letter-spacing:.01em;
-}
-#lightboxConfidenceMeter .lbcm-row-pct{
-  font-family:ui-monospace,Menlo,Consolas,monospace;
-  font-size:9px;font-weight:700;
-  color:#f1f5f9;
-  font-variant-numeric:tabular-nums;
-}
-#lightboxConfidenceMeter .lbcm-row-bar{
-  position:relative;
-  height:3px;
-  background:rgba(255,255,255,.10);
-  border-radius:1.5px;
-  margin-top:6px;     /* leave room for the threshold number above */
-}
-#lightboxConfidenceMeter .lbcm-row-fill{
-  position:absolute;
-  top:0;left:0;height:100%;
-  border-radius:1.5px;
-}
-#lightboxConfidenceMeter .lbcm-row-tick{
-  position:absolute;
-  top:-1px;bottom:-1px;
-  width:1px;background:#fff;
-  pointer-events:none;
-  transform:translateX(-0.5px);
-}
-#lightboxConfidenceMeter .lbcm-row-tick-num{
-  position:absolute;
-  top:-12px;
-  font-family:ui-monospace,Menlo,Consolas,monospace;
-  font-size:8px;font-weight:600;
-  color:rgba(255,255,255,.72);
-  letter-spacing:.01em;
-  transform:translateX(-50%);
-  pointer-events:none;
-}
-#lightboxConfidenceMeter .lbcm-more{
-  font-size:9.5px;color:rgba(226,232,240,.55);
-  font-style:italic;
-}
-
-/* ── Unified play cursor ───────────────────────────────────────────────── */
-/* Single 1 px white vertical line sweeping top-to-bottom across the
-   whole bottom stack. The 16 px wide invisible hit-area sibling drives
-   drag-to-scrub via Pointer Events; the line itself is pointer-events
-   none so taps elsewhere (e.g. timeline bars) still register. */
-#lightboxPlayCursor{
-  position:absolute;
-  top:0;bottom:0;
-  width:0;
-  z-index:8;
-  pointer-events:none;
-  /* JS sets `style.left` in pixels, aligned to the timeline strip's
-     coordinate system (so bars and cursor agree on x positions). */
-}
-#lightboxPlayCursor[hidden]{ display:none; }
-#lightboxPlayCursor .lbpc-line{
-  position:absolute;
-  top:0;bottom:0;left:0;
-  width:2px;
-  background:#fff;
-  box-shadow:0 0 4px rgba(255,255,255,.5);
-  pointer-events:none;
-}
-#lightboxPlayCursor .lbpc-line::before{
-  content:'';
-  position:absolute;
-  top:6px;left:-4px;
-  width:10px;height:10px;
-  border-radius:50%;
-  background:#fff;
-  box-shadow:0 0 4px rgba(255,255,255,.6);
-}
-/* Drag hit-area — wraps the line in a 16 px wide invisible column so
-   touch/mouse pointers landing within ±7 px of the line drive scrubbing.
-   touch-action:none lets us swallow the gesture before iOS turns it
-   into a horizontal page swipe. cursor:ew-resize hints desktop. */
-#lightboxPlayCursor .lbpc-hit{
-  position:absolute;
-  top:0;bottom:0;left:-7px;
-  width:16px;
-  pointer-events:auto;
-  cursor:ew-resize;
-  touch-action:none;
-  background:transparent;
-}
-
 /* ── Mobile adjustments ────────────────────────────────────────────────── */
 @media (max-width:480px){
-  #lightboxTrackTimeline{ padding:6px 10px 8px 10px; }
-  #lightboxTrackTimeline .lbtt-badge{ width:64px;font-size:11px; }
-  #lightboxTrackTimeline .lbtt-badge .lbtt-avatar{ width:20px;height:20px; }
-  #lightboxTrackTimeline .lbtt-ticks{ padding-left:72px; }
-  #lightboxTrackTimeline .lbtt-bar-num{ font-size:9px; }
+  #lightboxTrackTimeline{ padding:8px 10px 10px 10px; }
+  #lightboxTrackTimeline .lbtt-badge{
+    width:84px;
+    font-size:11px;font-weight:500;
+  }
+  #lightboxTrackTimeline .lbtt-badge .lbtt-avatar{ width:26px;height:26px; }
+  #lightboxTrackTimeline .lbtt-badge .lbtt-avatar svg{ width:16px;height:16px; }
+  #lightboxTrackTimeline .lbtt-strip{ height:24px; }
+  #lightboxTrackTimeline .lbtt-bar{ top:5px;bottom:5px; }
+  #lightboxTrackTimeline .lbtt-ticks{ padding-left:91px; }
+  #lightboxTrackTimeline .lbtt-bar-num{ font-size:9.5px; }
   #lightboxSettings{ padding:6px 10px 12px 10px; }
 }
