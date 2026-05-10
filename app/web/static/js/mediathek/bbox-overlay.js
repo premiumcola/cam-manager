@@ -9,11 +9,19 @@
 //      Kept as the fallback for events without a tracks.json sidecar
 //      (404 on fetch, schema mismatch, or tracker not installed).
 //
+// Phase-2 polish (Stage 30):
+//   * Auto-reindex when a 404 / empty sidecar would otherwise drop the
+//     lightbox into the misleading "static box at empty spot" legacy
+//     path — banner + retry loop, manual fallback button on failure.
+//   * Per-class visibility toggle row above the labels so the user can
+//     hide e.g. "person" boxes while keeping "cat" ones.
+//   * ?lbdebug=1 corner overlay for tracking-fetch diagnostics.
+//
 // The MP4 is NEVER modified; this is a Canvas overlay, like subtitles.
 // Track colours come from the deterministic tracks.json palette so
 // multiple persons in one clip get distinguishable strokes.
 import { byId } from '../core/dom.js';
-import { colors, OBJ_LABEL } from '../core/icons.js';
+import { colors, OBJ_LABEL, OBJ_SVG, TL_LABELS } from '../core/icons.js';
 import { _lbClearDetections } from '../lightbox.js';
 import { lbState } from './state.js';
 import { showToast } from '../core/toast.js';
@@ -25,6 +33,100 @@ const _tracksCache = new Map();    // event_id → payload | null (404)
 const _tracksInflight = new Map(); // event_id → Promise
 let _rafHandle = 0;
 let _chipFadeTimer = 0;
+
+// Auto-reindex bookkeeping (Task 2). All keyed by event_id.
+//   _reindexedThisSession → events we've already POSTed at least once.
+//     Prevents reopen-spam re-queueing the worker.
+//   _reindexInflight      → reindex retry-loop is currently running.
+//     The legacy fallback bbox is suppressed for these (Task 4a) so the
+//     user doesn't stare at a stationary mis-positioned box for 17 s
+//     while the worker re-runs.
+//   _reindexFinalFailed   → 3 retries elapsed without a usable sidecar.
+//     Legacy fallback is allowed back, but the pill switches to the
+//     "Auslöse-Detection" top-left variant (Task 4c) so the user
+//     understands the box is the trigger frame, not live tracking.
+const _reindexedThisSession = new Set();
+const _reindexInflight = new Set();
+const _reindexFinalFailed = new Set();
+
+const _REINDEX_INITIAL_WAIT_MS = 5000;
+const _REINDEX_RETRY_INTERVAL_MS = 4000;
+const _REINDEX_MAX_RETRIES = 3;
+
+// ?lbdebug=1 surfaces the same diagnostics that go to console.warn in a
+// small bottom-right corner overlay. Off by default; resolved once at
+// module load so navigation inside the SPA can't flip it mid-session.
+const _DEBUG_LB = (() => {
+  try { return new URLSearchParams(location.search).has('lbdebug'); }
+  catch { return false; }
+})();
+const _DEBUG_BUFFER = []; // last 4 lines for the corner overlay
+
+// ── Debug logging (Task 1) ───────────────────────────────────────────────
+// Failures + "fell back to legacy" go to console.warn so the user can
+// grep them in DevTools; happy-path tracks renders stay silent on the
+// console and only show up in the debug overlay when ?lbdebug=1.
+function _logDiag(line, level = 'info'){
+  if (level === 'error') console.error('[mediathek:tracking]', line);
+  else if (level === 'warn') console.warn('[mediathek:tracking]', line);
+  if (_DEBUG_LB){
+    _DEBUG_BUFFER.push(line);
+    while (_DEBUG_BUFFER.length > 4) _DEBUG_BUFFER.shift();
+    _renderDebugOverlay();
+  }
+}
+
+function _ensureDebugOverlay(){
+  if (!_DEBUG_LB) return null;
+  let el = byId('lbDebugOverlay');
+  if (el) return el;
+  const wrap = byId('lightboxMediaWrap');
+  if (!wrap) return null;
+  el = document.createElement('div');
+  el.id = 'lbDebugOverlay';
+  el.style.cssText = 'position:absolute;right:10px;bottom:10px;max-width:46%;'
+    + 'padding:6px 8px;border-radius:8px;background:rgba(0,0,0,.62);'
+    + 'color:#a5f3fc;font:500 10px/1.35 ui-monospace,Menlo,Consolas,monospace;'
+    + 'letter-spacing:.01em;backdrop-filter:blur(4px);pointer-events:none;'
+    + 'z-index:6;white-space:pre-wrap;word-break:break-all';
+  wrap.appendChild(el);
+  return el;
+}
+
+function _renderDebugOverlay(){
+  const el = _ensureDebugOverlay();
+  if (!el) return;
+  el.textContent = _DEBUG_BUFFER.join('\n');
+}
+
+// ── Per-class hidden-set persistence (Task 3) ────────────────────────────
+// localStorage keyed per camera. JSON-encoded array of label strings.
+// Reads parse into a Set for O(1) membership lookup; writes serialise
+// back to an array (additive — only the per-cam key is touched, the
+// rest of localStorage is untouched).
+
+function _hiddenStorageKey(camId){
+  return `tamspy.lb.bboxClasses.hidden.${camId || ''}`;
+}
+
+function _getHiddenClassesForCam(camId){
+  if (!camId) return new Set();
+  try {
+    const raw = localStorage.getItem(_hiddenStorageKey(camId));
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch { return new Set(); }
+}
+
+function _setHiddenClassesForCam(camId, hiddenSet){
+  if (!camId) return;
+  try {
+    const arr = [...hiddenSet];
+    if (arr.length === 0) localStorage.removeItem(_hiddenStorageKey(camId));
+    else localStorage.setItem(_hiddenStorageKey(camId), JSON.stringify(arr));
+  } catch { /* quota / private mode — fall through silently */ }
+}
 
 // ── Fetching ──────────────────────────────────────────────────────────────
 
@@ -56,6 +158,9 @@ async function _fetchTracks(item){
         // 404 = "no tracking data" — cache the negative so we don't
         // hammer the server on every RAF / reseek tick.
         _tracksCache.set(eid, null);
+        _logDiag(
+          `event=${eid} fetch status=${r.status} url=${url} → no tracks`,
+          r.status === 404 ? 'info' : 'warn');
         return null;
       }
       const data = await r.json();
@@ -65,9 +170,16 @@ async function _fetchTracks(item){
         (tr.samples || []).sort((a, b) => a.f - b.f);
       }
       _tracksCache.set(eid, data);
+      const fa = Array.isArray(data.filter_applied)
+        ? data.filter_applied.join(',') : 'none';
+      _logDiag(
+        `event=${eid} fetch status=200 schema=${data.schema ?? '?'} `
+        + `tracks=${(data.tracks || []).length} filter=${fa}`,
+        'info');
       return data;
-    } catch {
+    } catch (e) {
       _tracksCache.set(eid, null);
+      _logDiag(`event=${eid} fetch error: ${e?.message || e}`, 'warn');
       return null;
     } finally {
       _tracksInflight.delete(eid);
@@ -97,8 +209,228 @@ export async function lbLoadTracksForItem(item){
   // still the active lightbox item — otherwise we'd flash A's chip /
   // boxes over B.
   if (lbState.item !== item) return;
+
+  // Decide whether to kick the auto-reindex flow:
+  //   * no sidecar (null) AND event has ≥1 trigger detection
+  //   * sidecar with empty tracks AND event has ≥1 trigger detection
+  // Each kick is deduped via _reindexedThisSession so reopens of the
+  // same event don't re-queue the worker.
+  const haveAnyTracks = !!(tracks
+    && Array.isArray(tracks.tracks) && tracks.tracks.length > 0);
+  const triggerDetCount = (item.detections || [])
+    .filter(d => d && d.bbox && typeof d.bbox.x1 === 'number').length;
+  const sidecarMissing = tracks === null;
+  const sidecarEmpty = !!(tracks
+    && Array.isArray(tracks.tracks) && tracks.tracks.length === 0);
+  const shouldKick = (sidecarMissing || sidecarEmpty) && triggerDetCount >= 1;
+
+  if (shouldKick){
+    if (_reindexFinalFailed.has(item.event_id)){
+      // Already exhausted retries earlier this session — show the
+      // failure banner instead of re-kicking. User can hit ↺ to retry.
+      _showReindexBannerError(item);
+      _renderTrackingChip(tracks);
+      _renderToggleRow(tracks);
+      _lbDrawDetections();
+      return;
+    }
+    if (!_reindexedThisSession.has(item.event_id)){
+      _kickReindexFor(item);
+    } else if (_reindexInflight.has(item.event_id)){
+      // Already mid-retry from a previous open; just re-show the banner.
+      _showReindexBannerPending(item);
+    }
+    // Either way: chip + toggles stay hidden until tracks land.
+    _renderTrackingChip(null);
+    _renderToggleRow(null);
+    _lbDrawDetections();
+    return;
+  }
+
+  // No reindex needed. If we previously showed a banner for this event
+  // (e.g. user navigated back after a successful round-trip), hide it.
+  if (!_reindexInflight.has(item.event_id)) _hideReindexBanner();
+
   _renderTrackingChip(tracks);
+  _renderToggleRow(tracks);
   _lbDrawDetections();
+
+  if (!haveAnyTracks){
+    _logDiag(
+      `event=${item.event_id} render path=legacy `
+      + `(no tracks, ${triggerDetCount} trigger dets)`,
+      'warn');
+  } else {
+    _logDiag(
+      `event=${item.event_id} render path=tracks `
+      + `(${tracks.tracks.length} tracks)`,
+      'info');
+  }
+}
+
+// ── Auto-reindex flow (Task 2) ───────────────────────────────────────────
+
+async function _kickReindexFor(item){
+  const eid = item.event_id;
+  const cam = item.camera_id || '';
+  if (!eid) return;
+  _reindexedThisSession.add(eid);
+  _reindexInflight.add(eid);
+  _showReindexBannerPending(item);
+  _logDiag(`event=${eid} kicking reindex (camera_id=${cam})`, 'warn');
+  try {
+    const r = await fetch(
+      `/api/tracking/reindex/${encodeURIComponent(eid)}`
+      + `?camera_id=${encodeURIComponent(cam)}`,
+      { method: 'POST' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok){
+      _logDiag(
+        `event=${eid} reindex POST failed: ${d.error || r.statusText}`,
+        'error');
+      _failReindex(item);
+      return;
+    }
+  } catch (e) {
+    _logDiag(`event=${eid} reindex POST error: ${e?.message || e}`, 'error');
+    _failReindex(item);
+    return;
+  }
+  // Worker accepted the job; poll for the sidecar to appear.
+  setTimeout(
+    () => _retrySidecarFetch(item, 1), _REINDEX_INITIAL_WAIT_MS);
+}
+
+async function _retrySidecarFetch(item, attempt){
+  const eid = item.event_id;
+  // Bail if user navigated away or closed the lightbox.
+  if (lbState.item !== item){
+    _reindexInflight.delete(eid);
+    return;
+  }
+  // Drop cache + re-fetch.
+  lbInvalidateTracks(eid);
+  delete item._tracks;
+  const tracks = await _fetchTracks(item);
+  // Tab-switch race: re-check after the await.
+  if (lbState.item !== item){
+    _reindexInflight.delete(eid);
+    return;
+  }
+  const haveTracks = !!(tracks
+    && Array.isArray(tracks.tracks) && tracks.tracks.length > 0);
+  if (haveTracks){
+    _logDiag(
+      `event=${eid} reindex completed → ${tracks.tracks.length} tracks `
+      + `(attempt ${attempt}/${_REINDEX_MAX_RETRIES})`,
+      'warn');
+    _reindexInflight.delete(eid);
+    item._tracks = tracks;
+    _hideReindexBanner();
+    _renderTrackingChip(tracks);
+    _renderToggleRow(tracks);
+    _lbDrawDetections();
+    return;
+  }
+  if (attempt >= _REINDEX_MAX_RETRIES){
+    _logDiag(
+      `event=${eid} reindex final fail `
+      + `(${_REINDEX_MAX_RETRIES} retries exhausted)`,
+      'error');
+    _failReindex(item);
+    return;
+  }
+  _logDiag(
+    `event=${eid} reindex retry ${attempt}/${_REINDEX_MAX_RETRIES} `
+    + `(no tracks yet)`,
+    'info');
+  setTimeout(
+    () => _retrySidecarFetch(item, attempt + 1),
+    _REINDEX_RETRY_INTERVAL_MS);
+}
+
+function _failReindex(item){
+  const eid = item.event_id;
+  _reindexInflight.delete(eid);
+  _reindexFinalFailed.add(eid);
+  if (lbState.item === item){
+    _showReindexBannerError(item);
+    // Legacy fallback now allowed back — repaint with the shortened
+    // top-left "Auslöse-Detection" pill (Task 4c).
+    _lbDrawDetections();
+  }
+}
+
+// ── Reindex banner (Task 2 UI) ───────────────────────────────────────────
+
+function _ensureBanner(){
+  let banner = byId('lbTrackingBanner');
+  if (banner) return banner;
+  const wrap = byId('lightboxMediaWrap');
+  if (!wrap) return null;
+  _ensureOverlayStyles();
+  banner = document.createElement('div');
+  banner.id = 'lbTrackingBanner';
+  banner.innerHTML = `
+    <span class="lbtb-spinner" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="14" height="14" fill="none">
+        <circle cx="12" cy="12" r="9" stroke="rgba(226,232,240,.25)" stroke-width="2.4"/>
+        <path d="M12 3 A9 9 0 0 1 21 12" stroke="#7dd3fc" stroke-width="2.4" stroke-linecap="round"/>
+      </svg>
+    </span>
+    <span class="lbtb-text">Tracking wird generiert…</span>
+    <button type="button" class="lbtb-retry" title="Erneut versuchen" aria-label="Erneut versuchen" hidden>
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M2.5 8A5.5 5.5 0 0 1 13 5M13.5 8A5.5 5.5 0 0 1 3 11"/>
+        <polyline points="12,2 12,5.5 8.5,5.5"/>
+        <polyline points="4,14 4,10.5 7.5,10.5"/>
+      </svg>
+    </button>`;
+  wrap.appendChild(banner);
+  banner.querySelector('.lbtb-retry').addEventListener('click', _onReindexClick);
+  return banner;
+}
+
+function _showReindexBannerPending(item){
+  const banner = _ensureBanner();
+  if (!banner || lbState.item !== item) return;
+  banner.classList.remove('lbtb-error');
+  banner.querySelector('.lbtb-text').textContent = 'Tracking wird generiert…';
+  banner.querySelector('.lbtb-spinner').style.display = '';
+  banner.querySelector('.lbtb-retry').hidden = true;
+  banner.style.display = 'flex';
+  // Force reflow so the next opacity transition runs.
+  void banner.offsetWidth;
+  banner.style.opacity = '1';
+}
+
+function _showReindexBannerError(item){
+  const banner = _ensureBanner();
+  if (!banner || lbState.item !== item) return;
+  banner.classList.add('lbtb-error');
+  banner.querySelector('.lbtb-text').textContent = 'Tracking nicht verfügbar';
+  banner.querySelector('.lbtb-spinner').style.display = 'none';
+  banner.querySelector('.lbtb-retry').hidden = false;
+  banner.style.display = 'flex';
+  void banner.offsetWidth;
+  banner.style.opacity = '1';
+}
+
+function _hideReindexBanner(){
+  const banner = byId('lbTrackingBanner');
+  if (!banner) return;
+  banner.style.opacity = '0';
+  // Short fade-out before display:none so the change reads visually.
+  setTimeout(() => {
+    if (banner.style.opacity === '0') banner.style.display = 'none';
+  }, 250);
+}
+
+// True when the legacy fallback bbox should be skipped because we're
+// mid-reindex for this event (Task 4a).
+function _isReindexBannerActive(){
+  const eid = lbState.item?.event_id;
+  return !!eid && _reindexInflight.has(eid);
 }
 
 // ── Drawing ───────────────────────────────────────────────────────────────
@@ -179,8 +511,19 @@ function _resolveAllowedLabels(){
   return null;
 }
 
-function _labelAllowed(allowed, label){
-  return allowed === null ? true : allowed.has(label);
+// Combined visibility check: a label renders iff it passes the
+// camera-filter (from tracks.filter_applied / camera config) AND is
+// not in the per-camera user-toggled hidden set (Task 3). Returns a
+// closure so a single render reads the hidden-set / camera-filter
+// once and reuses across every per-track / per-detection check.
+function _makeLabelVisibleFn(){
+  const allowed = _resolveAllowedLabels();
+  const camId = lbState.item?.camera_id;
+  const hidden = _getHiddenClassesForCam(camId);
+  return (label) => {
+    if (hidden.has(label)) return false;
+    return allowed === null || allowed.has(label);
+  };
 }
 
 export function _lbDrawDetections(){
@@ -219,10 +562,7 @@ export function _lbDrawDetections(){
   // single-bbox legacy path otherwise.
   const tracks = lbState.item._tracks;
   const haveTracks = tracks && Array.isArray(tracks.tracks) && tracks.tracks.length > 0;
-  // Per-render label filter — applies to both render paths so legacy
-  // sidecars on disk (schema=1, no filter_applied) immediately stop
-  // drawing classes the user has filtered out via the camera config.
-  const allowed = _resolveAllowedLabels();
+  const isVisible = _makeLabelVisibleFn();
 
   ctx.font = '600 12px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
   ctx.textBaseline = 'top';
@@ -230,7 +570,7 @@ export function _lbDrawDetections(){
   if (haveTracks){
     const t = usingVideo ? (videoEl.currentTime || 0) : null;
     for (const tr of tracks.tracks){
-      if (!_labelAllowed(allowed, tr.label)) continue;
+      if (!isVisible(tr.label)) continue;
       const sample = (t == null)
         ? _firstSampleOfTrack(tr)
         : _interpolateTrackAt(tr, t);
@@ -240,44 +580,53 @@ export function _lbDrawDetections(){
     return;
   }
 
-  // Legacy single-bbox fallback — same as the pre-tracking overlay.
-  // The bbox is the trigger-frame detection; without per-frame tracks
-  // it would visually lie about where the subject is during playback.
-  // Hide it while the video is actually playing — the user's "bbox
-  // stays put while the subject moves out of it" complaint. Pause /
-  // ended / still-image modes paint the box back at trigger position
-  // and tag it with a small "Detection bei Auslösung" pill so the
-  // semantics are obvious.
+  // Legacy single-bbox fallback. The bbox is the trigger-frame
+  // detection; without per-frame tracks it would visually lie about
+  // where the subject is during playback.
+  // Suppress entirely while a reindex banner is showing (Task 4a) so
+  // the user doesn't stare at a stationary mis-positioned box for
+  // ~17 s while the worker re-runs.
+  if (_isReindexBannerActive()) return;
+
+  // Hide the legacy box during active playback — same as before, the
+  // user's "bbox stays put while subject moves out" complaint. Pause /
+  // ended / still-image modes paint the box back at trigger position.
   const isPlaying = usingVideo && !videoEl.paused && !videoEl.ended
                     && (videoEl.currentTime || 0) > 0.05;
   if (isPlaying) return;
 
   const dets = (lbState.item.detections || [])
     .filter(d => d && d.bbox && typeof d.bbox.x1 === 'number')
-    .filter(d => _labelAllowed(allowed, d.label));
+    .filter(d => isVisible(d.label));
   if (!dets.length) return;
   for (const d of dets){
     const c = colors[d.label] || colors.unknown;
     _drawTrackBox(ctx, { bbox: d.bbox, score: d.score, label: d.label },
                   c, offX, offY, scale);
   }
-  // Tiny "Detection bei Auslösung" annotation above the topmost bbox
-  // so the still-image / paused-video viewer understands the box is a
-  // freeze of the trigger moment, not a real-time tracker.
+  // Annotation pill. Two variants:
+  //   * default: "Detection bei Auslösung" centred above the topmost
+  //     bbox — the long-standing label.
+  //   * post-failed-reindex (Task 4c): shorter "Auslöse-Detection"
+  //     anchored at the top-left of the bbox so it competes less with
+  //     the actual subject during playback.
   const top = dets.reduce((min, d) =>
     (d.bbox.y1 < min.bbox.y1 ? d : min), dets[0]);
   const bx1 = offX + top.bbox.x1 * scale;
   const by1 = offY + top.bbox.y1 * scale;
-  const tagText = 'Detection bei Auslösung';
+  const isFinalFail = _reindexFinalFailed.has(lbState.item.event_id);
+  const tagText = isFinalFail ? 'Auslöse-Detection' : 'Detection bei Auslösung';
   ctx.font = '500 10px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
   const tagW = ctx.measureText(tagText).width;
   const padX = 6, tagH = 16;
-  // Sit ABOVE the regular label pill (which renders at y1 - 20).
-  const tagY = Math.max(0, by1 - 20 - tagH - 2);
+  const tagX = isFinalFail ? bx1 + 2 : bx1;
+  const tagY = isFinalFail
+    ? Math.max(0, by1 + 2)                   // inside, top-left of bbox
+    : Math.max(0, by1 - 20 - tagH - 2);      // above the regular label pill
   ctx.fillStyle = 'rgba(0,0,0,0.78)';
-  ctx.fillRect(bx1, tagY, tagW + padX * 2, tagH);
+  ctx.fillRect(tagX, tagY, tagW + padX * 2, tagH);
   ctx.fillStyle = colors[top.label] || colors.unknown;
-  ctx.fillText(tagText, bx1 + padX, tagY + 2);
+  ctx.fillText(tagText, tagX + padX, tagY + 2);
 }
 
 function _drawTrackBox(ctx, sample, color, offX, offY, scale){
@@ -333,49 +682,108 @@ function _startRafLoop(){
   _rafHandle = requestAnimationFrame(tick);
 }
 
-// ── Tracking chip + reindex button ───────────────────────────────────────
-// Bottom-left of the lightbox. Reads "Tracking · N Subjekte" plus a
-// monochrome ↺ button. Fades out 3 s after the video starts playing
-// so it doesn't sit on top of the content for the whole clip.
-
-// Chip-supporting CSS injected once per session. Lives next to the
-// chip's JS so the position constants + mobile breakpoint stay in sync
-// with the inline styles below; pulling it into a CSS partial would
-// mean threading the bottom-offset constant across two files.
-function _ensureChipStyles(){
+// ── Overlay styles (chip + banner + toggle row) ──────────────────────────
+// Single style block injected once. Stack from the bottom upward inside
+// the lightboxMediaWrap:
+//   80 px  — lightboxLabels (set inline in modals.html)
+//   140 px — #lbBboxToggleRow (per-class visibility pills + caption)
+//   200 px — #lbTrackingChip / #lbTrackingBanner (mutually exclusive)
+// Mobile bumps each layer by ~16 px so the iOS Safari controls bar
+// doesn't eat the chip on a 375 px screen.
+function _ensureOverlayStyles(){
   if (document.querySelector('#lbTrackingChipStyles')) return;
   const s = document.createElement('style');
   s.id = 'lbTrackingChipStyles';
-  // Desktop hit-area 36×36; mobile bumps to 44×44 per CLAUDE.md touch-target
-  // rule. The visible icon stays small inside a transparent padded wrapper.
   s.textContent = `
+    #lbTrackingChip{position:absolute;left:14px;bottom:200px;z-index:5;
+      display:none;align-items:center;gap:6px;padding:5px 8px 5px 10px;
+      border-radius:999px;background:rgba(0,0,0,.55);color:#e2e8f0;
+      font-size:11px;font-weight:600;letter-spacing:.02em;
+      backdrop-filter:blur(6px);opacity:0;transition:opacity .25s ease;
+      pointer-events:auto}
     #lbTrackingChip .lbtc-reindex{
       background:none;border:none;color:rgba(226,232,240,.85);cursor:pointer;
       padding:0;margin:-6px -4px -6px 2px;border-radius:10px;
       display:inline-flex;align-items:center;justify-content:center;
-      min-width:36px;min-height:36px;-webkit-tap-highlight-color:transparent;
-    }
+      min-width:36px;min-height:36px;-webkit-tap-highlight-color:transparent}
     #lbTrackingChip .lbtc-reindex:hover{background:rgba(255,255,255,.10)}
+
+    #lbTrackingBanner{position:absolute;left:14px;bottom:200px;z-index:5;
+      display:none;align-items:center;gap:8px;padding:6px 10px 6px 8px;
+      border-radius:14px;background:rgba(8,18,28,.78);color:#e2e8f0;
+      font-size:12px;font-weight:600;letter-spacing:.01em;
+      backdrop-filter:blur(8px);opacity:0;transition:opacity .25s ease;
+      pointer-events:auto;max-width:min(320px,72vw)}
+    #lbTrackingBanner.lbtb-error{background:rgba(75,28,28,.78);color:#fecaca}
+    #lbTrackingBanner .lbtb-spinner{
+      display:inline-flex;align-items:center;justify-content:center;
+      width:16px;height:16px;flex-shrink:0;
+      animation:lbtb-spin 1.1s linear infinite}
+    #lbTrackingBanner .lbtb-text{
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #lbTrackingBanner .lbtb-retry{
+      background:none;border:none;color:rgba(254,202,202,.95);cursor:pointer;
+      padding:0;margin:-6px -4px -6px 4px;border-radius:10px;
+      display:inline-flex;align-items:center;justify-content:center;
+      min-width:36px;min-height:36px;-webkit-tap-highlight-color:transparent}
+    #lbTrackingBanner .lbtb-retry:hover{background:rgba(255,255,255,.10)}
+    @keyframes lbtb-spin{to{transform:rotate(360deg)}}
+
+    #lbBboxToggleRow{position:absolute;left:14px;bottom:140px;z-index:4;
+      display:none;flex-direction:column;align-items:flex-start;gap:4px;
+      pointer-events:none}
+    #lbBboxToggleRow .lbbtr-cap{
+      font-size:10px;font-weight:600;letter-spacing:.05em;
+      text-transform:uppercase;color:rgba(226,232,240,.78);
+      padding:2px 8px;border-radius:8px;background:rgba(0,0,0,.42);
+      backdrop-filter:blur(4px);pointer-events:none}
+    #lbBboxToggleRow .lbbtr-pills{
+      display:flex;flex-direction:row;gap:6px;flex-wrap:wrap;
+      pointer-events:auto}
+    #lbBboxToggleRow .lbbtr-pill{
+      width:36px;height:36px;border-radius:50%;
+      display:inline-flex;align-items:center;justify-content:center;
+      background:rgba(0,0,0,.55);cursor:pointer;border:none;
+      padding:0;color:inherit;
+      transition:opacity .15s,background .15s;
+      -webkit-tap-highlight-color:transparent;
+      flex-shrink:0;position:relative}
+    #lbBboxToggleRow .lbbtr-pill::before{
+      content:'';position:absolute;inset:-2px;border-radius:50%;
+      box-shadow:0 0 0 2px var(--ring,rgba(255,255,255,.15));
+      pointer-events:none;transition:box-shadow .15s}
+    #lbBboxToggleRow .lbbtr-pill[data-on="0"]{
+      opacity:.5;filter:grayscale(.7)}
+    #lbBboxToggleRow .lbbtr-pill[data-on="0"]::before{
+      box-shadow:0 0 0 1px rgba(255,255,255,.10)}
+
     @media (max-width:768px){
-      #lbTrackingChip{bottom:160px!important;left:10px!important}
-      #lbTrackingChip .lbtc-reindex{min-width:44px;min-height:44px;margin:-9px -6px -9px 2px}
+      #lbTrackingChip{bottom:216px!important;left:10px!important}
+      #lbTrackingChip .lbtc-reindex{
+        min-width:44px;min-height:44px;margin:-9px -6px -9px 2px}
+      #lbTrackingBanner{bottom:216px!important;left:10px!important}
+      #lbTrackingBanner .lbtb-retry{
+        min-width:44px;min-height:44px;margin:-9px -6px -9px 4px}
+      #lbBboxToggleRow{bottom:156px!important;left:10px!important}
+      #lbBboxToggleRow .lbbtr-pill{width:44px;height:44px}
     }
   `;
   document.head.appendChild(s);
 }
+
+// ── Tracking chip + reindex button ───────────────────────────────────────
+// Bottom-left of the lightbox. Reads "Tracking · N Subjekte" plus a
+// monochrome ↺ button. Fades out 3 s after the video starts playing
+// so it doesn't sit on top of the content for the whole clip.
 
 function _ensureChip(){
   let chip = byId('lbTrackingChip');
   if (chip) return chip;
   const wrap = byId('lightboxMediaWrap');
   if (!wrap) return null;
-  _ensureChipStyles();
+  _ensureOverlayStyles();
   chip = document.createElement('div');
   chip.id = 'lbTrackingChip';
-  // Bottom offset 144px = lightboxLabels row sits at bottom:80px and is
-  // ~54px tall, so the chip's bottom edge clears the icons row by ~10px
-  // and never lands on the native <video> controls bar.
-  chip.style.cssText = 'position:absolute;left:14px;bottom:144px;display:none;align-items:center;gap:6px;padding:5px 8px 5px 10px;border-radius:999px;background:rgba(0,0,0,.55);color:#e2e8f0;font-size:11px;font-weight:600;letter-spacing:.02em;backdrop-filter:blur(6px);z-index:5;opacity:0;transition:opacity .25s ease;pointer-events:auto';
   chip.innerHTML = `
     <span class="lbtc-text" title="Anzahl unterschiedlicher Track-IDs in diesem Clip. Ein Objekt, das den Bildausschnitt verlässt und wiederkommt, bekommt eine neue ID.">Tracking</span>
     <button type="button" class="lbtc-reindex" title="Tracking neu generieren" aria-label="Tracking neu generieren">
@@ -409,9 +817,9 @@ function _renderTrackingChip(tracks){
   if (!chip) return;
   // Count POST-filter so the chip doesn't claim "6 Subjekte" when 4 of
   // them are filtered classes the overlay just dropped.
-  const allowed = _resolveAllowedLabels();
+  const isVisible = _makeLabelVisibleFn();
   const allTracks = (tracks && Array.isArray(tracks.tracks)) ? tracks.tracks : [];
-  const visible = allTracks.filter(t => _labelAllowed(allowed, t.label));
+  const visible = allTracks.filter(t => isVisible(t.label));
   const n = visible.length;
   if (!tracks || n === 0){
     chip.style.display = 'none';
@@ -430,6 +838,88 @@ function _renderTrackingChip(tracks){
   }, 3000);
 }
 
+// ── Per-class toggle row (Task 3) ────────────────────────────────────────
+
+function _ensureToggleRow(){
+  let row = byId('lbBboxToggleRow');
+  if (row) return row;
+  const wrap = byId('lightboxMediaWrap');
+  if (!wrap) return null;
+  _ensureOverlayStyles();
+  row = document.createElement('div');
+  row.id = 'lbBboxToggleRow';
+  row.innerHTML = `
+    <div class="lbbtr-cap">Boxen anzeigen</div>
+    <div class="lbbtr-pills" role="group" aria-label="Sichtbare Klassen"></div>`;
+  wrap.appendChild(row);
+  return row;
+}
+
+function _renderToggleRow(tracks){
+  const row = _ensureToggleRow();
+  if (!row) return;
+  const camId = lbState.item?.camera_id;
+  const allTracks = (tracks && Array.isArray(tracks.tracks)) ? tracks.tracks : [];
+  // Unique labels in tracks, ordered by TL_LABELS (deterministic) +
+  // anything else appended at the end so unfamiliar future classes
+  // still surface a toggle.
+  const present = new Set(allTracks.map(t => t.label).filter(Boolean));
+  if (present.size === 0){
+    row.style.display = 'none';
+    return;
+  }
+  const ordered = [
+    ...TL_LABELS.filter(l => present.has(l)),
+    ...[...present].filter(l => !TL_LABELS.includes(l)),
+  ];
+  const hidden = _getHiddenClassesForCam(camId);
+  const pillsEl = row.querySelector('.lbbtr-pills');
+  pillsEl.innerHTML = '';
+  for (const lbl of ordered){
+    const c = colors[lbl] || colors.unknown;
+    const rawSvg = OBJ_SVG[lbl] || OBJ_SVG.alarm;
+    const svg = rawSvg.replace('width="16" height="16"', 'width="22" height="22"');
+    const on = !hidden.has(lbl);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'lbbtr-pill';
+    btn.dataset.label = lbl;
+    btn.dataset.on = on ? '1' : '0';
+    btn.title = (OBJ_LABEL[lbl] || lbl)
+      + (on ? ' · Boxen sichtbar' : ' · Boxen ausgeblendet');
+    btn.style.setProperty('--ring', on ? c : 'rgba(255,255,255,.10)');
+    btn.style.background = on ? `${c}1f` : 'rgba(0,0,0,.55)';
+    btn.innerHTML = svg;
+    btn.addEventListener('click', _onToggleClassClick);
+    pillsEl.appendChild(btn);
+  }
+  row.style.display = 'flex';
+}
+
+function _onToggleClassClick(ev){
+  ev.stopPropagation();
+  const btn = ev.currentTarget;
+  const lbl = btn.dataset.label;
+  const camId = lbState.item?.camera_id;
+  if (!lbl || !camId) return;
+  const hidden = _getHiddenClassesForCam(camId);
+  if (hidden.has(lbl)) hidden.delete(lbl);
+  else hidden.add(lbl);
+  _setHiddenClassesForCam(camId, hidden);
+  // Update only this pill's visual state — no full re-render, so the
+  // user sees the toggle flip instantly without a layout flash.
+  const on = !hidden.has(lbl);
+  const c = colors[lbl] || colors.unknown;
+  btn.dataset.on = on ? '1' : '0';
+  btn.style.setProperty('--ring', on ? c : 'rgba(255,255,255,.10)');
+  btn.style.background = on ? `${c}1f` : 'rgba(0,0,0,.55)';
+  btn.title = (OBJ_LABEL[lbl] || lbl)
+    + (on ? ' · Boxen sichtbar' : ' · Boxen ausgeblendet');
+  // Re-paint canvas + chip count immediately.
+  _renderTrackingChip(lbState.item?._tracks || null);
+  _lbDrawDetections();
+}
+
 async function _onReindexClick(ev){
   ev.stopPropagation();
   const item = lbState.item;
@@ -437,32 +927,50 @@ async function _onReindexClick(ev){
   const btn = ev.currentTarget;
   btn.disabled = true;
   btn.style.opacity = '.5';
+  // Reset the per-event final-failed flag so a manual retry can
+  // restore the auto-reindex retry loop on the next tracks fetch.
+  _reindexFinalFailed.delete(item.event_id);
   try {
     const r = await fetch(
-      `/api/tracking/reindex/${encodeURIComponent(item.event_id)}` +
-      `?camera_id=${encodeURIComponent(item.camera_id || '')}`,
+      `/api/tracking/reindex/${encodeURIComponent(item.event_id)}`
+      + `?camera_id=${encodeURIComponent(item.camera_id || '')}`,
       { method: 'POST' });
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d.ok){
-      showToast('Tracking-Re-Index fehlgeschlagen: ' + (d.error || r.statusText), 'error');
+      showToast(
+        'Tracking-Re-Index fehlgeschlagen: ' + (d.error || r.statusText),
+        'error');
+      _logDiag(
+        `event=${item.event_id} manual reindex failed: `
+        + `${d.error || r.statusText}`,
+        'error');
       return;
     }
     showToast('Tracking neu generiert', 'success');
-    // Drop the cache so the next play / open re-fetches the fresh
-    // sidecar. The worker takes a few seconds — we don't await it.
+    // Drop cache + start the same retry-poll loop the auto-kick uses.
     lbInvalidateTracks(item.event_id);
     delete item._tracks;
-    setTimeout(() => lbLoadTracksForItem(item), 4000);
+    _reindexInflight.add(item.event_id);
+    _showReindexBannerPending(item);
+    setTimeout(
+      () => _retrySidecarFetch(item, 1),
+      _REINDEX_INITIAL_WAIT_MS);
   } catch (e){
-    showToast('Tracking-Re-Index fehlgeschlagen: ' + (e.message || e), 'error');
+    showToast(
+      'Tracking-Re-Index fehlgeschlagen: ' + (e.message || e),
+      'error');
+    _logDiag(
+      `event=${item.event_id} manual reindex error: ${e?.message || e}`,
+      'error');
   } finally {
     btn.disabled = false;
     btn.style.opacity = '';
   }
 }
 
-// Stop the loop and hide the chip — called from closeLightbox via the
-// window bridge so legacy.js doesn't have to know about RAF state.
+// Stop the loop and hide the chip + banner + toggles — called from
+// closeLightbox via the window bridge so legacy.js doesn't have to
+// know about RAF state.
 export function lbStopTrackingPlayback(){
   _stopRafLoop();
   clearTimeout(_chipFadeTimer);
@@ -471,6 +979,13 @@ export function lbStopTrackingPlayback(){
     chip.style.opacity = '0';
     chip.style.display = 'none';
   }
+  const banner = byId('lbTrackingBanner');
+  if (banner){
+    banner.style.opacity = '0';
+    banner.style.display = 'none';
+  }
+  const row = byId('lbBboxToggleRow');
+  if (row) row.style.display = 'none';
 }
 window.lbStopTrackingPlayback = lbStopTrackingPlayback;
 

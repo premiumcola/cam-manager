@@ -33,6 +33,8 @@ export default [
         navigator: 'readonly',
         location: 'readonly',
         history: 'readonly',
+        localStorage: 'readonly',
+        sessionStorage: 'readonly',
         fetch: 'readonly',
         URL: 'readonly',
         URLSearchParams: 'readonly',
