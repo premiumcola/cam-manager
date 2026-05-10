@@ -3,16 +3,19 @@
    when the active media item is a video (or timelapse). Without the
    class, #lightboxModal keeps the historical centred-modal geometry
    the photo branch still uses; with the class, the modal becomes a
-   full-page overlay split into three vertical regions:
+   full-page overlay split into two vertical regions:
 
        Top bar  (~48 px)            — cam name + ts + Confirm/Delete/Close
-       Video region (flex:1)       — existing media wrap with prev/next
-       Bottom panel (auto, ~200 px) — scrubber row + track timeline
+       Bottom stack (flex:1)        — scrubber row + video region +
+                                       track timeline (flush, no gaps)
 
-   The play-cursor and per-class toggle work off the same module-state
-   the bbox-overlay already owns; this file only handles the chrome.
-   Class colours come from data (inline style) — chrome is monochrome
-   per design spec. */
+   The bottom stack is the positioning context for the unified play
+   cursor (#lightboxPlayCursor): one 1 px white line that sweeps top-
+   to-bottom across the whole stack as the video plays, with a 16 px
+   invisible hit-area sibling for drag-to-scrub.
+
+   Class colours come from data (inline style); chrome is monochrome
+   per design spec — no light-blue accents on neutral surfaces. */
 
 #lightboxModal.lb-fs-video{
   padding:0!important;
@@ -40,7 +43,7 @@
   background:#000;
   color:#e2e8f0;
   border-bottom:1px solid rgba(255,255,255,.06);
-  z-index:6;
+  z-index:10;
 }
 #lightboxTopBar[hidden]{ display:none; }
 #lightboxTopMeta{
@@ -61,9 +64,6 @@
 #lightboxTopActions{
   display:flex;align-items:center;gap:8px;flex-shrink:0;
 }
-/* When the action buttons live inside the top bar (video mode), they
-   shed their absolute-positioned chrome so they sit naturally in the
-   flex row. The hover/focus states still apply for desktop. */
 #lightboxTopActions > button{
   position:static!important;
   top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;
@@ -94,63 +94,27 @@
   #lightboxTopTime{ font-size:10.5px; }
 }
 
-/* ── Video region ──────────────────────────────────────────────────────── */
-#lightboxModal.lb-fs-video #lightboxMediaWrap{
-  flex:1 1 auto!important;
-  width:100%!important;
-  border-radius:0!important;
-  min-height:0!important;
-  background:#000!important;
-  display:flex;align-items:center;justify-content:center;
-  position:relative;
-}
-#lightboxModal.lb-fs-video #lightboxImg,
-#lightboxModal.lb-fs-video #lightboxVideo{
-  width:100%!important;
-  height:100%!important;
-  max-height:none!important;
-  object-fit:contain;
-  background:#000!important;
-  border-radius:0!important;
-}
-/* Hide the in-media-wrap action buttons (Confirm/Delete/Close) — they
-   live in the top bar in video mode. JS relocates them at openLightbox
-   time, but if any of them stays in the wrap (e.g. transitional state),
-   force-hide so we never paint two copies. */
-#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxConfirm,
-#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxDelete,
-#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxClose{
-  display:none!important;
-}
-/* Drop the photo-mode bubble row in video full-screen — the per-class
-   toggles in the timeline panel make it redundant for video events
-   and the spec calls for its removal here. */
-#lightboxModal.lb-fs-video #lightboxLabels{ display:none!important; }
-/* Keep prev/next round buttons pinned to the video edges, vertically
-   centred relative to the video region. Their existing absolute-
-   positioned styles already do this; we just bump z-index above the
-   canvas and align with mobile-safe gutters. */
-#lightboxModal.lb-fs-video #lightboxPrev,
-#lightboxModal.lb-fs-video #lightboxNext{
-  z-index:7;
-  width:48px;height:48px;
-  background:rgba(0,0,0,.55);
-  backdrop-filter:blur(4px);
-}
-#lightboxModal.lb-fs-video #lightboxPrev{ left:14px; right:auto; }
-#lightboxModal.lb-fs-video #lightboxNext{ right:14px; left:auto; }
-@media (max-width:480px){
-  #lightboxModal.lb-fs-video #lightboxPrev,
-  #lightboxModal.lb-fs-video #lightboxNext{ width:44px;height:44px; }
+/* ── Bottom stack wrapper ──────────────────────────────────────────────── */
+/* Only the video full-screen mode applies layout to #lightboxBottomStack.
+   Photo events render inside the wrapper too but the wrapper has no
+   styling beyond default flex behaviour, so the centred-modal geometry
+   stays intact. */
+#lightboxModal.lb-fs-video #lightboxBottomStack{
+  flex:1 1 auto;
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  position:relative;     /* anchors #lightboxPlayCursor */
+  min-height:0;
+  background:#000;
 }
 
-/* ── Scrubber row ──────────────────────────────────────────────────────── */
+/* ── Scrubber row (top of bottom stack) ────────────────────────────────── */
 #lightboxScrubber{
   flex-shrink:0;
   display:flex;align-items:center;gap:12px;
   padding:8px 14px;
   background:#000;
-  border-top:1px solid rgba(255,255,255,.06);
   z-index:6;
 }
 #lightboxScrubber[hidden]{ display:none; }
@@ -175,7 +139,6 @@
   background:linear-gradient(to right,#e2e8f0 var(--lb-scrub-fill,0%),rgba(255,255,255,.18) var(--lb-scrub-fill,0%));
   border-radius:2px;
   outline:none;cursor:pointer;
-  /* Pad the slider hit area so touch users don't have to land the 4 px track. */
   padding:20px 0;
   background-clip:content-box;
 }
@@ -215,25 +178,75 @@
   #lbScrubPlay{ width:44px;height:44px;min-width:44px;min-height:44px; }
 }
 
-/* ── Track timeline panel ──────────────────────────────────────────────── */
+/* ── Video region (middle of bottom stack) ─────────────────────────────── */
+#lightboxModal.lb-fs-video #lightboxMediaWrap{
+  flex:1 1 auto!important;
+  width:100%!important;
+  border-radius:0!important;
+  min-height:0!important;
+  background:#000!important;
+  display:flex;align-items:center;justify-content:center;
+  position:relative;
+}
+#lightboxModal.lb-fs-video #lightboxImg,
+#lightboxModal.lb-fs-video #lightboxVideo{
+  width:100%!important;
+  height:100%!important;
+  max-height:none!important;
+  object-fit:contain;
+  background:#000!important;
+  border-radius:0!important;
+}
+/* Footer (#lightboxMeta) is redundant in video mode — the cam name +
+   timestamp are already in the top bar. Photo events keep their
+   footer untouched. */
+#lightboxModal.lb-fs-video #lightboxMeta{ display:none!important; }
+/* Hide the in-media-wrap action buttons (Confirm/Delete/Close) — they
+   live in the top bar in video mode. JS relocates them at openLightbox
+   time, but if any of them stays in the wrap (e.g. transitional state),
+   force-hide so we never paint two copies. */
+#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxConfirm,
+#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxDelete,
+#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxClose{
+  display:none!important;
+}
+#lightboxModal.lb-fs-video #lightboxLabels{ display:none!important; }
+#lightboxModal.lb-fs-video #lightboxPrev,
+#lightboxModal.lb-fs-video #lightboxNext{
+  z-index:7;
+  width:48px;height:48px;
+  background:rgba(0,0,0,.55);
+  backdrop-filter:blur(4px);
+}
+#lightboxModal.lb-fs-video #lightboxPrev{ left:14px; right:auto; }
+#lightboxModal.lb-fs-video #lightboxNext{ right:14px; left:auto; }
+@media (max-width:480px){
+  #lightboxModal.lb-fs-video #lightboxPrev,
+  #lightboxModal.lb-fs-video #lightboxNext{ width:44px;height:44px; }
+}
+
+/* ── Track timeline panel (flush under video) ──────────────────────────── */
 #lightboxTrackTimeline{
   flex-shrink:0;
   position:relative;
-  padding:6px 14px max(10px,env(safe-area-inset-bottom,0)) 14px;
+  /* Flush against the video bottom edge — no top border, no top
+     padding. The badge column sits at left:14px so the strip starts
+     at 14 + 78 + 8 = 100 px from the stack's left edge. */
+  padding:6px 14px 8px 14px;
   background:#000;
-  border-top:1px solid rgba(255,255,255,.04);
   z-index:5;
-  max-height:42dvh;
-  overflow-y:auto;
 }
 #lightboxTrackTimeline[hidden]{ display:none; }
 #lightboxTrackTimeline .lbtt-rows{
-  display:flex;flex-direction:column;gap:4px;
+  display:flex;flex-direction:column;gap:6px;
   position:relative;
 }
 #lightboxTrackTimeline .lbtt-row{
   display:flex;align-items:center;gap:8px;
-  min-height:32px;
+  /* Slightly larger than the previous 32 px so the bar + #N tag pair
+     reads at iPhone density without crowding. Tap target is the badge
+     button which has its own 44 px floor. */
+  min-height:40px;
 }
 #lightboxTrackTimeline .lbtt-badge{
   flex:0 0 auto;width:78px;
@@ -242,7 +255,7 @@
   padding:6px 4px 6px 0;
   min-height:44px;
   cursor:pointer;color:#e2e8f0;
-  font-size:11.5px;font-weight:600;letter-spacing:.01em;
+  font-size:12px;font-weight:600;letter-spacing:.01em;
   text-align:left;
   -webkit-tap-highlight-color:transparent;
   transition:opacity .15s;
@@ -251,8 +264,6 @@
   width:22px;height:22px;border-radius:50%;
   display:inline-flex;align-items:center;justify-content:center;
   flex-shrink:0;
-  /* Background tint comes from --c (per-class) inline; the SVG glyph
-     inside is its own colour. */
   background:color-mix(in srgb,var(--c,#fff) 28%,#000 0);
 }
 #lightboxTrackTimeline .lbtt-badge .lbtt-name{
@@ -268,85 +279,170 @@
 #lightboxTrackTimeline .lbtt-strip{
   flex:1 1 auto;min-width:0;
   position:relative;
-  height:18px;
-  border-radius:6px;
+  /* Bumped from 18 → 24 px so the per-track 14 px bars have visible
+     padding and the row reads as a band rather than a thin stripe. */
+  height:24px;
+  border-radius:8px;
   background:rgba(255,255,255,.04);
 }
 #lightboxTrackTimeline .lbtt-row[data-on="0"] .lbtt-strip{
   opacity:.30;
 }
 #lightboxTrackTimeline .lbtt-bar{
-  position:absolute;top:3px;bottom:3px;
+  position:absolute;top:5px;bottom:5px;
+  border:0;padding:0;
   border-radius:4px;
   cursor:pointer;
   -webkit-tap-highlight-color:transparent;
-  /* Background painted inline per class colour; opacity below keeps
-     adjacent bars distinguishable from the strip background. */
 }
 #lightboxTrackTimeline .lbtt-bar:hover{ filter:brightness(1.15); }
 #lightboxTrackTimeline .lbtt-bar-num{
-  position:absolute;top:-12px;left:0;
+  position:absolute;top:-13px;left:0;
   font-family:ui-monospace,Menlo,Consolas,monospace;
-  font-size:9px;font-weight:700;letter-spacing:.02em;
+  font-size:10px;font-weight:700;letter-spacing:.02em;
   pointer-events:none;
-  /* Color set inline per class. */
 }
 #lightboxTrackTimeline .lbtt-bar-end{
   position:absolute;top:50%;transform:translate(0,-50%);
   width:10px;height:10px;
-  font-size:10px;line-height:10px;font-weight:700;
+  font-size:11px;line-height:10px;font-weight:700;
   color:#ef4444;
   pointer-events:none;
   text-align:left;
 }
-/* Tick row beneath the strip — 4 evenly-spaced labels in monospace,
-   indented to align with the strip area (badge column = 78 px + 8 px
-   gap = 86 px). */
 #lightboxTrackTimeline .lbtt-ticks{
   position:relative;
   margin-top:6px;
   height:12px;
+  /* Aligns with the strip's left edge (badge col 78 + gap 8 = 86 px). */
   padding-left:86px;
 }
 #lightboxTrackTimeline .lbtt-tick{
   position:absolute;top:0;
   font-family:ui-monospace,Menlo,Consolas,monospace;
-  font-size:9px;font-weight:600;
+  font-size:10px;font-weight:600;
   color:rgba(226,232,240,.45);
   letter-spacing:.02em;
   font-variant-numeric:tabular-nums;
 }
-/* Empty state — clip without tracks (and not in reindex flow) shows
-   a single muted line instead of an empty panel. */
 #lightboxTrackTimeline .lbtt-empty{
   padding:8px 4px 4px;
   font-size:11.5px;color:rgba(226,232,240,.45);
   font-style:italic;
 }
 
-/* ── Play cursor ───────────────────────────────────────────────────────── */
-#lightboxTrackTimeline .lbtt-cursor{
-  position:absolute;top:0;bottom:0;
-  width:1px;background:#fff;
-  pointer-events:none;
-  /* Slight glow so the line stays readable against any class-coloured
-     bar below. The dot at the top sits in a pseudo-element. */
-  box-shadow:0 0 6px rgba(255,255,255,.45);
+/* ── Settings chip + panel ─────────────────────────────────────────────── */
+#lightboxSettings{
+  flex-shrink:0;
+  padding:6px 14px 12px 14px;
+  background:#000;
   z-index:5;
 }
-#lightboxTrackTimeline .lbtt-cursor::before{
-  content:'';position:absolute;
-  top:-2px;left:-3.5px;
-  width:8px;height:8px;border-radius:50%;
+#lightboxSettings[hidden]{ display:none; }
+#lightboxSettings .lbset-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 12px 7px 14px;
+  border:0;background:rgba(255,255,255,.07);
+  color:#e2e8f0;
+  font-size:11.5px;font-weight:600;letter-spacing:.01em;
+  border-radius:999px;
+  cursor:pointer;-webkit-tap-highlight-color:transparent;
+  min-height:30px;
+  transition:background .15s;
+  max-width:100%;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+#lightboxSettings .lbset-chip:hover{ background:rgba(255,255,255,.12); }
+#lightboxSettings .lbset-chip-chevron{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:12px;height:12px;flex-shrink:0;
+  transition:transform .18s ease;
+  color:rgba(226,232,240,.62);
+}
+#lightboxSettings .lbset-chip[aria-expanded="true"] .lbset-chip-chevron{
+  transform:rotate(180deg);
+}
+#lightboxSettings .lbset-panel{
+  margin-top:8px;
+  padding:10px 12px;
+  background:rgba(255,255,255,.04);
+  border-radius:10px;
+  display:grid;
+  grid-template-columns:max-content 1fr;
+  column-gap:14px;row-gap:6px;
+  font-size:11.5px;
+  color:#e2e8f0;
+}
+#lightboxSettings .lbset-panel[hidden]{ display:none; }
+#lightboxSettings .lbset-key{
+  color:rgba(226,232,240,.62);
+  font-weight:600;letter-spacing:.01em;
+}
+#lightboxSettings .lbset-val{
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  color:#f1f5f9;
+  font-variant-numeric:tabular-nums;
+  word-break:break-word;
+}
+#lightboxSettings .lbset-missing{
+  font-size:11.5px;
+  color:rgba(226,232,240,.45);
+  font-style:italic;
+  padding:4px 0 0;
+}
+
+/* ── Unified play cursor ───────────────────────────────────────────────── */
+/* Single 1 px white vertical line sweeping top-to-bottom across the
+   whole bottom stack. The 16 px wide invisible hit-area sibling drives
+   drag-to-scrub via Pointer Events; the line itself is pointer-events
+   none so taps elsewhere (e.g. timeline bars) still register. */
+#lightboxPlayCursor{
+  position:absolute;
+  top:0;bottom:0;
+  width:0;
+  z-index:8;
+  pointer-events:none;
+  /* JS sets `style.left` in pixels, aligned to the timeline strip's
+     coordinate system (so bars and cursor agree on x positions). */
+}
+#lightboxPlayCursor[hidden]{ display:none; }
+#lightboxPlayCursor .lbpc-line{
+  position:absolute;
+  top:0;bottom:0;left:0;
+  width:1px;
+  background:#fff;
+  box-shadow:0 0 6px rgba(255,255,255,.45);
+  pointer-events:none;
+}
+#lightboxPlayCursor .lbpc-line::before{
+  content:'';
+  position:absolute;
+  top:6px;left:-3.5px;
+  width:8px;height:8px;
+  border-radius:50%;
   background:#fff;
   box-shadow:0 0 6px rgba(255,255,255,.6);
+}
+/* Drag hit-area — wraps the line in a 16 px wide invisible column so
+   touch/mouse pointers landing within ±8 px of the line drive scrubbing.
+   touch-action:none lets us swallow the gesture before iOS turns it
+   into a horizontal page swipe. cursor:ew-resize hints desktop. */
+#lightboxPlayCursor .lbpc-hit{
+  position:absolute;
+  top:0;bottom:0;left:-8px;
+  width:16px;
+  pointer-events:auto;
+  cursor:ew-resize;
+  touch-action:none;
+  background:transparent;
 }
 
 /* ── Mobile adjustments ────────────────────────────────────────────────── */
 @media (max-width:480px){
-  #lightboxTrackTimeline{ padding:6px 10px max(10px,env(safe-area-inset-bottom,0)) 10px; }
+  #lightboxTrackTimeline{ padding:6px 10px 8px 10px; }
   #lightboxTrackTimeline .lbtt-badge{ width:64px;font-size:11px; }
   #lightboxTrackTimeline .lbtt-badge .lbtt-avatar{ width:20px;height:20px; }
   #lightboxTrackTimeline .lbtt-ticks{ padding-left:72px; }
-  #lightboxTrackTimeline .lbtt-bar-num{ font-size:8.5px; }
+  #lightboxTrackTimeline .lbtt-bar-num{ font-size:9px; }
+  #lightboxSettings{ padding:6px 10px 12px 10px; }
 }

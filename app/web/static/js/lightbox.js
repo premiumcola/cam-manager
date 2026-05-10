@@ -25,6 +25,7 @@ import { colors, OBJ_LABEL, OBJ_SVG, TL_LABELS, objBubble } from './core/icons.j
 import { lbState } from './mediathek/state.js';
 import {
   lbLoadTracksForItem, lbStopTrackingPlayback, lbClearTrackTimeline,
+  lbRenderSettingsPanel,
 } from './mediathek/bbox-overlay.js';
 import { _iosNativeVideoOpen } from './mediathek/ios-video.js';
 import { closeLiveView } from './chrome/live-view.js';
@@ -212,6 +213,10 @@ function _setupVideoChrome(item){
   if (tsEl)  tsEl.textContent  = item?.time || '';
   byId('lightboxTopBar').hidden = false;
   byId('lightboxScrubber').hidden = false;
+  // Reveal the unified play cursor in the bottom stack — JS positions
+  // it on every timeupdate / RAF tick.
+  const cursorEl = byId('lightboxPlayCursor');
+  if (cursorEl){ cursorEl.hidden = false; cursorEl.style.opacity = '0'; }
   // Move the action buttons into the top bar.
   _relocateActionsTo('lightboxTopActions');
   // Reset scrubber visuals (fresh open / item nav both reset to 0:00).
@@ -230,6 +235,16 @@ function _setupVideoChrome(item){
       lbClearTrackTimeline();
     }
   }
+  // Settings panel — bbox-overlay.js owns the rendering; we just
+  // toggle visibility based on whether the item carries the new
+  // recording_settings object (or for timelapses, hide).
+  const setHost = byId('lightboxSettings');
+  if (setHost){
+    setHost.hidden = (item?.type === 'timelapse');
+  }
+  if (item?.type !== 'timelapse'){
+    lbRenderSettingsPanel(item);
+  }
 }
 
 // Reverse _setupVideoChrome — called when navigating to a photo or
@@ -241,6 +256,10 @@ function _teardownVideoChrome(){
   byId('lightboxTopBar').hidden = true;
   byId('lightboxScrubber').hidden = true;
   byId('lightboxTrackTimeline').hidden = true;
+  const cursorEl = byId('lightboxPlayCursor');
+  if (cursorEl){ cursorEl.hidden = true; cursorEl.style.opacity = '0'; }
+  const setHost = byId('lightboxSettings');
+  if (setHost){ setHost.hidden = true; setHost.innerHTML = ''; }
   lbClearTrackTimeline();
   // Buttons return to the media wrap so the photo branch's existing
   // absolute-positioned CSS rules apply.

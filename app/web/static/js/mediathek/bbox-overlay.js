@@ -789,8 +789,12 @@ export function lbRenderTrackTimeline(item){
     return parts;
   })();
 
+  // Note: the play cursor is no longer rendered inside the timeline
+  // panel — the unified #lightboxPlayCursor in #lightboxBottomStack
+  // sweeps top-to-bottom across the whole video stack and is owned
+  // by _renderPlayCursor() / _wireCursorDrag() below.
   host.innerHTML = `
-    <div class="lbtt-rows">${rowsHtml}<div class="lbtt-cursor" style="left:86px"></div></div>
+    <div class="lbtt-rows">${rowsHtml}</div>
     <div class="lbtt-ticks">${ticksHtml}</div>`;
 
   // Wire the badge clicks (toggle hidden) + bar clicks (seek video).
@@ -836,37 +840,233 @@ function _onTimelineBarClick(ev){
   if (v.paused) v.play().catch(() => {});
 }
 
-// ── Play cursor ──────────────────────────────────────────────────────────
-// Vertical 1px white line + dot, anchored at currentTime/duration
-// across the timeline rows. Updated from videoEl.timeupdate (~4 Hz
-// natively) AND from the canvas RAF loop so the cursor stays smooth
-// at 60 Hz while playing. pointer-events:none so taps still hit the
-// bars below.
+// ── Unified play cursor + drag-to-scrub ──────────────────────────────────
+// Single 1 px white line in #lightboxPlayCursor (sibling of scrubber +
+// media wrap + timeline inside #lightboxBottomStack). Position is
+// anchored to the timeline strip's coordinate system so bars and
+// cursor agree on x for the same time-point. The 16 px wide invisible
+// hit-area sibling drives drag-to-scrub via Pointer Events; tap-to-
+// seek on a timeline bar still works because bars sit outside the
+// 16 px column at a higher z than the cursor's pointer-events:none
+// line.
+
+let _cursorDragWired = false;
+let _cursorDragWasPlaying = false;
 
 function _renderPlayCursor(){
-  const host = byId('lightboxTrackTimeline');
-  if (!host || host.hidden) return;
-  const cursor = host.querySelector('.lbtt-cursor');
-  if (!cursor) return;
+  const cursor = byId('lightboxPlayCursor');
+  if (!cursor || cursor.hidden) return;
+  const stack = byId('lightboxBottomStack');
   const v = byId('lightboxVideo');
+  if (!stack || !v) return;
   const dur = _timelineDuration > 0 ? _timelineDuration
-    : (Number.isFinite(v?.duration) && v.duration > 0 ? v.duration : 0);
-  if (!v || dur <= 0) return;
+    : (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : 0);
+  if (dur <= 0){
+    // Without duration we can't position the cursor meaningfully —
+    // hide it entirely so the user doesn't see a stray vertical line
+    // while the video is still loading metadata.
+    cursor.style.opacity = '0';
+    return;
+  }
   const cur = Number.isFinite(v.currentTime) ? v.currentTime : 0;
-  const pct = Math.min(100, Math.max(0, (cur / dur) * 100));
-  // Strip area starts at the badge column (78 px wide + 8 px gap),
-  // mobile collapses to 64 + 8. Read the first row's strip and use
-  // its left edge for an exact anchor.
-  const firstStrip = host.querySelector('.lbtt-strip');
-  const rowsEl = host.querySelector('.lbtt-rows');
-  if (!firstStrip || !rowsEl) return;
-  const stripRect = firstStrip.getBoundingClientRect();
-  const rowsRect = rowsEl.getBoundingClientRect();
-  const stripLeftPx = stripRect.left - rowsRect.left;
-  const stripWidthPx = stripRect.width;
-  if (stripWidthPx <= 0) return;
-  const xPx = stripLeftPx + (pct / 100) * stripWidthPx;
+  const pct = Math.min(1, Math.max(0, cur / dur));
+  // Anchor to the timeline strip's coordinate system: read the first
+  // strip's left edge + width relative to the stack so the cursor
+  // aligns with the bars (which use the same percentage axis). Falls
+  // back to a stack-relative span when the timeline isn't rendered
+  // yet (e.g. tracks-loading state, timelapse with no panel).
+  const tlHost = byId('lightboxTrackTimeline');
+  const stackRect = stack.getBoundingClientRect();
+  let stripLeftPx = 0;
+  let stripWidthPx = stackRect.width;
+  if (tlHost && !tlHost.hidden){
+    const firstStrip = tlHost.querySelector('.lbtt-strip');
+    if (firstStrip){
+      const stripRect = firstStrip.getBoundingClientRect();
+      stripLeftPx = stripRect.left - stackRect.left;
+      stripWidthPx = stripRect.width;
+    }
+  }
+  if (stripWidthPx <= 0){
+    cursor.style.opacity = '0';
+    return;
+  }
+  const xPx = stripLeftPx + pct * stripWidthPx;
   cursor.style.left = `${xPx.toFixed(1)}px`;
+  cursor.style.opacity = '1';
+  _wireCursorDrag();
+}
+
+// Drag-to-scrub handlers on the cursor's hit area. Wired once per
+// session — the listeners stay attached even when the cursor is
+// hidden (idempotent, no-op when there's no active video).
+function _wireCursorDrag(){
+  if (_cursorDragWired) return;
+  const cursor = byId('lightboxPlayCursor');
+  if (!cursor) return;
+  const hit = cursor.querySelector('.lbpc-hit');
+  if (!hit) return;
+  _cursorDragWired = true;
+
+  const _xToTime = (clientX) => {
+    const stack = byId('lightboxBottomStack');
+    const tlHost = byId('lightboxTrackTimeline');
+    const v = byId('lightboxVideo');
+    if (!stack || !v) return null;
+    const dur = Number.isFinite(v.duration) && v.duration > 0
+      ? v.duration : 0;
+    if (dur <= 0) return null;
+    const stackRect = stack.getBoundingClientRect();
+    let stripLeftPx = 0;
+    let stripWidthPx = stackRect.width;
+    if (tlHost && !tlHost.hidden){
+      const firstStrip = tlHost.querySelector('.lbtt-strip');
+      if (firstStrip){
+        const stripRect = firstStrip.getBoundingClientRect();
+        stripLeftPx = stripRect.left - stackRect.left;
+        stripWidthPx = stripRect.width;
+      }
+    }
+    if (stripWidthPx <= 0) return null;
+    const xLocal = clientX - stackRect.left - stripLeftPx;
+    const pct = Math.min(1, Math.max(0, xLocal / stripWidthPx));
+    return pct * dur;
+  };
+
+  hit.addEventListener('pointerdown', (ev) => {
+    const v = byId('lightboxVideo');
+    if (!v || !v.src) return;
+    ev.preventDefault();
+    try { hit.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
+    _cursorDragWasPlaying = !v.paused && !v.ended;
+    if (_cursorDragWasPlaying) v.pause();
+    const t = _xToTime(ev.clientX);
+    if (t != null){ v.currentTime = t; }
+  });
+  hit.addEventListener('pointermove', (ev) => {
+    if (!hit.hasPointerCapture(ev.pointerId)) return;
+    const v = byId('lightboxVideo');
+    if (!v) return;
+    const t = _xToTime(ev.clientX);
+    if (t != null){ v.currentTime = t; }
+  });
+  const _release = (ev) => {
+    if (hit.hasPointerCapture(ev.pointerId)){
+      try { hit.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+    }
+    if (_cursorDragWasPlaying){
+      const v = byId('lightboxVideo');
+      v?.play().catch(() => {});
+    }
+    _cursorDragWasPlaying = false;
+  };
+  hit.addEventListener('pointerup', _release);
+  hit.addEventListener('pointercancel', _release);
+}
+
+// ── Settings chip + panel (Stage 31) ─────────────────────────────────────
+// item.recording_settings is captured by _finalize_motion_clip at the
+// time of the recording so each event carries the exact thresholds /
+// filters / cadence it was shot under. Lightbox renders a compact
+// chip with the gist + a tappable panel for the full breakdown.
+// Pre-existing events (no key) get a muted "ältere Aufnahme" line.
+
+const _SETTINGS_KEY_LABELS = {
+  conf_thresh_general:           'Schwelle (allgemein)',
+  conf_thresh_per_class:         'Schwelle pro Klasse',
+  object_filter:                 'Objekt-Filter',
+  confirm_n:                     'Bestätigung Treffer',
+  confirm_seconds:               'Bestätigung Sekunden',
+  sample_interval_ms:            'Abtast-Intervall',
+  motion_pretrigger_sensitivity: 'Pretrigger-Empfindlichkeit',
+  post_motion_seconds:           'Nachlauf',
+  mode:                          'Modus',
+};
+
+function _fmtSettingsValue(key, val){
+  if (val == null) return '—';
+  if (key === 'conf_thresh_general'){
+    return `${Math.round(parseFloat(val) * 100)} %`;
+  }
+  if (key === 'conf_thresh_per_class'){
+    if (typeof val !== 'object' || Object.keys(val).length === 0) return '—';
+    return Object.entries(val)
+      .map(([k, v]) => `${OBJ_LABEL[k] || k} ${Math.round(parseFloat(v) * 100)} %`)
+      .join(', ');
+  }
+  if (key === 'object_filter'){
+    if (!Array.isArray(val) || val.length === 0) return 'keiner (alle Klassen)';
+    return val.map(l => OBJ_LABEL[l] || l).join(', ');
+  }
+  if (key === 'confirm_n')           return `${val} ×`;
+  if (key === 'confirm_seconds')     return `${val} s`;
+  if (key === 'sample_interval_ms')  return `${val} ms`;
+  if (key === 'motion_pretrigger_sensitivity') return `${val} %`;
+  if (key === 'post_motion_seconds'){
+    return val > 0 ? `${val} s` : 'Standard';
+  }
+  return String(val);
+}
+
+function _buildSettingsChipText(rs){
+  // "Settings · Schwelle 65 % · 3 ⁄ 5 s · Person, Katze"
+  const parts = ['Settings'];
+  if (rs.conf_thresh_general != null){
+    parts.push(`Schwelle ${Math.round(parseFloat(rs.conf_thresh_general) * 100)} %`);
+  }
+  if (rs.confirm_n != null && rs.confirm_seconds != null){
+    parts.push(`${rs.confirm_n} ⁄ ${rs.confirm_seconds} s`);
+  }
+  if (Array.isArray(rs.object_filter) && rs.object_filter.length > 0){
+    parts.push(rs.object_filter.map(l => OBJ_LABEL[l] || l).join(', '));
+  } else if (rs.object_filter == null){
+    parts.push('alle Klassen');
+  }
+  return parts.join(' · ');
+}
+
+export function lbRenderSettingsPanel(item){
+  const host = byId('lightboxSettings');
+  if (!host) return;
+  if (!item || item.type === 'timelapse'){
+    host.innerHTML = '';
+    return;
+  }
+  const rs = item.recording_settings;
+  if (!rs || typeof rs !== 'object'){
+    host.innerHTML = `<div class="lbset-missing">Settings nicht aufgezeichnet · ältere Aufnahme</div>`;
+    return;
+  }
+  const chipText = _buildSettingsChipText(rs);
+  // Order matters — use _SETTINGS_KEY_LABELS keys to preserve a
+  // consistent layout regardless of which fields the recording
+  // happened to capture.
+  const panelRows = [];
+  for (const key of Object.keys(_SETTINGS_KEY_LABELS)){
+    if (!Object.prototype.hasOwnProperty.call(rs, key)) continue;
+    const label = _SETTINGS_KEY_LABELS[key];
+    const value = _fmtSettingsValue(key, rs[key]);
+    panelRows.push(
+      `<div class="lbset-key">${label}</div><div class="lbset-val">${value}</div>`
+    );
+  }
+  host.innerHTML = `
+    <button type="button" class="lbset-chip" aria-expanded="false" aria-controls="lightboxSettingsPanel" title="Settings ein-/ausklappen">
+      <span class="lbset-chip-text">${chipText}</span>
+      <span class="lbset-chip-chevron" aria-hidden="true">
+        <svg viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5l3 3 3-3"/></svg>
+      </span>
+    </button>
+    <div class="lbset-panel" id="lightboxSettingsPanel" hidden>${panelRows.join('')}</div>`;
+  const chip = host.querySelector('.lbset-chip');
+  const panel = host.querySelector('.lbset-panel');
+  if (chip && panel){
+    chip.addEventListener('click', () => {
+      const open = !panel.hidden;
+      panel.hidden = open;
+      chip.setAttribute('aria-expanded', open ? 'false' : 'true');
+    });
+  }
 }
 
 // ── Public cleanup ───────────────────────────────────────────────────────

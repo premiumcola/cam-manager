@@ -131,6 +131,7 @@ class RecordingMixin:
             "duration_s": 0.0,
             "file_size_bytes": 0,
             "status": status,
+            "recording_settings": self._build_recording_settings_snapshot(),
         }
         self.store.add_event(self.camera_id, event)
 
@@ -344,6 +345,39 @@ class RecordingMixin:
         # — it produced a second bubble per detection with a different button
         # layout and confused users. Removed.
 
+    def _build_recording_settings_snapshot(self) -> dict:
+        """Capture the detection config active at clip-finalize time.
+
+        Stored under event["recording_settings"] so the lightbox can
+        replay "what config produced this clip" without having to
+        guess at the camera's current state when the user reviews it
+        weeks later. Pure read of self.cfg + tiny normalisation; no
+        side effects.
+        """
+        cw_global = (self.cfg.get("confirmation_window") or {}).get("global") or {}
+        obj_filter = self.cfg.get("object_filter") or []
+        return {
+            "conf_thresh_general":
+                float(self.cfg.get("detection_min_score") or 0.0),
+            "conf_thresh_per_class":
+                dict(self.cfg.get("label_thresholds") or {}),
+            # null when the filter is empty — distinguishes "no filter
+            # configured" from "filter has zero allowed classes" on
+            # the frontend without a sentinel value.
+            "object_filter":
+                list(obj_filter) if obj_filter else None,
+            "confirm_n":          int(cw_global.get("n", 3)),
+            "confirm_seconds":    int(cw_global.get("seconds", 5)),
+            "sample_interval_ms": int(self.cfg.get("frame_interval_ms") or 350),
+            # motion_sensitivity is stored as 0..1 in the schema; the
+            # spec wants an int 0..100 percentage so the chip can
+            # render "Sens. 50%" without a divisor on the frontend.
+            "motion_pretrigger_sensitivity":
+                int(round(float(self.cfg.get("motion_sensitivity") or 0.5) * 100)),
+            "post_motion_seconds":
+                int(self.cfg.get("post_motion_tail_s") or 0),
+        }
+
     def _finalize_motion_clip(self, frames: list, meta: dict, fps: float = 10.0):
         """Save MP4 clip (H.264 via ffmpeg, mp4v fallback), verify, write event JSON, send Telegram."""
         start_time: datetime = meta["time"]
@@ -465,6 +499,13 @@ class RecordingMixin:
         except Exception:
             pass
 
+        # Recording settings snapshot — captures the detection config
+        # active at clip-finalize time so each event.json carries the
+        # exact thresholds / filters / cadence it was shot under. Old
+        # events written before this addition simply lack the key, the
+        # frontend renders "Settings nicht aufgezeichnet" for them.
+        recording_settings = self._build_recording_settings_snapshot()
+
         # Write event JSON
         event = {
             "event_id": event_id,
@@ -489,6 +530,7 @@ class RecordingMixin:
             "video_relpath": video_relpath,
             "duration_s": duration_s,
             "file_size_bytes": file_size_bytes,
+            "recording_settings": recording_settings,
         }
         if encode_error:
             event["encode_error"] = encode_error
