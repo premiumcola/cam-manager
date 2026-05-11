@@ -88,11 +88,16 @@
    3-per-row layout above so the 44 px touch-target floor isn't
    risked by tighter cells. */
 @media (min-width:390px) and (max-width:768px){
-  .ach-cards-grid{grid-template-columns:repeat(8,1fr);gap:8px}
-  .ach-card{grid-column:span 2;padding:6px 2px 4px}
+  /* 12-track base so regular tiles (span 3 = 4 per row) AND the
+     three XL squirrel variants (span 4 = 3 per row) both land
+     cleanly. The previous 8-track grid forced XL squirrels into a
+     2+1 wrap; the user wants them in one row. Medal sizes scale
+     down to match the narrower XL cell — 72/104 → 64/84. */
+  .ach-cards-grid{grid-template-columns:repeat(12,1fr);gap:8px}
+  .ach-card{grid-column:span 3;padding:6px 2px 4px}
   .ach-card--xl{grid-column:span 4}
-  .medal-wrap{width:72px;height:72px;margin-top:6px}
-  .ach-card--xl .medal-wrap{width:104px;height:104px}
+  .medal-wrap{width:64px;height:64px;margin-top:6px}
+  .ach-card--xl .medal-wrap{width:84px;height:84px}
   .medal-name{
     font-size:11px;
     width:100%;

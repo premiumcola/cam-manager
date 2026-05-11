@@ -206,7 +206,12 @@
     gap:3px;
     padding:8px 4px 6px;
     min-height:54px;
-    color:rgba(155,168,196,.7);
+    /* Slightly darker neutral than the old slate-blue (155,168,196)
+       so iOS OLED stops rendering the inactive dock labels as
+       visibly blue. Opacity bumped .7 → .78 to compensate for the
+       darker base. .is-active below still uses the orange/blue/green
+       accent — left untouched. */
+    color:rgba(160,168,178,.78);
     cursor:pointer;
     transition:background .18s,color .18s,transform .12s;
     position:relative;

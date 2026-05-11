@@ -115,7 +115,12 @@
    grow up to the open-state width (220 px). The .cv-lp-open rule
    below still flips max-width explicitly to --lp-expanded-w so the
    open transition hits the same end state. */
-.cv-pill-live-wrap{--lp-collapsed-w:max-content;--lp-expanded-w:220px;position:relative;border-radius:999px;border:1.5px solid rgba(34,197,94,.55);background:rgba(34,197,94,.18);color:#c8f5e0;font-size:10.5px;font-weight:700;cursor:default;overflow:hidden;backdrop-filter:blur(8px);width:var(--lp-collapsed-w);max-width:var(--lp-expanded-w);max-height:22px;transition:max-width .28s ease,max-height .28s ease,border-radius .28s ease;margin-left:auto}
+/* width:max-content used to set the collapsed shape, but iOS Safari
+   ≤17.x doesn't resolve it against a flex/grid parent with spare
+   room — the pill fell through to max-width:220px instead. inline-
+   flex + width:auto gives intrinsic content-based sizing on every
+   browser, and the max-width:220px still caps the open state. */
+.cv-pill-live-wrap{--lp-collapsed-w:max-content;--lp-expanded-w:220px;display:inline-flex;align-items:center;position:relative;border-radius:999px;border:1.5px solid rgba(34,197,94,.55);background:rgba(34,197,94,.18);color:#c8f5e0;font-size:10.5px;font-weight:700;cursor:default;overflow:hidden;backdrop-filter:blur(8px);width:auto;max-width:var(--lp-expanded-w);max-height:22px;transition:max-width .28s ease,max-height .28s ease,border-radius .28s ease;margin-left:auto}
 .cv-pill-live-wrap.cv-lp-open{border-radius:14px;max-width:var(--lp-expanded-w);max-height:130px}
 .cv-live-off{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.15);color:rgba(255,255,255,.35)}
 /* Slimmer collapsed row — 3 px vertical padding, 10.5 px font, 1.2 line-

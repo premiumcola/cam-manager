@@ -1,4 +1,4 @@
-:root{--bg:#111111;--panel:#1a1a1a;--surface:#222222;--line:transparent;--text:#edf4fb;--muted:#8b9ab5;--accent:#3b82f6;--good:#22c55e;--warn:#f59e0b;--danger:#ef4444}
+:root{--bg:#111111;--panel:#1a1a1a;--surface:#222222;--line:transparent;--text:#edf4fb;--muted:#9ba3ad;--accent:#3b82f6;--good:#22c55e;--warn:#f59e0b;--danger:#ef4444}
 *{box-sizing:border-box}html{scroll-behavior:smooth}html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}button,input,select{font:inherit}button{cursor:pointer}a{color:inherit;text-decoration:none}
 html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@media (max-width:768px){html{scroll-padding-top:8px}}
 .shell{display:flex;gap:12px;max-width:1900px;margin:0 auto;padding:8px 14px 18px 14px}
