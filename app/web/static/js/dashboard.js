@@ -501,37 +501,47 @@ document.addEventListener('webkitfullscreenchange', _onFullscreenChange);
 
 window._cvEnterFullscreen = _cvEnterFullscreen;
 
-// ── SIM button — open the live-detect surface for this camera ───────────
-// Currently routes to the existing cam-edit "Erkennung jetzt simulieren"
-// panel, which is the canonical live-detect surface (~1000 lines of
-// machinery: test-detection polling, bbox SVG overlay, tracker trails,
-// per-class verdict colouring, decision-trace fold). Migrating that
-// flow into the new MediaView shell's mode='live-detect' is a sizable
-// follow-up — the cm-52 prompt explicitly allows stopping here under
-// the 150-line glue cap. The shell still exposes mode='live-detect'
-// as a not-yet-implemented branch so future migrations have a single
-// landing target.
+// ── SIM button — open MediaView in live-detect mode for this camera ─────
+// Routes to the unified MediaView shell so the user sees the SAME
+// chrome as a recorded clip (lb-fs-video top bar, 16:9 wrap, panel-
+// tabs strip, fine-analysis fold OPEN by default), driven by the
+// 1 Hz test-detection polling implemented in mediaview/live-detect.js.
+// Prev/next nav + confirm/delete/download actions are nulled — live
+// mode has no recorded-item navigation surface.
+import { openMediaView } from './mediaview/index.js';
+
 export function _cvOpenSim(camId){
-  if (typeof window.editCamera !== 'function') return;
-  // Close any open lightbox first so the cam-edit panel isn't hidden
-  // behind it. Then route to #cameras and open the panel for this id.
-  try { window.closeLightbox?.(); } catch { /* ignore */ }
-  location.hash = '#cameras';
-  window.editCamera(camId);
-  // editCamera rebuilds the form DOM synchronously; the Erkennung tab
-  // and the simulate button land one paint later. Two rAFs is the
-  // safe wait so the click reaches freshly-rendered elements.
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    const tabBtn = document.querySelector('.cam-tab-btn[data-tab="cam-tab-erkennung"]');
-    tabBtn?.click();
-    setTimeout(() => {
-      const simBtn = byId('erkSimulateBtn');
-      if (simBtn){
-        simBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        simBtn.click();
-      }
-    }, 150);
-  }));
+  const cam = (state.cameras || []).find(c => c.id === camId);
+  if (!cam) return;
+  try {
+    openMediaView({
+      mode: 'live-detect',
+      source: {
+        type: 'mjpeg',
+        url: `/api/camera/${encodeURIComponent(camId)}/stream_hd.mjpg`,
+        frameSize: (cam.main_w && cam.main_h)
+          ? { w: cam.main_w, h: cam.main_h }
+          : { w: 1920, h: 1080 },
+      },
+      item: {
+        camera_id: camId,
+        camera_name: cam.name || camId,
+      },
+      actions: {
+        onClose:    () => {},   // shell handles its own teardown via closeLightbox
+        onPrev:     null,
+        onNext:     null,
+        onConfirm:  null,
+        onDelete:   null,
+        onDownload: null,
+      },
+    });
+  } catch (err){
+    // Diagnostic only — surface a quiet toast via the window bridge
+    // so a missing showToast import (the module-level binding isn't
+    // pulled in here) doesn't ReferenceError the SIM button.
+    window.showToast?.(`Live-Erkennung fehlgeschlagen: ${err?.message || err}`, 'error');
+  }
 }
 window._cvOpenSim = _cvOpenSim;
 
