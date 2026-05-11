@@ -104,13 +104,20 @@ class TrackingJob:
 # `TrackingWorker._run_one` composes them with the worker's detector +
 # config getters; the helpers themselves never reach back into the worker.
 
-def _open_video(video_path: Path):
+def _open_video(video_path: Path, *, precision: str = "standard"):
     """Open the file and read its sampling cadence. Returns
     ``(capture, meta)``; capture is None on failure (and is released
     before returning so the caller doesn't have to). meta carries
     ``fps``, ``frame_count``, ``duration_s``, ``sample_interval``,
     ``frame_w``, ``frame_h``. The frame dimensions feed the per-track
-    end-state diagnostics (last_bbox_frac_h / last_bbox_frac_area)."""
+    end-state diagnostics (last_bbox_frac_h / last_bbox_frac_area).
+
+    ``precision`` controls the sampling cadence:
+      * ``"standard"`` (default) — ~1 Hz, the historic post-clip
+        behaviour. One inference per second of clip.
+      * ``"precise"`` — ~2 Hz. Doubles the per-clip inference cost
+        but halves the gap between samples so tracks reflect motion
+        more faithfully. Same algorithm; just sees more samples."""
     import cv2
     cap = cv2.VideoCapture(str(video_path))
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
@@ -128,7 +135,10 @@ def _open_video(video_path: Path):
             "frame_h": frame_h,
         }
     duration_s = frame_count / fps
-    sample_interval = max(1, int(round(fps)))  # ~1 Hz
+    if precision == "precise":
+        sample_interval = max(1, int(round(fps / 2)))  # ~2 Hz
+    else:
+        sample_interval = max(1, int(round(fps)))      # ~1 Hz
     return cap, {
         "fps": fps,
         "frame_count": frame_count,
@@ -370,7 +380,21 @@ class TrackingWorker(threading.Thread):
                         job.event_id, job.video_path)
             return
 
-        cap, meta = _open_video(job.video_path)
+        # Per-camera sampling cadence. "standard" = 1 Hz (historic
+        # default); "precise" = 2 Hz for richer track samples at
+        # double the inference cost. The knob lives in settings.json
+        # only (no UI in this version).
+        precision = "standard"
+        try:
+            _cfg = self._cam_cfg_getter(job.camera_id) if self._cam_cfg_getter else {}
+            if isinstance(_cfg, dict):
+                _p = str(_cfg.get("track_postclip_precision") or "").strip().lower()
+                if _p == "precise":
+                    precision = "precise"
+        except Exception:
+            precision = "standard"
+
+        cap, meta = _open_video(job.video_path, precision=precision)
         if cap is None:
             log.warning("[tracking] event=%s unreadable (fps=%.1f frames=%d)",
                         job.event_id, meta.get("fps", 0.0), meta.get("frame_count", 0))
@@ -379,7 +403,7 @@ class TrackingWorker(threading.Thread):
         try:
             detector = self._ensure_detector()
             allowed = _resolve_object_filter(self._cam_cfg_getter, job.camera_id)
-            spawn_score, floor_score = _resolve_track_thresholds(
+            spawn_score, floor_score, _grace_s = _resolve_track_thresholds(
                 self._cam_cfg_getter, job.camera_id,
             )
             state = _TrackerState()
@@ -399,9 +423,11 @@ class TrackingWorker(threading.Thread):
                 t_s = frame_idx / fps
                 dets = _detect_and_filter(detector, frame, allowed,
                                           floor_score=floor_score)
-                _associate_detections(state, dets, frame_idx, t_s,
-                                      frame_w, frame_h,
-                                      spawn_score=spawn_score)
+                _associate_detections(
+                    state, dets, frame_idx, t_s,
+                    frame_w=frame_w, frame_h=frame_h,
+                    spawn_score=spawn_score,
+                )
                 frame_idx += sample_interval
 
             # Flush any tracks still active at end-of-clip into closed so
