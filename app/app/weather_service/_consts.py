@@ -102,14 +102,10 @@ def _safe_dt(s: str) -> datetime | None:
         return None
 
 
-def _atomic_write_json(path: Path, payload: dict) -> None:
-    """Write `payload` as JSON to `path` via temp + atomic rename so a
-    concurrent reader never sees a half-written file."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp.{os.getpid()}.{threading.get_ident()}")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
-                   encoding="utf-8")
-    os.replace(str(tmp), str(path))
+# Re-export from the shared helper — every weather-service sibling
+# (`from ._consts import _atomic_write_json`) keeps working without
+# touching its import line.
+from ..io_utils import atomic_write_json as _atomic_write_json  # noqa: F401
 
 
 def migrate_sun_timelapse_layout(storage_root: Path) -> dict:

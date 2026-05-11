@@ -6,7 +6,7 @@ import logging
 import os
 import threading
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 from flask import Flask
@@ -386,12 +386,11 @@ _telegram_reload_lock = threading.Lock()
 _last_telegram_cfg_snapshot: dict | None = None
 
 
-def get_effective_config():
-    return settings.export_effective_config(base_cfg)
-
-
-def get_camera_cfg(cam_id: str):
-    return settings.get_camera(cam_id)
+# Single source of truth for both helpers lives in app_state; these
+# thin wrappers used to live here and forwarded byte-for-byte to the
+# same settings methods. Re-imported under the same names so the
+# internal callers below need no rewrite.
+from .app_state import get_camera_cfg, get_effective_config  # noqa: E402
 
 
 def _reload_telegram_service():

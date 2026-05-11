@@ -92,11 +92,6 @@ _NOTIFY_COOLDOWN_DEFAULTS = {
 }
 
 
-def _parse_hhmm(s: str | None) -> tuple[int, int]:
-    if not s or ":" not in s:
-        return 0, 0
-    try:
-        h, m = s.split(":", 1)
-        return int(h), int(m)
-    except Exception:
-        return 0, 0
+# Re-export from the shared module so every existing
+# `from ._consts import _parse_hhmm` consumer keeps working unchanged.
+from ..time_utils import parse_hhmm as _parse_hhmm  # noqa: E402, F401

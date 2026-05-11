@@ -14,7 +14,6 @@ import cv2
 import numpy as np
 
 from ._label_loader import load_label_map
-from ._types import Detection
 from ._wildlife_rules import (
     _inat_wildlife_category,
     _is_sciuridae_inat,

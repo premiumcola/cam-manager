@@ -112,31 +112,7 @@ def _color_for_track(track_id: str) -> str:
     return palette[h]
 
 
-def _iou(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> float:
-    """Standard intersection-over-union for axis-aligned (x1,y1,x2,y2)."""
-    ax1, ay1, ax2, ay2 = a
-    bx1, by1, bx2, by2 = b
-    ix1, iy1 = max(ax1, bx1), max(ay1, by1)
-    ix2, iy2 = min(ax2, bx2), min(ay2, by2)
-    iw, ih = max(0, ix2 - ix1), max(0, iy2 - iy1)
-    inter = iw * ih
-    if inter <= 0:
-        return 0.0
-    a_area = max(0, ax2 - ax1) * max(0, ay2 - ay1)
-    b_area = max(0, bx2 - bx1) * max(0, by2 - by1)
-    union = a_area + b_area - inter
-    return inter / union if union > 0 else 0.0
-
-
-def _bbox_dist_px(a: dict, b: dict) -> float:
-    """Centre-to-centre distance in pixels between two bbox dicts. Used
-    to suppress sparse samples that haven't moved meaningfully — tiny
-    shimmer would inflate the JSON without adding visual information."""
-    acx = (a["x1"] + a["x2"]) / 2.0
-    acy = (a["y1"] + a["y2"]) / 2.0
-    bcx = (b["x1"] + b["x2"]) / 2.0
-    bcy = (b["y1"] + b["y2"]) / 2.0
-    return ((acx - bcx) ** 2 + (acy - bcy) ** 2) ** 0.5
+from .bbox_utils import bbox_centroid_dist, iou
 
 
 class _Track:
@@ -180,7 +156,7 @@ class _Track:
         # detection sample (always kept so score history is preserved).
         if source == "track" and self.samples:
             last = self.samples[-1]["bbox"]
-            if _bbox_dist_px(last, bbox_dict) < SAMPLE_BBOX_DELTA_PX:
+            if bbox_centroid_dist(last, bbox_dict) < SAMPLE_BBOX_DELTA_PX:
                 return
         self.samples.append({
             "f": frame_idx,
@@ -488,7 +464,7 @@ def _associate_detections(state: _TrackerState, dets, frame_idx: int, t_s: float
                     continue
                 if ti in taken_tracks:
                     continue
-                iou_v = _iou(predicted[ti], d.bbox)
+                iou_v = iou(predicted[ti], d.bbox)
                 if iou_v >= IOU_MATCH_THRESHOLD:
                     candidates.append((di, ti, iou_v))
         candidates.sort(key=lambda p: p[2], reverse=True)

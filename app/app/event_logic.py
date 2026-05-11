@@ -6,12 +6,7 @@ from datetime import datetime
 log = logging.getLogger(__name__)
 
 
-def _parse_hhmm(s: str) -> tuple[int, int]:
-    try:
-        h, m = (s or "").split(":", 1)
-        return int(h), int(m)
-    except Exception:
-        return 0, 0
+from .time_utils import parse_hhmm as _parse_hhmm  # noqa: F401
 
 
 def _window_keys(schedule: dict) -> tuple[str, str]:

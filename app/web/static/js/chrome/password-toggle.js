@@ -36,7 +36,6 @@ window.togglePwFieldById = function(id){
   _setEyeState(btn, input.type === 'text');
 };
 
-// Bridged on window because camedit/rtsp.js's _toggleUrlMask has been
-// using window._setEyeState as its lookup since stage 7. Kept until
-// rtsp.js converts to a direct named import (this commit).
-window._setEyeState = _setEyeState;
+// Window bridge was kept while rtsp.js used the global lookup; now
+// rtsp.js imports _setEyeState directly via ES modules so the bridge
+// is no longer reached from any callsite — dropped at stage 32.

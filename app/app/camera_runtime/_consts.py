@@ -72,21 +72,11 @@ _PROFILE_PERIOD_DEFAULTS = {"daily": 86400, "weekly": 604800, "monthly": 2592000
 _WILDLIFE_BBOX_DONORS = ("cat", "dog", "bear", "sheep", "cow", "teddy bear")
 
 
-def _bbox_iou(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> float:
-    ax1, ay1, ax2, ay2 = a
-    bx1, by1, bx2, by2 = b
-    ix1 = max(ax1, bx1); iy1 = max(ay1, by1)
-    ix2 = min(ax2, bx2); iy2 = min(ay2, by2)
-    iw = max(0, ix2 - ix1); ih = max(0, iy2 - iy1)
-    inter = iw * ih
-    if inter <= 0:
-        return 0.0
-    aa = max(0, ax2 - ax1) * max(0, ay2 - ay1)
-    bb = max(0, bx2 - bx1) * max(0, by2 - by1)
-    union = aa + bb - inter
-    if union <= 0:
-        return 0.0
-    return inter / union
+from ..bbox_utils import iou
+# Backwards-compat alias — many camera_runtime siblings still import
+# `_bbox_iou` directly from this module. Keep the name available so
+# the dedup is a no-op at every consumer.
+_bbox_iou = iou
 
 
 def _refine_wildlife_bbox(detector, frame, motion_bbox, frame_size):
@@ -118,7 +108,7 @@ def _suppress_overlap(dets, ref_bbox, drop_labels, iou_min: float = 0.3):
         return dets
     out = []
     for d in dets:
-        if d.label in drop_labels and _bbox_iou(d.bbox, ref_bbox) >= iou_min:
+        if d.label in drop_labels and iou(d.bbox, ref_bbox) >= iou_min:
             continue
         out.append(d)
     return out

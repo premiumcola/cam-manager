@@ -10,7 +10,6 @@ config changes that affect runtime behaviour.
 from __future__ import annotations
 
 import json as _json
-import logging
 import shutil as _shutil
 import time as _time
 from datetime import datetime

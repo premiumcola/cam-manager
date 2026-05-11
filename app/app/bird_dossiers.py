@@ -65,13 +65,9 @@ _rate_lock = threading.Lock()
 _next_request_slot = [0.0]
 
 
-def _atomic_write_json(path: Path, data: dict) -> None:
-    """Write `data` as JSON via temp + os.replace so a crash never leaves
-    a half-written file. Mirrors storage.py::_atomic_write_text."""
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(_json_mod.dumps(data, ensure_ascii=False, indent=2),
-                   encoding="utf-8")
-    os.replace(str(tmp), str(path))
+# Re-export from the shared helper so the single internal callers
+# (this module and any future ones) all land on one implementation.
+from .io_utils import atomic_write_json as _atomic_write_json  # noqa: F401
 
 
 def _rate_limited_get(url: str) -> dict | None:

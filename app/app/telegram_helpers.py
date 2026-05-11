@@ -68,14 +68,7 @@ def most_specific_label(labels: list[str] | tuple[str, ...] | None) -> str:
     return next(iter(label_set))
 
 
-def _parse_hhmm(s: str | None) -> tuple[int, int]:
-    if not s or ":" not in s:
-        return 0, 0
-    try:
-        h, m = s.split(":", 1)
-        return int(h), int(m)
-    except Exception:
-        return 0, 0
+from .time_utils import parse_hhmm as _parse_hhmm  # noqa: F401
 
 
 def is_quiet_now(quiet_hours: dict | None, now: datetime | None = None) -> bool:

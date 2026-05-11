@@ -113,9 +113,7 @@ export function bindMergeModal() {
   });
 }
 
-// Inline onclick callsites (delegated trigger uses data attributes,
-// but openMergeModal + _selectMergeTarget were also exposed on window
-// before stage 6).
-window.openMergeModal     = openMergeModal;
-window._selectMergeTarget = _selectMergeTarget;
-window.closeMergeModal    = closeMergeModal;
+// Stage-32 cleanup: the three merge-modal window bridges had no
+// remaining external callers — every consumer in this file uses the
+// local function reference, and no template / onclick attribute
+// references the global names. Removed.
