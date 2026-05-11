@@ -466,3 +466,80 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
     state.closed.extend([t for t in state.active if not t.active])
     state.active = [t for t in state.active if t.active]
     return matches
+
+
+# ── Live runtime convenience wrapper ────────────────────────────────────────
+class LiveTracker:
+    """Per-camera tracker — one instance per :class:`CameraRuntime`.
+
+    Wraps a ``TrackerState`` plus the cadence-aware miss-grace logic so
+    the live runtime's per-frame loop reads as a one-liner:
+        survivors = self.tracker.step(detections, t_s=time.monotonic(),
+                                      fps=self._main_fps,
+                                      spawn_for=spawn_for_label)
+
+    Returns the subset of input detections that should continue down
+    the pipeline (every detection that either matched an existing
+    track or spawned a fresh one). Tentative detections that found no
+    IoU partner are dropped here — the second-stage classifiers
+    (bird species / wildlife) and DetectionConfirmer see only the
+    tracker's output.
+    """
+
+    __slots__ = (
+        "camera_id", "state", "_frame_idx",
+        "spawn_default", "floor", "grace_seconds",
+    )
+
+    def __init__(self, camera_id: str, *,
+                 spawn_default: float = TRACK_SPAWN_SCORE,
+                 floor: float = TRACK_FLOOR_SCORE,
+                 grace_seconds: float = MISS_GRACE_DEFAULT_SECONDS):
+        self.camera_id = camera_id
+        self.state = TrackerState()
+        self._frame_idx = 0
+        self.spawn_default = float(spawn_default)
+        self.floor = float(floor)
+        self.grace_seconds = float(grace_seconds)
+
+    def configure(self, *, spawn_default: float, floor: float,
+                  grace_seconds: float) -> None:
+        """Replace the per-camera thresholds. Called on settings reload
+        so a tweaked spawn / continue / grace value takes effect without
+        rebuilding the runtime."""
+        self.spawn_default = float(spawn_default)
+        self.floor = float(floor)
+        self.grace_seconds = float(grace_seconds)
+
+    def step(self, detections, *, t_s: float, fps: float,
+             spawn_for: Callable[[str], float] | None = None) -> list:
+        """Run one tracker step and return the surviving detections.
+
+        ``fps`` is the camera's effective per-frame inference rate —
+        the LiveTracker turns it into a sample-count grace via
+        ``compute_miss_grace_samples`` so the configured
+        ``grace_seconds`` (wall-clock) lands at the right sample count
+        regardless of cadence.
+
+        ``spawn_for`` defaults to a callable that returns this
+        tracker's ``spawn_default`` for every label — pass a richer
+        callable to honour the camera's label_thresholds dict.
+        """
+        self._frame_idx += 1
+        grace = compute_miss_grace_samples(self.grace_seconds, fps)
+        if spawn_for is None:
+            spawn_for = lambda _lbl: self.spawn_default  # noqa: E731
+        matches = associate_detections(
+            self.state, list(detections),
+            frame_idx=self._frame_idx, t_s=float(t_s),
+            spawn_score=self.spawn_default,
+            spawn_for=spawn_for,
+            miss_grace_samples=grace,
+        )
+        # Return the detection objects (not the (di, track) tuples) in
+        # input order so downstream pipeline stages see a clean list.
+        matched_dets = [detections[di] for di, _tr in matches]
+        return matched_dets
+
+    def active_count(self) -> int:
+        return len(self.state.active)

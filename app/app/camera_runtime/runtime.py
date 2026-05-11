@@ -16,6 +16,7 @@ from pathlib import Path
 import cv2
 
 from ..detection_confirmer import DetectionConfirmer
+from ..tracker_core import LiveTracker, resolve_track_thresholds
 from ..detectors import (
     BirdSpeciesClassifier,
     CoralObjectDetector,
@@ -173,6 +174,25 @@ class CameraRuntime(
         # N-of-M confirmation gate — per-runtime instance so its state
         # (per-(cam,label) deque) dies cleanly when the runtime restarts.
         self._confirmer = DetectionConfirmer()
+        # Per-camera live tracker — runs the SAME ByteTrack-style two-tier
+        # logic the post-clip worker uses (see :mod:`tracker_core`). Spawn
+        # / continue / grace defaults flow from the camera config; an
+        # unconfigured camera reads the module defaults. State lives
+        # the whole session so a track ID survives short low-conf dips.
+        _t_spawn, _t_floor, _t_grace = resolve_track_thresholds(
+            lambda _cid: self.cfg, self.camera_id,
+        )
+        self._tracker = LiveTracker(
+            self.camera_id,
+            spawn_default=_t_spawn,
+            floor=_t_floor,
+            grace_seconds=_t_grace,
+        )
+        from ._consts import log as _log
+        _log.info(
+            "[%s] live tracker: spawn=%.2f floor=%.2f grace=%.1fs",
+            self.camera_id, _t_spawn, _t_floor, _t_grace,
+        )
         self.bird_classifier = BirdSpeciesClassifier(proc.get("bird_species", {}))
         # Second-stage wildlife classifier — maps ImageNet top-1 to our
         # fox/squirrel/hedgehog labels so motion on a fox or hedgehog

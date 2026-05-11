@@ -169,37 +169,69 @@ class MainLoopMixin:
                 wildlife_motion_only = wlmotion_confirmed and not motion_confirmed
                 effective_motion = motion_labels if motion_confirmed else []
                 effective_bbox = motion_bbox if motion_confirmed else None
-                cam_min_score = self.cfg.get("detection_min_score") or None
                 # Per-label confidence overrides (e.g. {"person": 0.72}).
-                # Used to suppress false-positive person detections on
-                # static garden cameras without affecting recall on
-                # cat/bird/etc.
+                # In the two-tier tracker design these become the SPAWN
+                # floor for that label — a "person" detection below 0.72
+                # can still EXTEND an existing person-track (continuation)
+                # via the tracker's tentative-tier path. Cold-start
+                # gating still happens here because the confirmer's 3-of-5s
+                # rule trumps the tracker for fresh sightings.
                 label_thresholds = self.cfg.get("label_thresholds") or None
                 _t0 = time.time()
-                detections = self.detector.detect_frame(
+                # Pull EVERY hit above the tracker's continuation floor —
+                # the tracker classifies them into confirmed (≥ spawn) vs
+                # tentative (floor ≤ score < spawn) downstream. Per-camera
+                # detection_min_score is no longer the live cutoff — it
+                # would defeat the point of the tracker's two-tier flow.
+                detections = self.detector.detect_frame_raw(
                     proc_frame,
-                    min_score=cam_min_score,
-                    label_thresholds=label_thresholds,
-                    cam_id=self.camera_id,
+                    threshold=self._tracker.floor,
                 )
-                # Track a rolling-average inference latency for the /status
-                # bubble. Cheap (one append + one slice) and gives operators
-                # a visible sign that the Coral path is healthy.
+                # Rolling-average Coral inference latency for the /status
+                # bubble. Cost is unchanged from detect_frame() — same
+                # underlying invoke; only the post-filter threshold differs.
                 self._inference_times_ms.append((time.time() - _t0) * 1000.0)
                 allowed = set(self.cfg.get("object_filter") or [])
                 if allowed:
                     detections = [d for d in detections if d.label in allowed]
                 # Exclusion mask first: drop detections inside masked
-                # regions before zone filtering or any second-stage
-                # classification runs. Applied BEFORE the bird / cat /
-                # person classifiers so we don't waste cycles on a crop
-                # we're about to drop.
+                # regions before zone filtering or the tracker runs. A
+                # tracked subject must NOT survive into a masked region.
                 detections = self._filter_masked_detections(proc_frame, detections)
                 # Inclusion zones next: if any zones are defined, keep
                 # only detections whose centre lies inside a zone.
                 # Masks + zones compose: detect inside zones BUT exclude
                 # masked areas within zones.
                 detections = self._filter_zoned_detections(proc_frame, detections)
+                # ── Two-tier tracker ────────────────────────────────────
+                # Classifies each surviving detection into confirmed
+                # (≥ per-label spawn threshold) vs tentative (above floor,
+                # below spawn). Confirmed dets can spawn or extend tracks;
+                # tentative dets can only extend a still-unmatched IoU
+                # partner. Subjects survive short low-conf dips while
+                # genuine cold-start gating stays the confirmer's job.
+                spawn_for = (lambda _lbl: self._tracker.spawn_default)
+                if label_thresholds:
+                    _lt = dict(label_thresholds)
+                    _default = self._tracker.spawn_default
+                    spawn_for = (lambda lbl, _lt=_lt, _d=_default:
+                                 float(_lt[lbl]) if lbl in _lt else _d)
+                # Effective fps for grace-window math. Falls back to a
+                # conservative 3 Hz when the rolling measurement hasn't
+                # warmed up yet (first ~5 s of a camera's session).
+                _eff_fps = max(1.0, float(getattr(self, "_main_fps", 0.0) or 3.0))
+                detections = self._tracker.step(
+                    detections,
+                    t_s=time.monotonic(),
+                    fps=_eff_fps,
+                    spawn_for=spawn_for,
+                )
+                if log.isEnabledFor(logging.DEBUG) and detections:
+                    log.debug(
+                        "[%s] tracker: %d dets survived (active=%d)",
+                        self.camera_id, len(detections),
+                        self._tracker.active_count(),
+                    )
                 labels = effective_motion + [d.label for d in detections]
                 if self.bird_classifier.available:
                     for d in detections:
