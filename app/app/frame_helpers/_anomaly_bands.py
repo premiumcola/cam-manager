@@ -181,3 +181,28 @@ def is_horizontal_anomaly_band(img) -> tuple[bool, str]:
 # difference is the name kept in the public symbol set.
 def is_bottom_strip_anomaly(img) -> tuple[bool, str]:
     return is_horizontal_anomaly_band(img)
+
+
+# Cheap pink/rainbow H.264 bottom-strip detector. Originally a static
+# method on the camera-runtime capture mixin; lifted to a free function
+# so the test-detection endpoint can call it without instantiating the
+# runtime class. Single source of truth: the runtime mixin imports
+# this and forwards. The richer ``is_horizontal_anomaly_band`` above
+# generalises this idea over the whole frame, but the legacy detector
+# is intentionally less sensitive (no row-delta z-score, no chroma-
+# hue carving) so a clean test frame doesn't get rejected by the
+# stricter band heuristic.
+def has_corrupt_strip(frame, strip_height: int = 60) -> bool:
+    """Detect H.264 corrupt bottom strip (pink/rainbow codec artifact).
+    Returns True when the bottom ``strip_height`` rows show the
+    hue-saturation signature of a chroma-buffer flush."""
+    if frame is None:
+        return False
+    if frame.ndim < 3 or frame.shape[2] < 3:
+        return False
+    if frame.shape[0] < strip_height * 2:
+        return False
+    strip = frame[-strip_height:, :, :]
+    hsv = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV)
+    sat = hsv[:, :, 1].astype(np.float32)
+    return float(sat.mean()) > 120 and float(sat.std()) > 60

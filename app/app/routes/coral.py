@@ -593,52 +593,80 @@ def api_test_detection(cam_id: str):
     if rt is None:
         return jsonify({"error": "Kamera-Runtime nicht aktiv (deaktiviert?)"}), 503
 
-    # ── Fresh-frame guarantee ─────────────────────────────────────────
-    # Pair-read frame + frame_ts under the runtime's lock so we never
-    # see a torn pair (frame from one moment, ts from the next). If
-    # the cached frame is stale, poll until the main loop advances
-    # ``frame_ts`` — the loop already refills the buffer continuously,
-    # so we wait rather than racing to open a fresh RTSP handle here.
-    interval_ms = int(cam.get("frame_interval_ms", 350) or 350)
-    # Threshold for "this is stale": 1.5 s floor OR 3× the camera's
-    # configured interval. The 3× factor lets a cam with a long
-    # interval (1500 ms) avoid a false "stale" right after a
-    # legitimate single missed frame.
-    stale_threshold_s = max(1.5, 3.0 * (interval_ms / 1000.0))
-    wait_deadline = _time.monotonic() + 2.0
-    with rt.lock:
-        frame = rt.frame.copy() if rt.frame is not None else None
-        frame_ts_initial = float(getattr(rt, "frame_ts", 0.0) or 0.0)
-    if frame is None:
-        return jsonify({"error": "Noch kein Frame vorhanden — Kamera startet?"}), 503
-    frame_age_s = (_time.time() - frame_ts_initial) if frame_ts_initial > 0 else 0.0
-    if frame_age_s > stale_threshold_s:
-        # Wait for the main loop to advance frame_ts.
-        log.info(
-            "[test-detection] %s frame stale (%.1fs > %.1fs threshold) — "
-            "waiting up to 2.0s for main loop to refresh",
-            cam_id, frame_age_s, stale_threshold_s,
-        )
-        while _time.monotonic() < wait_deadline:
+    # ── Fresh + validated frame contract ──────────────────────────────
+    # The endpoint used to paint inference boxes on whatever was in
+    # rt.frame, then reported the age as ms-since-decode — which lies
+    # when a decoder buffer is draining 25-second-old frames at us. The
+    # new contract: poll up to 2.5 s for a frame whose timestamp is
+    # NEWER than this request AND passes ``is_valid_frame`` + the
+    # corrupt-strip check. If the contract fails the panel gets a 503
+    # with a code that lets the frontend pick a precise banner — no
+    # bbox-on-broken-frame fallbacks. Implementation reuses the
+    # runtime's existing rt.lock / rt.frame / rt.frame_ts publication;
+    # no changes to the capture loop.
+    from ..frame_helpers import has_corrupt_strip, is_valid_frame
+    request_started_at = _time.time()
+    deadline = _time.monotonic() + 2.5
+    frame = None
+    frame_ts_accepted = 0.0
+    last_candidate_ts = 0.0
+    saw_frame = False
+    saw_fresh_candidate = False
+    retries = 0
+    final_outcome = "no_frame"
+    while _time.monotonic() < deadline:
+        with rt.lock:
+            candidate = rt.frame.copy() if rt.frame is not None else None
+            candidate_ts = float(getattr(rt, "frame_ts", 0.0) or 0.0)
+        retries += 1
+        if candidate is None:
             _time.sleep(0.05)
-            with rt.lock:
-                cur_ts = float(getattr(rt, "frame_ts", 0.0) or 0.0)
-                if cur_ts > frame_ts_initial and rt.frame is not None:
-                    frame = rt.frame.copy()
-                    frame_ts_initial = cur_ts
-                    break
-        # Final age after the wait — still computed against the
-        # observed frame_ts so the response reflects reality.
-        frame_age_s = (_time.time() - frame_ts_initial) if frame_ts_initial > 0 else 0.0
-        if frame_age_s > stale_threshold_s:
-            return jsonify({
-                "error": (
-                    f"Kamera-Stream steckt fest (letzter Frame vor "
-                    f"{frame_age_s:.0f}s) — Simulation abgebrochen"
-                ),
-                "frame_age_ms": int(frame_age_s * 1000),
-            }), 503
-    frame_age_ms = int(frame_age_s * 1000)
+            continue
+        saw_frame = True
+        last_candidate_ts = max(last_candidate_ts, candidate_ts)
+        if candidate_ts < request_started_at:
+            final_outcome = "stale"
+            _time.sleep(0.05)
+            continue
+        saw_fresh_candidate = True
+        ok_valid, _vreason = is_valid_frame(candidate)
+        if not ok_valid or has_corrupt_strip(candidate):
+            final_outcome = "corrupt"
+            _time.sleep(0.05)
+            continue
+        # Accepted — fresh, valid, no corrupt strip.
+        frame = candidate
+        frame_ts_accepted = candidate_ts
+        final_outcome = "ok"
+        break
+
+    waited_s = _time.time() - request_started_at
+    if frame is None:
+        # Pick the most precise outcome the loop observed.
+        if not saw_frame:
+            code, msg = "no_frame", "Kamera liefert noch keine Frames"
+        elif not saw_fresh_candidate:
+            code, msg = "stale", "Stream-Puffer hinkt zurück — kein frischer Frame innerhalb 2.5 s"
+        else:
+            code, msg = "corrupt", "Stream liefert nur korrupte Frames"
+        # Best-effort age of the most recent rt.frame_ts we saw so the
+        # frontend can colour the banner against the existing
+        # frame_age_ms semantic. 0 means we never saw a frame at all.
+        if last_candidate_ts > 0:
+            frame_age_ms_attempt = int((_time.time() - last_candidate_ts) * 1000)
+        else:
+            frame_age_ms_attempt = 0
+        log.info(
+            "[test-detection] cam=%s outcome=%s waited=%.2fs retries=%d frame_age_ms=%d num_dets=0",
+            cam_id, code, waited_s, retries, frame_age_ms_attempt,
+        )
+        return jsonify({
+            "ok":           False,
+            "error":        msg,
+            "code":         code,
+            "frame_age_ms": frame_age_ms_attempt,
+        }), 503
+    frame_age_ms = int((_time.time() - frame_ts_accepted) * 1000)
     detector = getattr(rt, "detector", None)
     if not detector or not getattr(detector, "available", False):
         return jsonify({"error": "Coral nicht verfügbar (motion-only?)"}), 503
@@ -792,8 +820,10 @@ def api_test_detection(cam_id: str):
     # is the healthy signature; values stuck at multi-second highs while
     # the cam is otherwise believed live mean the RTSP feed is wedged.
     log.info(
-        "[test-detection] cam=%s frame_age_ms=%d num_dets=%d (pass=%d)",
-        cam_id, frame_age_ms, len(out), len(pass_dets),
+        "[test-detection] cam=%s outcome=%s waited=%.2fs retries=%d "
+        "frame_age_ms=%d num_dets=%d (pass=%d)",
+        cam_id, final_outcome, waited_s, retries,
+        frame_age_ms, len(out), len(pass_dets),
     )
     return jsonify({
         "ok":             True,

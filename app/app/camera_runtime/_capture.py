@@ -281,11 +281,12 @@ class CaptureMixin:
 
     @staticmethod
     def _has_corrupt_strip(frame, strip_height: int = 60) -> bool:
-        """Detect H.264 corrupt bottom strip (pink/rainbow codec artifact)."""
-        if frame is None or frame.shape[0] < strip_height * 2:
-            return False
-        strip = frame[-strip_height:, :, :]
-        hsv = cv2.cvtColor(strip, cv2.COLOR_BGR2HSV)
-        sat = hsv[:, :, 1].astype(np.float32)
-        return float(sat.mean()) > 120 and float(sat.std()) > 60
+        """Thin forwarder to :func:`frame_helpers.has_corrupt_strip`. Kept
+        as a class member so the existing mixin call sites (and tests
+        that reach in via ``CaptureMixin._has_corrupt_strip``) stay
+        bit-identical; the implementation lives in frame_helpers so the
+        test-detection route can call the same heuristic without
+        instantiating the runtime class."""
+        from ..frame_helpers import has_corrupt_strip as _has
+        return _has(frame, strip_height=strip_height)
 

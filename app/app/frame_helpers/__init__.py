@@ -17,6 +17,7 @@ mechanical, no behavior change."""
 from __future__ import annotations
 
 from ._anomaly_bands import (
+    has_corrupt_strip,
     is_bottom_strip_anomaly,
     is_horizontal_anomaly_band,
 )
@@ -58,6 +59,7 @@ __all__ = [
     "dead_area_score",
     "grab_valid_frame",
     "hamming_distance",
+    "has_corrupt_strip",
     "is_bottom_strip_anomaly",
     "is_colorbar",
     "is_flat_gray_full_frame",
