@@ -404,6 +404,40 @@ document.addEventListener('webkitfullscreenchange', _onFullscreenChange);
 
 window._cvEnterFullscreen = _cvEnterFullscreen;
 
+// ── SIM button — open the live-detect surface for this camera ───────────
+// Currently routes to the existing cam-edit "Erkennung jetzt simulieren"
+// panel, which is the canonical live-detect surface (~1000 lines of
+// machinery: test-detection polling, bbox SVG overlay, tracker trails,
+// per-class verdict colouring, decision-trace fold). Migrating that
+// flow into the new MediaView shell's mode='live-detect' is a sizable
+// follow-up — the cm-52 prompt explicitly allows stopping here under
+// the 150-line glue cap. The shell still exposes mode='live-detect'
+// as a not-yet-implemented branch so future migrations have a single
+// landing target.
+export function _cvOpenSim(camId){
+  if (typeof window.editCamera !== 'function') return;
+  // Close any open lightbox first so the cam-edit panel isn't hidden
+  // behind it. Then route to #cameras and open the panel for this id.
+  try { window.closeLightbox?.(); } catch { /* ignore */ }
+  location.hash = '#cameras';
+  window.editCamera(camId);
+  // editCamera rebuilds the form DOM synchronously; the Erkennung tab
+  // and the simulate button land one paint later. Two rAFs is the
+  // safe wait so the click reaches freshly-rendered elements.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const tabBtn = document.querySelector('.cam-tab-btn[data-tab="cam-tab-erkennung"]');
+    tabBtn?.click();
+    setTimeout(() => {
+      const simBtn = byId('erkSimulateBtn');
+      if (simBtn){
+        simBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        simBtn.click();
+      }
+    }, 150);
+  }));
+}
+window._cvOpenSim = _cvOpenSim;
+
 // Camera-tile grid renderer. Builds every visible cv-card from
 // state.cameras. The template string carries inline onclick handlers
 // (_cvCardClick / toggleCardHd / editCamera / _camImgRetry); each name

@@ -100,5 +100,21 @@ export function openMediaView(config){
     }
     return render(config.item);
   }
+  if (mode === 'live-detect'){
+    // The canonical live-detect surface today is camedit/erk-sim/*
+    // (test-detection polling, bbox SVG, tracker trails, decision-
+    // trace fold). The dashboard SIM button reaches that flow via
+    // window._cvOpenSim(camId) in dashboard.js. Migrating the full
+    // ~1000-line erk-sim machinery into this shell is a follow-up
+    // refactor — capped under the cm-52 task #4 glue budget. Keep
+    // this branch as a single landing target so the future shell
+    // implementation has a stable mounting point.
+    const camId = config.item?.camera_id;
+    if (camId && typeof window !== 'undefined'
+        && typeof window._cvOpenSim === 'function'){
+      return window._cvOpenSim(camId);
+    }
+    throw new Error('openMediaView(live-detect): no live-detect handler available');
+  }
   throw new Error(`openMediaView: mode '${mode}' not yet migrated`);
 }
