@@ -201,7 +201,7 @@ function _renderStatistik(monthData, dayData){
 
   // 5: last 24h heatmap — rendered after the static timeline block (#4)
   const hmBlock = byId('statHeatmapBlock');
-  if (hmBlock) hmBlock.innerHTML = `<div class="stat-card" style="margin-top:0"><div class="stat-card-title">${_STAT_TITLE_SVG.grid}<span>Letzte 24h · Aktivität nach Stunde</span></div>${heatmap}</div>`;
+  if (hmBlock) hmBlock.innerHTML = `<div class="stat-card" style="margin-top:16px"><div class="stat-card-title">${_STAT_TITLE_SVG.grid}<span>Letzte 24h · Aktivität nach Stunde</span></div>${heatmap}</div>`;
 
   // Camera label column auto-sizes to the widest entry so long names like
   // "Squirrel Town 'Nut Bar'" don't get clipped. Measure with the same

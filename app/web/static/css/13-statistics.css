@@ -5,7 +5,7 @@
 .stat-period-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted)}
 .stat-split{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 @media(max-width:768px){.stat-split{grid-template-columns:1fr}}
-.stat-card{background:var(--surface);border-radius:18px;padding:16px 18px;margin-bottom:12px}
+.stat-card{background:var(--surface);border-radius:18px;padding:16px 18px;margin-bottom:16px}
 .stat-card:last-child{margin-bottom:0}
 .stat-split .stat-card{margin-bottom:0}
 .stat-card-title{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:14px}
@@ -54,7 +54,7 @@
 /* tooltip handled by JS _hmTip (position:fixed) to avoid overflow-x:auto clipping */
 .stat-tl-block{margin-top:12px}
 .stat-tl-hdr{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);padding:4px 0 10px}
-.stat-tl-card{margin-top:12px}
+.stat-tl-card{margin-top:16px}
 .stat-tl-card-hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:0;flex-wrap:wrap}
 .stat-tl-card-hdr .stat-card-title{margin-bottom:0}
 .stat-drillable{cursor:pointer;border-radius:8px;transition:background .12s,opacity .12s}
@@ -62,7 +62,7 @@
 .stat-drillable:active{opacity:.7}
 
 /* ── Erkennungswolke (detection scatter) ─────────────────────────────────── */
-.stat-dc-card{margin-top:12px}
+.stat-dc-card{margin-top:16px}
 .stat-dc-hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
 .stat-dc-hdr .stat-card-title{margin-bottom:0}
 .stat-dc-hdr-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
