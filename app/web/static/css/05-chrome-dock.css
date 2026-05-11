@@ -99,7 +99,11 @@
        the right calibration: the gap is noticeable as a strip
        without re-introducing the 36 px chasm of the very first
        version. */
-    --m-dock-bottom-gap:calc(env(safe-area-inset-bottom, 0px) + 6px);
+    /* Always at least 8 px of breathing room above the home-indicator
+       band — matches the toast container's max(24px, env(...)) pattern
+       in 11-chrome-overlays.css. Devices without a safe-area inset
+       (older iPads, Android, desktop) still get the 8 px floor. */
+    --m-dock-bottom-gap:max(8px, calc(env(safe-area-inset-bottom, 0px) + 6px));
     display:grid;
     grid-template-columns:repeat(5,1fr);
     gap:2px;

@@ -107,4 +107,24 @@ export default [
       'unicorn/no-instanceof-array': 'warn',
     },
   },
+  // Service worker runs in a separate global scope — `self`, `caches`,
+  // and `clients` aren't browser-window globals. Adding them here so
+  // the SW source lints cleanly without dragging service-worker
+  // globals into every UI module's namespace.
+  {
+    files: ['app/web/static/sw.js'],
+    languageOptions: {
+      ecmaVersion: 2024,
+      sourceType: 'script',
+      globals: {
+        self:    'readonly',
+        caches:  'readonly',
+        clients: 'readonly',
+        fetch:   'readonly',
+        URL:     'readonly',
+        Promise: 'readonly',
+        Response:'readonly',
+      },
+    },
+  },
 ];

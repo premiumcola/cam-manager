@@ -58,6 +58,24 @@ def service_worker():
     )
 
 
+@bp.get('/version.json')
+def app_version():
+    """Tiny shell-version endpoint consumed by the service worker on
+    install. We hash the compiled app.css — its content already shifts
+    on every commit that touches a CSS partial (css_builder.py
+    concatenates them) so it's a faithful proxy for the entire
+    front-end shell. The SW uses this value to derive its cache
+    name; bumping the hash invalidates the PWA shell cache without
+    the user having to re-add the app from their home screen."""
+    # _file_hash lives on the jinja env — pull it through the
+    # current Flask app so this stays in lock-step with the
+    # ?v= cache-bust query the templates already use.
+    from flask import current_app
+    hasher = current_app.jinja_env.globals.get("static_v")
+    shell_hash = hasher("app.css") if callable(hasher) else "v1"
+    return jsonify({"shell_hash": shell_hash})
+
+
 @bp.get('/api/bootstrap')
 def api_bootstrap():
     return jsonify(app_state.settings.bootstrap_state())

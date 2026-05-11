@@ -135,8 +135,14 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@me
   width:20px;height:20px;border-radius:0;background:transparent;
 }
 .sidebar.collapsed:hover .nav a{padding:8px;gap:10px;justify-content:flex-start}
-.sidebar.collapsed:hover .nav-label,
-.sidebar.collapsed:hover .nav-chev{display:inline}
+/* Hover-only chevron reveal on the collapsed sidebar — touch users
+   never trigger this state and don't need the chevron (the sidebar
+   tap target itself is the toggle). Gated behind hover-capable
+   pointers so iOS stays clean. */
+@media (hover: hover) and (pointer: fine){
+  .sidebar.collapsed:hover .nav-label,
+  .sidebar.collapsed:hover .nav-chev{display:inline}
+}
 .sidebar.collapsed:hover .nav a:hover{background:rgba(255,255,255,.05)}
 .sidebar.collapsed:hover .nav a.nav-active{background:rgba(255,255,255,.10)}
 .sidebar.collapsed:hover .nav a.nav-achievements-item:hover{background:rgba(251,191,36,.09)}
@@ -147,4 +153,4 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@me
 .sidebar.collapsed:hover .nav a.nav-logs-item.nav-active{background:rgba(0,255,65,.10)}
 
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:199}.sidebar-overlay.visible{display:block}
-.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}h1,h2,h3,p{margin:0}.muted{color:var(--muted)}.main{display:grid;gap:14px;flex:1;min-width:0;padding-bottom:60vh}
+.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}h1,h2,h3,p{margin:0}.muted{color:var(--muted)}.main{display:grid;gap:14px;flex:1;min-width:0;padding-bottom:60dvh}
