@@ -99,15 +99,20 @@ function _renderWeatherTab(host, item){
     </div>`;
 }
 
-// Public entry — called from lightbox.js's _lbLegacyRender in place
-// of the legacy lbRenderSettingsPanel(item).
+// Public entry — called from lightbox.js for BOTH motion clips and
+// timelapses. Motion clips get the full tab set; timelapses get the
+// Wetter + Nach-Erkennung pair plus the fold (no Aufnahme-Settings
+// since timelapses don't carry recording_settings — they're not
+// produced by the alarm pipeline). The fine-analysis fold renders
+// for both kinds.
 export function mountRecordedPanels(item){
   const host = byId('lightboxSettings');
   if (!host) return;
-  if (!item || item.type === 'timelapse'){
+  if (!item){
     host.innerHTML = '';
     return;
   }
+  const isTimelapse = item.type === 'timelapse';
   host.innerHTML = `
     <div class="mv-recorded-panels">
       <div class="mv-recorded-tabs"></div>
@@ -115,20 +120,32 @@ export function mountRecordedPanels(item){
     </div>`;
   const tabsHost = host.querySelector('.mv-recorded-tabs');
   const faHost = host.querySelector('.mv-recorded-fafold');
-  const tabs = [
-    { id: 'settings',
+  const tabs = [];
+  if (!isTimelapse){
+    tabs.push({ id: 'settings',
       label: 'Aufnahme-Settings',
-      render: (h) => _renderSettingsTab(h, item) },
-    { id: 'rescan',
-      label: 'Nach-Erkennung',
-      render: (h) => _renderRescanTab(h, item) },
-  ];
+      render: (h) => _renderSettingsTab(h, item) });
+  }
+  tabs.push({ id: 'rescan',
+    label: 'Nach-Erkennung',
+    render: (h) => _renderRescanTab(h, item) });
+  // Weather tab — mounted whenever the item carries a weather
+  // snapshot. Motion clips usually don't; timelapses produced by
+  // the weather service do.
   if (item.weather && typeof item.weather === 'object'){
     tabs.push({ id: 'weather',
       label: 'Wetter',
       render: (h) => _renderWeatherTab(h, item) });
   }
-  renderPanelTabs(tabsHost, tabs, { initialId: 'settings' });
+  // Initial tab — for timelapses default to Wetter when there's
+  // weather data (the most useful view for a sun/event clip);
+  // otherwise Nach-Erkennung. Motion clips keep Aufnahme-Settings
+  // as the entry point.
+  let initialId;
+  if (isTimelapse && item.weather) initialId = 'weather';
+  else if (isTimelapse) initialId = 'rescan';
+  else initialId = 'settings';
+  renderPanelTabs(tabsHost, tabs, { initialId });
   // Recorded clips don't carry a server-side decision trace today —
   // the fold renders the standard "Trace nur im Live-Test verfügbar"
   // empty state. When the trace gets persisted (future change), pass

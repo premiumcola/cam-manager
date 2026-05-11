@@ -168,21 +168,16 @@ function _setupVideoChrome(item){
   // the chrome populates even before tracks.json lands; tracks-fetch
   // will re-render when the worker responds.
   lbRenderTrackTimeline(item);
-  // Settings panel — bbox-overlay.js owns the rendering; we just
-  // toggle visibility based on whether the item carries the new
-  // recording_settings object (or for timelapses, hide).
+  // mediaview-shell mount: wraps the legacy settings renderer in a
+  // dark tab strip ("Aufnahme-Settings" · "Nach-Erkennung" + Wetter
+  // when present) and adds the fine-analysis fold below. The
+  // settings tab still calls lbRenderSettingsPanel under the hood,
+  // just into the tab's body host instead of #lightboxSettings.
+  // Timelapses never reach this branch — openLightbox routes them
+  // to openTLPlayer before _lbLegacyRender runs.
   const setHost = byId('lightboxSettings');
-  if (setHost){
-    setHost.hidden = (item?.type === 'timelapse');
-  }
-  if (item?.type !== 'timelapse'){
-    // mediaview-shell mount: wraps the legacy settings renderer in a
-    // dark tab strip ("Aufnahme-Settings" · "Nach-Erkennung" + Wetter
-    // when present) and adds the fine-analysis fold below. The
-    // settings tab still calls lbRenderSettingsPanel under the hood,
-    // just into the tab's body host instead of #lightboxSettings.
-    mountRecordedPanels(item);
-  }
+  if (setHost) setHost.hidden = false;
+  mountRecordedPanels(item);
 }
 
 // Reverse _setupVideoChrome — called when navigating to a photo or
@@ -434,8 +429,13 @@ export function openTLPlayer(item){
   }
   lbState.deletePending = false;
   _lbClearDetections();
-  // Timelapse uses the same full-screen video shell as motion clips,
-  // but the timeline panel stays empty (no tracks.json sidecar).
+  // Timelapse now uses the SAME shell as motion clips — full-screen
+  // video chrome, scrubber, time-axis ticks, panel-tab strip
+  // (Wetter · Nach-Erkennung), fine-analysis fold, Space / ← →
+  // keyboard. The timeline panel renders the scrubber row even when
+  // tracks.json is absent (an inline "Nach-Erkennung starten" button
+  // sits in the empty placeholder row). When the worker produces a
+  // sidecar, the swimlane fills in via the existing fetcher loop.
   _setupVideoChrome(lbState.item);
   const imgEl = byId('lightboxImg'); imgEl.style.display = 'none';
   const videoEl = byId('lightboxVideo');
@@ -452,6 +452,15 @@ export function openTLPlayer(item){
     <span class="badge">Timelapse · ${esc(period)}</span>
     <span class="badge">${esc(item.window_key || item.day || '')}</span>
     ${sizeBadge}`;
+  // Render the scrubber + axis row stack so Space/keyboard/drag-to-
+  // scrub all work. lbLoadTracksForItem will populate tracks once a
+  // sidecar exists; meanwhile the empty placeholder row carries the
+  // Nach-Erkennung button.
+  const setHost = byId('lightboxSettings');
+  if (setHost) setHost.hidden = false;
+  lbRenderTrackTimeline(lbState.item);
+  lbLoadTracksForItem(lbState.item);
+  mountRecordedPanels(lbState.item);
   const total = navItems.length;
   byId('lightboxPrev').style.opacity = lbState.index > 0 ? '1' : '0.2';
   byId('lightboxNext').style.opacity = lbState.index < total - 1 ? '1' : '0.2';

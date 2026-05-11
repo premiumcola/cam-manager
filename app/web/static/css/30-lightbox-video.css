@@ -395,6 +395,49 @@
   font-size:11.5px;color:rgba(226,232,240,.45);
   font-style:italic;
 }
+/* Timelapse empty-state — places the placeholder text + the inline
+   Nach-Erkennung button on one row so the user sees BOTH the
+   "no tracks yet" status and the affordance to fix it without
+   scrolling. Layout: flex with auto-width text + auto-width button. */
+.lbtt-empty-tl{
+  display:flex;align-items:center;gap:10px;
+  flex-wrap:wrap;
+  font-style:normal;
+}
+.lbtt-empty-tl .lbtt-empty-text{
+  font-size:11.5px;color:rgba(226,232,240,.65);
+  letter-spacing:.01em;
+}
+.lbtt-empty-tl[data-state="running"] .lbtt-empty-text{ color:rgba(165,243,252,.85); }
+.lbtt-empty-tl[data-state="empty"]   .lbtt-empty-text{ color:rgba(226,232,240,.45);font-style:italic; }
+.lbtt-empty-tl[data-state="err"]     .lbtt-empty-text{ color:#fca5a5; }
+.lbtt-empty-rescan{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 11px;
+  border-radius:8px;
+  border:0;
+  background:rgba(56,189,248,.18);
+  color:#bae6fd;
+  font-size:11.5px;
+  font-weight:600;
+  letter-spacing:.01em;
+  cursor:pointer;
+  min-height:32px;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s,color .15s;
+}
+.lbtt-empty-rescan:hover:not(:disabled){
+  background:rgba(56,189,248,.28);
+  color:#e0f2fe;
+}
+.lbtt-empty-rescan:disabled{
+  opacity:.55;cursor:not-allowed;
+}
+.lbtt-empty-tl[data-state="running"] .lbtt-empty-rescan,
+.lbtt-empty-tl[data-state="empty"]   .lbtt-empty-rescan{ display:none; }
+@media (max-width:480px){
+  .lbtt-empty-rescan{ min-height:38px; }
+}
 
 /* ── Play cursor — child of .lb-time-stack (since the playhead refactor) ── */
 /* SINGLE HEAD: the scrubber thumb is the visual head. The play

@@ -13,6 +13,7 @@ import {
   _setHiddenClassesForCam,
 } from './hidden-classes.js';
 import { _lbDrawDetections, _resolveAllowedLabels } from './renderer.js';
+import { lbInvalidateTracks, lbLoadTracksForItem } from './fetcher.js';
 import {
   _updatePlayPct,
   _wirePlayButton,
@@ -110,11 +111,14 @@ export function lbRenderTrackTimeline(item){
       <div class="lb-scrub-hit"></div>
     </div>`);
 
-  // Per-class strips + matching badges. Skip entirely for timelapse
-  // (no tracking sidecar) and for motion clips that have no tracks
-  // yet (the auto-reindex banner handles the "tracking wird
-  // generiert…" state inside the video region).
-  if (!isTimelapse && haveTracks && orderedLabels.length > 0){
+  // Per-class strips + matching badges. Skip when there are no
+  // tracks (motion clips trigger the auto-reindex banner in that
+  // case; timelapses fall through to the "Nach-Erkennung starten"
+  // placeholder one branch below). Timelapses CAN carry tracks
+  // once the user kicks the worker on a timelapse MP4 — the
+  // tracks.json sidecar lands alongside the clip exactly like for
+  // motion events.
+  if (haveTracks && orderedLabels.length > 0){
     for (const lbl of orderedLabels){
       const c = colors[lbl] || colors.unknown;
       const labelText = OBJ_LABEL[lbl] || lbl;
@@ -189,30 +193,46 @@ export function lbRenderTrackTimeline(item){
       timeColParts.push(`
         <div class="lbtt-strip" data-on="${isOn ? '1' : '0'}" data-label="${lbl}">${barsHtml}</div>`);
     }
-  } else if (!isTimelapse && !haveTracks){
-    // No-tracks state for motion events — keep the layout structure
-    // so the cursor + scrubber still align, just show a one-liner.
+  } else if (!haveTracks){
+    // No-tracks placeholder — keep the layout structure so the
+    // cursor + scrubber still align with the strips below. For
+    // timelapses we add an inline "Nach-Erkennung starten" button
+    // that kicks the existing tracking worker against the
+    // timelapse MP4. For motion clips the auto-reindex banner
+    // inside the video region surfaces the same affordance, so
+    // here a plain text line is enough.
     sidebarParts.push(`<div class="lbtt-empty-side"></div>`);
-    timeColParts.push(`<div class="lbtt-empty">Keine Track-Daten — erscheinen sobald die Indexierung fertig ist.</div>`);
+    if (isTimelapse){
+      const eid = item.event_id || '';
+      const cid = item.camera_id || '';
+      timeColParts.push(`
+        <div class="lbtt-empty lbtt-empty-tl" data-event-id="${eid}" data-camera-id="${cid}">
+          <span class="lbtt-empty-text">Noch keine Track-Daten</span>
+          <button type="button" class="lbtt-empty-rescan">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8A5.5 5.5 0 0 1 13 5M13.5 8A5.5 5.5 0 0 1 3 11"/><polyline points="12,2 12,5.5 8.5,5.5"/><polyline points="4,14 4,10.5 7.5,10.5"/></svg>
+            <span>Nach-Erkennung starten</span>
+          </button>
+        </div>`);
+    } else {
+      timeColParts.push(`<div class="lbtt-empty">Keine Track-Daten — erscheinen sobald die Indexierung fertig ist.</div>`);
+    }
   }
 
-  // Tick row — always present for motion clips (gives the user a 0
-  // / 11 / 22 / 33 s scale). Timelapse skips it since it doesn't
-  // carry detection time semantics.
-  let ticksHtml = '';
-  if (!isTimelapse){
-    const N = 4;
-    let parts = '';
-    for (let i = 0; i < N; i++){
-      const tSec = (duration * i) / (N - 1);
-      const pct = (i / (N - 1)) * 100;
-      const nudge = i === 0 ? 0 : i === N - 1 ? 24 : 12;
-      parts += `<span class="lbtt-tick" style="left:calc(${pct.toFixed(2)}% - ${nudge}px)">${tSec.toFixed(0)}s</span>`;
-    }
-    ticksHtml = parts;
-    sidebarParts.push(`<div class="lb-tick-spacer"></div>`);
-    timeColParts.push(`<div class="lbtt-ticks">${ticksHtml}</div>`);
+  // Tick row — gives the user a 0/¼/½/¾/full scale. Now rendered
+  // for timelapses too so the scrubber bar has a readable axis
+  // (a 6-hour day-timelapse plays in ~20 s; without ticks the
+  // operator has no idea where in the day they're scrubbing).
+  const N = 4;
+  let parts = '';
+  for (let i = 0; i < N; i++){
+    const tSec = (duration * i) / (N - 1);
+    const pct = (i / (N - 1)) * 100;
+    const nudge = i === 0 ? 0 : i === N - 1 ? 24 : 12;
+    parts += `<span class="lbtt-tick" style="left:calc(${pct.toFixed(2)}% - ${nudge}px)">${tSec.toFixed(0)}s</span>`;
   }
+  const ticksHtml = parts;
+  sidebarParts.push(`<div class="lb-tick-spacer"></div>`);
+  timeColParts.push(`<div class="lbtt-ticks">${ticksHtml}</div>`);
 
   // Play cursor — promoted to a STACK-level sibling (was: inside the
   // time column) so its 2 px line visually cuts through every row at
@@ -245,6 +265,9 @@ export function lbRenderTrackTimeline(item){
   });
   host.querySelectorAll('.lbtt-bar').forEach(btn => {
     btn.addEventListener('click', _onTimelineBarClick);
+  });
+  host.querySelectorAll('.lbtt-empty-rescan').forEach(btn => {
+    btn.addEventListener('click', _onTimelineRescanClick);
   });
   _wireBarEndTooltips(host);
   _wirePlayButton();
@@ -285,4 +308,75 @@ function _onTimelineBarClick(ev){
   if (dur <= 0) return;
   v.currentTime = Math.min(dur, Math.max(0, t));
   if (v.paused) v.play().catch(() => {});
+}
+
+// "Nach-Erkennung starten" inline button — fires the existing rescan
+// endpoint (/api/events/<id>/rescan) which enqueues a TrackingJob
+// against the timelapse MP4. Idempotent on the backend; here we
+// just need to keep the user informed while the worker runs and
+// poll for tracks.json once. When the sidecar lands the swimlane
+// re-renders via the existing fetcher path. If the worker never
+// produces tracks (no detectable motion at all), surface a final
+// "Keine Objekte erkannt" state rather than spinning forever.
+async function _onTimelineRescanClick(ev){
+  ev.preventDefault();
+  ev.stopPropagation();
+  const btn = ev.currentTarget;
+  const host = btn.closest('.lbtt-empty');
+  if (!host) return;
+  const eid = host.dataset.eventId;
+  const cid = host.dataset.cameraId || '';
+  if (!eid) return;
+  const label = host.querySelector('.lbtt-empty-text');
+  btn.disabled = true;
+  if (label) label.textContent = 'Erkennung läuft …';
+  host.dataset.state = 'running';
+  try {
+    const r = await fetch(
+      `/api/events/${encodeURIComponent(eid)}/rescan?camera_id=${encodeURIComponent(cid)}`,
+      { method: 'POST' },
+    );
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok){
+      if (label) label.textContent = `Fehler: ${d.error || r.statusText}`;
+      host.dataset.state = 'err';
+      btn.disabled = false;
+      return;
+    }
+  } catch (err){
+    if (label) label.textContent = `Fehler: ${err?.message || err}`;
+    host.dataset.state = 'err';
+    btn.disabled = false;
+    return;
+  }
+  // Poll the tracks.json sidecar — the worker writes it atomically
+  // when the job finishes. Six attempts at 4 s = 24 s; long enough
+  // for a typical garden timelapse to be indexed. Each poll bypasses
+  // the cache so the new file replaces the cached null entry.
+  let attempts = 0;
+  const maxAttempts = 6;
+  const pollInterval = 4000;
+  const tick = async () => {
+    attempts += 1;
+    if (lbState.item?.event_id !== eid) return;   // user navigated away
+    try {
+      lbInvalidateTracks(eid);
+      if (lbState.item) delete lbState.item._tracks;
+      await lbLoadTracksForItem(lbState.item);
+      const fresh = lbState.item?._tracks;
+      const ready = !!(fresh
+        && Array.isArray(fresh.tracks) && fresh.tracks.length > 0);
+      if (ready){
+        lbRenderTrackTimeline(lbState.item);
+        return;
+      }
+    } catch { /* swallow — keep polling */ }
+    if (attempts < maxAttempts){
+      setTimeout(tick, pollInterval);
+      return;
+    }
+    if (label) label.textContent = 'Keine Objekte erkannt';
+    host.dataset.state = 'empty';
+  };
+  setTimeout(tick, pollInterval);
 }
