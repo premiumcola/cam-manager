@@ -310,6 +310,73 @@ def api_camera_probe_device_info(cam_id: str):
     })
 
 
+@bp.post('/api/cameras/<cam_id>/reolink/image-mode')
+def api_camera_reolink_image_mode(cam_id: str):
+    """Standalone day/night override test panel — manually triggered
+    from the Verbindung tab. Hits Reolink's SetIsp + IrLights pair via
+    :func:`reolink_api.set_image_mode`; not wired into the timelapse
+    pipeline (that comes back in a later round once the operator has
+    confirmed the toggle actually works on his cameras).
+
+    Body: ``{"mode": "auto" | "color" | "bw"}``.
+    Returns the underlying ``set_image_mode`` result plus the
+    masked-back ``mode`` so the UI can echo it.
+    """
+    cam = app_state.settings.get_camera(cam_id)
+    if not cam:
+        return jsonify({"ok": False, "error": "camera not found"}), 404
+    vendor = (cam.get("manufacturer") or "").strip().lower()
+    if vendor != "reolink":
+        return jsonify({
+            "ok":    False,
+            "error": "image-mode override is Reolink-only "
+                     f"(camera vendor={cam.get('manufacturer') or '?'})",
+        }), 400
+    body = request.get_json(silent=True) or {}
+    mode = str(body.get("mode") or "").strip().lower()
+    if mode not in ("auto", "color", "bw"):
+        return jsonify({
+            "ok":    False,
+            "error": "mode must be one of auto / color / bw",
+        }), 400
+    # Pull host from rtsp_url (we never persist the bare host
+    # separately — the URL is the source of truth). Fall back to
+    # snapshot_url if rtsp_url is empty.
+    src = (cam.get("rtsp_url") or cam.get("snapshot_url") or "").strip()
+    if not src:
+        return jsonify({"ok": False, "error": "no rtsp/snapshot URL configured"}), 400
+    try:
+        from urllib.parse import urlparse
+        host = urlparse(src).hostname
+    except Exception:
+        host = None
+    if not host:
+        return jsonify({"ok": False, "error": "cannot parse host from camera URL"}), 400
+    user = cam.get("username") or ""
+    password = cam.get("password") or ""
+    try:
+        port = int(cam.get("reolink_http_port") or 0) or 80
+    except (TypeError, ValueError):
+        port = 80
+    try:
+        from .. import reolink_api
+        result = reolink_api.set_image_mode(
+            host, port, user, password, mode, timeout=4.0,
+        )
+    except Exception as e:
+        return jsonify({
+            "ok":    False,
+            "error": f"image-mode call failed: {e}",
+        }), 502
+    status_code = 200 if result.get("ok") else 502
+    return jsonify({
+        "ok":     bool(result.get("ok")),
+        "mode":   mode,
+        "rc":     result.get("rc"),
+        "detail": result.get("detail", ""),
+    }), status_code
+
+
 @bp.post('/api/camera/<cam_id>/reload')
 def api_camera_reload(cam_id: str):
     settings = app_state.settings

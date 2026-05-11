@@ -191,6 +191,12 @@ CAMERA_SCHEMA: dict = {
     "track_continue_min_score":   (float, 0.0),
     "track_miss_grace_seconds":   (float, 0.0),
     "track_postclip_precision":   (str,   "standard"),
+    # ── Reolink-only · HTTP CGI port for image-mode override ─────────────
+    # Most Reolink cams listen on plain HTTP/80, but the user may have
+    # remapped that to e.g. 8000 when port-forwarding. Treated as 80 if
+    # unset/zero. Only consumed by /api/cameras/<id>/reolink/image-mode;
+    # the RTSP capture path is unaffected.
+    "reolink_http_port":          (int,   0),
 }
 
 # ── Section schemas (for update_section; all fields optional) ──────────────────
