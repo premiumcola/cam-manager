@@ -201,6 +201,29 @@
                   <div id="diagLastError" style="display:none;margin-top:5px;font-size:11px;color:var(--danger);background:rgba(239,68,68,.08);border-radius:6px;padding:5px 8px;word-break:break-all"></div>
                 </div>
               </div>
+              <!-- Reolink-only · Bild-Modus-Test (Tag/Nacht-Override).
+                   Standalone, manuell ausgelöst — NICHT in den Timelapse-
+                   Pfad eingebunden. Wird komplett ausgeblendet wenn der
+                   Hersteller ≠ Reolink ist. Setzt SetIsp+IrLights in einem
+                   POST; Feedback-Zeile räumt sich nach 10 s selbst auf. -->
+              <div id="reolinkImageModeBox" class="reolink-imgmode" hidden>
+                <div class="reolink-imgmode-head">
+                  <span class="reolink-imgmode-title">🎚 Bild-Modus-Test</span>
+                  <span class="reolink-imgmode-sub">Reolink-Override · manueller Test, Speichern vorab nötig</span>
+                </div>
+                <div class="reolink-imgmode-row">
+                  <div class="field-wrap" style="max-width:130px">
+                    <input name="reolink_http_port" type="number" min="1" max="65535" inputmode="numeric" placeholder="80" />
+                    <span class="field-label">HTTP-Port</span>
+                  </div>
+                  <div class="reolink-imgmode-seg" role="group" aria-label="Bild-Modus">
+                    <button type="button" class="reolink-imgmode-btn" data-mode="color"><span class="reolink-imgmode-ico" aria-hidden="true">🎨</span><span>Farbe</span></button>
+                    <button type="button" class="reolink-imgmode-btn" data-mode="auto"><span class="reolink-imgmode-ico" aria-hidden="true">⚙</span><span>Auto</span></button>
+                    <button type="button" class="reolink-imgmode-btn" data-mode="bw"><span class="reolink-imgmode-ico" aria-hidden="true">⚫</span><span>S/W</span></button>
+                  </div>
+                </div>
+                <div class="reolink-imgmode-feedback" id="reolinkImageModeFeedback" aria-live="polite"></div>
+              </div>
             </div>
 
             <!-- Panel: Erkennung — 5-step workflow with vertical "thread"

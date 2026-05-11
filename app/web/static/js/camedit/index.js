@@ -54,6 +54,7 @@ import {
   restoreShapeMode,
 } from '../shape-editor/index.js';
 import { _bindCamProbeDeviceInfo } from './discovery.js';
+import { _bindReolinkImageMode } from './reolink-imgmode.js';
 import {
   _renderSeverityMatrix, _checkAlertingConflicts,
   _renderAlertCooldownGrid, _bindAlertCooldownToggle,
@@ -259,12 +260,16 @@ function editCamera(camId){
   _bindCamIdPreviewListeners();
   // Reolink GetDevInfo rescan button — wires once per session.
   _bindCamProbeDeviceInfo();
+  // Reolink image-mode test panel — also wires once; visibility flips
+  // live on manufacturer-field edits.
+  _bindReolinkImageMode();
   // Reset the auto-detected hints — a fresh open should not retain a
   // hint left over from a previous session's save.
   byId('cameraForm')?.querySelectorAll('.cam-autodetected-hint').forEach(el=>{el.hidden=true});
   byId('cameraEditTitle').textContent=`Kamera bearbeiten · ${c.name||c.id}`;
   const p=parseRtspUrl(c.rtsp_url||'');
   f['rtsp_ip'].value=p.host||''; f['rtsp_user'].value=p.user||''; f['rtsp_pass'].value=p.pass||''; f['rtsp_port'].value=p.port||'554';
+  if(f['reolink_http_port']) f['reolink_http_port'].value = c.reolink_http_port || '';
   const matchedPath=RTSP_PATH_OPTS.find(o=>o.value===p.path);
   if(f['rtsp_path']) {
     const def=_defaultRtspPathForManufacturer(c.manufacturer||'');
