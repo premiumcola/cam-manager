@@ -55,6 +55,7 @@ log = logging.getLogger("app.quests")
 # Hardcoded by design — V1 has no user-editable quests. Adding a new entry
 # here + a window type below is enough to ship one.
 QUESTS: list[dict] = [
+    # ── Kept from v1 (already realistic for a garden install). ────────
     {
         "id": "wintervorrat",
         "title": "Wintervorrat",
@@ -73,42 +74,63 @@ QUESTS: list[dict] = [
         "window": "april_rolling_week",
         "criteria": {"label": "bird", "count_distinct_species": True},
     },
+    # ── Monthly diversity — achievable in central Europe with a feeder.
     {
-        "id": "mondtiere",
-        "title": "Mondtiere",
-        "icon": "🦊",
-        "description": "5 Wildtier-Erkennungen zwischen 02:00 und 04:00",
-        "target": 5,
-        "window": "year_to_date",
-        "criteria": {
-            "labels": ["fox", "hedgehog", "squirrel"],
-            "hour_in": [2, 3],
-        },
+        "id": "vogelvielfalt",
+        "title": "Vogelvielfalt",
+        "icon": "🐦",
+        "description": "8 verschiedene Vogelarten im laufenden Monat",
+        "target": 8,
+        "window": "current_calendar_month",
+        "criteria": {"label": "bird", "count_distinct_species": True},
     },
+    # ── Weekly counter for the most-common garden visitor class. ──────
     {
-        "id": "gewitterhueter",
-        "title": "Gewitterhüter",
-        "icon": "⚡",
-        "description": "Sun-Timelapse durch ein Gewitter komplett aufgenommen",
-        "target": 1,
-        "window": "year_to_date",
-        "criteria": {"event_type": "sun_tl_through_thunderstorm"},
+        "id": "eichhoernchen_wache",
+        "title": "Eichhörnchen-Wache",
+        "icon": "🌰",
+        "description": "12 Eichhörnchen-Sichtungen in einer Woche",
+        "target": 12,
+        "window": "current_rolling_week",
+        "criteria": {"label": "squirrel"},
     },
+    # ── Time-of-day quest — last hour before sunset. Fixed window
+    # 18:00–19:00 covers the German evening golden hour from
+    # late-summer through autumn; we accept that the window drifts
+    # against the actual sun (the operator gets a quieter quest in
+    # December as opposed to a perpetually-unachievable one). ──
     {
-        "id": "vollmondnacht",
-        "title": "Vollmondnacht",
-        "icon": "🌖",
-        "description": "Sun-TL bei Vollmond mit ≥3 Wildtier-Sichtungen in derselben Nacht",
-        "target": 1,
-        "window": "year_to_date",
-        "criteria": {"event_type": "sun_tl_full_moon_with_wildlife"},
+        "id": "goldene_stunde",
+        "title": "Goldene Stunde",
+        "icon": "🌅",
+        "description": "15 Sichtungen in der Abendstunde (18:00–19:00) im Monat",
+        "target": 15,
+        "window": "current_calendar_month",
+        "criteria": {"hour_in": [18]},
+    },
+    # ── Consistency — sightings spread across many days. ──────────────
+    {
+        "id": "stammgast",
+        "title": "Stammgast",
+        "icon": "📅",
+        "description": "An 15 Tagen des Monats mindestens eine Sichtung",
+        "target": 15,
+        "window": "current_calendar_month",
+        "criteria": {"count_distinct_days": True},
+    },
+    # ── Morning routine — generic 05:00–08:00 window. Replaces the
+    # weather-coupled "Nebelmorgen" idea with something that works
+    # without weather_history overlap. ──────────────────────────
+    {
+        "id": "morgenrunde",
+        "title": "Morgenrunde",
+        "icon": "☕",
+        "description": "8 Sichtungen am frühen Morgen (05:00–08:00) im Monat",
+        "target": 8,
+        "window": "current_calendar_month",
+        "criteria": {"hour_in": [5, 6, 7]},
     },
 ]
-
-# Wildlife labels used by the "vollmondnacht" night-counter and the
-# generic motion criteria ("mondtiere"). Mirrors the COCO-plus-wildlife
-# label set the runtime emits today.
-_WILDLIFE_LABELS = ("fox", "hedgehog", "squirrel", "marten", "deer")
 
 
 # ── Window resolver ────────────────────────────────────────────────────────
@@ -119,6 +141,14 @@ def _resolve_window(name: str, now: datetime) -> tuple[datetime | None, datetime
     `april_rolling_week` outside April. The evaluator treats that as
     "skip this quest until the window opens again", so progress freezes
     rather than silently zeroing out.
+
+    Window vocabulary:
+      december               — 1.–31. December of the current year
+      april_rolling_week     — last 7 days, clamped to April
+      year_to_date           — Jan 1 of the current year through now
+      current_calendar_month — 1. of the current month through now
+                               (rolls automatically on the 1st)
+      current_rolling_week   — last 7 days, every day of the year
     """
     year = now.year
     if name == "december":
@@ -131,8 +161,50 @@ def _resolve_window(name: str, now: datetime) -> tuple[datetime | None, datetime
         return (start, now)
     if name == "year_to_date":
         return (datetime(year, 1, 1, 0, 0, 0), now)
+    if name == "current_calendar_month":
+        return (datetime(year, now.month, 1, 0, 0, 0), now)
+    if name == "current_rolling_week":
+        return (now - timedelta(days=7), now)
     log.warning("[quests] unknown window: %s", name)
     return (None, None)
+
+
+def _next_window_start(name: str, now: datetime) -> datetime | None:
+    """Return the NEXT window-open datetime for ``name`` after ``now``,
+    or None when the window is either always active (``year_to_date``,
+    ``current_calendar_month``, ``current_rolling_week``) or unknown.
+
+    Used by ``preview_upcoming_quests`` to surface seasonal quests
+    before their window opens. We only care about windows that have a
+    distinct future "opens at" date the user can plan around — a
+    rolling-week window is always-on, so it has no "next" opening."""
+    year = now.year
+    if name == "december":
+        opens = datetime(year, 12, 1, 0, 0, 0)
+        if now >= opens:
+            opens = datetime(year + 1, 12, 1, 0, 0, 0)
+        return opens
+    if name == "april_rolling_week":
+        opens = datetime(year, 4, 1, 0, 0, 0)
+        if now >= datetime(year, 5, 1, 0, 0, 0):
+            opens = datetime(year + 1, 4, 1, 0, 0, 0)
+        elif now >= opens:
+            # We're inside April — the window is currently active, so
+            # this quest is on the active pinboard, not the preview.
+            return None
+        return opens
+    return None
+
+
+def _next_window_close(name: str, opens_at: datetime) -> datetime | None:
+    """Return the close datetime corresponding to the next opening of
+    ``name``. Used purely for the preview UI's "läuft bis DD.MM." label
+    — never feeds the evaluator."""
+    if name == "december":
+        return datetime(opens_at.year, 12, 31, 23, 59, 59)
+    if name == "april_rolling_week":
+        return datetime(opens_at.year, 4, 30, 23, 59, 59)
+    return None
 
 
 def _quest_id_with_year(base_id: str, now: datetime, window: str) -> str:
@@ -199,121 +271,14 @@ def _all_motion_events_in_window(store, start_dt: datetime,
 
 
 # ── Special event-type evaluators ──────────────────────────────────────────
-def _evaluate_sun_tl_through_thunderstorm(storage_root: Path,
-                                          start_dt: datetime,
-                                          end_dt: datetime) -> int:
-    """Count sun-timelapse sightings whose capture window overlaps a
-    thunderstorm in `weather_history.json`.
-
-    Heuristic: a sample with `lightning_potential > 0` inside the
-    sighting's [started_at, ended_at] range is enough. We don't
-    require a strict cell-overhead reading — Open-Meteo's lightning
-    potential is a cloud-physics index, not radar, so any non-zero
-    value during an outdoor 30-minute capture means the user got a
-    real thunderstorm timelapse.
-    """
-    weather_root = storage_root / "weather"
-    history_path = storage_root / "weather_history.json"
-    if not weather_root.exists() or not history_path.exists():
-        return 0
-    try:
-        history = _json_mod.loads(history_path.read_text(encoding="utf-8"))
-        samples = history.get("samples", []) or []
-    except Exception:
-        return 0
-
-    def _has_lightning_between(t1: datetime, t2: datetime) -> bool:
-        for s in samples:
-            try:
-                ts = datetime.fromisoformat(s.get("ts", ""))
-            except ValueError:
-                continue
-            if not (t1 <= ts <= t2):
-                continue
-            lp = (s.get("values") or {}).get("lightning_potential")
-            if lp is not None and float(lp) > 0:
-                return True
-        return False
-
-    hits = 0
-    for cam_dir in weather_root.iterdir():
-        if not cam_dir.is_dir():
-            continue
-        for evt_dir in cam_dir.iterdir():
-            if not evt_dir.is_dir():
-                continue
-            if not evt_dir.name.startswith("sun_timelapse"):
-                continue
-            for jf in evt_dir.glob("*.json"):
-                try:
-                    m = _json_mod.loads(jf.read_text(encoding="utf-8"))
-                except Exception:
-                    continue
-                try:
-                    started = datetime.fromisoformat(m.get("started_at", ""))
-                    ended = datetime.fromisoformat(m.get("ended_at", "") or m.get("started_at", ""))
-                except ValueError:
-                    continue
-                if not (start_dt <= started <= end_dt):
-                    continue
-                if _has_lightning_between(started, ended):
-                    hits += 1
-    return hits
-
-
-def _evaluate_sun_tl_full_moon_with_wildlife(storage_root: Path,
-                                              start_dt: datetime,
-                                              end_dt: datetime,
-                                              store, cam_ids: list[str]) -> int:
-    """Count sun-timelapses captured around a full moon with ≥3
-    wildlife motion events on the same calendar day.
-
-    Full-moon test: astral.moon.phase returns a value in [0, 27.99). A
-    full moon is at phase ~14, so we accept |phase - 14| <= 1. Cheap
-    and forgiving — the user's intent here is "you got a memorable
-    full-moon night", not a strict astronomical match.
-    """
-    try:
-        from astral import moon as _astral_moon
-    except ImportError:
-        return 0
-    weather_root = storage_root / "weather"
-    if not weather_root.exists():
-        return 0
-    hits = 0
-    for cam_dir in weather_root.iterdir():
-        if not cam_dir.is_dir():
-            continue
-        for evt_dir in cam_dir.iterdir():
-            if not evt_dir.is_dir() or not evt_dir.name.startswith("sun_timelapse"):
-                continue
-            for jf in evt_dir.glob("*.json"):
-                try:
-                    m = _json_mod.loads(jf.read_text(encoding="utf-8"))
-                except Exception:
-                    continue
-                try:
-                    started = datetime.fromisoformat(m.get("started_at", ""))
-                except ValueError:
-                    continue
-                if not (start_dt <= started <= end_dt):
-                    continue
-                phase = _astral_moon.phase(started.date())
-                if abs(phase - 14.0) > 1.0:
-                    continue
-                # Count wildlife motion events on the same calendar day.
-                day_start = started.replace(hour=0, minute=0, second=0, microsecond=0)
-                day_end = day_start + timedelta(days=1)
-                wildlife_count = 0
-                for ev in _all_motion_events_in_window(store, day_start, day_end, cam_ids):
-                    ev_labels = set(ev.get("labels", []) or [])
-                    if ev_labels & set(_WILDLIFE_LABELS):
-                        wildlife_count += 1
-                        if wildlife_count >= 3:
-                            break
-                if wildlife_count >= 3:
-                    hits += 1
-    return hits
+# The original v1 catalogue had two weather/astronomy-coupled evaluators
+# (sun_tl_through_thunderstorm, sun_tl_full_moon_with_wildlife). Both
+# were dropped in the realism pass because they were effectively
+# unachievable on a typical garden install. No special evaluators in
+# the new catalogue — every quest goes through the generic
+# _all_motion_events_in_window + _event_matches path. The function
+# slot stays so a future "rare but achievable" event-type criterion
+# (e.g. a Recap-completion quest) drops in without a new file.
 
 
 # ── Main evaluator ─────────────────────────────────────────────────────────
@@ -375,30 +340,35 @@ def evaluate_quests(store, achievements_data: dict,
         criteria = quest_def["criteria"]
         progress = 0
 
-        event_type = criteria.get("event_type")
-        if event_type == "sun_tl_through_thunderstorm":
-            progress = _evaluate_sun_tl_through_thunderstorm(
-                storage_root, start_dt, end_dt,
-            )
-        elif event_type == "sun_tl_full_moon_with_wildlife":
-            progress = _evaluate_sun_tl_full_moon_with_wildlife(
-                storage_root, start_dt, end_dt, store, cam_ids,
-            )
-        else:
-            events = _all_motion_events_in_window(store, start_dt, end_dt, cam_ids)
-            if criteria.get("count_distinct_species"):
-                species_seen: set[str] = set()
-                for ev in events:
+        events = _all_motion_events_in_window(store, start_dt, end_dt, cam_ids)
+        if criteria.get("count_distinct_species"):
+            species_seen: set[str] = set()
+            for ev in events:
+                if not _event_matches(ev, criteria):
+                    continue
+                sp = (ev.get("bird_species") or "").strip()
+                if sp:
+                    species_seen.add(sp.lower())
+            progress = len(species_seen)
+        elif criteria.get("count_distinct_days"):
+            # "Stammgast" — sightings on distinct calendar days
+            # within the window. Any event counts (no label filter),
+            # but a label filter still applies if present.
+            days_seen: set[str] = set()
+            for ev in events:
+                if criteria.get("label") or criteria.get("labels") \
+                        or criteria.get("hour_in"):
                     if not _event_matches(ev, criteria):
                         continue
-                    sp = (ev.get("bird_species") or "").strip()
-                    if sp:
-                        species_seen.add(sp.lower())
-                progress = len(species_seen)
-            else:
-                for ev in events:
-                    if _event_matches(ev, criteria):
-                        progress += 1
+                t = ev.get("time") or ""
+                day = t[:10]  # "YYYY-MM-DD"
+                if len(day) == 10:
+                    days_seen.add(day)
+            progress = len(days_seen)
+        else:
+            for ev in events:
+                if _event_matches(ev, criteria):
+                    progress += 1
 
         progress = min(progress, quest_def["target"])
         was_completed = bool(existing.get("completed_at"))
