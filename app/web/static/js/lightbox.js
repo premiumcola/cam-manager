@@ -28,6 +28,7 @@ import {
   lbRenderTrackTimeline, lbClearTrackTimeline,
   lbRenderSettingsPanel,
 } from './mediathek/bbox-overlay/index.js';
+import { openMediaView } from './mediaview/index.js';
 import { _iosNativeVideoOpen } from './mediathek/ios-video.js';
 import { closeLiveView } from './chrome/live-view.js';
 import { _initFsBtn } from './chrome/fullscreen.js';
@@ -291,6 +292,20 @@ export function openLightbox(item){
   // for tag/confirm/delete after the player closes.
   const _hasVideoSrc = !!(item && (item.video_relpath || item.video_url));
   if (IS_IOS && _hasVideoSrc){ _iosNativeVideoOpen(item); return; }
+  // Route through the new mediaview shell entry. For now `recorded`
+  // mode delegates back to `_lbLegacyRender` below — the visible
+  // composition is unchanged. Tasks #4-#6 of the migration plan
+  // progressively lift the legacy renderer into mediaview/ (continuous
+  // playhead line, gauge-style detail pill, dark panel tabs +
+  // fine-analysis fold + keyboard) without a single breaking flip.
+  return openMediaView({ mode: 'recorded', item });
+}
+
+// Legacy lightbox renderer — the body of the original openLightbox.
+// Pinned to window so openMediaView in mediaview/index.js can reach
+// it without a circular import. Kept verbatim during the migration;
+// later tasks gradually move pieces out into the mediaview/ tree.
+function _lbLegacyRender(item){
   // Index into the GLOBAL list (state._allMedia) so prev/next can cross
   // pagination boundaries — the page-slice (state.media) is a render
   // optimisation, not a navigation boundary.
@@ -705,3 +720,7 @@ document.addEventListener('tamspy:viewport-resumed', () => {
 window.openLightbox  = openLightbox;
 window.closeLightbox = closeLightbox;
 window.openTLPlayer  = openTLPlayer;
+// Internal hook for mediaview/index.js' openMediaView (mode='recorded')
+// — the indirection breaks the circular import openLightbox → openMediaView
+// → renderer without anything else having to change. NOT a public API.
+window._lbLegacyRender = _lbLegacyRender;

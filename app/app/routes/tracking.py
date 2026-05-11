@@ -43,6 +43,7 @@ def _resolve_event_video(event_id: str, cam_id_hint: str | None = None):
 
 
 @bp.post('/api/tracking/reindex/<event_id>')
+@bp.post('/api/events/<event_id>/rescan')
 def api_tracking_reindex(event_id):
     cam_id_hint = request.args.get("camera_id")
     cam_id, vid = _resolve_event_video(event_id, cam_id_hint)

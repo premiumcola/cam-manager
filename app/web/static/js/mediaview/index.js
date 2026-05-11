@@ -76,23 +76,29 @@ export {
 //     panels:  { detections, tracksList, settings, weather },
 //     actions: { onConfirm, onDelete, onDownload, onPrev, onNext, onClose } }
 //
-// Skeleton behaviour: for `mode='recorded'` we delegate to the legacy
-// Mediathek openLightbox flow so nothing visibly changes during the
-// migration. Other modes throw — they'll be wired up in later tasks
-// once cam-edit, dashboard, and timelapse callsites get migrated.
+// Recorded mode delegates to the legacy lightbox renderer pinned at
+// `window._lbLegacyRender` — that's lightbox.js's existing composition
+// body, unchanged for this commit. Tasks #4-#6 progressively lift
+// pieces of that body into the mediaview/ tree (playhead line, gauge
+// pill, panel tabs, fine-analysis fold, keyboard handler). Until then
+// the visible behaviour matches what users see today; the indirection
+// is what lets the later tasks land piece-by-piece without a single
+// breaking flip.
+//
+// Other modes (live, live-detect, timelapse) currently throw — the
+// cam-edit, dashboard, and timelapse player callsites still go through
+// their own legacy paths. Migrating them lands in a follow-up prompt.
 export function openMediaView(config){
   if (!config || typeof config !== 'object'){
     throw new Error('openMediaView: config object required');
   }
   const mode = config.mode;
   if (mode === 'recorded'){
-    // Delegate to the legacy lightbox until task #3 wires the shell
-    // composition in. The item field carries the same shape today.
-    const open = typeof window !== 'undefined' && window.openLightbox;
-    if (typeof open !== 'function'){
-      throw new Error('openMediaView(recorded): legacy openLightbox not available yet');
+    const render = typeof window !== 'undefined' && window._lbLegacyRender;
+    if (typeof render !== 'function'){
+      throw new Error('openMediaView(recorded): legacy renderer not loaded');
     }
-    return open(config.item);
+    return render(config.item);
   }
   throw new Error(`openMediaView: mode '${mode}' not yet migrated`);
 }
