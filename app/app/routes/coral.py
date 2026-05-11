@@ -604,7 +604,11 @@ def api_test_detection(cam_id: str):
     # bbox-on-broken-frame fallbacks. Implementation reuses the
     # runtime's existing rt.lock / rt.frame / rt.frame_ts publication;
     # no changes to the capture loop.
-    from ..frame_helpers import has_corrupt_strip, is_valid_frame
+    from ..frame_helpers import (
+        has_corrupt_strip,
+        is_valid_frame,
+        pick_profile_from_baseline,
+    )
     request_started_at = _time.time()
     deadline = _time.monotonic() + 2.5
     frame = None
@@ -629,9 +633,23 @@ def api_test_detection(cam_id: str):
             _time.sleep(0.05)
             continue
         saw_fresh_candidate = True
-        ok_valid, _vreason = is_valid_frame(candidate)
-        if not ok_valid or has_corrupt_strip(candidate):
+        # Auto-pick DAY/TWILIGHT/NIGHT profile from this frame's own
+        # brightness — the timelapse capture loop does the same thing
+        # via _pick_profile, and without it the daytime brightness
+        # floor mass-rejects perfectly fine IR/night frames as
+        # "too_dark". Single-frame baseline is fine for a test ping.
+        active_profile = pick_profile_from_baseline([candidate])
+        ok_valid, _vreason = is_valid_frame(candidate, profile=active_profile)
+        corrupt_strip = has_corrupt_strip(candidate)
+        if not ok_valid or corrupt_strip:
             final_outcome = "corrupt"
+            # Log the precise rejection reason at DEBUG so an operator
+            # can grep "[test-detection]" to see why a particular cam
+            # repeatedly fails the validator — without flooding INFO.
+            log.debug(
+                "[test-detection] %s rejected candidate · valid=%s reason=%r strip=%s",
+                cam_id, ok_valid, _vreason, corrupt_strip,
+            )
             _time.sleep(0.05)
             continue
         # Accepted — fresh, valid, no corrupt strip.
@@ -706,17 +724,51 @@ def api_test_detection(cam_id: str):
             "reason":  reason,
         })
     out.sort(key=lambda r: r["score"], reverse=True)
-    # Encode the frame as a base64 data URL so the frontend can display
-    # it inline without a separate snapshot fetch (and so the snapshot
-    # is the same frame the boxes were computed against).
+    # ── Downscale the snapshot to ≤960 px wide ────────────────────────
+    # Inference already ran on the full-resolution frame (above). What
+    # the frontend renders inside the panel is only the JPEG that lives
+    # in the base64 data URL — a 1920×1080 snapshot at 1 Hz turns iOS
+    # Safari into molasses without any actual stream problem. Bbox
+    # coordinates land in the same coordinate space as the encoded
+    # JPEG (frame_size), so the SVG viewBox lines up regardless of
+    # the source resolution. Quality 65 + JPEG-OPTIMIZE gives a
+    # progressive render that iOS paints incrementally.
+    src_h, src_w = frame.shape[:2]
+    target_w = 960
+    if src_w > target_w:
+        snap_scale = target_w / float(src_w)
+        snap_w = target_w
+        snap_h = max(2, int(round(src_h * snap_scale)) // 2 * 2)
+        snap_frame = cv2.resize(frame, (snap_w, snap_h), interpolation=cv2.INTER_AREA)
+    else:
+        snap_scale = 1.0
+        snap_w, snap_h = src_w, src_h
+        snap_frame = frame
+    # Rewrite bbox coords into the downscaled space when we actually
+    # resized. Skip the multiplication entirely on the no-op path so
+    # rounding never nudges an integer bbox off the source frame.
+    if snap_scale != 1.0:
+        for d in out:
+            x, y, w_box, h_box = d["bbox"]
+            d["bbox"] = [
+                int(round(x * snap_scale)),
+                int(round(y * snap_scale)),
+                int(round(w_box * snap_scale)),
+                int(round(h_box * snap_scale)),
+            ]
     try:
         import base64
-        ok, jpg = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 75])
+        ok, jpg = cv2.imencode(".jpg", snap_frame, [
+            int(cv2.IMWRITE_JPEG_QUALITY), 65,
+            int(cv2.IMWRITE_JPEG_OPTIMIZE), 1,
+        ])
         snapshot = f"data:image/jpeg;base64,{base64.b64encode(jpg.tobytes()).decode()}" if ok else None
     except Exception as e:
         log.warning("[test-detection] %s encode failed: %s", cam_id, e)
         snapshot = None
-    h, w = frame.shape[:2]
+    # Frontend uses these dims to size the SVG viewBox; must match the
+    # bbox + snapshot coordinate space, not the source resolution.
+    w, h = snap_w, snap_h
     # ── Decision trace ──────────────────────────────────────────
     # Walk every gate from capture → telegram and record a one-line
     # human-readable verdict for each. The frontend renders this list
