@@ -132,7 +132,15 @@ export function drawShapes(){
     ctx.beginPath();
     ctx.moveTo(shapeState.points[0].x, shapeState.points[0].y);
     shapeState.points.slice(1).forEach(p => ctx.lineTo(p.x, p.y));
-    ctx.strokeStyle = '#ffffff';
+    // Preview-stroke colour matches the committed-polygon colour for
+    // the active mode so the user sees the upcoming shape's identity
+    // while drawing. Vertex handles + the closing-point pulse below
+    // stay neutral white so they remain visible against both blue
+    // and red strokes.
+    const previewColor = shapeState.mode === 'mask'
+      ? 'rgba(255,107,107,1)'
+      : 'rgba(75,163,255,1)';
+    ctx.strokeStyle = previewColor;
     ctx.lineWidth = 2;
     ctx.setLineDash([7, 6]);
     ctx.stroke();
