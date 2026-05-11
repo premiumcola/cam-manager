@@ -91,3 +91,6 @@ app/web/static/app.css
 
 # Claude internal
 .claude/
+
+# Local scratch archives — never the repo's source of truth
+*.zip
