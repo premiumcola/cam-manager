@@ -73,10 +73,9 @@ def api_weather_sightings():
     ws = app_state.weather_service
     if ws is None:
         return jsonify({"items": [], "counts": {}, "total": 0, "page": 0, "page_size": 50})
-    try:
-        page = int(request.args.get('page', 0))
-    except (TypeError, ValueError):
-        page = 0
+    # Flask's type=int parser swallows non-int values into None;
+    # the explicit `or 0` matches the prior try/except default.
+    page = request.args.get('page', type=int, default=0) or 0
     return jsonify(ws.list_sightings(
         cam_id=request.args.get('cam_id') or None,
         event_type=request.args.get('event_type') or None,
@@ -277,8 +276,5 @@ def api_weather_history():
             "hours": 24, "samples": [], "thresholds": {}, "units": {},
             "labels_de": {}, "fields": [], "poll_interval_s": 300,
         })
-    try:
-        hours = int(request.args.get("hours", 24))
-    except (TypeError, ValueError):
-        hours = 24
+    hours = request.args.get("hours", type=int, default=24) or 24
     return jsonify(ws.history(hours))

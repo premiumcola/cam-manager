@@ -15,6 +15,7 @@ from pathlib import Path
 from flask import Blueprint, jsonify, request
 
 from .. import app_state
+from ._helpers import safe_day_param
 
 bp = Blueprint("timelapse", __name__)
 
@@ -92,7 +93,9 @@ def api_camera_timelapse(cam_id):
     tl_cfg = cam_cfg.get("timelapse") or {}
     if not tl_cfg.get("enabled", False):
         return jsonify({"ok": False, "error": "timelapse disabled"}), 400
-    day = request.args.get("day") or datetime.now().strftime("%Y-%m-%d")
+    # Validate YYYY-MM-DD or fall back to today — guards against a
+    # path-traversal attempt landing in the filesystem join below.
+    day = safe_day_param(request.args.get("day")) or datetime.now().strftime("%Y-%m-%d")
     force = request.args.get("force") == "1"
     target_s = int(tl_cfg.get("daily_target_seconds", 60))
     target_fps = int(tl_cfg.get("fps", 25))
@@ -199,7 +202,9 @@ def api_camera_timelapse_rolling(cam_id):
     settings = app_state.settings
     storage_root = app_state.storage_root
     timelapse_builder = app_state.timelapse_builder
-    minutes = int(request.args.get("minutes", 10))
+    # type=int makes Flask return None on a bogus value instead of
+    # raising; the `or 10` keeps the legacy default.
+    minutes = request.args.get("minutes", type=int) or 10
     minutes = max(1, min(minutes, 120))
     cam_cfg = settings.get_camera(cam_id)
     if not cam_cfg:

@@ -101,14 +101,15 @@ class ClipMixin:
         try:
             import cv2
             cap = cv2.VideoCapture(str(mp4_path))
-            manifest["width"]  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))  or manifest["width"]
-            manifest["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            cap.release()
+            try:
+                manifest["width"]  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))  or manifest["width"]
+                manifest["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            finally:
+                cap.release()
         except Exception:
             pass
         manifest_path = out_dir / f"{ts_label}.json"
-        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2),
-                                 encoding="utf-8")
+        _atomic_write_json(manifest_path, manifest)
         log.info("[weather] Clip written: %s · %s · %.1fs · sev=%.2f",
                  self._cam_name(cam_id), EVENT_LABEL_DE.get(evt, evt),
                  manifest["duration_s"], severity)

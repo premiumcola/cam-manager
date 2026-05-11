@@ -19,6 +19,7 @@ import numpy as np
 import requests
 
 from ..detection_confirmer import DetectionConfirmer
+from ..io_utils import atomic_write_json
 from ..detectors import (
     BirdSpeciesClassifier,
     CoralObjectDetector,
@@ -179,7 +180,7 @@ class TimelapseMixin:
                 if cap_stats:
                     meta["capture_stats"] = cap_stats
                 meta_path = out_dir / f"{stem}.json"
-                meta_path.write_text(_json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+                atomic_write_json(meta_path, meta)
                 log_tl.debug("[%s][timelapse] sidecar JSON written: %s", self.camera_id, meta_path.name)
             except Exception as e:
                 log_tl.warning("[%s][timelapse] sidecar write failed: %s", self.camera_id, e)
@@ -575,7 +576,7 @@ class TimelapseMixin:
                     "camera_id": self.camera_id,
                     "species": species_label,
                 }
-                self._ach_path.write_text(_json_mod.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+                atomic_write_json(self._ach_path, data)
             log.info("[%s] Achievement unlocked: %s (%s)", self.camera_id, ach_id, species_label)
             return True
         except Exception as e:

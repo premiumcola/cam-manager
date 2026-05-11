@@ -277,8 +277,11 @@ def api_camera_media(cam_id):
     labels = [l.strip() for l in labels_raw.split(',') if l.strip()] if labels_raw else None
     start = request.args.get('start')
     end = request.args.get('end')
-    limit = int(request.args.get('limit') or app_state.get_effective_config().get("storage", {}).get("media_limit_default", 24))
-    offset = int(request.args.get('offset') or 0)
+    # type=int returns None on parse failure so a bogus ?limit=foo no
+    # longer 500s — falls back to the configured media_limit_default.
+    cfg_default = app_state.get_effective_config().get("storage", {}).get("media_limit_default", 24)
+    limit = request.args.get('limit', type=int) or cfg_default
+    offset = request.args.get('offset', type=int) or 0
     items = store.list_events(cam_id, label=label, labels=labels, start=start, end=end, limit=limit, offset=offset, media_only=True)
     total_count = store.count_events(cam_id, label=label, labels=labels, start=start, end=end, media_only=True)
     for item in items:

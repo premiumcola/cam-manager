@@ -15,7 +15,11 @@ from pathlib import Path
 from typing import Any
 
 
-def atomic_write_json(path: Path, payload: Any, *, indent: int = 2) -> None:
+def atomic_write_json(
+    path: Path, payload: Any, *,
+    indent: int = 2,
+    fsync: bool = False,
+) -> None:
     """Write ``payload`` as JSON to ``path`` atomically.
 
     Pattern: write to a temp file in the same directory, then
@@ -28,12 +32,26 @@ def atomic_write_json(path: Path, payload: Any, *, indent: int = 2) -> None:
     threads racing to update the same file don't trample each
     other's temp blob (the underlying issue that motivated the
     weather_service variant of this helper).
+
+    Pass ``fsync=True`` for files whose loss across an OS-level
+    crash matters (e.g. weather history, time-series state). The
+    default is False because for derived files (manifests,
+    sidecars) we'd rather the cheap path than the durable one.
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.tmp.{os.getpid()}.{threading.get_ident()}")
-    tmp.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=indent),
-        encoding="utf-8",
-    )
+    if fsync:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, indent=indent)
+            fh.flush()
+            try:
+                os.fsync(fh.fileno())
+            except OSError:
+                pass
+    else:
+        tmp.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=indent),
+            encoding="utf-8",
+        )
     os.replace(str(tmp), str(path))

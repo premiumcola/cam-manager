@@ -6,6 +6,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from .io_utils import atomic_write_json
+
 
 def dhash_bgr(img: np.ndarray) -> str | None:
     if img is None or img.size == 0:
@@ -37,7 +39,7 @@ class IdentityRegistry:
                 self.data = {"profiles": []}
 
     def _save(self):
-        self.path.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
+        atomic_write_json(self.path, self.data)
 
     def list_profiles(self):
         return self.data.get("profiles", [])

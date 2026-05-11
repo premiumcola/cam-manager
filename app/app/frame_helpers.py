@@ -21,6 +21,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from .io_utils import atomic_write_json
+
 log = logging.getLogger(__name__)
 
 
@@ -1405,7 +1407,7 @@ class CaptureStats:
                 "phase_drift_min": self.phase_drift_min,
                 "phase_drift_warning": self.phase_drift_warning,
             }
-            path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+            atomic_write_json(path, payload)
         except Exception as e:
             log.warning("[timelapse] could not write _stats.json in %s: %s", self.out_dir, e)
         # Per-flush log line so docker logs surface which cluster is

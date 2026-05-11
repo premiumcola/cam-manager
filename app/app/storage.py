@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 
 def _atomic_write_text(path: Path, text: str) -> None:
@@ -25,7 +28,11 @@ class EventStore:
             try:
                 old_events.rename(self.events_dir)
             except Exception:
-                pass
+                # Best-effort one-time migration. Falling through is
+                # fine — the mkdir() below ensures the canonical dir
+                # exists regardless. Breadcrumb for the DEBUG channel.
+                log.debug("[storage] legacy events/ → motion_detection/ rename skipped",
+                          exc_info=True)
         self.events_dir.mkdir(parents=True, exist_ok=True)
 
     def _cam_dir(self, camera_id: str) -> Path:
@@ -48,7 +55,11 @@ class EventStore:
             return None
         try:
             return json.loads(matches[0].read_text(encoding="utf-8"))
-        except Exception:
+        except Exception as e:
+            # Returning None silently was hiding malformed event JSON
+            # from operators — surface it once so a corrupted file
+            # gets a clear signal in `docker logs`.
+            log.warning("[storage] malformed event JSON %s: %s", matches[0], e)
             return None
 
     def find_event_anywhere(self, event_id: str) -> dict | None:
@@ -68,7 +79,8 @@ class EventStore:
                 payload = json.loads(matches[0].read_text(encoding="utf-8"))
                 payload.setdefault("camera_id", cam_dir.name)
                 return payload
-            except Exception:
+            except Exception as e:
+                log.warning("[storage] malformed event JSON %s: %s", matches[0], e)
                 continue
         return None
 
@@ -89,7 +101,8 @@ class EventStore:
             try:
                 m.unlink()
             except Exception:
-                pass
+                log.debug("[storage] unlink %s failed (best-effort)",
+                          m, exc_info=True)
         return bool(matches)
 
     def _filter_events(self, camera_id: str, label: str | None = None,
@@ -115,7 +128,11 @@ class EventStore:
         for file in cam_dir.rglob("*.json"):
             try:
                 obj = json.loads(file.read_text(encoding="utf-8"))
-            except Exception:
+            except Exception as e:
+                # A malformed event JSON used to vanish from list_events
+                # without a peep. Surface it as a one-line warning so
+                # the operator notices and can investigate / repair.
+                log.warning("[storage] malformed event JSON %s: %s", file, e)
                 continue
             if media_only:
                 has_media = (obj.get("snapshot_relpath") or obj.get("snapshot_url") or
@@ -252,8 +269,12 @@ class EventStore:
             json_path = matches[0]
             try:
                 event = json.loads(json_path.read_text(encoding="utf-8"))
-            except Exception:
-                pass
+            except Exception as e:
+                # Falling through with event=None still deletes the
+                # JSON; sidecars (snapshot/video/tracks) just won't get
+                # cleaned because we couldn't read their relpaths.
+                log.warning("[storage] malformed event JSON during delete %s: %s",
+                            json_path, e)
             json_path.unlink(missing_ok=True)
         snap_deleted = False
         if event and event.get("snapshot_relpath"):
@@ -279,7 +300,8 @@ class EventStore:
                     tp.unlink()
                     tracks_deleted = True
                 except Exception:
-                    pass
+                    log.debug("[storage] tracks sidecar unlink %s failed",
+                              tp, exc_info=True)
             # `<event_id>.best.jpg` is the Telegram-only "best frame"
             # cache (bbox burnt on) — recreated by the next push if
             # tracks.json is rebuilt, but pointless to keep around
@@ -288,7 +310,8 @@ class EventStore:
                 try:
                     bp.unlink()
                 except Exception:
-                    pass
+                    log.debug("[storage] best.jpg unlink %s failed",
+                              bp, exc_info=True)
         return {"json_deleted": event is not None, "snap_deleted": snap_deleted,
                 "vid_deleted": vid_deleted, "tracks_deleted": tracks_deleted}
 
@@ -306,7 +329,11 @@ class EventStore:
                     continue
                 try:
                     obj = json.loads(jf.read_text(encoding="utf-8"))
-                except Exception:
+                except Exception as e:
+                    # purge_orphans intentionally treats unparseable
+                    # JSON as an orphan (can't validate its media
+                    # refs). Log so the deletion is visible.
+                    log.warning("[storage] removing malformed event JSON %s: %s", jf, e)
                     jf.unlink(missing_ok=True)
                     removed += 1
                     continue
@@ -396,11 +423,13 @@ class EventStore:
                         try:
                             import cv2 as _cv2
                             cap = _cv2.VideoCapture(str(media_file))
-                            total = int(cap.get(_cv2.CAP_PROP_FRAME_COUNT))
-                            if total > 2:
-                                cap.set(_cv2.CAP_PROP_POS_FRAMES, total // 2)
-                            ok_t, frame_t = cap.read()
-                            cap.release()
+                            try:
+                                total = int(cap.get(_cv2.CAP_PROP_FRAME_COUNT))
+                                if total > 2:
+                                    cap.set(_cv2.CAP_PROP_POS_FRAMES, total // 2)
+                                ok_t, frame_t = cap.read()
+                            finally:
+                                cap.release()
                             if ok_t and frame_t is not None and _cv2.imwrite(
                                     str(thumb), frame_t, [int(_cv2.IMWRITE_JPEG_QUALITY), 85]):
                                 thumb_rel = thumb.relative_to(self.root).as_posix()

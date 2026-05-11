@@ -162,8 +162,7 @@ class RecapsMixin:
                 "duration_s":    int(duration),
                 "included_sightings": [p.get("id") for p in picks],
             }
-            (self._recaps_dir() / f"{r['period_id']}.json").write_text(
-                json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+            _atomic_write_json(self._recaps_dir() / f"{r['period_id']}.json", manifest)
             log.info("[weather] Recap built: %s · %d Clips · %ds",
                      r["period_label"], len(picks), int(duration))
             self._maybe_push_recap(manifest, mp4_path)
@@ -262,9 +261,11 @@ class RecapsMixin:
             try:
                 import cv2
                 cap = cv2.VideoCapture(str(out_path))
-                fc  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                fps = float(cap.get(cv2.CAP_PROP_FPS)) or 15.0
-                cap.release()
+                try:
+                    fc  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    fps = float(cap.get(cv2.CAP_PROP_FPS)) or 15.0
+                finally:
+                    cap.release()
                 return int(fc / fps) if fc > 0 and fps > 0 else 0
             except Exception:
                 return 0

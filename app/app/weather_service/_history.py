@@ -17,6 +17,7 @@ from pathlib import Path
 
 import requests
 
+from ..io_utils import atomic_write_json
 from ._consts import (
     EVENT_ICON_HEX,
     EVENT_LABEL_DE,
@@ -95,16 +96,11 @@ class HistoryMixin:
             "saved_at": datetime.now().isoformat(timespec="seconds"),
             "samples": samples,
         }
-        tmp = path.with_suffix(path.suffix + ".tmp")
+        # fsync=True — history is the source of truth for the weather
+        # chart; an OS-level crash mid-write would lose the rolling
+        # window without the explicit flush + fsync.
         try:
-            with open(tmp, "w", encoding="utf-8") as fh:
-                json.dump(payload, fh, ensure_ascii=False, indent=2)
-                fh.flush()
-                try:
-                    os.fsync(fh.fileno())
-                except OSError:
-                    pass
-            os.replace(str(tmp), str(path))
+            atomic_write_json(path, payload, fsync=True)
         except Exception as e:
             log.warning("[weather] history write failed: %s", e)
 

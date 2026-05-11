@@ -229,14 +229,10 @@ def api_achievements_media(species_id: str):
     name_variants = {name for name, ach in _SPECIES_TO_ACH_ID.items() if ach == sid}
     if not name_variants:
         return jsonify({"items": [], "total_count": 0})
-    try:
-        limit = max(1, int(request.args.get('limit') or 24))
-    except ValueError:
-        limit = 24
-    try:
-        offset = max(0, int(request.args.get('offset') or 0))
-    except ValueError:
-        offset = 0
+    # Flask's type=int returns None on parse failure → fall through
+    # to the legacy default. No more try/except wrappers needed.
+    limit = max(1, request.args.get('limit', type=int) or 24)
+    offset = max(0, request.args.get('offset', type=int) or 0)
     cams = app_state.get_effective_config().get("cameras", []) or []
     seen_ids: set[str] = set()
     pool: list = []

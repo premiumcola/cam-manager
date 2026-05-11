@@ -1030,8 +1030,7 @@ class SunTimelapseMixin:
             cap.release()
         except Exception:
             pass
-        (out_dir / f"{stem}.json").write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        _atomic_write_json(out_dir / f"{stem}.json", manifest)
         log.info("[%s] Manifest geschrieben: %s · score=%.2f",
                  log_tag, manifest["id"], score)
         if test_session is not None:

@@ -426,13 +426,14 @@ class EventTimelapseMixin:
         try:
             import cv2
             cap = cv2.VideoCapture(str(mp4_path))
-            manifest["width"]  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            manifest["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            cap.release()
+            try:
+                manifest["width"]  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                manifest["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            finally:
+                cap.release()
         except Exception:
             pass
-        (out_dir / f"{stem}.json").write_text(
-            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        _atomic_write_json(out_dir / f"{stem}.json", manifest)
         log.info("[weather] Manifest geschrieben: %s · score=%.2f", manifest["id"], score)
         self._cleanup_sun_scratch(frames_dir)
         # Optional Telegram push reuses the existing weather pipeline. The
