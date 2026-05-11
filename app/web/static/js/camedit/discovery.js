@@ -581,6 +581,12 @@ byId('cameraForm').onsubmit=async(e)=>{
     alarm_profile: f['alarm_profile']?.value || existingCam?.alarm_profile || 'soft',
     detection_min_score:parseFloat(f['detection_min_score']?.value||0),
     label_thresholds: _collectLabelThresholds(e.target),
+    // Per-camera tracker overrides — 0 means "use the module default"
+    // from tracker_core.py. Spawn/floor land as scores (0..1); grace is
+    // wall-clock seconds. See cam-edit Erkennung tab step 6.
+    track_spawn_min_score: parseFloat(f['track_spawn_min_score']?.value || 0),
+    track_continue_min_score: parseFloat(f['track_continue_min_score']?.value || 0),
+    track_miss_grace_seconds: parseFloat(f['track_miss_grace_seconds']?.value || 0),
     confirmation_window: _collectConfirmationWindow(e.target, existingCam),
     resolution:f['resolution']?.value||existingCam?.resolution||'auto',
     frame_interval_ms:parseInt(f['frame_interval_ms']?.value||350),

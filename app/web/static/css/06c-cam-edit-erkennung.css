@@ -299,3 +299,36 @@
 .erk-more:hover{ color:#cfe1ee; }
 .erk-more svg{ width:9px;height:9px;flex-shrink:0; }
 
+/* ── Step-6 Objekt-Tracking grid ─────────────────────────────────────────
+   Three labeled numeric inputs that flow as a 3-up row on desktop and
+   stack vertically on mobile. min-height:44 px on each input keeps the
+   iOS touch target comfortable; inputmode="decimal" on the markup side
+   surfaces the right keyboard. */
+.erk-track-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.erk-track-cell{display:flex;flex-direction:column;gap:4px;min-width:0}
+.erk-track-lbl{font-size:11.5px;font-weight:600;color:rgba(226,232,240,.78);letter-spacing:.01em}
+.erk-track-cell input[type="number"]{
+  width:100%;
+  min-height:44px;
+  padding:9px 11px;
+  border-radius:10px;
+  border:0;
+  background:rgba(255,255,255,.04);
+  color:var(--text);
+  font:inherit;
+  font-variant-numeric:tabular-nums;
+  outline:none;
+  -webkit-appearance:none;
+  appearance:none;
+  transition:background .15s,box-shadow .15s;
+}
+.erk-track-cell input[type="number"]:focus{
+  background:rgba(255,255,255,.07);
+  box-shadow:0 0 0 2px rgba(75,163,255,.45);
+}
+.erk-track-cell input[type="number"]::placeholder{color:rgba(148,163,184,.6)}
+.erk-track-sub{font-size:10.5px;color:var(--muted);line-height:1.35}
+@media(max-width:768px){
+  .erk-track-grid{grid-template-columns:1fr;gap:10px}
+}
+

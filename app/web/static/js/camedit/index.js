@@ -375,6 +375,18 @@ function editCamera(camId){
     const v=(lt!=null && !Number.isNaN(parseFloat(lt))) ? parseFloat(lt) : 0.72;
     f['label_threshold_person'].value=v;
   }
+  // Tracker overrides — restore the per-camera values. 0 (the
+  // "use system default" sentinel) shows as 0 in the input; the
+  // placeholder text tells the user what default kicks in.
+  if(f['track_spawn_min_score']){
+    f['track_spawn_min_score'].value = parseFloat(c.track_spawn_min_score) || 0;
+  }
+  if(f['track_continue_min_score']){
+    f['track_continue_min_score'].value = parseFloat(c.track_continue_min_score) || 0;
+  }
+  if(f['track_miss_grace_seconds']){
+    f['track_miss_grace_seconds'].value = parseFloat(c.track_miss_grace_seconds) || 0;
+  }
   // Confirmation-window step 3 sliders — confirm_n/confirm_seconds carry
   // the new global entry. Existing per-class entries (cw[person] etc.)
   // stay in storage untouched; Phase 2 surfaces them via a "Pro Klasse
