@@ -319,9 +319,90 @@ export function _refreshLivePillForCard(camId){
 // as window.openLiveView for any external caller; the dashboard
 // itself no longer reaches for it.
 //
-// `_cvEnterFullscreen(camId)` and `_cvOpenSim(camId)` are exposed on
-// window from the FS and SIM modules; this file just renders the
-// buttons that call them.
+// ── FS button — native fullscreen on the tile's .cv-img-wrap ────────────
+// Reuses the requestFullscreen + .fake-fullscreen pattern that
+// chrome/fullscreen.js + chrome/live-view.js already exercise for
+// the legacy modal, retargeted at the per-tile media wrap.
+//
+// _hdAtFsEntry snapshots which cameras had HD on at FS-enter so the
+// fullscreenchange exit handler can tell "user turned HD on inside
+// FS" (drop back to SD) from "HD was on before FS started" (leave it).
+const _hdAtFsEntry = new Set();
+
+export function _cvEnterFullscreen(camId){
+  const card = byId('cameraCards')?.querySelector(`[data-camid="${CSS.escape(camId)}"]`);
+  const wrap = card?.querySelector('.cv-img-wrap');
+  if (!wrap) return;
+  // Snapshot HD state at FS-enter — drives the auto-drop rule below.
+  if (_hdCards.has(camId)) _hdAtFsEntry.add(camId);
+  else _hdAtFsEntry.delete(camId);
+  const req = wrap.requestFullscreen || wrap.webkitRequestFullscreen || wrap.mozRequestFullScreen;
+  if (req){
+    req.call(wrap).catch(() => { wrap.classList.add('fake-fullscreen'); });
+  } else {
+    wrap.classList.add('fake-fullscreen');
+  }
+  // .fake-fullscreen has its own dismiss path — tap-outside the
+  // wrap returns to normal. The native API exits via Esc / browser
+  // controls / iOS swipe.
+  if (wrap.classList.contains('fake-fullscreen')){
+    const dismiss = (ev) => {
+      if (!wrap.contains(ev.target)){
+        wrap.classList.remove('fake-fullscreen');
+        document.removeEventListener('keydown', escDismiss);
+        document.removeEventListener('click', dismiss, true);
+        _runHdDropOnFsExit();
+      }
+    };
+    const escDismiss = (ev) => {
+      if (ev.key === 'Escape'){
+        wrap.classList.remove('fake-fullscreen');
+        document.removeEventListener('keydown', escDismiss);
+        document.removeEventListener('click', dismiss, true);
+        _runHdDropOnFsExit();
+      }
+    };
+    setTimeout(() => {
+      document.addEventListener('click', dismiss, true);
+      document.addEventListener('keydown', escDismiss);
+    }, 0);
+  }
+}
+
+// Drop HD on tiles whose FS session involved a user-initiated HD
+// toggle. Walks every visible cv-card so the rule applies whether
+// FS ended via the native API, the .fake-fullscreen dismiss path, or
+// a user navigation. Quiet — no toast, just the stream and the HD
+// button visual flip back. Used by both fullscreenchange + the
+// fake-fullscreen click/Esc handlers above.
+function _runHdDropOnFsExit(){
+  const grid = byId('cameraCards');
+  if (!grid) return;
+  grid.querySelectorAll('.cv-card[data-camid]').forEach(card => {
+    const camId = card.dataset.camid;
+    const hasHdNow = _hdCards.has(camId);
+    const hadHdAtEntry = _hdAtFsEntry.has(camId);
+    if (hasHdNow && !hadHdAtEntry){
+      const hdBtn = card.querySelector('.cv-hd-badge');
+      if (hdBtn) toggleCardHd(camId, hdBtn);
+    }
+  });
+  _hdAtFsEntry.clear();
+}
+
+function _onFullscreenChange(){
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+  if (fsEl) return;       // entered (or transitioning into) FS — wait for exit.
+  // Exited fullscreen — defensive cleanup + auto-drop HD per cm-52 task #5b.
+  document.querySelectorAll('.cv-img-wrap.fake-fullscreen').forEach(w => {
+    w.classList.remove('fake-fullscreen');
+  });
+  _runHdDropOnFsExit();
+}
+document.addEventListener('fullscreenchange', _onFullscreenChange);
+document.addEventListener('webkitfullscreenchange', _onFullscreenChange);
+
+window._cvEnterFullscreen = _cvEnterFullscreen;
 
 // Camera-tile grid renderer. Builds every visible cv-card from
 // state.cameras. The template string carries inline onclick handlers
