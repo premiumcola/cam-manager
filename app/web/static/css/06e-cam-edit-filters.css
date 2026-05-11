@@ -1,0 +1,64 @@
+/* ── Per-camera object-filter pill bar (mirrors media-pill visuals but
+     sits in the camera edit form and toggles state.cameraObjectFilter). */
+.cam-objfilter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.cam-obj-pill{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 14px;border-radius:12px;min-height:44px;min-width:64px;border:1.5px solid rgba(255,255,255,.09);background:transparent;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:background .15s,color .15s,border-color .15s;-webkit-tap-highlight-color:transparent;white-space:nowrap}
+.cam-obj-pill:hover{background:rgba(255,255,255,.04);color:var(--text);border-color:rgba(255,255,255,.18)}
+/* Active state uses --cb (content-base) set inline per object from the same
+   colour palette as the media filter bar. */
+.cam-obj-pill.active{background:color-mix(in srgb,var(--cb,#8888aa) 40%,transparent);color:#fff;border-color:color-mix(in srgb,var(--cb,#8888aa) 55%,transparent);box-shadow:inset 0 0 12px color-mix(in srgb,var(--cb,#8888aa) 18%,transparent)}
+.cam-obj-pill .cop-ico{display:inline-flex;align-items:center;line-height:0}
+
+/* ── Erkennung & Aufnahme grouped block (motion / trigger / tail) ───────── */
+.cam-det-block{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.08)}
+.cam-det-heading{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;margin-bottom:8px}
+.cam-det-row{display:grid;grid-template-columns:auto 1fr 1fr;gap:12px;align-items:end}
+.cam-det-toggle{display:inline-flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;white-space:nowrap;padding-bottom:4px;user-select:none}
+.cam-det-toggle input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+.cam-det-field{display:flex;flex-direction:column;gap:3px;min-width:0}
+.cam-det-field select{width:100%;min-width:0;font-size:12px;padding:6px 8px}
+.cam-det-label{font-size:11px;color:var(--muted);font-weight:500;line-height:1.2}
+.cam-det-help{font-size:11px;color:var(--muted);margin-top:6px;font-style:italic}
+.cam-det-motionoff{font-size:11px;color:#f59e0b;margin-top:4px;font-weight:600}
+.cam-det-block.motion-off select[name="detection_trigger"]{opacity:.5;pointer-events:none}
+@media (max-width:720px){.cam-det-row{grid-template-columns:1fr;gap:8px}}
+/* Camera connection diagnostics — collapsible, tinted by status.
+   --problem=1 swaps to a red tint, otherwise green. Background + border
+   colour the entire card so the status reads at a glance even while
+   collapsed. */
+.cam-diag{border-radius:10px;overflow:hidden;transition:background .2s,border-color .2s;
+  background:rgba(34,197,94,0.04); border:1px solid rgba(34,197,94,0.1)}
+.cam-diag[data-problem="1"]{background:rgba(239,68,68,0.06); border-color:rgba(239,68,68,0.12)}
+.cam-diag-head{width:100%;display:flex;align-items:center;gap:8px;padding:9px 12px;background:transparent;border:none;color:var(--text);font-size:12px;font-weight:600;cursor:pointer;text-align:left}
+.cam-diag-head:hover{background:rgba(255,255,255,.03)}
+.cam-diag-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;flex-shrink:0;box-shadow:0 0 6px rgba(34,197,94,.5)}
+.cam-diag[data-problem="1"] .cam-diag-dot{background:#f87171;box-shadow:0 0 6px rgba(239,68,68,.5)}
+.cam-diag-title{flex-shrink:0;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.cam-diag-summary{flex:1;color:#4ade80;font-weight:500;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cam-diag[data-problem="1"] .cam-diag-summary{color:#f87171}
+.cam-diag-chevron{margin-left:auto;width:12px;height:12px;color:var(--muted);transition:transform .2s,color .15s;flex-shrink:0}
+.cam-diag.open .cam-diag-chevron{transform:rotate(90deg);color:var(--text)}
+.cam-diag-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .28s cubic-bezier(.4,0,.2,1)}
+.cam-diag.open .cam-diag-body{grid-template-rows:1fr}
+.cam-diag-body>*{overflow:hidden;min-height:0}
+.cam-diag.open .cam-diag-body{padding:0 12px 10px}
+.cam-diag-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.cam-diag-item{background:var(--surface);border-radius:8px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+.cam-diag-label{font-size:11px;color:var(--muted);font-weight:500}
+.cam-diag-val{font-size:12px;font-weight:700;font-variant-numeric:tabular-nums}
+.cam-diag-val.ok{color:var(--success)}
+.cam-diag-val.warn{color:#f59e0b}
+.cam-diag-val.bad{color:var(--danger)}
+/* Live view: stream mode badges in live pill */
+.cv-stream-mode{font-size:11px;font-variant-numeric:tabular-nums}
+.cv-mode-live{color:#4ade80}
+.cv-mode-base{color:var(--muted)}
+.cv-mode-hd{color:#38bdf8;font-weight:600}
+/* Live view pill button */
+.cv-lp-livebtn{width:100%;padding:7px 10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:12px;font-weight:700;cursor:pointer;transition:background .15s}
+.cv-lp-livebtn:hover{background:#2563eb}
+/* HD button in live view modal */
+.cv-livebtn-hd{padding:6px 14px;border-radius:10px;border:1.5px solid rgba(255,255,255,.15);background:transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s}
+.cv-livebtn-hd:hover{border-color:var(--accent);color:var(--text)}
+.cv-livebtn-hd.cv-livebtn-active{border-color:#f59e0b;color:#f59e0b;background:rgba(245,158,11,.1)}
+
+

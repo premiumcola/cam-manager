@@ -1,0 +1,144 @@
+/* ── Erkennung-Simulator: decision-trace log ─────────────────────────────
+   Green-on-black terminal block sitting under the detection list inside
+   #erkSimLiveBody. Same aesthetic family as the System-Logs Matrix
+   surface (#logs.panel) — monospace, classic green text, sharp dark
+   background — so the user reads it as "what would land in the logs"
+   without context-switch. Header strip stays subtle; the body is the
+   surface that actually shows trace lines. */
+.erk-sim-log{
+  margin-top:12px;
+  border-radius:10px;
+  background:#0c1014;
+  border:1px solid rgba(255,255,255,.06);
+  overflow:hidden;
+}
+
+/* Active-config chip strip — sits above the collapsible head and
+   shows the threshold floor + per-class overrides + object_filter
+   that actually drove this run, parsed straight from the trace.
+   Hidden when no chips were extractable (legacy or partial trace). */
+.erk-sim-cfg{
+  display:flex;flex-wrap:wrap;gap:6px;
+  padding:8px 12px;
+  background:rgba(255,255,255,.025);
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+.erk-sim-cfg-chip{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:4px 9px;
+  background:rgba(0,0,0,.45);
+  border-radius:8px;
+  font-size:10.5px;font-weight:600;
+  letter-spacing:.01em;
+}
+.erk-sim-cfg-key{
+  color:rgba(154,164,176,.85);
+  text-transform:lowercase;
+}
+.erk-sim-cfg-val{ color:#fff; }
+
+/* Collapsible trace head — the whole bar is a button, click anywhere
+   on it toggles open/closed. Min-height meets the iOS 44 px tap-
+   target floor without padding the head into a chunky strip. */
+.erk-sim-log-head{
+  display:flex;align-items:center;justify-content:space-between;
+  width:100%;
+  padding:10px 14px;
+  background:rgba(255,255,255,.025);
+  border:0;
+  color:#cbd5e1;
+  font-size:12px;font-weight:700;letter-spacing:.02em;
+  text-align:left;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  min-height:44px;
+  transition:background .15s,border-color .15s;
+}
+.erk-sim-log-head:hover{
+  background:rgba(255,255,255,.05);
+  color:#fff;
+}
+.erk-sim-log-head.is-open{
+  border-bottom:1px solid rgba(255,255,255,.10);
+}
+.erk-sim-log-summary{ flex:1 1 auto;min-width:0; }
+.erk-sim-log-chev{
+  flex-shrink:0;
+  font-size:14px;line-height:1;
+  color:rgba(255,255,255,.55);
+  transition:transform .2s ease;
+}
+.erk-sim-log-head.is-open .erk-sim-log-chev{ transform:rotate(180deg); }
+
+/* Body wrap — opens beneath the head when expanded. Houses the
+   "leeren" action row + the line list. */
+.erk-sim-log-body-wrap{ display:block; }
+.erk-sim-log-body-wrap[hidden]{ display:none; }
+.erk-sim-log-actions{
+  display:flex;justify-content:flex-end;
+  padding:6px 12px;
+  background:rgba(255,255,255,.02);
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+.erk-sim-log-clear{
+  background:transparent;border:1px solid rgba(255,255,255,.12);
+  color:#9aa4b0;font-size:10.5px;font-weight:600;
+  padding:4px 10px;border-radius:8px;cursor:pointer;
+}
+.erk-sim-log-clear:hover{
+  background:rgba(255,255,255,.04);color:#cbd5e1;
+}
+.erk-sim-log-body{
+  margin:0;
+  padding:8px 0;
+  max-height:240px;
+  overflow:auto;
+  background:#0c1014;
+}
+
+/* Per-line colour table — classifyLine() in trace.js picks the class
+   from each [prefix] head. Bright colours for verdict-bearing lines
+   (PASS / REJECTED / FILTERED / [final]) so they pop against the
+   muted infrastructure rows above and below. */
+.erk-sim-log-line{
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  font-size:11.5px;
+  line-height:1.55;
+  padding:0 14px;
+  word-break:break-word;
+  color:#86efac;
+}
+.erk-sim-log-line.is-infra        { color:rgba(255,255,255,.40); }
+.erk-sim-log-line.is-info         { color:rgba(154,164,176,.78); }
+.erk-sim-log-line.is-pass         { color:#22c55e;font-weight:600; }
+.erk-sim-log-line.is-rejected     { color:#fbbf24; }
+.erk-sim-log-line.is-filtered     { color:#94a3b8; }
+.erk-sim-log-line.is-verdict-fail { color:#f87171; }
+.erk-sim-log-line.is-cooldown-skip{ color:rgba(248,113,113,.70); }
+.erk-sim-log-line.is-cooldown-pass{ color:rgba(74,222,128,.75); }
+.erk-sim-log-line.is-final-fail   { color:#f87171;font-weight:700; }
+.erk-sim-log-line.is-final-pass   { color:#4ade80;font-weight:700; }
+
+/* Size-floor hint — surfaces under the trace whenever any detection
+   got rejected for being too small. Amber tint to read as a
+   "hint, not error" without competing with the trace's red verdict
+   lines. */
+.erk-sim-size-hint{
+  display:flex;align-items:flex-start;gap:9px;
+  padding:9px 12px;
+  background:rgba(251,191,36,.07);
+  border-top:1px solid rgba(251,191,36,.18);
+  font-size:11px;line-height:1.5;
+  color:rgba(254,243,199,.92);
+}
+.erk-sim-size-hint-icon{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;flex-shrink:0;
+  border-radius:50%;
+  background:rgba(251,191,36,.25);
+  color:#fbbf24;
+  font-size:11px;font-weight:700;line-height:1;
+}
+.erk-sim-size-hint-text{ flex:1;min-width:0; }
+.erk-sim-size-hint-text b{ color:#fde68a; }
+

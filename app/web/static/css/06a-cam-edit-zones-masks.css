@@ -1,0 +1,145 @@
+/* ── Zone/mask editor (camera edit form, Zonen tab) ─────────────────── */
+.shape-drawing-bar{display:flex;align-items:center;gap:10px;padding:9px 12px;margin-top:10px;border-radius:10px;background:rgba(255,255,255,0.04);border:1px dashed rgba(255,255,255,0.15);flex-wrap:wrap}
+.shape-drawing-count{font-size:12px;font-weight:600;color:var(--text);flex:1;min-width:180px}
+.shape-save-btn{background:#22c55e!important;color:#fff!important;border:none!important;font-weight:700;padding:8px 14px!important;border-radius:10px!important;cursor:pointer}
+.shape-save-btn:hover{background:#16a34a!important}
+.shape-save-btn:disabled{opacity:.4;cursor:not-allowed;background:rgba(255,255,255,.1)!important}
+.shape-list{display:grid;gap:6px;margin-top:12px}
+.shape-row{display:flex;flex-direction:column;gap:6px;padding:8px 12px;border-radius:9px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);cursor:pointer;transition:background .15s,border-color .15s}
+.shape-row-head{display:flex;align-items:center;gap:10px}
+.shape-row:hover{background:rgba(255,255,255,0.06)}
+/* Per-polygon label chip row — checkboxes that scope which detections
+   this zone/mask applies to. "Alle" sits first; toggling it clears the
+   labels list (= legacy "applies to everything" semantics). */
+.shape-lbl-row{display:flex;flex-wrap:wrap;gap:4px;padding-left:18px}
+.shape-lbl-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:11px;color:#94a3b8;cursor:pointer;user-select:none}
+.shape-lbl-chip input{display:none}
+.shape-lbl-chip:hover{background:rgba(255,255,255,.07)}
+.shape-lbl-chip.shape-lbl-chip--on{background:rgba(251,191,36,.13);border-color:rgba(251,191,36,.4);color:#fbbf24}
+/* Per-zone trigger panel — Foto / Video / Telegram opt-out chips. Hidden
+   by default; the chevron in the row head toggles visibility. */
+.shape-row-chev{width:24px;height:24px;border:none;border-radius:6px;background:transparent;color:#94a3b8;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .15s,transform .2s}
+.shape-row-chev:hover{background:rgba(255,255,255,.06);color:#e2e8f0}
+.shape-row-chev.shape-row-chev--open{transform:rotate(90deg);color:#e2e8f0}
+.shape-trig-row{display:none;flex-wrap:wrap;gap:6px;padding:6px 0 2px 18px;margin-top:4px;border-top:1px dashed rgba(255,255,255,.06)}
+.shape-trig-row.shape-trig-row--open{display:flex}
+.shape-trig-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);font-size:12px;color:#94a3b8;cursor:pointer;user-select:none}
+.shape-trig-chip input{display:none}
+.shape-trig-chip:hover{background:rgba(255,255,255,.07)}
+.shape-trig-chip.shape-trig-chip--on{background:rgba(34,197,94,.13);border-color:rgba(34,197,94,.4);color:#4ade80}
+.shape-row.pulse{animation:shape-pulse 1.4s ease-in-out infinite}
+@keyframes shape-pulse{0%,100%{border-color:rgba(255,255,255,0.06)}50%{border-color:#fff}}
+.shape-row-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.shape-row-dot--zone{background:#4ba3ff}
+.shape-row-dot--mask{background:#ff6b6b}
+.shape-row-label{flex:1;font-size:13px;font-weight:600;color:var(--text)}
+.shape-row-count{font-size:11px;color:var(--muted);font-weight:500}
+.shape-row-del{width:28px;height:28px;border:none;border-radius:8px;background:rgba(239,68,68,.1);color:#f87171;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .15s}
+.shape-row-del:hover{background:rgba(239,68,68,.22);color:#fecaca}
+.shape-clear-row{margin-top:10px;display:flex;justify-content:flex-end}
+.canvas-wrap canvas{touch-action:manipulation}.small-btn{padding:8px 10px!important;border-radius:12px!important}.danger-btn{color:#fca5a5!important}.wizard{position:fixed;inset:0;background:rgba(0,0,0,.7);display:grid;place-items:center;z-index:1000;padding:18px}.wizard.hidden{display:none}.wizard-card{width:min(920px,100%);padding:22px;border-radius:24px}.wizard-head{display:flex;gap:16px;align-items:center;margin-bottom:16px}.logo.lg{width:62px;height:62px;font-size:28px}.wizard-steps{display:flex;gap:10px;margin-bottom:18px}.wiz-tab{padding:10px 14px;border-radius:999px;border:none;background:var(--surface);color:var(--muted)}.wiz-tab.active{background:var(--accent);color:#fff}.wiz-step{display:none}.wiz-step.active{display:block}.wizard-actions{display:flex;justify-content:space-between;gap:10px;margin-top:18px}.compact input{margin-bottom:10px}.hidden{display:none!important}
+@media (max-width:1200px){.two-thirds{grid-template-columns:1fr}.wizard-card{padding:16px}}
+
+
+.field-help{margin:-2px 0 8px;color:var(--muted);font-size:12px;line-height:1.45}.field-wrap{display:flex;flex-direction:column;gap:0}.field-wrap input:not([type=range]):not([type=number]),.field-wrap input[type=number],.field-wrap select{width:100%;padding:10px 14px;background:#1e1e1e;border:1.5px solid rgba(255,255,255,0.07);border-radius:12px;color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s;font-size:14px;-webkit-appearance:none;appearance:none}.field-wrap input:not([type=range]):not([type=number]):focus,.field-wrap input[type=number]:focus,.field-wrap select:focus{border-color:#555555;box-shadow:0 0 0 3px rgba(255,255,255,.06)}.field-wrap input::placeholder{color:#64748b}.field-wrap select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888888' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px}.field-label{font-style:italic;font-size:11px;color:var(--muted);margin-top:4px;padding-left:14px;line-height:1.3}.settings-divider{margin:14px 0 10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);padding-top:12px}
+.field-help code{background:var(--surface);padding:2px 6px;border-radius:8px;color:#e2e8f0}
+/* When .field-help sits INSIDE its .field-wrap card (preferred — keeps
+   the help text grouped with the input it describes), drop the
+   negative margin used by free-floating helps and indent it to the
+   field-label gutter so it reads as part of the card.  */
+.field-wrap > .field-help{margin:4px 0 0;padding-left:14px;padding-right:6px;font-size:11.5px}
+/* Unified toggle row — one component used by every section. */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.03);margin-bottom:0}
+.toggle-row-label{font-size:13px;font-weight:600;color:var(--text);display:flex;flex-direction:column;gap:2px;min-width:0}
+.toggle-row-sublabel{font-size:11px;color:var(--muted);font-weight:400}
+/* Greyed variant — used when the feature's model file is missing etc.
+   The toggle itself stays functional; only the visual cue changes. */
+.toggle-row--disabled{opacity:.55}
+.toggle-row--disabled .toggle-row-sublabel::after{content:" · Modell fehlt";color:#f59e0b}
+/* Unified switch: 44×24 pill, green-on, white thumb with subtle shadow. */
+.switch{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0}
+.switch input{opacity:0;width:0;height:0;position:absolute}
+.slider{position:absolute;cursor:pointer;inset:0;background:rgba(255,255,255,0.1);border:none;border-radius:999px;transition:background .2s}
+.slider:before{content:"";position:absolute;height:20px;width:20px;left:2px;top:2px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.switch input:checked + .slider{background:#22c55e}
+.switch input:checked + .slider:before{transform:translateX(20px)}
+.wizard-actions button:not(.ghost){padding:12px 18px;border:0;border-radius:14px;background:var(--accent);color:#fff;font-weight:800;min-height:44px}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:grid;place-items:center;z-index:1100;padding:max(18px,env(safe-area-inset-top,0px)) max(18px,env(safe-area-inset-right,0px)) max(18px,env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px))}.modal.hidden{display:none!important}#lightboxClose{position:absolute;top:12px;right:12px;z-index:10;width:44px;height:44px;border-radius:50%;border:none;background:rgba(40,40,40,.85);color:#fff;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);transition:background .15s}#lightboxClose:hover{background:rgba(40,40,40,1)}#lightboxPrev,#lightboxNext{position:absolute;top:50%;transform:translateY(-50%);width:60px;height:60px;border-radius:50%;background:rgba(0,0,0,.55);border:none;color:#fff;padding:0;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;transition:background .15s,opacity .15s}#lightboxPrev{left:12px}#lightboxNext{right:12px}#lightboxPrev:hover,#lightboxNext:hover{background:var(--accent)}#lightboxConfirm{position:absolute;top:12px;right:68px;z-index:5;width:44px;height:44px;border-radius:50%;border:none;background:rgba(22,163,74,.9);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:background .15s}#lightboxDelete{position:absolute;top:68px;right:12px;z-index:5;width:44px;height:44px;border-radius:50%;border:none;background:rgba(220,38,38,.85);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:background .15s}#lightboxDelete.confirm-delete{animation:lb-del-pulse .5s ease-in-out infinite alternate;background:rgba(220,38,38,1)}@media(max-width:768px){#lightboxModal{padding:0!important;background:#000!important}#lightboxInner{width:100%!important;height:100dvh!important;display:flex;flex-direction:column;justify-content:center}#lightboxMediaWrap{border-radius:0!important;min-height:100dvh;display:flex;align-items:center;justify-content:center}#lightboxImg,#lightboxVideo{max-height:100dvh!important;width:100%!important;object-fit:contain}#lightboxMeta{display:none!important}}@keyframes lb-del-pulse{from{transform:scale(1)}to{transform:scale(1.1)}}.modal-card{width:min(780px,100%);max-height:90vh;max-height:90dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:24px;border-radius:16px;background:var(--panel)}.close-btn{padding:8px 14px;border-radius:12px;border:none;background:var(--surface);color:var(--text);font-weight:600;cursor:pointer;min-height:36px}.close-btn:hover{background:#333333}
+.log-output{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;background:#000000;border-radius:0;padding:12px;max-height:480px;overflow-y:auto;display:grid;gap:3px}.log-row{display:grid;grid-template-columns:60px 54px 48px 1fr;gap:6px;padding:3px 6px;border-radius:0;border-left:1px solid #003b00}.log-row.DEBUG{color:#008f11}.log-row.INFO{color:#00ff41}.log-row.WARNING{color:var(--warn);background:rgba(245,158,11,.05);border-left-color:var(--warn)}.log-row.ERROR{color:var(--danger);background:rgba(239,68,68,.08);border-left-color:var(--danger)}.log-ts{color:#008f11}.log-level{font-weight:700}.log-subsys{color:#008f11;font-size:10px;padding-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.log-level-select{padding:6px 10px;border-radius:0;background:#000000;color:#00ff41;border:1px solid #003b00;font:inherit;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+/* Logs section: strict Matrix terminal — pure black, classic green, sharp
+   corners. Nav-item and panel share the look so they read as one surface. */
+#logs.panel{background:#000000;border:1px solid #003b00;border-radius:0;box-shadow:none}
+#logs.panel .section-head h3{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#00ff41;font-weight:400;letter-spacing:.1em;text-transform:none}
+#logs.panel .section-head h3::before{content:"~/ ";color:#00ff41}
+#logs.panel .btn-action{background:#000000;color:#00ff41;border:1px solid #003b00;border-radius:0;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+#logs.panel .btn-action:hover{background:#000000;border-color:#008f11;color:#00ff41}
+#logs.panel .log-output{background:#000000;padding:8px 4px;border-radius:0;scrollbar-width:thin;scrollbar-color:#00aa33 #000000}
+/* Matrix scrollbar — scoped to the log output so the rest of the UI keeps
+   the platform default. Sharp corners, classic green thumb. */
+#logs.panel .log-output::-webkit-scrollbar{width:6px}
+#logs.panel .log-output::-webkit-scrollbar-track{background:#000000}
+#logs.panel .log-output::-webkit-scrollbar-thumb{background:#00aa33;border-radius:0}
+#logs.panel .log-output::-webkit-scrollbar-thumb:hover{background:#00ff41}
+/* Matrix selects — both the level filter and the subsystem filter. Custom
+   green chevron data-uri so the dropdown arrow matches the palette. */
+#logs.panel select,
+#logs.panel .log-level-select{
+  appearance:none;-webkit-appearance:none;-moz-appearance:none;
+  background:#000000;color:#00ff41;border:1px solid #00aa33;border-radius:0;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;
+  /* Explicit height + box-sizing forces iOS Safari to render the
+     native select control at exactly 38 px regardless of its UA-
+     internal padding (min-height:38px alone left iOS rendering it
+     visibly taller than the sibling Refresh button). line-height:1
+     + zero vertical padding keeps the option text vertically
+     centred inside the 38 px box. The chevron stays optically
+     centred via background-position:right 10px center below. */
+  height:38px;
+  box-sizing:border-box;
+  line-height:1;
+  padding:0 30px 0 12px;
+  accent-color:#00ff41;outline:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2300ff41' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+  cursor:pointer
+}
+#logs.panel select:hover,#logs.panel .log-level-select:hover{border-color:#00ff41}
+#logs.panel select:focus,#logs.panel select:focus-visible,
+#logs.panel .log-level-select:focus,#logs.panel .log-level-select:focus-visible{
+  outline:none;box-shadow:0 0 0 2px #00ff41;border-color:#00ff41
+}
+#logs.panel select option,#logs.panel .log-level-select option{background:#000000;color:#00ff41}
+/* Highlighted / selected options inside the open dropdown. The inset
+   box-shadow is the Chromium workaround — Chromium ignores plain
+   background on highlighted <option>s, so we paint with a 100px inset
+   shadow instead. Firefox honours background directly. */
+#logs.panel select option:checked,#logs.panel select option:hover,
+#logs.panel .log-level-select option:checked,#logs.panel .log-level-select option:hover{
+  background:#003a14;color:#00ff41;
+  box-shadow:0 0 10px 100px #003a14 inset;
+}
+/* iPhone: at 390 px the section-head packs four flex items
+   (level select, subsystem select, Aktualisieren, Leeren) on one
+   row with gap:8 — the two selects squeeze to ~28 px each and only
+   the first character of the option text is visible ("I" for INFO,
+   "A" for "Alle Subsysteme"). Wrapping the row + flexing each child
+   to ~50 % gives selects + buttons one line each at full width.
+   font-size:16 px on the selects also kills the iOS-Safari focus-
+   zoom that fires on any <input>/<select> rendered <16 px. */
+@media (max-width:600px){
+  #logs .section-head > div:first-of-type{flex-wrap:wrap}
+  #logs.panel select,
+  #logs.panel .log-level-select{
+    flex:1 1 calc(50% - 4px);min-width:0;
+    /* font-size:16 keeps the iOS Safari focus-zoom suppressor in
+       place. min-height was 44 (iOS touch-target floor) but that
+       overrode the base height:38 fix and made selects visibly
+       taller than the Refresh button on iPhone — the spec
+       intentionally accepts sub-44 px in the dense Logs panel
+       so the select + button heights match. */
+    font-size:16px;
+  }
+  #logs.panel #logRefreshBtn,
+  #logs.panel #logClearBtn{flex:1 1 calc(50% - 4px)}
+}
+.discovery-creds{display:grid;grid-template-columns:.75fr .75fr 2fr;gap:8px;margin-top:10px}.disc-input{padding:9px 11px;border-radius:12px;background:var(--surface);color:var(--text);border:none;width:100%;font:inherit;transition:box-shadow .12s ease}.disc-input::placeholder{color:var(--muted)}.disc-input:focus{outline:none;box-shadow:0 0 0 2px var(--accent)}.disc-input.is-bad{box-shadow:0 0 0 2px #ef4444}.disc-input.is-bad:focus{box-shadow:0 0 0 2px #ef4444}.disc-select{padding:9px 28px 9px 11px;border-radius:12px;background:var(--surface);color:var(--text);border:none;width:100%;font:inherit;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center}.disc-select:focus{outline:none;box-shadow:0 0 0 2px var(--accent)}

@@ -1,0 +1,286 @@
+/* ── Erkennung tab — read-only global status rows (link to Coral). */
+.cam-global-status{display:grid;gap:6px;margin-bottom:4px}
+.cam-gs-row{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.12);font-size:12px;color:var(--text)}
+.cam-gs-row--off{background:rgba(255,255,255,0.03);border-color:rgba(255,255,255,0.07);color:var(--muted)}
+/* Orange CPU-fallback warning row — same shape as --off, different color
+   so the user can tell at a glance that detection is still running but
+   degraded (no TPU). */
+.cam-gs-row--warn{background:rgba(251,146,60,0.08);border-color:rgba(251,146,60,0.20);color:#fdba74}
+.cam-gs-dot{width:8px;height:8px;border-radius:50%;background:#4ade80;flex-shrink:0;box-shadow:0 0 6px rgba(34,197,94,.5)}
+.cam-gs-row--off .cam-gs-dot{background:#6b7280;box-shadow:none}
+.cam-gs-row--warn .cam-gs-dot{background:#fb923c;box-shadow:0 0 6px rgba(251,146,60,.55)}
+.cam-gs-text{flex:1;font-weight:600}
+.cam-gs-tag{font-size:10px;color:var(--muted);font-weight:500;padding:1px 8px;border-radius:999px;background:rgba(255,255,255,0.04)}
+.cam-gs-link{display:inline-block;margin-top:2px;padding:2px 4px;font-size:11px;color:#60a5fa;text-decoration:none;font-weight:500}
+.cam-gs-link:hover{text-decoration:underline}
+
+/* ── Erkennung tab — 5-step workflow with vertical "thread" ──────────────
+   Status strip across the top, then a single .erk-flow container that
+   drops a 2 px storm-blue line down its left margin connecting numbered
+   step nodes. Inside each step, .erk-card surfaces sit flat on the
+   panel — depth via background contrast, never via thin borders. The
+   visual register is intentionally compact: 11 px text, 9 px radii,
+   tight padding so all 5 steps fit on a single screen at iPhone-SE
+   width. Reduced-motion users skip the CPU-fallback pulse animation. */
+
+/* Top status strip — slim 7×11 px row with a coloured dot indicating
+   live Coral state, the inference latency, and time since the last
+   good frame. */
+.erk-status{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:7px 11px;
+  background:rgba(0,0,0,.22);
+  border-radius:8px;
+  margin-bottom:14px;
+  font-size:11px;
+  color:rgba(255,255,255,.65);
+}
+.erk-status .dot{
+  width:7px;height:7px;border-radius:50%;flex-shrink:0;
+}
+.erk-status .dot.is-ok{
+  background:#22c55e;
+  box-shadow:0 0 8px rgba(34,197,94,.4);
+}
+.erk-status .dot.is-cpu{
+  background:#fb923c;
+  box-shadow:0 0 8px rgba(251,146,60,.4);
+  animation:erk-status-pulse 2s ease-out infinite;
+}
+.erk-status .dot.is-off{ background:#6b7280; }
+@keyframes erk-status-pulse{
+  0%,100%{ opacity:1; }
+  50%   { opacity:.55; }
+}
+.erk-status .lbl{ color:rgba(255,255,255,.4);font-size:10.5px; }
+.erk-status .val{
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  color:#cbd5e1;font-weight:600;font-size:10.5px;
+  font-variant-numeric:tabular-nums;
+}
+.erk-status .sep{ width:1px;height:11px;background:rgba(255,255,255,.08); }
+@media (prefers-reduced-motion: reduce){
+  .erk-status .dot{ animation:none !important; }
+}
+
+/* The "red thread" — single absolutely-positioned vertical line that
+   connects the numbered nodes. ::before on the flow container is the
+   line; .erk-step-num circles sit on top of it via z-index:2. The line
+   stops 30 px short of the bottom so step 5's node looks anchored,
+   not dangling. */
+.erk-flow{
+  position:relative;
+  padding-left:38px;
+}
+.erk-flow::before{
+  content:'';
+  position:absolute;
+  left:14px;
+  top:14px;
+  bottom:30px;
+  width:2px;
+  background:linear-gradient(180deg,
+    rgba(127,174,201,.55) 0%,
+    rgba(127,174,201,.35) 100%);
+  border-radius:2px;
+}
+.erk-step{
+  position:relative;
+  margin-bottom:16px;
+}
+.erk-step:last-child{ margin-bottom:0; }
+.erk-step-num{
+  position:absolute;
+  left:-38px;
+  top:-1px;
+  width:28px;height:28px;
+  border-radius:50%;
+  background:#1c1c20;
+  color:#cfe1ee;
+  font-size:12px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 0 3px rgba(127,174,201,.12);
+  z-index:2;
+}
+.erk-step-head{
+  display:flex;align-items:center;gap:8px;
+  margin-bottom:6px;
+  flex-wrap:wrap;
+}
+.erk-step-icon{
+  width:14px;height:14px;
+  color:rgba(127,174,201,.8);
+  flex-shrink:0;
+}
+.erk-step-title{
+  font-size:13px;font-weight:700;
+  color:#fff;
+}
+.erk-step-hint{
+  font-size:10.5px;
+  color:rgba(255,255,255,.45);
+  margin-left:4px;
+  font-style:italic;
+}
+.erk-card{
+  background:rgba(0,0,0,.22);
+  border-radius:9px;
+  padding:9px 11px;
+}
+.erk-card + .erk-card{ margin-top:5px; }
+/* The slider thumb (13 px wide) gets centred on the track at the
+   current value, so at min/max it projects ~7 px past the input's
+   content box. Without the lateral padding here, the thumb at max
+   visually escapes the .erk-card and gets clipped by the iPhone's
+   right edge — most visible in step 3 where the .two-col cells
+   are narrowest. The 7 px gutter on each side reserves exactly
+   that thumb-radius clearance so the slider stays fully inside
+   its card at min and max alike. The rule lives on .erk-card .row
+   so it applies to step 1-4 AND the per-class drilldown
+   (#erkConfirmPerClass / #erkPerClass), which use the same row
+   pattern — shared fix, no duplication. */
+.erk-card .row{ display:flex;align-items:center;gap:10px;padding:0 7px;min-width:0; }
+.erk-card .lbl{
+  font-size:10.5px;color:rgba(255,255,255,.5);
+  margin-top:3px;display:block;
+}
+.erk-card .val{
+  font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  font-size:10.5px;color:#cbd5e1;
+  min-width:42px;text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+/* Left-side row label — used by step 3's Treffer / Sekunden rows once
+   they stack vertically on phones. Shown only when present so existing
+   single-slider rows (steps 1-2, per-class drilldown) keep their
+   slider+val layout untouched. Hidden in the desktop side-by-side
+   layout where the value pill ("3 ×" / "5 s") already conveys the
+   unit; only revealed below the .two-col stack breakpoint. */
+.erk-card .row-lbl{
+  font-size:11.5px;color:rgba(226,232,240,.78);
+  font-weight:600;letter-spacing:.01em;
+  min-width:60px;flex-shrink:0;display:none;
+}
+@media (max-width:420px){
+  .erk-card .row-lbl{ display:inline-block; }
+}
+
+/* Compact slider — narrower than the default range input so two side-
+   by-side fit comfortably in a phone-width card. The 13 px thumb keeps
+   the touch target reasonable; the 22 px hit area below covers the
+   iOS 44 px floor since each .erk-card row is at least 36 px tall and
+   the parent step-head adds another ~24 px. */
+.erk-card input[type="range"]{
+  -webkit-appearance:none;appearance:none;
+  flex:1;height:3px;
+  background:rgba(255,255,255,.14);
+  border-radius:2px;outline:0;margin:0;
+  /* Pad the actual hit area to 22 px tall so the user has slack while
+     dragging — the visible track stays at 3 px. */
+  padding:10px 0;
+  background-clip:content-box;
+  cursor:pointer;
+  /* Belt-and-braces: kill any inherited border / box-shadow / outline
+     so neither the form-validation `:invalid` ring nor a stray
+     cam-field-warn highlight (if a slider ever ends up inside a
+     warn-tagged wrap) draws a red rectangle past the thumb. */
+  border:0;
+  box-shadow:none;
+}
+/* Same scrub for the hidden-state pseudo-classes — Chrome's default
+   :invalid ring on range sliders with min/max/step is what produced
+   the user-visible "red rectangle past the thumb" in the Erkennung tab. */
+.erk-card input[type="range"]:invalid,
+.erk-card input[type="range"]:focus,
+.erk-card input[type="range"]:focus-visible{
+  outline:0;
+  box-shadow:none;
+  border:0;
+}
+/* Defensive scope: if a slider ever DOES end up inside a wrap that
+   the connection-warn flow tagged, cancel the inset highlight on
+   that wrap so the slider track stays clean. The actual warn-flagged
+   wraps in production are rtsp_ip / rtsp_user / rtsp_pass — none
+   contain sliders today, but this rule guards against future moves. */
+.field-wrap.cam-field-warn:has(input[type="range"]){
+  background:transparent;
+  box-shadow:none;
+}
+.erk-card input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:13px;height:13px;border-radius:50%;
+  background:#7faec9;border:0;cursor:pointer;
+  margin-top:-5px;
+  transition:background .15s,transform .15s;
+}
+.erk-card input[type="range"]::-webkit-slider-thumb:active{
+  background:#a4c5da;transform:scale(1.18);
+}
+.erk-card input[type="range"]::-moz-range-thumb{
+  width:13px;height:13px;border-radius:50%;
+  background:#7faec9;border:0;cursor:pointer;
+}
+.erk-card input[type="range"]::-moz-range-track{
+  height:3px;background:rgba(255,255,255,.14);border-radius:2px;
+}
+/* WebKit/Chrome/iOS Safari needs an explicit runnable-track when
+   -webkit-appearance:none is set on the input — otherwise no rail is
+   drawn and only the thumbs render. Mirrors the Firefox track above
+   so the visual is identical across engines. */
+.erk-card input[type="range"]::-webkit-slider-runnable-track{
+  height:3px;background:rgba(255,255,255,.14);border-radius:2px;
+  border:0;
+}
+
+/* Two-column row used by step 3 — confirm_n + confirm_seconds side by
+   side. Drops to single column at the modern-iPhone breakpoint (420 px
+   covers iPhone SE through iPhone 15 Pro Max in portrait), at which
+   point each row picks up its left-side .row-lbl ("Treffer" /
+   "Sekunden") so the user reads label → slider → value left-to-right
+   instead of cramming both pieces into a half-width cell. */
+.erk-card .two-col{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+@media (max-width:420px){
+  .erk-card .two-col{ grid-template-columns:1fr;gap:6px; }
+  /* Slightly more breathing room between thumb-at-max and the value
+     pill on the narrow stacked layout. */
+  .erk-card .two-col .row{ gap:12px; }
+}
+
+/* Compact select inside an .erk-card row — strips the inherited input
+   chrome down to match the slider visual register. */
+.erk-card select{
+  flex:1;
+  background:rgba(255,255,255,.04);
+  color:#cbd5e1;
+  border:0;border-radius:7px;
+  padding:7px 10px;
+  font-size:11.5px;
+  outline:none;
+  -webkit-appearance:none;appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%237faec9' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat:no-repeat;
+  background-position:right 10px center;
+  padding-right:24px;
+}
+
+/* Drilldown "Pro Klasse anpassen" — small inline link button.
+   Reserves visual register beneath the cards in step 2 and step 3 for
+   Phase 2's per-class sliders. */
+.erk-more{
+  margin-top:5px;
+  font-size:10.5px;
+  color:rgba(127,174,201,.7);
+  cursor:pointer;
+  display:inline-flex;align-items:center;gap:4px;
+  padding:4px 0;
+  background:transparent;border:0;
+  font-weight:600;
+  letter-spacing:.01em;
+}
+.erk-more:hover{ color:#cfe1ee; }
+.erk-more svg{ width:9px;height:9px;flex-shrink:0; }
+

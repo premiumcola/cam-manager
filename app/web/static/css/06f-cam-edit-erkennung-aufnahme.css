@@ -1,0 +1,172 @@
+/* ────────────────────────────────────────────────────────────────────────
+   Camera-edit panel · DARK overlay reskin (scoped to .cam-edit-inner)
+
+   The expanded body is a dark elevated card on the panel surface.
+   Every override is scoped on .cam-edit-inner so the global dark
+   theme keeps applying everywhere else. NO blue tint — neutral zinc
+   greys only. Depth via translucent overlays
+   (rgba(255,255,255,.025/.04/.06)), never thin lines.
+   ──────────────────────────────────────────────────────────────────── */
+.cam-edit-inner{color:#edf4fb}
+.cam-edit-inner .field-label,
+.cam-edit-inner .cam-field-label,
+.cam-edit-inner .cam-icon-microlabel,
+.cam-edit-inner .settings-divider,
+.cam-edit-inner .toggle-row-sublabel,
+.cam-edit-inner .field-help,
+.cam-edit-inner .muted{color:#a3a3a3}
+.cam-edit-inner .field-help code{background:rgba(255,255,255,.08);color:#edf4fb}
+/* Italic micro-labels under inputs need to align horizontally with
+   the input's text content (input padding is 0 14px). The base
+   .field-label rule already supplies padding-left:14px; the hints
+   below carry their own scoped colours, so we re-state the indent
+   here to keep every italic sub-line aligned with the input text
+   above it. */
+.cam-edit-inner .cam-autodetected-hint{padding-left:14px}
+/* Italic muted subtitle rendered BELOW the Kamera-ID box (was a hint
+   inside the box; pulled out so the box only carries label+value and
+   the explanation reads as a regular field-label sub-line, matching
+   the Erkennungs-Modus pattern further down). */
+.cam-edit-inner .cam-id-preview-subtitle{
+  font-size:10.5px;font-style:italic;color:#a3a3a3;
+  margin-top:5px;padding-left:14px;display:block
+}
+/* Inputs uniform 40 px so labels below align across rows.
+   The previous rgba(255,255,255,.06) over the dark panel made filled
+   values read like a faded raised tile — users mistook committed
+   entries for placeholders. Solid #1c1c20 surface gives the field a
+   recessed-slot feel (background depth, not borders, per project
+   design rules). The text colour bumps to a clean #ffffff so filled
+   values are visibly brighter than the muted #737373 placeholder. */
+.cam-edit-inner .field-wrap input:not([type=range]):not([type=number]):not([type=checkbox]),
+.cam-edit-inner .field-wrap input[type=number],
+.cam-edit-inner .field-wrap select,
+.cam-edit-inner .field-wrap textarea{
+  height:40px;
+  background:#1c1c20;
+  color:#ffffff;
+  border:1px solid rgba(255,255,255,.04);
+  box-shadow:none;
+  padding:0 14px;
+  border-radius:10px
+}
+.cam-edit-inner .field-wrap textarea{height:auto;padding:10px 14px}
+.cam-edit-inner .field-wrap input:focus,
+.cam-edit-inner .field-wrap select:focus,
+.cam-edit-inner .field-wrap textarea:focus{
+  border-color:rgba(34,197,94,.40);
+  box-shadow:0 0 0 3px rgba(22,163,74,.18);
+  outline:none
+}
+.cam-edit-inner .field-wrap input::placeholder,
+.cam-edit-inner .field-wrap textarea::placeholder{color:#737373}
+/* Browser-autofill override — Chrome/Safari paint a yellow tint that
+   ignores the field's background. The huge inset box-shadow is the
+   long-standing workaround that re-paints the field with our solid
+   surface; -webkit-text-fill-color forces the autofilled text to use
+   our white instead of the browser's default near-black. The
+   transition keeps the autofill style stable across focus/blur — the
+   `5000s` value is the documented trick that delays the OS-fallback
+   long enough that a user never sees the yellow flash. */
+.cam-edit-inner .field-wrap input:-webkit-autofill,
+.cam-edit-inner .field-wrap input:-webkit-autofill:hover,
+.cam-edit-inner .field-wrap input:-webkit-autofill:focus,
+.cam-edit-inner .field-wrap input:-webkit-autofill:active,
+.cam-edit-inner .field-wrap select:-webkit-autofill,
+.cam-edit-inner .field-wrap textarea:-webkit-autofill{
+  -webkit-text-fill-color:#ffffff !important;
+  -webkit-box-shadow:0 0 0 1000px #1c1c20 inset !important;
+  caret-color:#ffffff;
+  transition:background-color 5000s ease-in-out 0s;
+}
+/* Native chevron in selects: a single neutral chevron at the right
+   edge, no-repeat. The previous rule emitted a chevron without
+   locking background-repeat — Firefox/Chrome tile-painted the SVG
+   across the entire field producing the "arrow-tape" effect in the
+   redesign brief screenshots. */
+.cam-edit-inner .field-wrap select{
+  appearance:none;
+  -webkit-appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23a3a3a3' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  padding-right:32px
+}
+/* KAMERA-ID + status tiles — soft elevated cards on the dark body. */
+.cam-edit-inner .cam-id-preview,
+.cam-edit-inner .cam-gs-row,
+.cam-edit-inner .cam-sched,
+.cam-edit-inner .tl-panel,
+.cam-edit-inner .toggle-row{
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.06);
+  box-shadow:none;
+  color:#edf4fb
+}
+.cam-edit-inner .cam-id-preview-label{color:#a3a3a3;letter-spacing:.6px;font-weight:500}
+.cam-edit-inner .cam-id-preview-value{color:#edf4fb;background:transparent}
+.cam-edit-inner .cam-autodetected-hint{color:#4ade80}
+.cam-edit-inner .cam-sep{background:rgba(255,255,255,.06)}
+.cam-edit-inner .toggle-row-label{color:#edf4fb}
+.cam-edit-inner .cam-sched summary{color:#a3a3a3}
+.cam-edit-inner .tl-preset{background:rgba(255,255,255,.04)}
+.cam-edit-inner .tl-preset-head{color:#a3a3a3}
+.cam-edit-inner .tl-val{color:#4ade80}
+.cam-edit-inner .cam-gs-row--off{background:rgba(255,255,255,.02);color:#a3a3a3}
+.cam-edit-inner .cam-gs-tag{background:rgba(255,255,255,.06);color:#a3a3a3}
+/* Tab bar on the dark body — light text, white active underline. */
+.cam-edit-inner .cam-tab-bar{
+  display:flex;align-items:center;padding:0 18px;gap:2px;
+  border-bottom-color:rgba(255,255,255,.06)
+}
+.cam-edit-inner .cam-tab-btn{color:#a3a3a3}
+.cam-edit-inner .cam-tab-btn .cam-tab-ico{color:#a3a3a3}
+.cam-edit-inner .cam-tab-btn:hover{background:rgba(255,255,255,.05);color:#edf4fb}
+.cam-edit-inner .cam-tab-btn.active{color:#edf4fb;border-bottom-color:#edf4fb}
+.cam-edit-inner .cam-tab-btn.active .cam-tab-ico{color:#a3a3a3}
+/* Recovery button — compact, right-aligned in the tab bar row,
+   green-tinted to mirror the .btn-action.action-green token used
+   elsewhere. NOT taller than the tabs themselves. The override
+   wins by specificity over the unscoped 44 px iOS rule in
+   22-cam-edit-3.css; the surrounding tabs are also <44 px so the
+   compact size keeps the whole tab strip on one visual line. */
+.cam-edit-inner .cam-tab-recovery-btn{
+  margin-left:auto;
+  height:32px;
+  min-height:32px;
+  padding:0 11px;
+  background:rgba(34,197,94,.10);
+  border:1px solid rgba(34,197,94,.20);
+  color:#4ade80;
+  border-radius:8px;
+  font-size:11.5px;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  cursor:pointer
+}
+.cam-edit-inner .cam-tab-recovery-btn:hover{background:rgba(34,197,94,.16)}
+/* Header-variant: when JS lifts #camTabRecoveryBtn out of the tab
+   bar and inserts it into the cam-item header (left of the chevron)
+   on edit-mode entry. Smaller and flatter than the tab-bar variant
+   so the row's chevron stays the dominant glyph; no margin-left:
+   auto because the parent .cam-item-head-right already aligns the
+   chevron to the right. */
+.cam-item-head-right .cam-tab-recovery-btn{
+  margin-left:0;height:30px;min-height:30px;padding:0 10px;font-size:11px;
+  border-radius:8px
+}
+@media (max-width:520px){
+  /* Header-variant on phones — keep the "Reconnect" label visible
+     (the previous icon-only collapse made the button feel like a
+     dormant square next to the chevron). Symmetric padding pairs
+     the icon-label group centred between equal gutters. */
+  .cam-item-head-right .cam-tab-recovery-btn{padding:0 11px}
+}
+/* Headlines */
+.cam-edit-inner h3,.cam-edit-inner h4{color:#edf4fb}
+/* Whitelist chips revert to dark-theme tints. The light-skin pass
+   painted them with #d1d5db; removing the override here lets the
+   base .wl-chip per-class colours (purple/pink/cyan/orange/brown/
+   teal) paint again on the dark body. */
+
