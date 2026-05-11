@@ -146,9 +146,14 @@
   opacity:.78;
   font-size:10px;
   font-weight:600;
-  /* +2 px on top of the row's 6 px gap → 8 px effective spacing
-     between "Live" and the fps reading. */
-  margin-left:2px;
+  /* Belt-and-braces spacing between "Live" and the fps number: the
+     flex `gap:6px` on .cv-live-collapsed was disappearing on iOS in
+     some live-pill renders (probably the inline-flex parent
+     collapsing intrinsic widths), making "Live3.9 fps" run together.
+     Explicit margin-left guarantees the gap survives even when the
+     flex `gap` doesn't fire — modern browsers stack both for a 12 px
+     visible gap, broken iOS still gets 6 px which is enough to read. */
+  margin-left:6px;
 }
 .cv-pill-live-wrap.cv-lp-open .cv-live-collapsed{opacity:0;transform:translateY(-4px);pointer-events:none;max-height:0;padding:0;overflow:hidden}
 .cv-live-expanded{padding:0 12px;max-height:0;opacity:0;overflow:hidden;transition:max-height .3s ease,opacity .25s ease,padding .3s ease;width:100%;min-width:0}
