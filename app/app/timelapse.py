@@ -85,6 +85,18 @@ class TimelapseBuilder:
         """Encode valid JPEG frames to H.264 MP4 via ffmpeg concat demuxer.
         No frame data is loaded into Python memory — ffmpeg reads files directly.
         Returns path string on success, None on failure."""
+        # Defence-in-depth — _write_video already rejects len<2 before
+        # we get here, but a direct caller could still hand us 0 or 1
+        # paths. ffmpeg-concat with a single entry silently produces a
+        # 1-frame mp4 that fails ffprobe duration validation downstream
+        # but leaves an inscrutable file on disk; refusing up front is
+        # cheaper and produces a clearer log line.
+        if len(valid_paths) < 2:
+            log.warning(
+                "timelapse: _write_video_ffmpeg refused — only %d input frame(s) for %s",
+                len(valid_paths), out_path.name,
+            )
+            return None
         w, h = ref_size
         out_w, out_h = self._scale_dims(w, h)
         frame_dur = 1.0 / fps
@@ -112,10 +124,22 @@ class TimelapseBuilder:
                 str(out_path),
             ]
             result = subprocess.run(cmd, capture_output=True, timeout=180)
-            if result.returncode == 0 and out_path.exists() and out_path.stat().st_size > 0:
-                log.debug("timelapse: ffmpeg encoded %s (%d frames → H.264 %dx%d)",
-                          out_path.name, len(valid_paths), out_w, out_h)
+            # 50 KB floor — empirically the smallest VALID H.264 mp4 we
+            # see from a 2-frame, 16x16 source is ~12 KB; the bad
+            # zero-duration writes we want to reject land at ≤ 2 KB
+            # (just the moov atom + sps/pps headers). 50 KB is the
+            # safest threshold that catches the failure mode without
+            # rejecting any legitimate output.
+            ok_size = out_path.exists() and out_path.stat().st_size >= 50_000
+            if result.returncode == 0 and ok_size:
+                log.debug("timelapse: ffmpeg encoded %s (%d frames → H.264 %dx%d, %d bytes)",
+                          out_path.name, len(valid_paths), out_w, out_h, out_path.stat().st_size)
                 return str(out_path)
+            if result.returncode == 0 and out_path.exists() and not ok_size:
+                log.warning(
+                    "timelapse: ffmpeg wrote %s but file is %d B < 50 KB · treating as failure",
+                    out_path.name, out_path.stat().st_size,
+                )
             if result.returncode != 0:
                 log.warning("timelapse: ffmpeg failed for %s: %s",
                             out_path.name, result.stderr.decode(errors="replace")[-300:])
@@ -256,8 +280,17 @@ class TimelapseBuilder:
             writer.write(img)
             del img
         writer.release()
-        if out_path.exists() and out_path.stat().st_size > 0:
+        # Mirror the 50 KB floor from the ffmpeg path — OpenCV mp4v
+        # encoder lands ~30 % larger than libx264 for the same input,
+        # so 50 KB is well below any legitimate output and still
+        # catches the zero-content writer failure mode.
+        if out_path.exists() and out_path.stat().st_size >= 50_000:
             return str(out_path)
+        if out_path.exists():
+            log.warning(
+                "timelapse: opencv wrote %s but file is %d B < 50 KB · treating as failure",
+                out_path.name, out_path.stat().st_size,
+            )
         return None
 
     def _write_thumbnail(self, img_path: Path, out_path: Path) -> None:

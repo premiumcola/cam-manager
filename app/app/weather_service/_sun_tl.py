@@ -952,7 +952,29 @@ class SunTimelapseMixin:
         try:
             from ..timelapse import TimelapseBuilder
             tb = TimelapseBuilder(self._sightings_dir().parent.parent)
+            # Re-glob the scratch directory rather than trusting the
+            # in-memory ``n_written`` counter. A mid-capture cleanup
+            # (e.g. ``_finalise_scratch`` racing on a previous run) or
+            # an aggressive antivirus pass would leave the counter
+            # ahead of what's actually on disk; encoding from an empty
+            # / partial directory then yields the 1-frame mp4 that
+            # ffprobe rejects. Cheaper to spot it here than to debug
+            # the diag sidecar later.
             images = sorted(frames_dir.glob("*.jpg"))
+            if len(images) != n_written:
+                log.warning(
+                    "[%s] frame-count mismatch · captured=%d on-disk=%d (%s %s) — using on-disk count",
+                    log_tag, n_written, len(images), cam_name, phase,
+                )
+            if len(images) < min_frames:
+                log.warning(
+                    "[%s] re-glob found only %d frames (min=%d) — encode skipped (%s %s)",
+                    log_tag, len(images), min_frames, cam_name, phase,
+                )
+                if test_session is not None:
+                    test_session.error = f"too few frames on disk ({len(images)})"
+                _finalise_scratch()
+                return
             # Test runs let the user pick the final encoded MP4 length
             # explicitly; production captures still use the legacy
             # implicit math (n_written/fps clamped to [8, 60]). This
