@@ -46,7 +46,22 @@
 .stat-hm-cam{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:32px;display:flex;align-items:center}
 .stat-hm-hours{display:contents}
 .stat-hm-cells{display:contents}
-.stat-hm-hlabel{flex:1;font-size:9px;color:var(--muted);font-weight:600;text-align:center;min-width:0;padding:0 1px}
+/* Each hour label sits in its own 1fr column. flex:1 is a leftover —
+   inside display:contents on .stat-hm-hours the parent's grid controls
+   the layout, but it doesn't hurt. Use display:flex to center the
+   text inside the cell so the anchor lands on the column centre even
+   when the label string is wider than the cell (the text overflow
+   visually centres around the cell, not left-anchored against the
+   adjacent label). */
+.stat-hm-hlabel{display:flex;align-items:center;justify-content:center;flex:1;font-size:9px;color:var(--muted);font-weight:600;min-width:0;padding:0;overflow:hidden}
+/* On mobile the 24 columns get ~10 px each — too narrow for two-digit
+   labels to fit at 9 px font. Hide every label that isn't a multiple
+   of 3 hours, keeping 8 evenly-spaced labels (0, 3, 6, 9, 12, 15, 18,
+   21). visibility:hidden preserves the grid layout so the visible
+   labels still line up with their data cells. */
+@media(max-width:768px){
+  .stat-hm-hlabel:not(:nth-child(3n+1)){visibility:hidden}
+}
 .stat-hm-cell{flex:1;min-height:28px;border-radius:4px;position:relative;cursor:default;transition:filter .15s}
 .stat-hm-cell:hover{filter:brightness(1.25)}
 .stat-hm-row{margin-bottom:4px}
