@@ -28,6 +28,7 @@ def register_blueprints(app) -> None:
         bootstrap,
         cameras,
         coral,
+        detection_cloud,
         events,
         media,
         sichtungen,
@@ -51,3 +52,4 @@ def register_blueprints(app) -> None:
     app.register_blueprint(coral.bp)
     app.register_blueprint(weather.bp)
     app.register_blueprint(telegram.bp)
+    app.register_blueprint(detection_cloud.bp)

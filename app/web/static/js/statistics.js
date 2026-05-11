@@ -9,6 +9,10 @@ import { state, STAT_MEDIA_DRILLDOWN } from './core/state.js';
 import { j } from './core/api.js';
 import { CAT_COLORS } from './timeline.js';
 import { colors, OBJ_LABEL, OBJ_SVG, objIconSvg, getCameraIcon, getCameraColor } from './core/icons.js';
+// Erkennungswolke is rendered into its own mount node inside the
+// Statistik section. Importing here keeps its IntersectionObserver
+// lifecycle in lockstep with the rest of the panel.
+import { initDetectionCloud } from './detection-cloud.js';
 
 const _STAT_LABEL_ICONS  = { motion: '👁', person: '🧍', cat: '🐈', bird: '🐦', car: '🚗', dog: '🐕', fox: '🦊', hedgehog: '🦔', squirrel: '🐿️', horse: '🐴' };
 const _STAT_LABEL_COLORS = { motion: '#36a2ff', person: '#ff6b6b', cat: '#9b8cff', bird: '#62d26f', car: '#00c2ff', dog: '#7c2d12', fox: '#ff7a1a', hedgehog: '#a67c52', squirrel: '#c8651a' };
@@ -246,7 +250,10 @@ byId('statRefreshBtn')?.addEventListener('click', () => { _statLoaded = false; l
 const _statSection = byId('statistik');
 if (_statSection){
   new IntersectionObserver(entries => {
-    if (entries.some(e => e.isIntersecting) && !_statLoaded) loadStatistik();
+    if (entries.some(e => e.isIntersecting)){
+      if (!_statLoaded) loadStatistik();
+      initDetectionCloud();
+    }
   }, { threshold: 0.05 }).observe(_statSection);
 }
 
