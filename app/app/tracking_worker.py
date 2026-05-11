@@ -28,10 +28,31 @@ import os
 import queue
 import threading
 import time
-import uuid
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
+
+# The tracking algorithm itself lives in :mod:`tracker_core` — same
+# code runs in the live camera_runtime path AND here in the post-clip
+# worker. Constants / dataclasses / helpers re-exported under their
+# legacy underscore-prefixed names so any external import that
+# happened to grab them via `from .tracking_worker import _Track`
+# keeps resolving.
+from .tracker_core import (
+    IOU_MATCH_THRESHOLD,
+    SAMPLE_BBOX_DELTA_PX,
+    TRACK_FLOOR_SCORE,
+    TRACK_MISS_WINDOWS,
+    TRACK_SPAWN_SCORE,
+    Track as _Track,
+    TrackerState as _TrackerState,
+    associate_detections as _associate_detections,
+    color_for_track as _color_for_track,
+    predicted_bbox as _predicted_bbox,
+    resolve_track_thresholds as _resolve_track_thresholds,
+    short_id as _short_id,
+    update_best_top as _update_best_top,
+)
 
 log = logging.getLogger(__name__)
 
@@ -64,24 +85,9 @@ TRACKS_SCHEMA = 3
 # operator notices a degraded run without losing frames.
 SLOW_JOB_RATIO = 1.0 / 3.0  # processing time / clip duration
 
-# Track-association tuning.
-IOU_MATCH_THRESHOLD = 0.30
-# Two-tier detection floor — see TRACKS_SCHEMA v3 doc above.
-#   TRACK_FLOOR_SCORE — the raw model floor we ask the detector for.
-#     Everything between FLOOR and SPAWN is "tentative": it may
-#     continue an existing IoU match, never starts a new track.
-#   TRACK_SPAWN_SCORE — minimum confidence to spawn a NEW track.
-# Per-camera overrides land via `track_continue_min_score` and
-# `track_spawn_min_score` (camera schema); 0.0 means "use the module
-# default".
-TRACK_FLOOR_SCORE = 0.20
-TRACK_SPAWN_SCORE = 0.50
-# Bumped from 2 to 4 in v3: with the tentative-continuation phase
-# there's a real chance of recovering a low-conf frame *after* one
-# miss, so the wider grace window pays for itself by keeping the
-# track id stable across short occlusions / partial bbox dropouts.
-TRACK_MISS_WINDOWS = 4          # how many sample windows a track may go un-matched
-SAMPLE_BBOX_DELTA_PX = 2        # skip samples whose bbox didn't move by ≥ this many px
+# Track-association tuning — IOU_MATCH_THRESHOLD, TRACK_FLOOR_SCORE,
+# TRACK_SPAWN_SCORE, TRACK_MISS_WINDOWS, SAMPLE_BBOX_DELTA_PX all live
+# in :mod:`tracker_core` and are imported at the top of this file.
 
 
 @dataclass
@@ -91,157 +97,6 @@ class TrackingJob:
     snapshot_path: Path | None
     camera_id: str
 
-
-def _short_id() -> str:
-    """6-hex-char id for a track. Stable across the clip but not globally
-    unique — the (event_id, track_id) pair is what callers index on."""
-    return uuid.uuid4().hex[:6]
-
-
-def _color_for_track(track_id: str) -> str:
-    """Deterministic 6-char hex colour from the track id. The lightbox
-    overlay uses this to keep each subject visually distinct without a
-    server-side palette table. Picks from a hue-spread set of saturated
-    colours so two adjacent tracks never collide."""
-    palette = [
-        "#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7",
-        "#14b8a6", "#ec4899", "#84cc16", "#f97316", "#06b6d4",
-        "#eab308", "#8b5cf6", "#10b981", "#f43f5e", "#0ea5e9",
-    ]
-    h = sum(ord(c) for c in track_id) % len(palette)
-    return palette[h]
-
-
-from .bbox_utils import bbox_centroid_dist, iou
-
-
-class _Track:
-    """Mutable track state held during a single job. Closed at the end
-    and serialised into tracks.json's `tracks` array. end_reason +
-    last_* diagnostics surface in the lightbox × tooltip so the user
-    sees WHY a track dropped without having to grep worker logs."""
-
-    __slots__ = ("track_id", "label", "color", "samples",
-                 "first_frame", "last_frame", "best_score", "best_frame_idx",
-                 "active", "missed_windows",
-                 "end_reason", "last_score",
-                 "last_bbox_w_px", "last_bbox_h_px",
-                 "last_bbox_frac_h", "last_bbox_frac_area")
-
-    def __init__(self, track_id: str, label: str, frame_idx: int):
-        self.track_id = track_id
-        self.label = label
-        self.color = _color_for_track(track_id)
-        self.samples: list[dict] = []
-        self.first_frame = frame_idx
-        self.last_frame = frame_idx
-        self.best_score: float = 0.0
-        self.best_frame_idx: int = frame_idx
-        self.active = True
-        self.missed_windows = 0
-        # End-state diagnostics — populated by close() before
-        # serialisation. None means "track never closed cleanly" and
-        # the consumer should treat it as missing.
-        self.end_reason: str | None = None
-        self.last_score: float | None = None
-        self.last_bbox_w_px: int | None = None
-        self.last_bbox_h_px: int | None = None
-        self.last_bbox_frac_h: float | None = None
-        self.last_bbox_frac_area: float | None = None
-
-    def add_sample(self, frame_idx: int, t_s: float, bbox_dict: dict,
-                   score: float | None, source: str):
-        # Squelch micro-jitter samples — only emit when the bbox moved
-        # by ≥ SAMPLE_BBOX_DELTA_PX pixels at the centroid OR this is a
-        # detection sample (always kept so score history is preserved).
-        if source == "track" and self.samples:
-            last = self.samples[-1]["bbox"]
-            if bbox_centroid_dist(last, bbox_dict) < SAMPLE_BBOX_DELTA_PX:
-                return
-        self.samples.append({
-            "f": frame_idx,
-            "t": round(t_s, 3),
-            "bbox": bbox_dict,
-            "score": (round(float(score), 4) if score is not None else None),
-            "source": source,
-        })
-        self.last_frame = frame_idx
-        if score is not None and score > self.best_score:
-            self.best_score = float(score)
-            self.best_frame_idx = frame_idx
-        self.missed_windows = 0
-
-    def close(self, reason: str, frame_w: int, frame_h: int) -> None:
-        """Mark the track inactive and capture diagnostic fields from
-        the LAST detect sample (falls back to last sample of any
-        source when no detect samples exist — happens for tracks that
-        only ever got `track`-source extrapolations). `reason` is one
-        of "timeout" or "ended_at_clip" today; the worker's pipeline
-        doesn't run per-track conf_drop / class_filter / bbox_too_small
-        gates after the detector so those reasons aren't emitted from
-        here.
-        """
-        self.active = False
-        self.end_reason = reason
-        last_detect = next(
-            (s for s in reversed(self.samples) if s.get("source") == "detect"),
-            None,
-        )
-        last = last_detect or (self.samples[-1] if self.samples else None)
-        if not last:
-            return
-        if last.get("score") is not None:
-            self.last_score = float(last["score"])
-        bb = last.get("bbox") or {}
-        try:
-            bw = max(0, int(bb["x2"]) - int(bb["x1"]))
-            bh = max(0, int(bb["y2"]) - int(bb["y1"]))
-        except Exception:
-            return
-        self.last_bbox_w_px = bw
-        self.last_bbox_h_px = bh
-        if frame_h > 0:
-            self.last_bbox_frac_h = round(bh / frame_h, 4)
-        if frame_w > 0 and frame_h > 0:
-            self.last_bbox_frac_area = round((bw * bh) / (frame_w * frame_h), 5)
-
-    def to_dict(self) -> dict:
-        d = {
-            "track_id": self.track_id,
-            "label": self.label,
-            "color": self.color,
-            "first_frame": self.first_frame,
-            "last_frame": self.last_frame,
-            "best_score": round(self.best_score, 4),
-            "best_frame": self.best_frame_idx,
-            "samples": self.samples,
-        }
-        # End-state diagnostics — additive. Omit fields that close()
-        # didn't populate (e.g. a track with zero samples). The
-        # lightbox tooltip falls back to "—" / "unknown" for missing
-        # values, never breaks on absence.
-        if self.end_reason is not None:
-            d["end_reason"] = self.end_reason
-        if self.last_score is not None:
-            d["last_score"] = round(self.last_score, 4)
-        if self.last_bbox_w_px is not None and self.last_bbox_h_px is not None:
-            d["last_bbox_size_px"] = [self.last_bbox_w_px, self.last_bbox_h_px]
-        if self.last_bbox_frac_h is not None:
-            d["last_bbox_frac_h"] = self.last_bbox_frac_h
-        if self.last_bbox_frac_area is not None:
-            d["last_bbox_frac_area"] = self.last_bbox_frac_area
-        return d
-
-
-@dataclass
-class _TrackerState:
-    """Per-job mutable state shared across the per-frame helpers. Replaces
-    the four locals tracks_active / tracks_closed / samples_emitted /
-    best_top in the legacy `_run_one` body."""
-    active: list = field(default_factory=list)   # list[_Track]
-    closed: list = field(default_factory=list)   # list[_Track]
-    samples_emitted: int = 0
-    best_top: dict | None = None
 
 
 # ── Per-job pure helpers (R05) ───────────────────────────────────────────
@@ -318,224 +173,6 @@ def _detect_and_filter(detector, frame, allowed, *, floor_score: float):
         dets = [d for d in dets if d.label in allowed]
     return dets
 
-
-def _resolve_track_thresholds(cam_cfg_getter, camera_id) -> tuple[float, float]:
-    """Pull the camera's spawn / continue thresholds.
-
-    Returns ``(spawn_score, floor_score)``. A camera that hasn't
-    customised these fields (or has them set to 0.0, the schema's
-    "use module default" sentinel) falls back to the module-level
-    ``TRACK_SPAWN_SCORE`` / ``TRACK_FLOOR_SCORE`` so the worker
-    behaves identically to today on an unconfigured install.
-    """
-    spawn = TRACK_SPAWN_SCORE
-    floor = TRACK_FLOOR_SCORE
-    try:
-        cfg = cam_cfg_getter(camera_id) or {}
-    except Exception:
-        cfg = {}
-    try:
-        s = float(cfg.get("track_spawn_min_score") or 0.0)
-        if s > 0.0:
-            spawn = s
-    except (TypeError, ValueError):
-        pass
-    try:
-        f = float(cfg.get("track_continue_min_score") or 0.0)
-        if f > 0.0:
-            floor = f
-    except (TypeError, ValueError):
-        pass
-    # Refuse a configuration where spawn dips below floor — that would
-    # let "tentative" samples spawn tracks, defeating the whole point
-    # of the two-tier design. Clamp floor up to spawn.
-    if floor > spawn:
-        floor = spawn
-    return spawn, floor
-
-
-def _predicted_bbox(track: "_Track", frame_idx: int) -> tuple[int, int, int, int]:
-    """Linear-velocity bbox prediction for IoU matching at ``frame_idx``.
-
-    Uses the last two *detect-source* samples to estimate centroid
-    velocity (dx/df, dy/df) and projects the centroid forward to the
-    current frame index, keeping the most recent bbox size. With
-    fewer than two detect samples we have no velocity signal, so we
-    fall back to the literal last sample bbox — same behaviour as
-    pre-v3.
-
-    Linear is intentional: at ~1 Hz sampling and the IoU threshold
-    of 0.30, the prediction only needs to bring the bbox within
-    ~70 % overlap of the next detection. Full Kalman buys nothing
-    at this cadence."""
-    detect_samples = [s for s in track.samples if s.get("source") == "detect"]
-    if not track.samples:
-        return (0, 0, 0, 0)
-    if len(detect_samples) < 2:
-        last = track.samples[-1]["bbox"]
-        return (int(last["x1"]), int(last["y1"]),
-                int(last["x2"]), int(last["y2"]))
-    s_prev = detect_samples[-2]
-    s_last = detect_samples[-1]
-    bb_prev = s_prev["bbox"]
-    bb_last = s_last["bbox"]
-    cx_prev = (bb_prev["x1"] + bb_prev["x2"]) / 2.0
-    cy_prev = (bb_prev["y1"] + bb_prev["y2"]) / 2.0
-    cx_last = (bb_last["x1"] + bb_last["x2"]) / 2.0
-    cy_last = (bb_last["y1"] + bb_last["y2"]) / 2.0
-    df = max(1, int(s_last["f"]) - int(s_prev["f"]))
-    dx = (cx_last - cx_prev) / df
-    dy = (cy_last - cy_prev) / df
-    elapsed = max(0, frame_idx - int(s_last["f"]))
-    p_cx = cx_last + dx * elapsed
-    p_cy = cy_last + dy * elapsed
-    half_w = (bb_last["x2"] - bb_last["x1"]) / 2.0
-    half_h = (bb_last["y2"] - bb_last["y1"]) / 2.0
-    return (int(p_cx - half_w), int(p_cy - half_h),
-            int(p_cx + half_w), int(p_cy + half_h))
-
-
-def _update_best_top(state: _TrackerState, det, frame_idx: int, t_s: float):
-    """Bump state.best_top when det.score beats the current best.
-    Lifted to a helper because the legacy code ran this exact 3-line
-    block twice — once after the match-loop and once after the spawn
-    loop."""
-    score = float(det.score)
-    if state.best_top is None or score > state.best_top["score"]:
-        state.best_top = {
-            "f": frame_idx,
-            "t": round(t_s, 3),
-            "score": round(score, 4),
-            "label": det.label,
-        }
-
-
-def _associate_detections(state: _TrackerState, dets, frame_idx: int, t_s: float,
-                          frame_w: int = 0, frame_h: int = 0,
-                          spawn_score: float = TRACK_SPAWN_SCORE):
-    """Two-tier greedy IoU pairing + spawn + age-out for one frame.
-
-    Mutates ``state`` in place. v3 rules:
-
-    * Phase 1 — *confirmed* detections (score ≥ ``spawn_score``) are
-      matched to active tracks of the same label by descending IoU.
-      Targets use the track's predicted bbox (linear velocity from
-      the last two detect samples) so a fast-moving subject still
-      lands inside an existing patch.
-    * Phase 2 — *tentative* detections (FLOOR ≤ score < spawn) may
-      ONLY extend a still-unmatched active track via the same IoU
-      rule. The sample is recorded with ``source="detect"`` (it IS
-      a real detector hit, just below the spawn floor); the lightbox
-      branches on score to draw it differently.
-    * Phase 3 — unmatched confirmed detections spawn fresh tracks.
-      Unmatched tentative detections are dropped entirely.
-
-    frame_w / frame_h feed each closed track's `last_bbox_frac_h` and
-    `last_bbox_frac_area` diagnostics — the worker's only writer for
-    those fields, so missing dims (0) leave the fractions unpopulated
-    and the consumer falls back gracefully.
-
-    The pre-spawn snapshot (`original_count = len(state.active)`) keeps
-    freshly-spawned tracks out of the age-out pass on their birth
-    frame — without it they'd immediately get missed_windows += 1 and
-    halve the intended TRACK_MISS_WINDOWS grace period."""
-    confirmed: list[tuple[int, "Detection"]] = []   # noqa: F821
-    tentative: list[tuple[int, "Detection"]] = []   # noqa: F821
-    for di, d in enumerate(dets):
-        (confirmed if float(d.score) >= spawn_score else tentative).append((di, d))
-
-    # Predict each active track's bbox at the current frame — used as
-    # the IoU target for BOTH phases. Computed once per track, indexed
-    # by track index so phase 2 reuses the cache without re-walking
-    # the sample list.
-    predicted: list[tuple[int, int, int, int]] = [
-        _predicted_bbox(tr, frame_idx) for tr in state.active
-    ]
-
-    taken_tracks: set[int] = set()
-
-    def _pair_pass(pool):
-        """Greedy IoU pairing for one tier; yields (di, ti, det).
-        Mutates ``taken_tracks`` so phase 2 sees phase 1's claims."""
-        candidates: list[tuple[int, int, float]] = []
-        for di, d in pool:
-            for ti, tr in enumerate(state.active):
-                if not tr.active or tr.label != d.label or not tr.samples:
-                    continue
-                if ti in taken_tracks:
-                    continue
-                iou_v = iou(predicted[ti], d.bbox)
-                if iou_v >= IOU_MATCH_THRESHOLD:
-                    candidates.append((di, ti, iou_v))
-        candidates.sort(key=lambda p: p[2], reverse=True)
-        taken_dets_local: set[int] = set()
-        out = []
-        for di, ti, _iou_v in candidates:
-            if di in taken_dets_local or ti in taken_tracks:
-                continue
-            taken_dets_local.add(di)
-            taken_tracks.add(ti)
-            out.append((di, ti))
-        return out, taken_dets_local
-
-    def _record_match(di_ti_pairs, pool_by_di):
-        for di, ti in di_ti_pairs:
-            d = pool_by_di[di]
-            tr = state.active[ti]
-            bbox_dict = {"x1": int(d.bbox[0]), "y1": int(d.bbox[1]),
-                         "x2": int(d.bbox[2]), "y2": int(d.bbox[3])}
-            tr.add_sample(frame_idx, t_s, bbox_dict,
-                          float(d.score), "detect")
-            state.samples_emitted += 1
-            _update_best_top(state, d, frame_idx, t_s)
-
-    # Phase 1 — confirmed dets fight for tracks first.
-    confirmed_by_di = {di: d for di, d in confirmed}
-    pairs1, taken_confirmed = _pair_pass(confirmed)
-    _record_match(pairs1, confirmed_by_di)
-
-    # Phase 2 — tentative dets extend whatever's still unmatched.
-    tentative_by_di = {di: d for di, d in tentative}
-    pairs2, _taken_tentative = _pair_pass(tentative)
-    _record_match(pairs2, tentative_by_di)
-
-    # Snapshot the pre-spawn track count so the age-out loop
-    # below can skip tracks that are about to be created on
-    # this same frame. Without this, a freshly spawned track
-    # is not in `taken_tracks` (which was built from the
-    # original indices) and immediately gets missed_windows
-    # += 1 on the same frame as its birth — halving the
-    # intended TRACK_MISS_WINDOWS grace period.
-    original_count = len(state.active)
-    # Phase 3 — unmatched confirmed dets → new tracks. Unmatched
-    # tentative dets are intentionally dropped (no spawn) so a flicker
-    # of low-conf noise can't seed a new track id.
-    for di, d in confirmed:
-        if di in taken_confirmed:
-            continue
-        tid = _short_id()
-        tr = _Track(tid, d.label, frame_idx)
-        bbox_dict = {"x1": int(d.bbox[0]), "y1": int(d.bbox[1]),
-                     "x2": int(d.bbox[2]), "y2": int(d.bbox[3])}
-        tr.add_sample(frame_idx, t_s, bbox_dict,
-                      float(d.score), "detect")
-        state.active.append(tr)
-        state.samples_emitted += 1
-        _update_best_top(state, d, frame_idx, t_s)
-    # Age out tracks that didn't get a hit this window. After
-    # TRACK_MISS_WINDOWS misses they close — guards against the
-    # subject leaving frame and a different one re-entering at
-    # the same coordinates. Restricted to indices < original_count
-    # so newly-spawned tracks (appended above) skip this pass and
-    # get their first miss-check on the NEXT frame iteration.
-    for ti, tr in enumerate(state.active[:original_count]):
-        if ti in taken_tracks:
-            continue
-        tr.missed_windows += 1
-        if tr.missed_windows >= TRACK_MISS_WINDOWS:
-            tr.close("timeout", frame_w, frame_h)
-    state.closed.extend([t for t in state.active if not t.active])
-    state.active = [t for t in state.active if t.active]
 
 
 def _build_payload(state: _TrackerState, fps: float, frame_count: int,
