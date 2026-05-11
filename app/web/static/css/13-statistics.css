@@ -110,17 +110,12 @@
 .stat-dc-slider{display:flex;flex-direction:column;gap:6px}
 .stat-dc-slider-lbl{font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted);text-transform:uppercase;display:flex;justify-content:space-between;gap:8px}
 .stat-dc-slider-lbl b{color:var(--text);font-weight:800;letter-spacing:0;text-transform:none}
-/* Full custom range-input styling — iOS Safari would otherwise leak
-   the default blue thumb with an invisible track. Touch target is the
-   24 px input height + iOS's touch slop; the visible 18 px thumb stays
-   quiet so the selected value reads from the b labels next to it. */
-.stat-dc-slider input[type=range]{appearance:none;-webkit-appearance:none;width:100%;height:24px;background:transparent;outline:none;cursor:pointer}
-.stat-dc-slider input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:999px;background:rgba(255,255,255,.12)}
-.stat-dc-slider input[type=range]::-moz-range-track{height:4px;border-radius:999px;background:rgba(255,255,255,.12);border:0}
-.stat-dc-slider input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:18px;height:18px;border-radius:50%;border:none;background:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.4);margin-top:-7px;cursor:pointer}
-.stat-dc-slider input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;border:none;background:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.4);cursor:pointer}
-.stat-dc-slider input[type=range]:focus-visible::-webkit-slider-thumb{outline:2px solid var(--accent);outline-offset:2px}
-.stat-dc-slider input[type=range]:focus-visible::-moz-range-thumb{outline:2px solid var(--accent);outline-offset:2px}
+/* Slider visuals (track + thumb + focus ring) now ship as a global
+   rule in 01-base.css so every input[type=range] in the app reads
+   the same — no per-section duplication. Width:100% inside the
+   stat-dc-slider column ensures the slider fills the available
+   space, matching the desktop layout. */
+.stat-dc-slider input[type=range]{width:100%}
 
 .stat-dc-coverage{display:inline-flex;flex-wrap:wrap;gap:5px;align-items:center;align-self:flex-end;font-size:12px;font-weight:600;color:var(--muted);background:rgba(255,255,255,.04);padding:7px 12px;border-radius:11px;margin-left:auto;min-height:34px;transition:background .2s,color .2s,box-shadow .2s}
 .stat-dc-coverage.is-amber{background:rgba(245,158,11,.16);color:#fbbf24;box-shadow:inset 0 0 0 1px rgba(245,158,11,.30)}

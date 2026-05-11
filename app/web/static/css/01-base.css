@@ -154,3 +154,18 @@ html{scroll-padding-top:0}.section,.panel.section,[id]{scroll-margin-top:8px}@me
 
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:199}.sidebar-overlay.visible{display:block}
 .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted)}h1,h2,h3,p{margin:0}.muted{color:var(--muted)}.main{display:grid;gap:14px;flex:1;min-width:0;padding-bottom:60dvh}
+
+/* ── Range input · global custom styling ─────────────────────────────────
+   iOS Safari otherwise renders the default blue thumb on a track that
+   the dark UI can't paint over. Same rule applies everywhere — the
+   Coral Erkennung wizard, Telegram throttle, Wetter sliders,
+   Statistik → Erkennungswolke, etc. Per-section CSS that needs a
+   different accent (e.g. timelapse-settings.js uses purple) can still
+   override accent-color via inline styles or a more-specific rule. */
+input[type=range]{appearance:none;-webkit-appearance:none;width:100%;height:24px;background:transparent;outline:none;margin:0;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:999px;background:rgba(255,255,255,.12)}
+input[type=range]::-moz-range-track{height:4px;border-radius:999px;background:rgba(255,255,255,.12);border:0}
+input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:18px;height:18px;border-radius:50%;border:none;background:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.4);margin-top:-7px;cursor:pointer}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;border:none;background:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.4);cursor:pointer}
+input[type=range]:focus-visible::-webkit-slider-thumb{outline:2px solid var(--accent);outline-offset:2px}
+input[type=range]:focus-visible::-moz-range-thumb{outline:2px solid var(--accent);outline-offset:2px}
