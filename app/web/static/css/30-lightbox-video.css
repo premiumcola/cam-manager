@@ -1206,6 +1206,73 @@
   pointer-events:none;
 }
 
+/* ── Broken-event state ───────────────────────────────────────────────── */
+/* Replaces the panel-tab strip when the lightbox lands on an event
+   whose video file is missing on disk. The playbar is cleared in JS
+   (lbClearTrackTimeline); this card carries the actionable buttons. */
+.mv-broken-event{
+  padding:20px 16px;
+  background:#0a0e1a;
+  border-radius:10px;
+  display:flex;flex-direction:column;
+  align-items:center;
+  gap:12px;
+}
+.mv-broken-event-title{
+  font-size:14px;font-weight:700;
+  color:#fca5a5;
+  letter-spacing:.01em;
+}
+.mv-broken-event-msg{
+  font-size:12px;
+  color:rgba(226,232,240,.65);
+  text-align:center;
+  line-height:1.5;
+  max-width:360px;
+}
+.mv-broken-event-actions{
+  display:flex;gap:10px;flex-wrap:wrap;
+  justify-content:center;
+}
+.mv-broken-event-next,
+.mv-broken-event-close{
+  padding:9px 16px;
+  border-radius:10px;
+  border:0;
+  font-size:12.5px;
+  font-weight:600;
+  cursor:pointer;
+  min-height:38px;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s,color .15s;
+}
+.mv-broken-event-next{
+  background:rgba(56,189,248,.18);
+  color:#bae6fd;
+}
+.mv-broken-event-next:hover{
+  background:rgba(56,189,248,.28);
+  color:#e0f2fe;
+}
+.mv-broken-event-close{
+  background:rgba(255,255,255,.05);
+  color:rgba(226,232,240,.85);
+}
+.mv-broken-event-close:hover{
+  background:rgba(255,255,255,.10);
+  color:#fff;
+}
+.mv-broken-event-final{
+  font-size:11.5px;
+  font-style:italic;
+  color:rgba(226,232,240,.55);
+  text-align:center;
+}
+@media (max-width:480px){
+  .mv-broken-event-next,
+  .mv-broken-event-close{ min-height:44px;padding:11px 18px; }
+}
+
 /* ── Live-detect overlay-toggle pill row ─────────────────────────────── */
 /* Sits ABOVE the playbar (between #lightboxMediaWrap and
    #lightboxBottomStack) when live-detect is mounted. Five toggle

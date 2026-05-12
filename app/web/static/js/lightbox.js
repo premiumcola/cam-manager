@@ -224,6 +224,73 @@ export function _lbShowError(text){
   }
 }
 
+// Render a clean error state for a broken event (video file gone,
+// API 404, etc.) — clears the playbar/swimlanes from the previous
+// clip so the user doesn't see stale chrome bleed through, and
+// surfaces actionable buttons. "Nächste anzeigen" skip-traverses
+// through unavailable neighbours (loop guard: max 5 attempts).
+// "Schließen" just closes. Wetter tab content stays addressable
+// because the event metadata is still valid — only the video
+// file is gone.
+export function resetLightboxToErrorState(msg){
+  // Clear playbar/swimlanes/scrubber so the previous clip's chrome
+  // doesn't leak through.
+  try { lbClearTrackTimeline(); } catch { /* ignore */ }
+  // Replace the panel-tabs body so Nach-Erkennung disappears and the
+  // operator can't fire a rescan against a missing video. Wetter +
+  // Settings tabs the user opened previously stay accessible — they
+  // re-mount on the next valid event.
+  const setHost = byId('lightboxSettings');
+  if (setHost){
+    setHost.innerHTML = `
+      <div class="mv-broken-event">
+        <div class="mv-broken-event-title">Diese Aufnahme ist nicht mehr verfügbar</div>
+        <div class="mv-broken-event-msg">${esc(msg || 'Video-Datei fehlt oder Event wurde entfernt.')}</div>
+        <div class="mv-broken-event-actions">
+          <button type="button" class="mv-broken-event-next">→ Nächste anzeigen</button>
+          <button type="button" class="mv-broken-event-close">✕ Schließen</button>
+        </div>
+      </div>`;
+    setHost.hidden = false;
+    setHost.querySelector('.mv-broken-event-next')
+      ?.addEventListener('click', () => _lbSkipToValidNeighbour(+1));
+    setHost.querySelector('.mv-broken-event-close')
+      ?.addEventListener('click', () => closeLightbox());
+  }
+  _lbShowError(msg || 'Diese Aufnahme ist nicht mehr verfügbar.');
+}
+
+// Try to navigate to a valid neighbour by stepping `dir` (-1 prev,
+// +1 next) up to MAX_HOPS times. A neighbour counts as "valid" when
+// it carries either a video_relpath or a video_url — anything less
+// hits the same broken-state path. If we run out of neighbours,
+// surface the muted "Keine weiteren Aufnahmen verfügbar" note.
+const _LB_SKIP_MAX_HOPS = 5;
+function _lbSkipToValidNeighbour(dir){
+  const nav = _lbNavList();
+  const startIdx = nav.findIndex(x => x.event_id === lbState.item?.event_id);
+  if (startIdx < 0){ closeLightbox(); return; }
+  for (let hop = 1; hop <= _LB_SKIP_MAX_HOPS; hop++){
+    const idx = startIdx + dir * hop;
+    if (idx < 0 || idx >= nav.length) break;
+    const candidate = nav[idx];
+    if (candidate && (candidate.video_relpath || candidate.video_url)){
+      openLightbox(candidate);
+      return;
+    }
+  }
+  // Out of valid neighbours in this direction — soften the error
+  // state with a muted note so the user knows there's nothing left.
+  const setHost = byId('lightboxSettings');
+  if (setHost){
+    const note = document.createElement('div');
+    note.className = 'mv-broken-event-final';
+    note.textContent = 'Keine weiteren Aufnahmen verfügbar.';
+    const actions = setHost.querySelector('.mv-broken-event-actions');
+    if (actions) actions.replaceWith(note);
+  }
+}
+
 // ── Stage-23 orchestration ──────────────────────────────────────────────────
 export function _renderLbLabels(){
   const el = byId('lightboxLabels');
@@ -363,6 +430,22 @@ function _lbLegacyRender(item){
     const imgEl = byId('lightboxImg'); imgEl.style.display = 'none';
     const videoEl = byId('lightboxVideo');
     videoEl.style.display = 'block'; videoEl.src = vidSrc; videoEl.muted = true; videoEl.loop = true;
+    // One-shot error listener: when the video src 404s (missing
+    // .mp4 on disk) the browser fires `error` on the element.
+    // resetLightboxToErrorState clears the previous clip's playbar
+    // chrome, hides Nach-Erkennung, and surfaces a clean centred
+    // "→ Nächste anzeigen / ✕ Schließen" card so the user isn't
+    // stranded with stale UI from a clip that's no longer there.
+    // Listener is one-shot — the next openLightbox re-binds it
+    // freshly via this same code path.
+    const _onVideoError = () => {
+      if (videoEl._lbErrorBound !== _onVideoError) return;
+      videoEl.removeEventListener('error', _onVideoError);
+      videoEl._lbErrorBound = null;
+      resetLightboxToErrorState('Video-Datei ist nicht mehr verfügbar.');
+    };
+    videoEl._lbErrorBound = _onVideoError;
+    videoEl.addEventListener('error', _onVideoError);
     videoEl.load(); videoEl.play().catch(() => {});
     // Fire-and-forget: fetch the tracks.json sidecar in parallel with
     // the first paint. The track timeline panel + per-class toggles
