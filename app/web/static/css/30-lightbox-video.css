@@ -28,14 +28,23 @@
   place-items:stretch!important;
   inset:0!important;
   z-index:1200;
-  /* Outer scroll fallback — on landscape viewports where the inner
-     content (video + bottom stack) cannot both fit at their natural
-     sizes, the outer modal becomes scrollable so the user can swipe
-     to reach the panel content. Portrait + tall desktop windows
-     stay on the existing layout (inner pinned to 100dvh, panel
-     scrolls internally) — the media query below opts in. */
+  /* fw384 — outer modal never scrolls. The single scroll container
+     is #lightboxInner below; this rule pins the outer at 100dvh so
+     the rubber-band ends there instead of spilling onto the
+     underlying page. */
   overflow-y:hidden;
 }
+
+/* ── fw384 · Single-scroll modal · sticky video, scrollable column ────────
+   ONE scroll region (#lightboxInner) for the whole modal at every
+   viewport size. The video wrap sticks at the top of the column;
+   everything below it (toggle row + scrubber + Detections panel +
+   trace log + fine-analysis fold) scrolls past it in the same
+   surface. No nested scroll on the trace log — the cv-44 short-
+   landscape outer-scroll carve-out and the orientation:landscape
+   sticky carve-out it used to live in both retire here. The
+   :fullscreen / .is-fs override below lifts the wrap to 100dvh
+   when the user explicitly enters FS to focus on the video. */
 #lightboxModal.lb-fs-video #lightboxInner{
   width:100vw!important;
   height:100dvh!important;
@@ -43,61 +52,38 @@
   display:flex!important;
   flex-direction:column!important;
   align-items:stretch!important;
-  /* Defensive: a leftover mobile @media rule sets justify-content:
-     center on #lightboxInner, which on borderline viewports (tablets,
-     narrow desktops) would vertically centre the column and push the
-     video down. Pin to flex-start. */
   justify-content:flex-start!important;
   padding:0!important;
   margin:0!important;
+  /* The single scroll container. overscroll-behavior:contain stops
+     a swipe past the bottom from rubber-banding onto the underlying
+     page (iOS Safari is the most aggressive offender). */
+  overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
 }
-
-/* ── Short-landscape outer scroll (cm-44) ─────────────────────────────────
-   When the viewport is wider than tall AND shorter than 700 px the
-   100dvh pin on #lightboxInner means the bottom panel becomes a
-   sliver that can't be reached without resizing the browser. In that
-   regime we drop the pin: inner becomes auto-height with a
-   min-height of 100dvh (so a fresh open still fills the viewport),
-   the outer modal opts into vertical scroll, and the video clamps
-   to 70dvh so the panel's first row is always visible in the
-   initial scroll position. Bottom-stack internal max-height + scroll
-   still applies for very long log content. */
-@media (orientation: landscape) and (max-height: 699px){
-  #lightboxModal.lb-fs-video{
-    overflow-y:auto;
-    -webkit-overflow-scrolling:touch;
-    overscroll-behavior:contain;
-  }
-  #lightboxModal.lb-fs-video #lightboxInner{
-    height:auto!important;
-    min-height:100dvh!important;
-  }
-  #lightboxModal.lb-fs-video #lightboxMediaWrap{
-    max-height:70dvh!important;
-  }
+#lightboxModal.lb-fs-video #lightboxMediaWrap{
+  /* !important wins over the legacy rule further down in this file
+     (line ~225) that sets position:relative + max-height:calc(100dvh
+     - 320px) under the "WRAPPER never letterboxes" comment. The
+     legacy rule pre-dates the single-scroll pattern and assumed the
+     bottom stack was reserved-but-non-scrolling. fw384's sticky
+     pattern reclaims that real estate. */
+  position:sticky!important;
+  top:0;
+  z-index:4;
+  background:#000;
+  max-height:55dvh!important;
 }
-
-/* ── Sticky video + scrollable panel · landscape (fm824) ──────────────────
-   On TALL landscape viewports the cm-44 rule above doesn't engage,
-   yet the bottom panel (log / tab strip / fine-analysis fold) can
-   still extend past 100dvh because users have lots of detection
-   history to scroll through. Pattern A: pin the media wrap at the
-   top of the inner column (sticky, top: 0, max-height: 60dvh) and
-   let the rest of the column scroll inside #lightboxInner. Video
-   stays visible while the user reads the panel below it. Portrait
-   keeps its existing layout — phone viewports don't need this. */
-@media (orientation: landscape){
-  #lightboxModal.lb-fs-video #lightboxInner{
-    overflow-y:auto!important;
-    -webkit-overflow-scrolling:touch;
-    overscroll-behavior:contain;
-  }
-  #lightboxModal.lb-fs-video #lightboxMediaWrap{
-    position:sticky;
-    top:0;
-    max-height:60dvh;
-    z-index:5;
-  }
+/* Browser FS — user explicitly entered fullscreen to focus on the
+   video, so the wrap lifts to the full viewport and the sticky
+   pinning drops away. Both selectors so Webkit (Safari) and the
+   modern spec both engage. */
+#lightboxModal.lb-fs-video #lightboxMediaWrap.is-fs,
+#lightboxModal.lb-fs-video #lightboxMediaWrap:fullscreen,
+#lightboxModal.lb-fs-video #lightboxMediaWrap:-webkit-full-screen{
+  max-height:100dvh!important;
+  position:relative!important;
 }
 
 /* ── Top bar ───────────────────────────────────────────────────────────── */
@@ -974,41 +960,15 @@
   font-size:12.5px;
   line-height:1.5;
   min-height:60px;
-  /* Internal-scroll the tab body so a tall Aufnahme-Settings list
-     never pushes the playbar off-screen. The dvh budget accounts
-     for the rest of #lightboxBottomStack — scrubber row (~50 px) +
-     per-class strips + ticks (~20 px) + tab strip (~44 px) +
-     fine-analysis-fold header (~40 px) + safe-area inset. 38 dvh
-     leaves ample room for the playbar above on a typical desktop
-     viewport; narrow-screen override below tightens it further. */
-  max-height:38dvh;
-  overflow-y:auto;
-  /* Touch scrolling on iOS — overscroll-behavior contains the
-     swipe so the underlying modal / page doesn't rubber-band when
-     the user pulls past the top/bottom of the panel content;
-     -webkit-overflow-scrolling:touch keeps momentum smooth on
-     older iOS. */
-  overscroll-behavior:contain;
-  -webkit-overflow-scrolling:touch;
-  scrollbar-width:thin;
-  scrollbar-color:rgba(255,255,255,.18) transparent;
-}
-.mv-tabs-content::-webkit-scrollbar{ width:6px;height:6px; }
-.mv-tabs-content::-webkit-scrollbar-track{ background:transparent; }
-.mv-tabs-content::-webkit-scrollbar-thumb{
-  background:rgba(255,255,255,.18);
-  border-radius:3px;
-}
-.mv-tabs-content::-webkit-scrollbar-thumb:hover{
-  background:rgba(255,255,255,.30);
+  /* fw384 — no internal max-height + overflow any more. The whole
+     modal scrolls inside #lightboxInner now, so the trace log /
+     Aufnahme-Settings tab body extends at its natural height and
+     scrolls with everything else in the outer column. The previous
+     38 dvh cap + nested overflow-y:auto produced the double-scroll
+     the user reported. */
 }
 @media (max-width:480px){
   .mv-tab{ min-height:44px;padding:9px 12px; }
-  /* Narrow-screen budget is tighter — the playbar plus the tab
-     strip alone already eat into the viewport. 32 dvh leaves the
-     iPhone-393 user a usable strip of playbar visible above the
-     scrolling panel. */
-  .mv-tabs-content{ max-height:32dvh; }
 }
 
 .mv-fafold-root{
