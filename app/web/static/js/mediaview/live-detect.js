@@ -108,12 +108,27 @@ function _setupLiveChrome(camId, cameraName){
   // Live mode title-bar marker — replaces the recorded timestamp.
   const tsEl = byId('lightboxTopTime');
   if (tsEl) tsEl.textContent = '● Live';
-  // Show <img>, hide <video> + recorded action buttons that don't
-  // make sense for a live snapshot.
+  // Hide both <img> and <video> until the first snapshot lands —
+  // otherwise an empty src on #lightboxImg renders the browser's
+  // broken-image icon while we wait for the first 1 Hz tick to
+  // return. _renderFrame flips display:block on the next snapshot
+  // assignment (img.onload handler installed once below).
   const imgEl = byId('lightboxImg');
   const videoEl = byId('lightboxVideo');
   if (videoEl){ videoEl.pause(); videoEl.src = ''; videoEl.style.display = 'none'; }
-  if (imgEl){ imgEl.style.display = 'block'; imgEl.src = ''; }
+  if (imgEl){
+    imgEl.style.display = 'none';
+    imgEl.src = '';
+    if (!imgEl._liveOnloadInstalled){
+      imgEl.addEventListener('load', () => {
+        // Only reveal once the src is a real (non-empty) URL — the
+        // initial reset above sets src='' which still fires `load`
+        // on some browsers via the cache.
+        if (imgEl.getAttribute('src')) imgEl.style.display = 'block';
+      });
+      imgEl._liveOnloadInstalled = true;
+    }
+  }
   const confirmBtn = byId('lightboxConfirm');
   if (confirmBtn) confirmBtn.style.display = 'none';
   const delBtn = byId('lightboxDelete');
