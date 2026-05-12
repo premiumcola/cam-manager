@@ -23,7 +23,22 @@ import { bindShapeModeToggle } from './mode-toggle.js';
 
 function _commitInProgressPolygon(){
   if (shapeState.points.length < 3) return false;
-  const poly = { points: [...shapeState.points], label: _nextPolyName(shapeState.mode) };
+  // pn834 — stamp the polygon with the canvas dimensions it was drawn
+  // in. Frontend overlay renderer (zone-layer.js) prefers these over
+  // videoEl.videoWidth/Height so a polygon drawn against a 640 × 360
+  // substream snapshot maps correctly onto a 2560 × 1440 main-stream
+  // recorded clip. Legacy polygons saved before this change have no
+  // source_w/h and the renderer falls back to the media element's
+  // native dimensions — re-edit a polygon to upgrade it.
+  const canvas = byId('maskCanvas');
+  const sourceW = (canvas && canvas.width)  || 1280;
+  const sourceH = (canvas && canvas.height) || 720;
+  const poly = {
+    points: [...shapeState.points],
+    label:  _nextPolyName(shapeState.mode),
+    source_w: sourceW,
+    source_h: sourceH,
+  };
   if (shapeState.mode === 'zone') shapeState.zones.push(poly);
   else shapeState.masks.push(poly);
   shapeState.points = [];

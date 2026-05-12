@@ -91,16 +91,29 @@ export function renderZoneLayer(canvas, polygons, srcW, srcH, opts = {}, fitted 
   if (fit.w <= 0 || fit.h <= 0) return;
   const zones = polygons.zones || [];
   const masks = opts.hideMasks ? [] : (polygons.masks || []);
+  // pn834 — each polygon may stamp its own source_w / source_h
+  // (saved by the editor at commit time). When present, those win
+  // over the media-element's videoWidth/Height so a polygon drawn
+  // against a 640×360 substream snapshot maps correctly onto a
+  // 2560×1440 main-stream recorded clip. Legacy polygons without
+  // these fields fall back to the caller-supplied srcW/srcH.
+  const _src = (p) => {
+    const w = (p && typeof p === 'object' && p.source_w) || srcW;
+    const h = (p && typeof p === 'object' && p.source_h) || srcH;
+    return { w, h };
+  };
   // Masks drawn FIRST so the green inclusion lines sit on top — when
   // a zone overlaps a mask the user sees the inclusion edge clearly.
   for (const m of masks){
     const poly = Array.isArray(m) ? m : (m?.points || m?.poly || []);
-    const mapped = mapPolygonToCanvas(poly, srcW, srcH, fit);
+    const { w, h } = _src(m);
+    const mapped = mapPolygonToCanvas(poly, w, h, fit);
     _drawPoly(ctx, mapped, MASK_STROKE, MASK_FILL);
   }
   for (const z of zones){
     const poly = Array.isArray(z) ? z : (z?.points || z?.poly || []);
-    const mapped = mapPolygonToCanvas(poly, srcW, srcH, fit);
+    const { w, h } = _src(z);
+    const mapped = mapPolygonToCanvas(poly, w, h, fit);
     _drawPoly(ctx, mapped, ZONE_STROKE, ZONE_FILL);
   }
 }

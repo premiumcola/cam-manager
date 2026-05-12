@@ -694,10 +694,26 @@ function _renderZoneMaskOverlay(){
   // read-only overlay context exactly (cm-43). SVG viewBox is
   // already in source coordinates, so a non-scaling-stroke keeps
   // the LINE_W constant regardless of the rendered size.
+  // pn834 — each polygon may stamp its own source_w / source_h. The
+  // SVG viewBox is set to the live frame size (fs.w × fs.h, typically
+  // the main-stream resolution) so a polygon drawn in a 640 × 360
+  // substream snapshot needs its points scaled up before they're
+  // written into the polygon string. Legacy polygons without
+  // source_w/h pass straight through (sx = sy = 1) and only render
+  // correctly when the polygon's saved coord-space matches fs.
+  const _polyPts = (p) => {
+    const sx = (p && p.source_w) ? (fs.w / p.source_w) : 1;
+    const sy = (p && p.source_h) ? (fs.h / p.source_h) : 1;
+    return (p.points || p.poly || []).map(pt => {
+      const x = (pt.x != null ? pt.x : pt[0]) * sx;
+      const y = (pt.y != null ? pt.y : pt[1]) * sy;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+  };
   const parts = [];
   if (showZones){
     for (const z of (cam.zones || [])){
-      const pts = (z.points || z.poly || []).map(p => `${p.x || p[0]},${p.y || p[1]}`).join(' ');
+      const pts = _polyPts(z);
       if (pts){
         parts.push(`<polygon points="${pts}" fill="${_ZF}" stroke="${_ZS}" stroke-width="${_LW}" vector-effect="non-scaling-stroke"/>`);
       }
@@ -705,7 +721,7 @@ function _renderZoneMaskOverlay(){
   }
   if (showMasks){
     for (const m of (cam.masks || [])){
-      const pts = (m.points || m.poly || []).map(p => `${p.x || p[0]},${p.y || p[1]}`).join(' ');
+      const pts = _polyPts(m);
       if (pts){
         parts.push(`<polygon points="${pts}" fill="${_MF}" stroke="${_MS}" stroke-width="${_LW}" vector-effect="non-scaling-stroke"/>`);
       }

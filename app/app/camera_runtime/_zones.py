@@ -82,13 +82,23 @@ class ZonesMixin:
         # GLOBAL masks (no `labels` filter). Labeled masks restrict specific
         # object classes and are evaluated per-detection in
         # _filter_masked_detections — they shouldn't suppress motion.
+        # pn834 — polygons may carry their own source_w / source_h
+        # (recorded by the editor at save time). Scale points into the
+        # 1280×720 canvas before fillPoly so a mask drawn against a
+        # 640×360 substream snapshot covers the correct area at this
+        # canonical resolution. Legacy polygons without source_w/h
+        # default to 1280×720 (no scale).
         for poly in cam_masks:
             if isinstance(poly, dict) and poly.get("labels"):
                 continue
             pts_list = poly.get("points", poly) if isinstance(poly, dict) else poly
             if not isinstance(pts_list, list) or len(pts_list) < 3:
                 continue
-            pts = np.array([[int(p.get('x', 0)), int(p.get('y', 0))] for p in pts_list], dtype=np.int32)
+            src_w = int(poly.get("source_w") or w) if isinstance(poly, dict) else w
+            src_h = int(poly.get("source_h") or h) if isinstance(poly, dict) else h
+            sx = float(w) / max(1, src_w)
+            sy = float(h) / max(1, src_h)
+            pts = np.array([[int(p.get('x', 0) * sx), int(p.get('y', 0) * sy)] for p in pts_list], dtype=np.int32)
             pts[:, 0] = np.clip(pts[:, 0], 0, w - 1)
             pts[:, 1] = np.clip(pts[:, 1], 0, h - 1)
             cv2.fillPoly(mask, [pts], 0)
@@ -124,12 +134,19 @@ class ZonesMixin:
         return out
 
     @staticmethod
-    def _point_in_poly(cx: int, cy: int, points: list, frame_w: int, frame_h: int) -> bool:
-        """Polygon points are stored in 1280×720 coord space; rescale the
-        frame centre into that space before testing so cameras at any
-        resolution share one coordinate system."""
-        sx = 1280.0 / max(1, frame_w)
-        sy = 720.0 / max(1, frame_h)
+    def _point_in_poly(
+        cx: int, cy: int, points: list, frame_w: int, frame_h: int,
+        source_w: int = 1280, source_h: int = 720,
+    ) -> bool:
+        """pn834 — polygon points sit in their own source coord space
+        (recorded on save as source_w / source_h). Rescale the frame
+        centre into that space before the point-in-polygon test so a
+        polygon drawn against a 640×360 substream snapshot still
+        suppresses detections in a 2560×1440 main-stream frame
+        correctly. Legacy polygons without source_w/h fall back to
+        the historical 1280×720 default the caller passes here."""
+        sx = float(source_w) / max(1, frame_w)
+        sy = float(source_h) / max(1, frame_h)
         try:
             arr = np.array([[int(p.get('x', 0)), int(p.get('y', 0))] for p in points], dtype=np.int32)
         except Exception:
@@ -183,7 +200,9 @@ class ZonesMixin:
                     if d.label not in m.get("labels", []):
                         continue
                     pts = m.get("points") or []
-                    if self._point_in_poly(cx, cy, pts, w_f, h_f):
+                    src_w = int(m.get("source_w") or 1280)
+                    src_h = int(m.get("source_h") or 720)
+                    if self._point_in_poly(cx, cy, pts, w_f, h_f, src_w, src_h):
                         log.debug("[%s] Detection '%s' (%.0f%%) suppressed by label-mask",
                                   self.camera_id, d.label, d.score * 100)
                         dropped = True
@@ -231,11 +250,18 @@ class ZonesMixin:
             return
         h, w = 720, 1280
         zone = np.zeros((h, w), dtype=np.uint8)  # start all black (inactive)
+        # pn834 — same per-polygon source_w/source_h scaling as the
+        # mask path above. Polygons without source_w/h fall back to
+        # the canvas dimensions (no scale).
         for poly in global_zones:
             pts_list = poly.get("points", poly) if isinstance(poly, dict) else poly
             if not isinstance(pts_list, list) or len(pts_list) < 3:
                 continue
-            pts = np.array([[int(p.get('x', 0)), int(p.get('y', 0))] for p in pts_list], dtype=np.int32)
+            src_w = int(poly.get("source_w") or w) if isinstance(poly, dict) else w
+            src_h = int(poly.get("source_h") or h) if isinstance(poly, dict) else h
+            sx = float(w) / max(1, src_w)
+            sy = float(h) / max(1, src_h)
+            pts = np.array([[int(p.get('x', 0) * sx), int(p.get('y', 0) * sy)] for p in pts_list], dtype=np.int32)
             pts[:, 0] = np.clip(pts[:, 0], 0, w - 1)
             pts[:, 1] = np.clip(pts[:, 1], 0, h - 1)
             cv2.fillPoly(zone, [pts], 255)  # white = active zone
@@ -308,7 +334,9 @@ class ZonesMixin:
             matched_zone = None
             # Prefer a label-scoped zone match (more specific) over global.
             for z in label_zones:
-                if self._point_in_poly(cx, cy, z.get("points") or [], w_f, h_f):
+                z_sw = int(z.get("source_w") or 1280)
+                z_sh = int(z.get("source_h") or 720)
+                if self._point_in_poly(cx, cy, z.get("points") or [], w_f, h_f, z_sw, z_sh):
                     matched_zone = z
                     break
             if matched_zone is None and global_applies and zone_resized[cy, cx] > 0:
@@ -316,7 +344,9 @@ class ZonesMixin:
                 # forward its trigger flags. The prebaked image only tells
                 # us "yes, inside SOMETHING" — we need the dict for flags.
                 for z in global_polys:
-                    if self._point_in_poly(cx, cy, z.get("points") or [], w_f, h_f):
+                    z_sw = int(z.get("source_w") or 1280)
+                    z_sh = int(z.get("source_h") or 720)
+                    if self._point_in_poly(cx, cy, z.get("points") or [], w_f, h_f, z_sw, z_sh):
                         matched_zone = z
                         break
             if matched_zone is not None:
