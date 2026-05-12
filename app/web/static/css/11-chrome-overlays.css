@@ -40,7 +40,7 @@
 .lvm-wrap{position:relative;width:100%;height:100dvh;
           display:flex;align-items:center;justify-content:center;
           background:#000}
-.lvm-img{width:100%;height:100%;object-fit:contain;display:block;background:#000}
+.lvm-img{max-width:100%;max-height:100dvh;object-fit:contain;display:block;background:#000}
 .lvm-top{position:absolute;
          top:max(12px, env(safe-area-inset-top, 0px));
          left:0;right:0;
@@ -90,33 +90,53 @@
             transition:background .15s ease}
 .lvm-fs-btn:hover{background:rgba(0,0,0,.75)}
 
-/* ── Live-view modal fullscreen ──────────────────────────────────────
-   When the FS button promotes #liveViewWrap into browser fullscreen,
-   the wrap fills the viewport and the img inside fills the wrap with
-   object-fit:contain — letterbox / pillarbox depending on viewport
-   aspect ratio. Symmetric to .cv-img-wrap:fullscreen in
-   03-dashboard.css. The .fake-fullscreen class covers the iOS Safari
-   fallback where requestFullscreen rejects on a <div>. */
+/* ── Live-view modal fullscreen ──────────────────────────────────
+   Three-way rule: native browser :fullscreen on desktop Chrome /
+   Firefox, :-webkit-full-screen on Safari, .fake-fullscreen as
+   the iOS Safari fallback where requestFullscreen on a <div>
+   gets rejected (Safari only allows it on <video>). The user
+   experience must be identical across all three paths.
+
+   The image rule deliberately uses width:auto; height:auto with
+   max-width/max-height:100% so the MJPEG stream renders at its
+   NATIVE pixel resolution centred on the screen — never upscaled
+   past the source. A 1920×1080 SD source on a 5120×1440 ultrawide
+   therefore shows as a sharp 1920×1080 image with black gutters
+   on all four sides, instead of being stretched to 2560×1440 by
+   object-fit:contain (which is what an earlier commit did and
+   was the source of the "super zoomed in" complaint).
+
+   .fake-fullscreen also needs position:fixed; inset:0; z-index;
+   width:100vw; height:100dvh — without these on iOS where
+   requestFullscreen rejects, the wrap stays in normal flow inside
+   the .lvm modal and just causes a layout shift instead of
+   promoting to viewport-fill. */
 .lvm-wrap:fullscreen,
 .lvm-wrap:-webkit-full-screen,
 .lvm-wrap.fake-fullscreen{
-  width:100% !important;
-  height:100% !important;
-  max-width:none;
-  max-height:none;
   background:#000;
   display:flex;
   align-items:center;
   justify-content:center;
 }
+.lvm-wrap.fake-fullscreen{
+  position:fixed !important;
+  inset:0 !important;
+  z-index:9999 !important;
+  width:100vw !important;
+  height:100dvh !important;
+  margin:0 !important;
+  max-width:none !important;
+  max-height:none !important;
+}
 .lvm-wrap:fullscreen .lvm-img,
 .lvm-wrap:-webkit-full-screen .lvm-img,
 .lvm-wrap.fake-fullscreen .lvm-img{
-  width:100% !important;
-  height:100% !important;
-  max-width:none !important;
-  max-height:none !important;
+  width:auto !important;
+  height:auto !important;
+  max-width:100% !important;
+  max-height:100% !important;
   object-fit:contain;
-  background:#000;
+  background:transparent;
 }
 

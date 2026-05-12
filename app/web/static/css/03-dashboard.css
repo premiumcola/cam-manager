@@ -296,21 +296,19 @@
 .cv-img-wrap:fullscreen .cv-img,
 .cv-img-wrap:-webkit-full-screen .cv-img,
 .cv-img-wrap.fake-fullscreen .cv-img{
-  /* Earlier we used width:auto;height:auto + max-*:100% so the
-     intrinsic image size combined with the wrap's flex centring
-     produced a letterbox. That works for 16:9 displays but breaks on
-     21:9 / 32:9 monitors when the MJPEG stream reports an unusual
-     intrinsic size — the browser falls back to "auto" sizing in a
-     way that bypasses object-fit and the image renders cropped.
-     Forcing both dimensions to 100% + !important guarantees object-
-     fit:contain controls the visible rect regardless of intrinsic
-     dimensions; the wrap background paints the gutters. */
+  /* Native pixel size — width/height:auto + max-*:100% means the
+     MJPEG stream renders at its intrinsic resolution centred via
+     the wrap's flex, capped to the viewport. No upscale-blur on
+     32:9 monitors (5120×1440) where the previous width:100%/
+     height:100%/object-fit:contain rule stretched a 1920×1080 SD
+     source to 2560×1440. .cv-img must escape its normal
+     position:absolute;inset:0 so flex centring actually works. */
   position:static;
   inset:auto;
-  width:100% !important;
-  height:100% !important;
-  max-width:none !important;
-  max-height:none !important;
+  width:auto !important;
+  height:auto !important;
+  max-width:100% !important;
+  max-height:100% !important;
   object-fit:contain;
   background:transparent;
 }
