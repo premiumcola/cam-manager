@@ -82,13 +82,18 @@
    future call paths that might use a class swap. */
 .lvm-hd-btn.lvm-hd-on{background:rgba(255,255,255,.92);color:#0a0e1a;
                       font-weight:800;border-color:transparent}
-.lvm-fs-btn{width:40px;height:40px;border-radius:10px;
+/* mr637 — same 38 × 30 footprint as the dashboard-tile FS button so
+   the live-view modal reads as the same affordance family. SVG bumps
+   to 18 px to match. */
+.lvm-fs-btn{width:38px;min-width:38px;height:30px;border-radius:10px;
             background:rgba(0,0,0,.55);
             border:1px solid rgba(255,255,255,.15);cursor:pointer;
             display:flex;align-items:center;justify-content:center;
+            padding:0;
             backdrop-filter:blur(8px);
             -webkit-backdrop-filter:blur(8px);
             transition:background .15s ease}
+.lvm-fs-btn svg{width:18px;height:18px}
 .lvm-fs-btn:hover{background:rgba(0,0,0,.75)}
 /* mx918 — two-state FS icon, expand/minimize swap via .is-fs on
    .lvm-wrap. Mirrors the .cv-fs-btn rules in 03-dashboard.css. */

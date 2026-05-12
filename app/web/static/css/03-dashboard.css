@@ -278,10 +278,14 @@
 }
 @keyframes cv-hd-countdown{from{transform:scaleX(1)}to{transform:scaleX(0)}}
 
-/* FS button — icon-only 30 × 30 from chrome-btn defaults. mx918
-   ships both expand / minimize SVGs inline; CSS picks based on
-   .cv-img-wrap.is-fs ancestor. */
-.cv-fs-btn{flex-shrink:0}
+/* FS button — mr637 — slightly wider (38 × 30) than the other
+   icon-only pills so the diagonal expand arrows get visible
+   breathing room and the button reads as the primary FS
+   affordance. Same height as HD / Settings (30 px) so the row
+   lines up vertically. mx918 ships both expand / minimize SVGs
+   inline; CSS picks based on .cv-img-wrap.is-fs ancestor. */
+.cv-fs-btn{flex-shrink:0;width:38px;min-width:38px;height:30px;padding:0}
+.cv-fs-btn svg{width:18px;height:18px}
 .cv-fs-btn .fs-icon-expand,
 .cv-fs-btn .fs-icon-minimize{display:block}
 .cv-fs-btn .fs-icon-minimize{display:none}
