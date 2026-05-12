@@ -85,7 +85,7 @@
    screen on the wrap carries the entire chrome layer with it. Four
    absolute-positioned flex rows, one per corner. The wrap is
    position:relative so these anchor correctly. */
-.cv-chrome-top-left{position:absolute;top:var(--cv-overlay-inset);left:var(--cv-overlay-inset);display:flex;flex-direction:column;gap:3px;max-width:70%;z-index:3}
+.cv-chrome-top-left{position:absolute;top:var(--cv-overlay-inset);left:var(--cv-overlay-inset);display:flex;flex-direction:column;gap:5px;align-items:flex-start;max-width:70%;z-index:3}
 .cv-chrome-top-right{position:absolute;top:var(--cv-overlay-inset);right:var(--cv-overlay-inset);display:flex;flex-direction:column;gap:8px;align-items:flex-end;z-index:3}
 .cv-chrome-bottom-left{position:absolute;left:var(--cv-overlay-inset);bottom:var(--cv-overlay-inset);display:flex;align-items:center;gap:6px;z-index:3;pointer-events:none}
 .cv-chrome-bottom-left > *{pointer-events:auto}

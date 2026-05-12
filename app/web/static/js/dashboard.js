@@ -577,34 +577,36 @@ export function renderDashboard(){
         <div class="cv-name-row">
           <span class="cv-title-icon" aria-hidden="true">${getCameraIcon(c.name)}</span>
           <div class="cv-name">${esc(c.name)}</div>
-          ${c.rtsp_url ? `<button class="cv-hd-badge${hdOn ? ' active' : ''}" type="button" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau" aria-label="HD-Vorschau ein/aus">HD</button>` : ''}
         </div>
         ${c.location ? `<div class="cv-loc">${esc(c.location)}</div>` : ''}
+${isActive ? `
+        <div class="cv-pill-live-wrap cv-live-active">
+          <span class="cv-pdot"></span>
+          <span class="cv-live-label">Live</span>
+          ${previewFps ? `<span class="cv-live-fps">${previewFps} fps</span>` : ''}
+          <svg class="cv-live-arrow" width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="rgba(200,245,224,.85)" stroke-width="1.8" stroke-linecap="round"><path d="M3 4.5l3 3 3-3"/></svg>
+          <div class="cv-live-detail">
+            <div class="cv-live-detail-header">
+              <span class="cv-pdot"></span>
+              <span>Livestream aktiv</span>
+            </div>
+            <div class="cv-lp-row"><span>Stream-Modus</span><strong class="cv-stream-mode ${hdOn ? 'cv-mode-hd' : (streamMode === 'live' ? 'cv-mode-live' : 'cv-mode-base')}">${hdOn ? '● HD-Stream' : (streamMode === 'live' ? '● Live' : '○ Vorschau')}</strong></div>
+            <div class="cv-lp-row"><span>Preview-FPS</span><strong class="cv-lp-fps-val">${previewFps != null ? previewFps + ' fps' : '—'}</strong></div>
+            <div class="cv-lp-row"><span>Auflösung</span><strong class="cv-lp-res-val">${hdOn ? esc(c.main_resolution || c.preview_resolution || c.resolution || '—') : esc(c.preview_resolution || c.resolution || '—')}</strong></div>
+            <div class="cv-lp-row"><span>Analyse-Framerate</span><strong>${fps != null ? fps + ' fps' : '—'}</strong></div>
+          </div>
+        </div>
+` : ''}
       </div>
 ${isActive ? `
       <div class="cv-chrome-top-right">
         <div class="cv-tr-row">
+          ${c.rtsp_url ? `<button class="cv-hd-badge${hdOn ? ' active' : ''}" type="button" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau" aria-label="HD-Vorschau ein/aus">HD</button>` : ''}
           ${c.rtsp_url ? `<button class="cv-fs-btn" type="button" data-cam="${esc(c.id)}" onclick="event.stopPropagation();window._cvEnterFullscreen && window._cvEnterFullscreen('${esc(c.id)}')" title="Vollbild" aria-label="Vollbild">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/>
             </svg>
           </button>` : ''}
-          <div class="cv-pill-live-wrap cv-live-active">
-            <span class="cv-pdot"></span>
-            <span class="cv-live-label">Live</span>
-            ${previewFps ? `<span class="cv-live-fps">${previewFps} fps</span>` : ''}
-            <svg class="cv-live-arrow" width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="rgba(200,245,224,.85)" stroke-width="1.8" stroke-linecap="round"><path d="M3 4.5l3 3 3-3"/></svg>
-            <div class="cv-live-detail">
-              <div class="cv-live-detail-header">
-                <span class="cv-pdot"></span>
-                <span>Livestream aktiv</span>
-              </div>
-              <div class="cv-lp-row"><span>Stream-Modus</span><strong class="cv-stream-mode ${hdOn ? 'cv-mode-hd' : (streamMode === 'live' ? 'cv-mode-live' : 'cv-mode-base')}">${hdOn ? '● HD-Stream' : (streamMode === 'live' ? '● Live' : '○ Vorschau')}</strong></div>
-              <div class="cv-lp-row"><span>Preview-FPS</span><strong class="cv-lp-fps-val">${previewFps != null ? previewFps + ' fps' : '—'}</strong></div>
-              <div class="cv-lp-row"><span>Auflösung</span><strong class="cv-lp-res-val">${hdOn ? esc(c.main_resolution || c.preview_resolution || c.resolution || '—') : esc(c.preview_resolution || c.resolution || '—')}</strong></div>
-              <div class="cv-lp-row"><span>Analyse-Framerate</span><strong>${fps != null ? fps + ' fps' : '—'}</strong></div>
-            </div>
-          </div>
         </div>
         ${tlOn ? `<div class="cv-pill cv-pill-tl" title="Timelapse aktiv">${objIconSvg('timelapse', 14)}Timelapse</div>` : ''}
       </div>
