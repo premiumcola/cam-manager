@@ -170,6 +170,14 @@
 .cv-class-pill{width:30px;color:var(--icon-tint, #fff)}
 .cv-class-pill[data-state="muted"]{color:rgba(255,255,255,.5)}
 .cv-class-pill svg{width:18px;height:18px;display:block}
+/* gp538 — class filter pills sit ~2 px apart so the colored class
+   icons read as one tightly-packed status row rather than five
+   separate buttons. The wrapper's own 6 px cluster-default gap
+   still separates this group from any neighbour (schedule pill /
+   channel cluster). Same tight gap applied to the TG/MQTT badge
+   pair below since those two also read as "notification channels"
+   as a single group. */
+.cv-class-cluster{display:flex;align-items:center;gap:2px}
 /* pq924 — channel cluster: muted schedule label STACKED above the
    TG/MQTT badge row in the bottom-right cluster. The label is text
    metadata (smaller font, lower opacity, smaller padding) so it
@@ -180,7 +188,9 @@
    cluster renders and the label appears if a schedule window is
    actually configured. */
 .cv-channel-cluster{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
-.cv-channel-row{display:flex;align-items:center;gap:6px}
+/* gp538 — TG + MQTT badge pair tight together, mirrors the
+   .cv-class-cluster gap above. */
+.cv-channel-row{display:flex;align-items:center;gap:2px}
 .cv-channel-schedule{
   font-size:10px;font-weight:500;letter-spacing:.02em;
   color:rgba(255,255,255,.62);

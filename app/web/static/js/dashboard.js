@@ -828,7 +828,7 @@ ${isActive ? `
         ${tlOn ? `<div class="cv-pill cv-pill-tl" title="Timelapse aktiv">${objIconSvg('timelapse', 14)}Timelapse</div>` : ''}
       </div>
 ` : ''}
-      <div class="cv-chrome-bottom-left">${_classPills}</div>
+      <div class="cv-chrome-bottom-left">${_classPills ? `<div class="cv-class-cluster">${_classPills}</div>` : ''}</div>
       <div class="cv-chrome-bottom-right">
         ${_channelCluster}
         ${c.rtsp_url && isActive ? `<button class="cv-chrome-btn cv-sim-btn has-text" type="button" data-cam="${esc(c.id)}" onclick="event.stopPropagation();window._cvOpenSim && window._cvOpenSim('${esc(c.id)}')" title="Erkennung jetzt simulieren" aria-label="Simulieren">${_CHROME_SIM_SVG}<span>Simulieren</span></button>` : ''}
