@@ -173,10 +173,11 @@ const _CAM_OFF_SVG = `<svg viewBox="0 0 48 48" width="72" height="72" aria-hidde
   <circle cx="20" cy="24" r="2" fill="rgba(255,255,255,0.55)"/>
   <polygon points="7,3 3,7 41,45 45,41" fill="rgba(239,68,68,0.95)"/>
 </svg>`;
-const _CAM_SM_SVG = `<svg viewBox="0 0 48 48" width="48" height="48" fill="none" stroke="rgba(59,130,246,0.5)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display:block">
-  <rect x="8" y="14" width="24" height="20" rx="2.5"/>
-  <path d="M32 20 L40 14 V34 L32 28 Z"/>
-  <circle cx="20" cy="24" r="5"/>
+const _CAM_SM_SVG = `<svg viewBox="0 0 48 48" width="48" height="48" aria-hidden="true" style="display:block">
+  <rect x="8" y="14" width="24" height="20" rx="3" fill="rgba(59,130,246,0.42)"/>
+  <path d="M32 20 L40 14 V34 L32 28 Z" fill="rgba(59,130,246,0.28)"/>
+  <circle cx="20" cy="24" r="5" fill="rgba(8,17,38,0.85)"/>
+  <circle cx="20" cy="24" r="2" fill="rgba(147,197,253,0.95)"/>
 </svg>`;
 
 export function _makeOfflinePlaceholder(){
