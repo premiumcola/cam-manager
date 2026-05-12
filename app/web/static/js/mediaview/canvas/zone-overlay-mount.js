@@ -18,6 +18,11 @@ let _resizeObs = null;
 let _videoEl = null;
 let _onMeta = null;
 let _onResize = null;
+// Live visibility flags + memoised draw function — overlay-toggles
+// flips these on user toggle then calls ``redrawZoneOverlay()`` so
+// the canvas updates without remounting the ResizeObserver.
+let _visibility = { showZones: true, showMasks: true };
+let _redrawFn = null;
 
 function _ensureCanvas(wrap){
   let c = document.getElementById(_ZONE_CANVAS_ID);
@@ -62,9 +67,27 @@ export function mountZoneOverlayForLightbox(item, opts = {}){
     masks: (cam.masks || []).map(m => m.points || m.poly || m),
   };
   const isTL = item.type === 'timelapse';
-  const draw = () => renderZoneLayerForMediaEl(canvas, _videoEl, polygons, {
-    hideMasks: opts.hideMasks ?? isTL,
-  });
+  // Initial visibility — zones always on, masks hidden by default
+  // for timelapses (sped-up overview gets cluttered) and on for
+  // motion clips. The overlay-toggles bar can flip either at
+  // runtime via setZoneOverlayVisibility().
+  _visibility = {
+    showZones: true,
+    showMasks: !(opts.hideMasks ?? isTL),
+  };
+  const draw = () => {
+    if (!_visibility.showZones && !_visibility.showMasks){
+      // Both off — clear the canvas to a transparent state.
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+    renderZoneLayerForMediaEl(canvas, _videoEl, {
+      zones: _visibility.showZones ? polygons.zones : [],
+      masks: _visibility.showMasks ? polygons.masks : [],
+    }, {});
+  };
+  _redrawFn = draw;
   // ResizeObserver — fires on every layout change of the media
   // element (window resize, address-bar collapse on iOS, modal
   // open/close, fullscreen enter/exit).
@@ -89,6 +112,18 @@ export function mountZoneOverlayForLightbox(item, opts = {}){
   draw();
 }
 
+/**
+ * Live-toggle either the zone or mask layer's visibility without
+ * unmounting the ResizeObserver. Called by the overlay-toggles bar
+ * when the user flips a pill.
+ */
+export function setZoneOverlayVisibility({ showZones, showMasks }){
+  if (typeof showZones === 'boolean') _visibility.showZones = showZones;
+  if (typeof showMasks === 'boolean') _visibility.showMasks = showMasks;
+  if (_redrawFn) _redrawFn();
+}
+window._setZoneOverlayVisibility = setZoneOverlayVisibility;
+
 export function unmountZoneOverlayForLightbox(){
   if (_resizeObs){
     try { _resizeObs.disconnect(); } catch { /* ignore */ }
@@ -106,6 +141,7 @@ export function unmountZoneOverlayForLightbox(){
     window.removeEventListener('resize', _onResize);
     _onResize = null;
   }
+  _redrawFn = null;
   const c = document.getElementById(_ZONE_CANVAS_ID);
   if (c) c.remove();
 }

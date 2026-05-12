@@ -32,6 +32,7 @@ import { mountRecordedPanels } from './mediaview/panels/orchestration.js';
 import {
   mountZoneOverlayForLightbox, unmountZoneOverlayForLightbox,
 } from './mediaview/canvas/zone-overlay-mount.js';
+import { mountWeatherToggleBar } from './mediaview/overlay-toggles.js';
 import { _iosNativeVideoOpen } from './mediathek/ios-video.js';
 import { closeLiveView } from './chrome/live-view.js';
 import { _initFsBtn } from './chrome/fullscreen.js';
@@ -192,6 +193,21 @@ export function _setupVideoChrome(item){
   // the polygons aligned with the video element through every
   // layout change (fullscreen enter/exit, address-bar collapse).
   mountZoneOverlayForLightbox(item, { hideMasks: item?.type === 'timelapse' });
+  // Overlay-toggles pill bar — Mediathek motion clips get all five
+  // pills (bboxes/trails/zones/masks/confirmer), weather timelapses
+  // get just zones+masks. Toggling zones/masks flips the live
+  // visibility on the zone overlay above; bboxes/trails/confirmer
+  // persist their state in localStorage but the bbox-overlay
+  // show/hide wiring lands in a follow-up — for now those pills
+  // act as bookmarks for the user's preference.
+  mountWeatherToggleBar(item, (id, on, _all) => {
+    if (id === 'zones' || id === 'masks'){
+      window._setZoneOverlayVisibility?.({
+        showZones: id === 'zones' ? on : undefined,
+        showMasks: id === 'masks' ? on : undefined,
+      });
+    }
+  });
 }
 
 // Reverse _setupVideoChrome — called when navigating to a photo or
@@ -204,6 +220,10 @@ function _teardownVideoChrome(){
   const setHost = byId('lightboxSettings');
   if (setHost){ setHost.hidden = true; setHost.innerHTML = ''; }
   lbClearTrackTimeline();
+  // Tear down the overlay-toggles bar so a subsequent photo-event
+  // open doesn't show a stale "Bboxes / Trails / …" row.
+  const togRow = byId('mvLiveToggles');
+  if (togRow) togRow.remove();
   // Buttons return to the media wrap so the photo branch's existing
   // absolute-positioned CSS rules apply.
   _relocateActionsTo('lightboxMediaWrap');
