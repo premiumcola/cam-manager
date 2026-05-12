@@ -28,6 +28,13 @@
   place-items:stretch!important;
   inset:0!important;
   z-index:1200;
+  /* Outer scroll fallback — on landscape viewports where the inner
+     content (video + bottom stack) cannot both fit at their natural
+     sizes, the outer modal becomes scrollable so the user can swipe
+     to reach the panel content. Portrait + tall desktop windows
+     stay on the existing layout (inner pinned to 100dvh, panel
+     scrolls internally) — the media query below opts in. */
+  overflow-y:hidden;
 }
 #lightboxModal.lb-fs-video #lightboxInner{
   width:100vw!important;
@@ -43,6 +50,31 @@
   justify-content:flex-start!important;
   padding:0!important;
   margin:0!important;
+}
+
+/* ── Short-landscape outer scroll (cm-44) ─────────────────────────────────
+   When the viewport is wider than tall AND shorter than 700 px the
+   100dvh pin on #lightboxInner means the bottom panel becomes a
+   sliver that can't be reached without resizing the browser. In that
+   regime we drop the pin: inner becomes auto-height with a
+   min-height of 100dvh (so a fresh open still fills the viewport),
+   the outer modal opts into vertical scroll, and the video clamps
+   to 70dvh so the panel's first row is always visible in the
+   initial scroll position. Bottom-stack internal max-height + scroll
+   still applies for very long log content. */
+@media (orientation: landscape) and (max-height: 699px){
+  #lightboxModal.lb-fs-video{
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+  }
+  #lightboxModal.lb-fs-video #lightboxInner{
+    height:auto!important;
+    min-height:100dvh!important;
+  }
+  #lightboxModal.lb-fs-video #lightboxMediaWrap{
+    max-height:70dvh!important;
+  }
 }
 
 /* ── Top bar ───────────────────────────────────────────────────────────── */
