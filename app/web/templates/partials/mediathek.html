@@ -29,48 +29,35 @@
           </div>
         </div>
 
-        <div class="set-section" id="set-media-config" style="margin-top:14px" data-accent="143,158,181">
-          <button type="button" class="set-hd" onclick="toggleSetSection('set-media-config')">
-            <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#9ba1a8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span>Mediathek-Einstellungen</span><svg class="set-chevron set-chevron-lg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
-          </button>
-          <div class="set-bd"><div class="set-inner">
-            <!-- Sonderaktionen — recovery / reindex actions kept out of
-                 the top bar so the page stays focused on browsing.
-                 Handlers + endpoints unchanged (fixThumbsBtn /
-                 rescanMediaBtn / reindexTrackingBtn IDs preserved
-                 verbatim so the existing JS bindings continue to wire). -->
-            <div class="media-special-actions">
-              <div class="media-special-actions-head">
-                <span class="media-special-actions-title">Sonderaktionen</span>
-                <span class="media-special-actions-hint">Nur bei Indexproblemen — normalerweise nicht nötig.</span>
-              </div>
-              <div class="media-special-actions-row">
-                <button type="button" id="fixThumbsBtn" class="btn btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="1" y="3" width="10" height="8" rx="1.5"/><path d="M2 9l2.5-2.5 2 1.5 2.5-3L11 9"/><circle cx="13" cy="11" r="2.5"/><path d="M13 9.5v-.8M13 12.5v-.8M11.5 11h-.8M14.5 11h-.8 M12 9.8l-.5-.5M14.5 12.2l-.5-.5 M11.5 12.2l.5-.5M14 9.8l.5-.5"/></svg> Thumbnails neu generieren</button>
-                <button type="button" id="rescanMediaBtn" class="btn btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><circle cx="8" cy="8" r="3.5" stroke-opacity=".45"/><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/><line x1="8" y1="8" x2="13" y2="5.5" stroke-opacity=".85"/></svg> Neu scannen</button>
-                <button type="button" id="reindexTrackingBtn" class="btn btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="3" width="11" height="9" rx="1.2"/><line x1="3.5" y1="3" x2="3.5" y2="12" stroke-opacity=".55"/><line x1="6" y1="3" x2="6" y2="12" stroke-opacity=".55"/><line x1="8.5" y1="3" x2="8.5" y2="12" stroke-opacity=".55"/><line x1="11" y1="3" x2="11" y2="12" stroke-opacity=".55"/><path d="M11 13.5A3 3 0 0 0 14.5 10.5"/><polyline points="13.5,8 14.5,10.5 12,11"/></svg> Tracking neu generieren</button>
-              </div>
-            </div>
-            <form id="mediaSettingsForm" class="form" style="padding-top:8px">
-              <div style="display:grid;gap:10px;margin-bottom:10px">
-                <div>
-                  <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-                    <span style="font-size:13px;color:var(--muted)">Aufbewahrung</span>
-                    <span id="ms_retention_days_val" style="font-size:13px;font-weight:700;color:var(--text)">14 Tage</span>
-                  </div>
-                  <input id="ms_retention_days" name="retention_days" type="range" min="1" max="90" step="1" value="14" style="width:100%;accent-color:#cbd5e1" oninput="byId('ms_retention_days_val').textContent=this.value+' Tage'" />
-                </div>
-                <label class="toggle-row" style="margin:0;white-space:nowrap;gap:8px">
-                  <span style="font-size:13px">Auto-Cleanup</span>
-                  <label class="switch"><input type="checkbox" id="ms_auto_cleanup" name="auto_cleanup_enabled" /><span class="slider"></span></label>
-                </label>
-              </div>
-              <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-                <button type="button" id="purgeOrphansBtn" class="btn btn-danger"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="2.5,4 13.5,4"/><path d="M5.5 4V2.5h5V4"/><path d="M3.5 4l.7 9.2a1.3 1.3 0 0 0 1.3 1.3h5a1.3 1.3 0 0 0 1.3-1.3L12.5 4"/><line x1="2" y1="14.5" x2="14" y2="2.5" stroke-width="1.6"/></svg>Verwaiste Events</button>
-                <button type="button" id="cleanupNowBtn" class="btn btn-danger"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="9" y1="2" x2="14" y2="7"/><path d="M9 2l-3 3 5 5 3-3z"/><path d="M6 5l-4 8 8-4"/><line x1="2" y1="13" x2="6" y2="13"/></svg>Jetzt bereinigen</button>
-                <button type="submit" class="btn btn-save" style="margin-left:auto"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h8L13.5 5v8.5h-11z"/><polyline points="5,2.5 5,6.5 10,6.5 10,2.5"/><polyline points="4.5,13.5 4.5,9 11.5,9 11.5,13.5"/></svg>Speichern</button>
-              </div>
-            </form>
-          </div></div>
-        </div>
+        {# Maintenance accordion (Sonderaktionen + retention slider +
+           auto-cleanup toggle + Speichern). Renamed
+           Mediathek-Einstellungen → Mediathek-Wartung so both panels
+           end in "-Wartung" and read symmetrically. The two legacy
+           danger buttons (purgeOrphansBtn, cleanupNowBtn) are dropped
+           per docs/maintenance-panels.md — Auto-Cleanup + retention
+           already cover the same intent. Backend endpoints stay alive
+           in case something else calls them. #}
+        {% from 'partials/_maintenance_panel.html' import maintenance_panel %}
+        {% call maintenance_panel(
+                panel_id='set-media-maint',
+                accent='143,158,181',
+                title='Mediathek-Wartung',
+                hint='Nur bei Indexproblemen — normalerweise nicht nötig.',
+                retention={
+                    'form_id':      'mediaSettingsForm',
+                    'val_id':       'ms_retention_days_val',
+                    'input_id':     'ms_retention_days',
+                    'toggle_id':    'ms_auto_cleanup',
+                    'days_name':    'retention_days',
+                    'enabled_name': 'auto_cleanup_enabled',
+                    'current':      14,
+                    'min':          1,
+                    'max':          90,
+                }
+        ) %}
+          <button type="button" id="fixThumbsBtn" class="btn btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="1" y="3" width="10" height="8" rx="1.5"/><path d="M2 9l2.5-2.5 2 1.5 2.5-3L11 9"/><circle cx="13" cy="11" r="2.5"/><path d="M13 9.5v-.8M13 12.5v-.8M11.5 11h-.8M14.5 11h-.8 M12 9.8l-.5-.5M14.5 12.2l-.5-.5 M11.5 12.2l.5-.5M14 9.8l.5-.5"/></svg> Thumbnails neu generieren</button>
+          <button type="button" id="rescanMediaBtn" class="btn btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><circle cx="8" cy="8" r="3.5" stroke-opacity=".45"/><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/><line x1="8" y1="8" x2="13" y2="5.5" stroke-opacity=".85"/></svg> Neu scannen</button>
+          <button type="button" id="reindexTrackingBtn" class="btn btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="3" width="11" height="9" rx="1.2"/><line x1="3.5" y1="3" x2="3.5" y2="12" stroke-opacity=".55"/><line x1="6" y1="3" x2="6" y2="12" stroke-opacity=".55"/><line x1="8.5" y1="3" x2="8.5" y2="12" stroke-opacity=".55"/><line x1="11" y1="3" x2="11" y2="12" stroke-opacity=".55"/><path d="M11 13.5A3 3 0 0 0 14.5 10.5"/><polyline points="13.5,8 14.5,10.5 12,11"/></svg> Tracking neu generieren</button>
+        {% endcall %}
       </section>
 

@@ -1,0 +1,81 @@
+{# ── Shared maintenance-panel macro ─────────────────────────────────────────
+
+   Renders the outer accordion shell + "Sonderaktionen" sub-block that
+   both ``partials/mediathek.html`` (Mediathek-Wartung) and
+   ``partials/weather.html`` (Wetter-Wartung) used to repeat verbatim.
+
+   Usage::
+
+       {% from 'partials/_maintenance_panel.html' import maintenance_panel %}
+
+       {% call maintenance_panel(
+              panel_id='set-media-maint',
+              accent='143,158,181',
+              title='Mediathek-Wartung',
+              hint='Nur bei Indexproblemen — normalerweise nicht nötig.',
+              retention={
+                  'form_id':              'mediaSettingsForm',
+                  'val_id':               'ms_retention_days_val',
+                  'input_id':             'ms_retention_days',
+                  'toggle_id':            'ms_auto_cleanup',
+                  'days_name':            'retention_days',
+                  'enabled_name':         'auto_cleanup_enabled',
+                  'current':              14,
+                  'min':                  1,
+                  'max':                  90,
+              },
+       ) %}
+         <button id="fixThumbsBtn"   class="btn btn-action action-green">…</button>
+         <button id="rescanMediaBtn" class="btn btn-action action-green">…</button>
+         <button id="reindexTrackingBtn" class="btn btn-action action-green">…</button>
+       {% endcall %}
+
+   - ``panel_id``      — DOM id (also used by ``toggleSetSection`` onclick).
+   - ``accent``        — CSS RGB triplet for ``data-accent``.
+   - ``title``         — accordion header label.
+   - ``hint``          — short subtitle under "Sonderaktionen".
+   - ``retention``     — optional dict; when present, renders the retention
+                         slider + auto-cleanup toggle + Speichern row.
+                         When ``None``, the action row is the only body.
+
+   Action buttons are rendered by the macro CALLER (each panel's own
+   icons + ids stay distinct) — the macro just lays out the row. #}
+
+{% macro maintenance_panel(panel_id, accent, title, hint, retention=None) %}
+<div class="set-section" id="{{ panel_id }}" data-accent="{{ accent }}">
+  <button type="button" class="set-hd" onclick="toggleSetSection('{{ panel_id }}')">
+    <span class="set-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span><span>{{ title }}</span><svg class="set-chevron set-chevron-lg" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="5,3 11,8 5,13"/></svg>
+  </button>
+  <div class="set-bd"><div class="set-inner">
+    <div class="media-special-actions">
+      <div class="media-special-actions-head">
+        <span class="media-special-actions-title">Sonderaktionen</span>
+        <span class="media-special-actions-hint">{{ hint }}</span>
+      </div>
+      <div class="media-special-actions-row">
+        {{ caller() }}
+      </div>
+    </div>
+    {% if retention %}
+    <form id="{{ retention.form_id }}" class="form" style="padding-top:8px">
+      <div style="display:grid;gap:10px;margin-bottom:10px">
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+            <span style="font-size:13px;color:var(--muted)">Aufbewahrung</span>
+            <span id="{{ retention.val_id }}" style="font-size:13px;font-weight:700;color:var(--text)">{{ retention.current }} Tage</span>
+          </div>
+          <input id="{{ retention.input_id }}" name="{{ retention.days_name }}" type="range" min="{{ retention.min }}" max="{{ retention.max }}" step="1" value="{{ retention.current }}" style="width:100%;accent-color:#cbd5e1" oninput="byId('{{ retention.val_id }}').textContent=this.value+' Tage'" />
+        </div>
+        <label class="toggle-row" style="margin:0;white-space:nowrap;gap:8px">
+          <span style="font-size:13px">Auto-Cleanup</span>
+          <label class="switch"><input type="checkbox" id="{{ retention.toggle_id }}" name="{{ retention.enabled_name }}" /><span class="slider"></span></label>
+        </label>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <button type="submit" class="btn btn-save" style="margin-left:auto"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 2.5h8L13.5 5v8.5h-11z"/><polyline points="5,2.5 5,6.5 10,6.5 10,2.5"/><polyline points="4.5,13.5 4.5,9 11.5,9 11.5,13.5"/></svg>Speichern</button>
+      </div>
+    </form>
+    {% endif %}
+  </div></div>
+</div>
+{% endmacro %}
