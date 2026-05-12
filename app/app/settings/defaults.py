@@ -126,6 +126,29 @@ def default_camera(cam: dict | None = None) -> dict:
         # use the runtime's per-class fallbacks (see
         # _NOTIFY_COOLDOWN_DEFAULTS in telegram_bot).
         "notification_cooldown": cam.get("notification_cooldown") or {},
+        # bw916 — per-camera tracker overrides. The four preset buttons
+        # in the cam-edit Erkennung tab populate these inputs; before
+        # this entry was added, the keys lived in CAMERA_SCHEMA but
+        # never made it into default_camera, so the merged dict that
+        # upsert_camera builds dropped them and existing.update(merged)
+        # could never overwrite the previously-stored value. 0.0 keeps
+        # tracker_core's module default.
+        "track_spawn_min_score":     float(cam.get("track_spawn_min_score") or 0.0),
+        "track_continue_min_score":  float(cam.get("track_continue_min_score") or 0.0),
+        "track_miss_grace_seconds":  float(cam.get("track_miss_grace_seconds") or 0.0),
+        "track_iou_match_threshold": float(cam.get("track_iou_match_threshold") or 0.0),
+        "track_postclip_precision":  (cam.get("track_postclip_precision") or "standard"),
+        # Reolink HTTP-CGI port override — same persistence hole as the
+        # tracker fields above, surfaced by task vk257 when the image-
+        # mode panel's port number was getting dropped on save.
+        "reolink_http_port":         int(cam.get("reolink_http_port") or 0),
+        "wildlife_min_score":        float(cam.get("wildlife_min_score") or 0.0),
+        # Per-camera streaming preferences + timestamp-overlay calibration.
+        # Empty dicts mean "use the module-level defaults"; the runtime
+        # only checks them when present so an unset camera keeps its
+        # historical behaviour.
+        "streaming":                 (cam.get("streaming") or {}),
+        "timestamp_overlay_zone":    (cam.get("timestamp_overlay_zone") or {}),
     }
 
 
