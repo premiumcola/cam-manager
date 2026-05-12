@@ -21,6 +21,9 @@ from pathlib import Path
 # override anything they need to. Domain partials in the middle can be in any
 # order — CSS specificity, not source order, decides the cascade for them.
 LOAD_ORDER = [
+    # Zone + mask design tokens — load FIRST so every later partial
+    # can reference the --zone-stroke / --mask-stroke custom properties.
+    "00-zone-tokens.css",
     "01-base.css",
     "02-hero.css",
     "03-dashboard.css",
