@@ -1,30 +1,4 @@
       <section id="weather" class="panel section" data-accent="127,174,201">
-        {# Wetter-Wartung — recovery actions + retention controls
-           rendered via the shared maintenance_panel macro so the two
-           panels stay symmetric. Handlers in
-           /web/static/js/weather/maintenance.js. #}
-        {% from 'partials/_maintenance_panel.html' import maintenance_panel %}
-        {% call maintenance_panel(
-                panel_id='set-weather-maint',
-                accent='127,174,201',
-                title='Wetter-Wartung',
-                hint='Nur bei Indexproblemen — normalerweise nicht nötig.',
-                retention={
-                    'form_id':      'weatherMaintForm',
-                    'val_id':       'ws_retention_days_val',
-                    'input_id':     'ws_retention_days',
-                    'toggle_id':    'ws_auto_cleanup',
-                    'days_name':    'retention_days',
-                    'enabled_name': 'auto_cleanup_enabled',
-                    'current':      90,
-                    'min':          7,
-                    'max':          365,
-                }
-        ) %}
-          <button type="button" id="weatherRescanBtn" class="btn btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><circle cx="8" cy="8" r="3.5" stroke-opacity=".45"/><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/><line x1="8" y1="8" x2="13" y2="5.5" stroke-opacity=".85"/></svg> Wetter neu einlesen</button>
-          <button type="button" id="weatherThumbRegenBtn" class="btn btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="1" y="3" width="10" height="8" rx="1.5"/><path d="M2 9l2.5-2.5 2 1.5 2.5-3L11 9"/><circle cx="13" cy="11" r="2.5"/><path d="M13 9.5v-.8M13 12.5v-.8M11.5 11h-.8M14.5 11h-.8 M12 9.8l-.5-.5M14.5 12.2l-.5-.5 M11.5 12.2l.5-.5M14 9.8l.5-.5"/></svg> Wetter-Thumbnails neu erzeugen</button>
-        {% endcall %}
-
         <!-- Wetter-Ereignisse: clip grid + recaps + filter pills. The user
              opens the section primarily to look at recent events, so this
              block sits at the top. Element ids (weatherSightingsBlock /
@@ -80,4 +54,31 @@
             <!-- populated by renderWeatherStatsExplainer() when a chip is isolated -->
           </div>
         </div>
+
+        {# Wetter-Wartung — recovery actions + retention controls, placed
+           LAST in the section so the user lands on the events grid first
+           and only sees maintenance controls when they intentionally
+           scroll to the bottom. Mirrors the Mediathek-Wartung position
+           at the foot of partials/mediathek.html. #}
+        {% from 'partials/_maintenance_panel.html' import maintenance_panel %}
+        {% call maintenance_panel(
+                panel_id='set-weather-maint',
+                accent='127,174,201',
+                title='Wetter-Wartung',
+                hint='Nur bei Indexproblemen — normalerweise nicht nötig.',
+                retention={
+                    'form_id':      'weatherMaintForm',
+                    'val_id':       'ws_retention_days_val',
+                    'input_id':     'ws_retention_days',
+                    'toggle_id':    'ws_auto_cleanup',
+                    'days_name':    'retention_days',
+                    'enabled_name': 'auto_cleanup_enabled',
+                    'current':      90,
+                    'min':          7,
+                    'max':          365,
+                }
+        ) %}
+          <button type="button" id="weatherRescanBtn" class="btn btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><circle cx="8" cy="8" r="3.5" stroke-opacity=".45"/><circle cx="8" cy="8" r="1" fill="currentColor" stroke="none"/><line x1="8" y1="8" x2="13" y2="5.5" stroke-opacity=".85"/></svg> Wetter neu einlesen</button>
+          <button type="button" id="weatherThumbRegenBtn" class="btn btn-action action-green"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><rect x="1" y="3" width="10" height="8" rx="1.5"/><path d="M2 9l2.5-2.5 2 1.5 2.5-3L11 9"/><circle cx="13" cy="11" r="2.5"/><path d="M13 9.5v-.8M13 12.5v-.8M11.5 11h-.8M14.5 11h-.8 M12 9.8l-.5-.5M14.5 12.2l-.5-.5 M11.5 12.2l.5-.5M14 9.8l.5-.5"/></svg> Wetter-Thumbnails neu erzeugen</button>
+        {% endcall %}
       </section>
