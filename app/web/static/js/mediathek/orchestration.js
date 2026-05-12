@@ -560,6 +560,11 @@ export function renderMediaGrid(){
       if (state.mediaSelected.has(card.dataset.eventId)) card.classList.add('media-card--selected');
     });
   }
+  // Lazy-paint QA pills on every visible timelapse card. Pure
+  // window-level wiring — no import to keep this hot path free of
+  // module-graph dependencies. paintQAPillsForGrid exists on
+  // window via the import in main.js below.
+  try { window.paintQAPillsForGrid?.(); } catch { /* swallow */ }
   requestAnimationFrame(() => { grid.style.transition = 'opacity .18s ease,transform .18s ease'; grid.style.opacity = '1'; grid.style.transform = ''; });
   renderMediaPagination();
   window._openMediaItem = id => {

@@ -136,6 +136,47 @@ def api_camera_timelapse(cam_id):
     return jsonify({"ok": True, "day": day, "url": f"/media/{rel.as_posix()}"})
 
 
+@bp.get('/api/timelapse/<path:rel>/qa')
+def api_timelapse_qa(rel):
+    """Return the QA sidecar JSON for an mp4 under storage/.
+
+    ``rel`` is the path of the .mp4 (or path of the sidecar minus
+    the trailing ``.qa.json``) relative to storage_root. Examples:
+      /api/timelapse/timelapse/<cam>/<file>.mp4/qa
+      /api/timelapse/weather/<cam>/sunrise_timelapse/<file>.mp4/qa
+    Returns 404 when the sidecar doesn't exist — older builds
+    (pre-QA-pass) have no sidecar and the UI falls back to its
+    grey "n/a" pill + Rebuild affordance.
+    """
+    from ..timelapse_qa import qa_sidecar_path, read_qa_sidecar
+    storage_root = app_state.storage_root
+    # Defence against directory traversal — resolve against storage_root
+    # and reject anything that escapes.
+    try:
+        target = (storage_root / rel).resolve()
+        target.relative_to(storage_root.resolve())
+    except Exception:
+        return jsonify({"error": "invalid path"}), 400
+    # Accept either the mp4 path or the explicit .qa.json path.
+    if target.suffix == ".mp4":
+        sidecar = qa_sidecar_path(target)
+    elif target.name.endswith(".qa.json"):
+        sidecar = target
+    else:
+        return jsonify({"error": "expected an .mp4 or .qa.json path"}), 400
+    if not sidecar.exists():
+        return jsonify({"error": "no sidecar"}), 404
+    data = read_qa_sidecar(sidecar.parent / sidecar.name.replace(".qa.json", ""))
+    if data is None:
+        # Last-resort raw read so a malformed sidecar still surfaces
+        # SOMETHING instead of a silent 500.
+        try:
+            return jsonify(_json.loads(sidecar.read_text(encoding="utf-8")))
+        except Exception:
+            return jsonify({"error": "sidecar unreadable"}), 500
+    return jsonify(data)
+
+
 @bp.get('/api/camera/<cam_id>/timelapse/list')
 def api_camera_timelapse_list(cam_id):
     storage_root = app_state.storage_root
