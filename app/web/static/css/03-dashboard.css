@@ -241,6 +241,15 @@
 }
 .cv-fs-btn:hover{background:rgba(0,0,0,.65);color:#fff}
 .cv-fs-btn:active{transform:scale(.94)}
+/* mx918 — two-state FS icon. Both SVGs ship inline; CSS picks which
+   is visible based on the wrap's .is-fs class, toggled by
+   fullscreenchange. No JS-driven innerHTML swap — the browser
+   already restyles instantly on class change. */
+.cv-fs-btn .fs-icon-expand,
+.cv-fs-btn .fs-icon-minimize{display:block}
+.cv-fs-btn .fs-icon-minimize{display:none}
+.cv-img-wrap.is-fs .cv-fs-btn .fs-icon-expand{display:none}
+.cv-img-wrap.is-fs .cv-fs-btn .fs-icon-minimize{display:block}
 
 /* SIM button — now flows inside .cv-chrome-bottom-right (task fb537);
    the wrapper handles positioning so this rule only carries shape +

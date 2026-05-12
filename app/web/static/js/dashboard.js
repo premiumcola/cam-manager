@@ -435,9 +435,13 @@ export function _cvEnterFullscreen(camId){
   else _hdAtFsEntry.delete(camId);
   const req = wrap.requestFullscreen || wrap.webkitRequestFullscreen || wrap.mozRequestFullScreen;
   if (req){
-    req.call(wrap).catch(() => { wrap.classList.add('fake-fullscreen'); });
+    req.call(wrap).catch(() => {
+      wrap.classList.add('fake-fullscreen');
+      wrap.classList.add('is-fs');
+    });
   } else {
     wrap.classList.add('fake-fullscreen');
+    wrap.classList.add('is-fs');
   }
   // .fake-fullscreen has its own dismiss path — tap-outside the
   // wrap returns to normal. The native API exits via Esc / browser
@@ -446,6 +450,7 @@ export function _cvEnterFullscreen(camId){
     const dismiss = (ev) => {
       if (!wrap.contains(ev.target)){
         wrap.classList.remove('fake-fullscreen');
+        wrap.classList.remove('is-fs');
         document.removeEventListener('keydown', escDismiss);
         document.removeEventListener('click', dismiss, true);
         _runHdDropOnFsExit();
@@ -454,6 +459,7 @@ export function _cvEnterFullscreen(camId){
     const escDismiss = (ev) => {
       if (ev.key === 'Escape'){
         wrap.classList.remove('fake-fullscreen');
+        wrap.classList.remove('is-fs');
         document.removeEventListener('keydown', escDismiss);
         document.removeEventListener('click', dismiss, true);
         _runHdDropOnFsExit();
@@ -489,10 +495,18 @@ function _runHdDropOnFsExit(){
 
 function _onFullscreenChange(){
   const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+  // .is-fs drives the FS-button icon swap (task mx918) and any other
+  // chrome that needs to know "this wrap is the FS target right now".
+  // Walk every wrap on the page so stale .is-fs from a previous exit
+  // can't linger after a navigation.
+  document.querySelectorAll('.cv-img-wrap').forEach(w => {
+    w.classList.toggle('is-fs', w === fsEl || w.classList.contains('fake-fullscreen'));
+  });
   if (fsEl) return;       // entered (or transitioning into) FS — wait for exit.
   // Exited fullscreen — defensive cleanup + auto-drop HD per cm-52 task #5b.
   document.querySelectorAll('.cv-img-wrap.fake-fullscreen').forEach(w => {
     w.classList.remove('fake-fullscreen');
+    w.classList.remove('is-fs');
   });
   _runHdDropOnFsExit();
 }
@@ -603,8 +617,13 @@ ${isActive ? `
         <div class="cv-tr-row">
           ${c.rtsp_url ? `<button class="cv-hd-badge${hdOn ? ' active' : ''}" type="button" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau" aria-label="HD-Vorschau ein/aus">HD</button>` : ''}
           ${c.rtsp_url ? `<button class="cv-fs-btn" type="button" data-cam="${esc(c.id)}" onclick="event.stopPropagation();window._cvEnterFullscreen && window._cvEnterFullscreen('${esc(c.id)}')" title="Vollbild" aria-label="Vollbild">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/>
+            <svg class="fs-icon-expand" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 14v7h7"/><path d="M21 10V3h-7"/>
+              <path d="M3 21l8-8"/><path d="M21 3l-8 8"/>
+            </svg>
+            <svg class="fs-icon-minimize" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 3v7H3"/><path d="M14 21v-7h7"/>
+              <path d="M10 10L3 3"/><path d="M14 14l7 7"/>
             </svg>
           </button>` : ''}
         </div>

@@ -90,6 +90,13 @@
             -webkit-backdrop-filter:blur(8px);
             transition:background .15s ease}
 .lvm-fs-btn:hover{background:rgba(0,0,0,.75)}
+/* mx918 — two-state FS icon, expand/minimize swap via .is-fs on
+   .lvm-wrap. Mirrors the .cv-fs-btn rules in 03-dashboard.css. */
+.lvm-fs-btn .fs-icon-expand,
+.lvm-fs-btn .fs-icon-minimize{display:block}
+.lvm-fs-btn .fs-icon-minimize{display:none}
+.lvm-wrap.is-fs .lvm-fs-btn .fs-icon-expand{display:none}
+.lvm-wrap.is-fs .lvm-fs-btn .fs-icon-minimize{display:block}
 
 /* ── Live-view modal fullscreen ──────────────────────────────────
    Three-way rule: native browser :fullscreen on desktop Chrome /
