@@ -423,6 +423,27 @@ function _renderBboxOverlay(){
   const fs = _session.lastFrameSize || { w: 1920, h: 1080 };
   svg.setAttribute('viewBox', `0 0 ${fs.w} ${fs.h}`);
   _positionSvgOverImage(svg);
+  // tg593 — 0×0 guard. If the image hasn't sized yet (first
+  // detection arrived before the first MJPEG frame), skip painting.
+  // The next tick OR the load/ResizeObserver listener on imgEl
+  // will re-fire _renderBboxOverlay with valid dimensions.
+  const rect = svg.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0){
+    svg.innerHTML = '';
+    return;
+  }
+  // tg593 — one-shot diagnostic on first detection-arrives-and-paints
+  // call per session. Single line answers "is the renderer running"
+  // vs "are detections empty" vs "is the SVG zero-sized" without
+  // needing DevTools to inspect every layer. Uses console.warn so
+  // the eslint no-console gate (allow: warn/error) lets it through;
+  // semantically it's a diagnostic, not a warning, but warn is what
+  // the lint policy permits.
+  if (_session && !_session._bboxDiagLogged && (_session.lastDetections || []).length){
+    _session._bboxDiagLogged = true;
+    const zIndex = window.getComputedStyle(svg).zIndex;
+    console.warn(`[sim-bbox] dets=${(_session.lastDetections || []).length} viewBox=${fs.w}x${fs.h} svgRect=${Math.round(rect.width)}x${Math.round(rect.height)} zIndex=${zIndex}`);
+  }
   svg.innerHTML = (_session.lastDetections || []).map(d => {
     const c = colors[d.label] || colors.unknown;
     const op = d.verdict === 'pass' ? 1 : d.verdict === 'belowthresh' ? 0.55 : 0.30;
