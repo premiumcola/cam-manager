@@ -581,6 +581,31 @@ function _chromeClassSvg(cls){
 }
 
 
+// tw284 — currentColor chrome icons for the bottom-right cluster.
+// Telegram + MQTT badges + the settings cog. Each glyph uses
+// stroke="currentColor" so the parent pill's ``color`` value tints
+// it (Telegram brand blue, MQTT amber, white for the cog).
+const _CHROME_TG_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 4L3 11l6 2 2 6 3-4 5 4z"/><path d="M9 13l8-7"/></svg>`;
+const _CHROME_MQTT_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7c4-4 10-4 14 0"/><path d="M7.5 10c2.5-2.5 6.5-2.5 9 0"/><path d="M10 13a2.5 2.5 0 0 1 4 0"/><circle cx="12" cy="17" r="1.2" fill="currentColor"/></svg>`;
+const _CHROME_COG_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+const _CHROME_SIM_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>`;
+
+// Derive the state-dot colour for a notification channel pill.
+//   "on"    → currently armed AND in schedule window         → green dot
+//   "muted" → enabled but camera is NOT armed (user toggled) → amber dot
+//   "idle"  → enabled + armed + outside schedule window       → no dot
+function _channelState(c){
+  if (!c.armed) return 'muted';
+  const sch = (c.schedule_notify && c.schedule_notify.enabled)
+    ? c.schedule_notify
+    : ((c.schedule && c.schedule.enabled) ? c.schedule : null);
+  if (sch && sch.from && sch.to){
+    return _isInScheduleWindow(sch.from, sch.to) ? 'on' : 'idle';
+  }
+  return 'on';  // no schedule defined → always on
+}
+
+
 // Camera-tile grid renderer. Builds every visible cv-card from
 // state.cameras. The template string carries inline onclick handlers
 // (_cvCardClick / toggleCardHd / editCamera / _camImgRetry); each name
@@ -619,6 +644,19 @@ export function renderDashboard(){
     const _schedulePill = (_sch.enabled && _sch.from && _sch.to)
       ? `<div class="cv-chrome-btn cv-schedule-pill has-text" title="Aktivitätszeit">${esc(_sch.from)}–${esc(_sch.to)}</div>`
       : '';
+    // tw284 — Telegram + MQTT channel badges in bottom-right. Each
+    // renders only when the camera has the channel enabled. State-dot
+    // colour reflects armed × in-schedule semantics (see _channelState).
+    const _chanState = _channelState(c);
+    const _stateDot = (state) => state === 'idle'
+      ? ''
+      : `<span class="cv-state-dot" data-state="${state}" aria-hidden="true"></span>`;
+    const _tgBadge = c.telegram_enabled
+      ? `<div class="cv-chrome-btn cv-tg-badge" data-state="${_chanState}" title="Telegram-Kanal" aria-label="Telegram-Kanal">${_CHROME_TG_SVG}${_stateDot(_chanState)}</div>`
+      : '';
+    const _mqttBadge = c.mqtt_enabled
+      ? `<div class="cv-chrome-btn cv-mqtt-badge" data-state="${_chanState}" title="MQTT-Kanal" aria-label="MQTT-Kanal">${_CHROME_MQTT_SVG}${_stateDot(_chanState)}</div>`
+      : '';
     return `<article class="cv-card${c.armed ? '' : ' cv-card--muted'}" data-camid="${esc(c.id)}" data-cam-name="${esc(c.name || c.id)}">
   <div class="cv-frame">
     <div class="cv-img-wrap">
@@ -656,8 +694,8 @@ ${isActive ? `
 ${isActive ? `
       <div class="cv-chrome-top-right">
         <div class="cv-tr-row">
-          ${c.rtsp_url ? `<button class="cv-hd-badge${hdOn ? ' active' : ''}" type="button" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau" aria-label="HD-Vorschau ein/aus">HD</button>` : ''}
-          ${c.rtsp_url ? `<button class="cv-fs-btn" type="button" data-cam="${esc(c.id)}" onclick="event.stopPropagation();window._cvEnterFullscreen && window._cvEnterFullscreen('${esc(c.id)}')" title="Vollbild" aria-label="Vollbild">
+          ${c.rtsp_url ? `<button class="cv-chrome-btn cv-hd-badge has-text${hdOn ? ' active' : ''}" type="button" data-cam="${esc(c.id)}" onclick="event.stopPropagation();toggleCardHd('${esc(c.id)}',this)" title="HD-Vorschau" aria-label="HD-Vorschau ein/aus">HD</button>` : ''}
+          ${c.rtsp_url ? `<button class="cv-chrome-btn cv-fs-btn" type="button" data-cam="${esc(c.id)}" onclick="event.stopPropagation();window._cvEnterFullscreen && window._cvEnterFullscreen('${esc(c.id)}')" title="Vollbild" aria-label="Vollbild">
             <svg class="fs-icon-expand" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M3 14v7h7"/><path d="M21 10V3h-7"/>
               <path d="M3 21l8-8"/><path d="M21 3l-8 8"/>
@@ -673,19 +711,10 @@ ${isActive ? `
 ` : ''}
       <div class="cv-chrome-bottom-left">${_classPills}${_schedulePill}</div>
       <div class="cv-chrome-bottom-right">
-        ${c.rtsp_url && isActive ? `<button class="cv-sim-btn" type="button" data-cam="${esc(c.id)}" onclick="event.stopPropagation();window._cvOpenSim && window._cvOpenSim('${esc(c.id)}')" title="Erkennung jetzt simulieren" aria-label="Simulieren">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/>
-            <circle cx="12" cy="12" r="3"/>
-          </svg>
-          <span>Simulieren</span>
-        </button>` : ''}
-        <button class="cv-cog" type="button" onclick="event.stopPropagation();editCamera('${esc(c.id)}')" title="Einstellungen" aria-label="Einstellungen">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
-        </button>
+        ${_tgBadge}
+        ${_mqttBadge}
+        ${c.rtsp_url && isActive ? `<button class="cv-chrome-btn cv-sim-btn has-text" type="button" data-cam="${esc(c.id)}" onclick="event.stopPropagation();window._cvOpenSim && window._cvOpenSim('${esc(c.id)}')" title="Erkennung jetzt simulieren" aria-label="Simulieren">${_CHROME_SIM_SVG}<span>Simulieren</span></button>` : ''}
+        <button class="cv-chrome-btn cv-cog" type="button" onclick="event.stopPropagation();editCamera('${esc(c.id)}')" title="Einstellungen" aria-label="Einstellungen">${_CHROME_COG_SVG}</button>
       </div>
     </div>
   </div>

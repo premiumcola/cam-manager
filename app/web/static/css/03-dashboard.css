@@ -238,84 +238,46 @@
    template — keep the rule in case a future caller re-adds them. */
 .cv-lp-row small{font-size:9px;color:rgba(220,252,231,.5);display:block}
 .cv-lp-row strong{color:#fff;font-weight:700;white-space:nowrap}
-/* HD badge — primary control next to the Live pill. */
-/* HD toggle — INLINE inside .cv-name-row, immediately right of the
-   .cv-name span. The name truncates with ellipsis when the tile is
-   narrow; the HD button has flex-shrink:0 so it stays the same size
-   and never compresses the title. Visual matches the cog + new FS
-   button so the three controls read as one family. */
-.cv-hd-badge{
-  flex-shrink:0;
-  height:28px;min-width:36px;
-  padding:0 9px;
-  border-radius:9px;
-  background:rgba(0,0,0,.45);
-  color:rgba(255,255,255,.85);
-  font-size:11px;font-weight:700;letter-spacing:.05em;
-  border:0;outline:0;
-  display:inline-flex;align-items:center;justify-content:center;
-  cursor:pointer;
-  -webkit-tap-highlight-color:transparent;
-  -webkit-backdrop-filter:blur(8px);
-  backdrop-filter:blur(8px);
-  transition:background .15s,color .15s,transform .12s;
-}
-.cv-hd-badge:hover{background:rgba(0,0,0,.65);color:#fff}
-.cv-hd-badge.active{background:rgba(59,130,246,.42);color:#fff;font-weight:800}
-.cv-hd-badge:active{transform:scale(.94)}
+/* tw284 — every chrome control on the tile now composes from
+   .cv-chrome-btn (defined further up in this file). The per-control
+   rules below carry ONLY the modifier each one needs on top of the
+   shared base — letter-spacing for HD, the active blue tint, the
+   FS-icon swap, channel-badge colour tints, and the state-dot dots. */
 
-/* FS button — top-right corner of the tile, sits LEFT of the
-   LivePill in .cv-tr-row so the live indicator stays the rightmost
-   element and the FS affordance reads as the "expand" cue. Same
-   round / blur / hit-area treatment as HD + SIM so the three new
-   controls share one visual language. */
-.cv-fs-btn{
-  flex-shrink:0;
-  width:32px;height:32px;
-  border-radius:9px;
-  border:0;outline:0;
-  background:rgba(0,0,0,.45);
-  color:rgba(255,255,255,.85);
-  display:inline-flex;align-items:center;justify-content:center;
-  cursor:pointer;
-  -webkit-tap-highlight-color:transparent;
-  -webkit-backdrop-filter:blur(8px);
-  backdrop-filter:blur(8px);
-  transition:background .15s,color .15s,transform .12s;
-}
-.cv-fs-btn:hover{background:rgba(0,0,0,.65);color:#fff}
-.cv-fs-btn:active{transform:scale(.94)}
-/* mx918 — two-state FS icon. Both SVGs ship inline; CSS picks which
-   is visible based on the wrap's .is-fs class, toggled by
-   fullscreenchange. No JS-driven innerHTML swap — the browser
-   already restyles instantly on class change. */
+/* HD pill — text variant, kept narrower than the default has-text
+   padding so the 2-character label sits tight. The .active state
+   tints the bg in the Reolink HD blue. */
+.cv-hd-badge{padding:0 9px;font-weight:700;letter-spacing:.05em;font-size:11px;flex-shrink:0}
+.cv-hd-badge.active{background:rgba(59,130,246,.42);color:#fff;font-weight:800}
+.cv-hd-badge.active:hover{background:rgba(59,130,246,.5)}
+
+/* FS button — icon-only 30 × 30 from chrome-btn defaults. mx918
+   ships both expand / minimize SVGs inline; CSS picks based on
+   .cv-img-wrap.is-fs ancestor. */
+.cv-fs-btn{flex-shrink:0}
 .cv-fs-btn .fs-icon-expand,
 .cv-fs-btn .fs-icon-minimize{display:block}
 .cv-fs-btn .fs-icon-minimize{display:none}
 .cv-img-wrap.is-fs .cv-fs-btn .fs-icon-expand{display:none}
 .cv-img-wrap.is-fs .cv-fs-btn .fs-icon-minimize{display:block}
 
-/* SIM button — now flows inside .cv-chrome-bottom-right (task fb537);
-   the wrapper handles positioning so this rule only carries shape +
-   colour. Same dark-chrome family as the cog beside it. */
-.cv-sim-btn{
-  height:32px;
-  padding:0 12px;
-  border-radius:9px;
-  border:0;outline:0;
-  background:rgba(0,0,0,.45);
-  color:rgba(255,255,255,.85);
-  font-size:11.5px;font-weight:600;letter-spacing:.02em;
-  display:inline-flex;align-items:center;gap:6px;
-  cursor:pointer;
-  -webkit-tap-highlight-color:transparent;
-  -webkit-backdrop-filter:blur(8px);
-  backdrop-filter:blur(8px);
-  transition:background .15s,color .15s,transform .12s;
-}
-.cv-sim-btn:hover{background:rgba(0,0,0,.65);color:#fff}
-.cv-sim-btn:active{transform:scale(.94)}
+/* SIM + cog — chrome-btn handles size + bg + transitions. SIM is
+   .has-text so the "Simulieren" label fits; cog is icon-only. */
 .cv-sim-btn svg{flex-shrink:0}
+.cv-cog{width:30px}
+
+/* Channel badges — Telegram blue + MQTT amber tint via parent's
+   ``color``. State-dot in the top-right corner reads the channel's
+   armed × in-schedule state computed in dashboard.js#_channelState. */
+.cv-tg-badge{width:30px;color:#5eb6ff}
+.cv-mqtt-badge{width:30px;color:#d6a06b}
+.cv-state-dot{
+  position:absolute;top:4px;right:4px;
+  width:6px;height:6px;border-radius:50%;
+  box-shadow:0 0 0 2px rgba(0,0,0,.65);
+}
+.cv-state-dot[data-state="on"]{background:#22c55e}
+.cv-state-dot[data-state="muted"]{background:#f59e0b}
 
 /* Tile body must NOT show a click-pointer anymore — the article-level
    onclick is gone (cm-52 task 2). Buttons inside the tile keep their
