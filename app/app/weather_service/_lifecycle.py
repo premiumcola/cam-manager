@@ -98,6 +98,86 @@ class LifecycleMixin:
             log.warning("[weather] daily recompute job failed: %s", e)
         cams_in = [self._cam_name(cid) for cid in self._enabled_cam_ids()]
         log.info("[weather] Service started · interval=%ss · cameras=%s", interval, cams_in)
+        # ── Self-heal index drift after a filename refactor ────────────
+        # The cam-slug rename refactor renamed every clip in-place; older
+        # manifests still point at pre-rename paths. The tolerant
+        # resolver in routes/weather.py serves them on demand, but the
+        # index drift means slow first-paint on every card. Boot-time
+        # check: if >30 % of index rows need tolerant-resolve fallback
+        # AND the last auto-rescan was >24 h ago, fire one in a daemon
+        # thread so the index converges on the current filenames.
+        try:
+            self._maybe_rescan_drifted_index()
+        except Exception as e:
+            log.warning("[weather] drift check failed: %s", e)
+
+    def _maybe_rescan_drifted_index(self):
+        """Daemon-thread auto-rescan when the weather index has drifted
+        far from disk after a filename refactor. Throttled to once per
+        24 h via storage/.last_weather_rescan.json so a noisy boot loop
+        can't trigger repeated rescans."""
+        from .. import app_state
+        from ..scripts.diag_weather_index import scan as _scan_drift
+        storage_root = app_state.storage_root
+        if storage_root is None:
+            return
+        marker = Path(storage_root) / ".last_weather_rescan.json"
+        # Throttle — skip when the last rescan ran inside the last 24 h.
+        if marker.exists():
+            try:
+                last = json.loads(marker.read_text(encoding="utf-8"))
+                last_dt = datetime.fromisoformat(last.get("ts") or "")
+                if (datetime.now() - last_dt) < timedelta(hours=24):
+                    log.debug("[weather] drift check: last rescan %s — throttled",
+                              last_dt.isoformat(timespec="seconds"))
+                    return
+            except Exception:
+                # Unparseable marker — fall through, the scan/rescan
+                # will rewrite a valid marker.
+                pass
+        weather_root = Path(storage_root) / "weather"
+        report = _scan_drift(weather_root)
+        agg = report.get("summary") or {}
+        drift_pct = float(agg.get("drift_pct") or 0.0)
+        if drift_pct <= 30.0:
+            log.debug(
+                "[weather] index drift %.1f%% (matched=%d, needs_tolerant=%d) "
+                "— under threshold, no rescan",
+                drift_pct, agg.get("matched") or 0,
+                agg.get("needs_tolerant") or 0,
+            )
+            return
+        log.warning(
+            "[weather] index drift %.1f%% (matched=%d, needs_tolerant=%d) "
+            "— triggering auto-rescan",
+            drift_pct, agg.get("matched") or 0,
+            agg.get("needs_tolerant") or 0,
+        )
+
+        def _bg_rescan():
+            try:
+                # Late import avoids the request-context coupling at module load.
+                from ..routes.weather import api_weather_rescan
+                # api_weather_rescan is a Flask view function; call its
+                # body via the test client to satisfy the request scope.
+                from flask import current_app
+                with current_app.test_client() as c:
+                    r = c.post("/api/weather/rescan")
+                    body = r.get_json() or {}
+                    log.info("[weather] auto-rescan finished: %s", body)
+            except Exception as e:
+                log.warning("[weather] auto-rescan failed: %s", e)
+            try:
+                _atomic_write_json(marker, {
+                    "ts": datetime.now().isoformat(timespec="seconds"),
+                    "drift_pct_at_trigger": drift_pct,
+                })
+            except Exception as e:
+                log.debug("[weather] marker write failed: %s", e)
+
+        t = threading.Thread(target=_bg_rescan, daemon=True,
+                             name="weather-auto-rescan")
+        t.start()
 
     def shutdown(self):
         if self._stopped:
