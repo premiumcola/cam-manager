@@ -81,6 +81,16 @@ export function closeLiveDetect(){
 }
 
 function _setupLiveChrome(camId, cameraName){
+  // kz368 — Simulieren intentionally does NOT render an HD toggle.
+  // The detection pipeline runs on the sub-preview stream
+  // (stream.mjpg, ~15-25 fps) per the kr493 redesign, not on HD —
+  // an HD toggle here would mislead the user into thinking the
+  // simulation reflects HD-pipeline behaviour. The MediaView
+  // chrome below (_setupVideoChrome + the live-detect overlay
+  // toggles) deliberately omits any .cv-hd-badge / .lvm-hd-btn
+  // equivalent. The dashboard tile's HD button stays where it is;
+  // it just isn't surfaced inside this view.
+  //
   // Synthesise a timelapse-shaped item so _setupVideoChrome takes
   // its full chrome path (top bar + action relocation + scrubber +
   // panels). The 'live-detect' type tag lets downstream renderers
