@@ -13,7 +13,8 @@ import { byId } from '../core/dom.js';
 import { shapeState } from '../core/state.js';
 import { showToast, showConfirm } from '../core/toast.js';
 import {
-  _hitVertex, _hitMidpoint, _isClosingPoint, _findPolygonAt, _polyPoints, canvasPoint,
+  _hitVertex, _hitMidpoint, _isClosingPoint, _findPolygonAt, _polyPoints,
+  _SHAPE_HIT_PX, canvasPoint,
 } from './geometry.js';
 import { drawShapes } from './canvas.js';
 import { saveShapesIntoForm, _nextPolyName } from './persistence.js';
@@ -221,6 +222,34 @@ function _commitInProgressPolygon(){
     if (evt.cancelable) evt.preventDefault();
   };
 
+  // C5 — touch-only double-tap fallback. The `dblclick` event doesn't
+  // fire on iOS Safari for tap sequences (it's emitted by mouse
+  // double-clicks only), so we synthesise it: a second touchstart
+  // within 350 ms and inside _SHAPE_HIT_PX of the last invokes the
+  // same straightening branch the desktop dblclick uses. The 350 ms
+  // matches the user-agent's own double-tap-zoom timeout so the gesture
+  // feels native — and since touch-action:none disables that zoom, the
+  // second tap is ours to claim.
+  let _lastTapAt = 0;
+  let _lastTapPt = null;
+  const onTouchStart = (evt) => {
+    const pt = canvasPoint(evt);
+    const now = Date.now();
+    if (_lastTapPt && (now - _lastTapAt) < 350){
+      const dx = pt.x - _lastTapPt.x;
+      const dy = pt.y - _lastTapPt.y;
+      if (dx * dx + dy * dy < _SHAPE_HIT_PX * _SHAPE_HIT_PX){
+        _lastTapAt = 0;
+        _lastTapPt = null;
+        onDblClick(evt);
+        return;
+      }
+    }
+    _lastTapAt = now;
+    _lastTapPt = pt;
+    onDown(evt);
+  };
+
   canvas.addEventListener('mousedown', onDown);
   canvas.addEventListener('mousemove', onMove);
   canvas.addEventListener('mouseup',   onUp);
@@ -234,7 +263,7 @@ function _commitInProgressPolygon(){
     canvas.style.cursor = 'crosshair';
     drawShapes();
   });
-  canvas.addEventListener('touchstart', onDown, { passive: false });
+  canvas.addEventListener('touchstart', onTouchStart, { passive: false });
   canvas.addEventListener('touchmove',  onMove, { passive: false });
   canvas.addEventListener('touchend',   onUp,   { passive: false });
   canvas.addEventListener('touchcancel', () => { drag = null; downPt = null; });

@@ -82,7 +82,14 @@
 .shape-row-del{width:28px;height:28px;border:none;border-radius:8px;background:rgba(239,68,68,.1);color:#f87171;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;transition:background .15s}
 .shape-row-del:hover{background:rgba(239,68,68,.22);color:#fecaca}
 .shape-clear-row{margin-top:10px;display:flex;justify-content:flex-end}
-.canvas-wrap canvas{touch-action:manipulation}
+/* C5 — touch-action:none disables every default touch behaviour
+   (pinch-zoom, double-tap zoom, scroll-pan) on the canvas. The zone
+   editor consumes single touch for drag + double-tap for straighten
+   (see pointer.js); without this, iOS Safari's pinch-zoom can fight
+   the polygon drag state machine. `manipulation` previously left
+   double-tap zoom on, which on iOS swallowed the second tap before
+   the page-level dblclick listener could see it. */
+.canvas-wrap canvas{touch-action:none}
 /* Action buttons under the canvas (Letzten Punkt entfernen / Polygon
    übernehmen / Alle Polygone löschen) — shrunk visual (cm-41) but
    the touch hitbox still hits the iOS-recommended 44 × 44 via a
