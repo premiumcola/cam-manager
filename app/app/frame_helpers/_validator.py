@@ -37,7 +37,12 @@ from ._split import is_split_frame
 log = logging.getLogger(__name__)
 
 
-def is_valid_frame(img, profile: FrameValidatorProfile = DAY_PROFILE) -> tuple[bool, str]:
+def is_valid_frame(
+    img,
+    profile: FrameValidatorProfile = DAY_PROFILE,
+    *,
+    timestamp_zone=None,
+) -> tuple[bool, str]:
     """Bundled validity check used by every timelapse capture and build path.
 
     Returns (True, "") when the frame is suitable for inclusion in a
@@ -48,7 +53,15 @@ def is_valid_frame(img, profile: FrameValidatorProfile = DAY_PROFILE) -> tuple[b
     ``profile`` lets the capture loop swap thresholds for IR-night /
     twilight scenes — the default keeps the historic daytime tunings.
     Per-call (not module-level) so a single process can run different
-    profiles for different cameras at the same time."""
+    profiles for different cameras at the same time.
+
+    ``timestamp_zone`` (per-camera ``timestamp_overlay_zone`` setting)
+    names the strip the camera burns its clock readout into; bands
+    that fit entirely within it are suppressed in
+    ``is_horizontal_anomaly_band`` so the clock isn't misread as a
+    corruption stripe. ``None`` (the default) applies the module-level
+    defaults of (y=68 %, h=6 %) — pass ``{"enabled": false}`` to opt
+    out for a specific camera."""
     img = _decode(img)
     if img is None or img.size == 0:
         return False, "null/empty"
@@ -130,7 +143,7 @@ def is_valid_frame(img, profile: FrameValidatorProfile = DAY_PROFILE) -> tuple[b
     # slots in the MP4. Reason head stays as the legacy
     # ``bottom_strip_*`` when the band is in the bottom 25 % so
     # existing log greps and reject-folder layouts keep working.
-    bs, bs_reason = is_horizontal_anomaly_band(img)
+    bs, bs_reason = is_horizontal_anomaly_band(img, timestamp_zone=timestamp_zone)
     if bs:
         return False, bs_reason
 
@@ -281,6 +294,8 @@ def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
                      max_total_seconds: float = 5.0,
                      on_reject=None,
                      profile: FrameValidatorProfile = DAY_PROFILE,
+                     *,
+                     timestamp_zone=None,
                      ) -> tuple[object, int, str]:
     """Call ``grab_fn`` up to ``attempts`` times OR
     ``max_total_seconds`` wall-clock, whichever comes first.
@@ -341,7 +356,8 @@ def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
             last_reason = f"grab_exception:{e}"
             frame = None
         if frame is not None:
-            ok, reason = is_valid_frame(frame, profile=profile)
+            ok, reason = is_valid_frame(frame, profile=profile,
+                                        timestamp_zone=timestamp_zone)
             if ok:
                 return frame, attempt, ""
             last_reason = reason or last_reason or "invalid"

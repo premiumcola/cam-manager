@@ -48,6 +48,44 @@ _ANOMALY_CHROMA_ROW_FRAC = 0.01      # threshold = 1 % of row width
 _ANOMALY_CHROMA_MIN_HEIGHT = 20      # rows — minimum band height
 _ANOMALY_CHROMA_PEAK_PCT = 1.0       # peak fraction of row width
 
+# Per-camera timestamp-overlay exclusion ──────────────────────────────────
+# Many cameras burn a 1-line clock into the lower-middle of the frame.
+# That single-line text reads as a thin row-delta spike — the row above
+# is sky/scene, the row through the text is high-contrast — and the
+# detector flags it as a corruption band (score ~2–3, y≈68 %, h≈4 %).
+# The fix: a per-camera zone the operator declares as "where my camera's
+# clock lives". Bands that fit ENTIRELY within zone ± fudge are
+# suppressed; bands that extend above/below or span the full frame
+# still reject. The fudge factor compensates for the 1-row jitter in
+# how the row-delta smoothing locates the band centre.
+#
+# Defaults match the dominant false-positive cluster in the 2026-05-12
+# sunset test run on garten-dach-terrasse: 34 of 86 horizontal_anomaly_band
+# rejects had identical parameters (y=68 %, h=4 %), a 4-row band 68 %
+# down the frame — exactly the timestamp strip on Reolink CX810
+# firmware. Users whose camera burns its clock somewhere else override
+# via cameras[].timestamp_overlay_zone = {"y_pct": …, "h_pct": …};
+# explicit ``{"enabled": false}`` turns the exclusion off completely.
+_DEFAULT_TIMESTAMP_ZONE_Y_PCT = 68
+_DEFAULT_TIMESTAMP_ZONE_H_PCT = 6
+_TIMESTAMP_ZONE_FUDGE_PCT = 2
+
+
+def _resolve_timestamp_zone(zone) -> tuple[int, int] | None:
+    """Pick the effective (y_pct, h_pct) tuple for a per-camera setting.
+
+    Returns ``None`` when the camera opted out via ``{"enabled": false}``.
+    A missing / empty dict falls back to the module defaults so a fresh
+    install benefits from the exclusion without anyone editing JSON."""
+    if isinstance(zone, dict) and zone.get("enabled") is False:
+        return None
+    if isinstance(zone, dict):
+        return (
+            int(zone.get("y_pct", _DEFAULT_TIMESTAMP_ZONE_Y_PCT)),
+            int(zone.get("h_pct", _DEFAULT_TIMESTAMP_ZONE_H_PCT)),
+        )
+    return (_DEFAULT_TIMESTAMP_ZONE_Y_PCT, _DEFAULT_TIMESTAMP_ZONE_H_PCT)
+
 
 def _longest_above(mask: np.ndarray) -> tuple[int, int]:
     """Return (start_index, length) of the longest contiguous True
@@ -138,7 +176,7 @@ def _chroma_anomaly_band(img_bgr: np.ndarray) -> tuple[int, int, float] | None:
     return (start, length, peak_pct)
 
 
-def is_horizontal_anomaly_band(img) -> tuple[bool, str]:
+def is_horizontal_anomaly_band(img, *, timestamp_zone=None) -> tuple[bool, str]:
     """Detect a horizontal band of corruption rows anywhere in the
     frame. Backwards-compat: when the band sits in the bottom 25 %
     the reason head emitted is the legacy ``bottom_strip_white`` /
@@ -147,7 +185,15 @@ def is_horizontal_anomaly_band(img) -> tuple[bool, str]:
     location-agnostic ``horizontal_anomaly_band`` and the parens
     carry the band's y%/h%/score so the rejected-folder name (built
     by the test-mode reject sink) groups corrupt frames by failure
-    location."""
+    location.
+
+    ``timestamp_zone`` (per-camera setting from settings.json) names
+    the strip the camera burns its clock into. When the detected band
+    fits entirely within that zone (± fudge) AND the chroma stage did
+    NOT independently fire, the band is suppressed — that signature
+    matches a clock readout (single-row text spike, no chroma leak),
+    not a NAL/slice-loss corruption (which produces both row-delta
+    AND wrong-colour evidence)."""
     img = _decode(img)
     if img is None or img.size == 0:
         return False, ""
@@ -167,6 +213,19 @@ def is_horizontal_anomaly_band(img) -> tuple[bool, str]:
     band_y, band_h, score = a if a is not None else b
     band_y_pct = int(round(100.0 * band_y / h))
     band_h_pct = int(round(100.0 * band_h / h))
+    # Timestamp-overlay exclusion ─ a clock readout only trips the
+    # row-delta stage (high-contrast text, low chroma). Real codec
+    # corruption trips BOTH stages, so requiring ``b is None`` keeps
+    # the suppression narrow to the false-positive cluster while
+    # still rejecting any real corruption that happens to overlap the
+    # timestamp strip.
+    zone = _resolve_timestamp_zone(timestamp_zone)
+    if zone is not None and b is None:
+        zone_y, zone_h = zone
+        zone_lo = zone_y - _TIMESTAMP_ZONE_FUDGE_PCT
+        zone_hi = zone_y + zone_h + _TIMESTAMP_ZONE_FUDGE_PCT
+        if zone_lo <= band_y_pct and (band_y_pct + band_h_pct) <= zone_hi:
+            return False, ""
     head = "horizontal_anomaly_band"
     # Backwards compat: when the band is in the bottom 25 % keep
     # emitting the legacy head so existing log greps survive.
@@ -179,8 +238,8 @@ def is_horizontal_anomaly_band(img) -> tuple[bool, str]:
 # ``is_bottom_strip_anomaly``. Forwards to the new location-agnostic
 # detector so behaviour is the new behaviour everywhere; the only
 # difference is the name kept in the public symbol set.
-def is_bottom_strip_anomaly(img) -> tuple[bool, str]:
-    return is_horizontal_anomaly_band(img)
+def is_bottom_strip_anomaly(img, *, timestamp_zone=None) -> tuple[bool, str]:
+    return is_horizontal_anomaly_band(img, timestamp_zone=timestamp_zone)
 
 
 # Cheap pink/rainbow H.264 bottom-strip detector. Originally a static

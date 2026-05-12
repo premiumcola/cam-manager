@@ -482,6 +482,12 @@ class SunTimelapseMixin:
             if test_session is not None:
                 test_session.error = "camera runtime not available"
             return
+        # Per-camera timestamp-overlay zone — bands inside it are the
+        # camera's burnt-in clock readout, not corruption. Threaded
+        # through grab_valid_frame + the strict re-validation below
+        # so every reject decision on this camera honours its zone.
+        _cam_rec = next((c for c in self._cfg_cameras() if c.get("id") == cam_id), None)
+        timestamp_zone = (_cam_rec or {}).get("timestamp_overlay_zone")
         # Test mode shortens the window from minutes to seconds. The
         # rest of the pipeline (frame grab loop, validity gating,
         # encoder) runs unchanged so the test reproduces the real
@@ -824,6 +830,7 @@ class SunTimelapseMixin:
                 lambda: rt.snapshot_jpeg_hires(quality=92),
                 on_reject=save_reject_cb,
                 profile=active_profile,
+                timestamp_zone=timestamp_zone,
             )
             if jpg:
                 out = frames_dir / f"{i:05d}.jpg"
@@ -864,6 +871,7 @@ class SunTimelapseMixin:
                     strict = _stricter_profile(active_profile)
                     ok_strict, strict_reason = is_valid_frame(
                         last_valid_jpg, profile=strict,
+                        timestamp_zone=timestamp_zone,
                     )
                     if not ok_strict:
                         log.info(

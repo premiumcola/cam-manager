@@ -142,6 +142,13 @@ CAMERA_SCHEMA: dict = {
     "zones":               (list,  []),
     "masks":               (list,  []),
     "whitelist_names":     (list,  []),
+    # Where this camera burns its timestamp readout. The horizontal-
+    # anomaly-band detector treats bands that fit entirely within
+    # ``[y_pct - 2, y_pct + h_pct + 2]`` as the clock, not corruption.
+    # Empty dict → detector defaults (y_pct=68, h_pct=6, matching the
+    # Reolink CX810 strip the 2026-05-12 sunset test exposed). Opt out
+    # entirely with ``{"enabled": false}``.
+    "timestamp_overlay_zone": (dict, {}),
     "timelapse":           (dict,  {}),
     "schedule":            (dict,  {}),
     # Two independent schedules — one for notifications (Telegram/MQTT),

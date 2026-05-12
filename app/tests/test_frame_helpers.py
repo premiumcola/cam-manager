@@ -730,6 +730,86 @@ def test_real_clean_fixture_passes(path):
         assert ok, f"real clean fixture {path.name} rejected under {prof.name}: {reason}"
 
 
+class TestTimestampOverlayExclusion:
+    """``is_horizontal_anomaly_band`` ignores bands that fit entirely
+    within the camera's burnt-in timestamp strip — but only when the
+    chroma stage didn't independently fire. Bands extending above or
+    below the zone (or spanning the full frame) still reject.
+
+    Synthetic frames use a GREY (B=G=R) noise band so the chroma
+    stage stays silent — same signature as a real clock readout.
+    Frame height 1080 so band heights of 4 % / 8 % / 14 % land above
+    the detector's 30-row floor on a realistic resolution."""
+
+    @staticmethod
+    def _scene_with_grey_band(*, y_pct: int, h_pct: int, seed: int = 7) -> np.ndarray:
+        rng = _rng(seed)
+        h, w = 1080, 1920
+        img = np.zeros((h, w, 3), dtype=np.uint8)
+        # Sky/scene gradient gives the row-delta detector a stable
+        # baseline that the injected band has to beat.
+        yy, _xx = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+        img[..., 0] = np.clip(120 + yy * 0.04, 0, 255).astype(np.uint8)
+        img[..., 1] = np.clip(140 + yy * 0.03, 0, 255).astype(np.uint8)
+        img[..., 2] = np.clip(150 + yy * 0.02, 0, 255).astype(np.uint8)
+        scene_noise = rng.integers(-5, 6, size=img.shape, dtype=np.int16)
+        img = np.clip(img.astype(np.int16) + scene_noise, 0, 255).astype(np.uint8)
+        # Grey band — uniform B=G=R per pixel so the chroma stage's
+        # "wrong colour" rule sees zero matches and returns None,
+        # matching the signature of a burnt-in clock readout.
+        y0 = int(h * y_pct / 100)
+        band_h = max(1, int(h * h_pct / 100))
+        band_gray = rng.integers(0, 255, size=(band_h, w), dtype=np.uint8)
+        img[y0:y0 + band_h, :, 0] = band_gray
+        img[y0:y0 + band_h, :, 1] = band_gray
+        img[y0:y0 + band_h, :, 2] = band_gray
+        return img
+
+    def test_band_inside_default_zone_suppressed(self):
+        # 4 %-tall grey band at y=68 % matches the default zone
+        # (68, 6) ± 2 fudge — the timestamp false-positive cluster
+        # from the 2026-05-12 sunset run.
+        img = self._scene_with_grey_band(y_pct=68, h_pct=4)
+        ok, reason = is_horizontal_anomaly_band(img)
+        assert ok is False, f"expected suppression, got {reason!r}"
+
+    def test_band_outside_zone_still_rejects(self):
+        # Band at y=15 % is far from the default zone — must still
+        # be flagged as corruption.
+        img = self._scene_with_grey_band(y_pct=15, h_pct=8)
+        ok, reason = is_horizontal_anomaly_band(img)
+        assert ok is True, "expected reject, detector returned False"
+        assert "horizontal_anomaly_band" in reason
+
+    def test_band_straddling_zone_still_rejects(self):
+        # 14 %-tall band starting at y=66 % begins inside the zone
+        # (66, 76) but ends at 80 — extends below the fudge zone,
+        # so the "entirely inside" rule does NOT apply.
+        img = self._scene_with_grey_band(y_pct=66, h_pct=14)
+        ok, reason = is_horizontal_anomaly_band(img)
+        assert ok is True, f"expected reject, got {ok}/{reason!r}"
+        assert "horizontal_anomaly_band" in reason or "bottom_strip" in reason
+
+    def test_explicit_disable_lets_zone_band_reject(self):
+        # Per-camera ``{"enabled": false}`` turns the exclusion off
+        # — even a clock-shaped band gets flagged.
+        img = self._scene_with_grey_band(y_pct=68, h_pct=4)
+        ok, reason = is_horizontal_anomaly_band(
+            img, timestamp_zone={"enabled": False}
+        )
+        assert ok is True, f"expected reject with zone disabled, got {ok}/{reason!r}"
+
+    def test_user_override_relocates_zone(self):
+        # User whose camera burns the clock at y=85 % overrides the
+        # zone; the new location suppresses there but the default
+        # location no longer applies.
+        img = self._scene_with_grey_band(y_pct=85, h_pct=4)
+        ok, reason = is_horizontal_anomaly_band(
+            img, timestamp_zone={"y_pct": 85, "h_pct": 6}
+        )
+        assert ok is False, f"expected suppression with custom zone, got {reason!r}"
+
+
 class TestReasonFamily:
     """``reason_family`` collapses parameter variants of one reject
     head into a single bucket name. Two callers depend on it: the
