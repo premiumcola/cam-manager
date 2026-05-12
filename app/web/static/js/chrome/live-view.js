@@ -12,10 +12,16 @@
 // surfaces when the MJPEG fallback drives the modal.
 import { byId } from '../core/dom.js';
 import { _hdCards } from '../dashboard.js';
+import { colors } from '../core/icons.js';
+import { fittedRect } from '../core/video-fit.js';
 
 let _liveViewCamId = null;
 let _hlsInstance = null;
 let _liveViewUsingHls = false;
+let _lvDetectAbort = null;
+let _lvDetectTimer = null;
+
+const _LV_DETECT_INTERVAL_MS = 1000;
 
 // _liveViewHd is exposed on window because the template reads
 // `!_liveViewHd` inline in the HD-toggle button's onclick. We keep
@@ -37,6 +43,124 @@ export function openLiveView(camId, camName){
   if (imgEl) imgEl.onclick = null;
   modal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
+  // vm625 — bbox overlay on the regular Live modal. Polls the
+  // detection endpoint at 1 Hz and paints PASS-verdict boxes onto
+  // an SVG overlay inside #liveViewWrap. Decoupled from the video
+  // stream so the user sees what the detector currently sees on
+  // every camera regardless of which path is driving the visual
+  // (HLS, MJPEG, etc.).
+  _startLvDetectPolling();
+}
+
+
+// ── Live-modal bbox overlay (vm625) ────────────────────────────────────────
+function _ensureLvBboxOverlay(){
+  let svg = byId('liveViewBboxOverlay');
+  if (svg) return svg;
+  const wrap = byId('liveViewWrap');
+  if (!wrap) return null;
+  svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.id = 'liveViewBboxOverlay';
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3';
+  wrap.appendChild(svg);
+  return svg;
+}
+
+function _activeLvMediaEl(){
+  // Whichever of <video> / <img> is currently visible drives the
+  // fittedRect math — the SVG must sit over the on-screen pixels,
+  // not the wrap's outer box.
+  const video = byId('liveViewVideo');
+  const img = byId('liveViewImg');
+  if (video && video.style.display !== 'none' && video.videoWidth > 0) return video;
+  if (img && img.style.display !== 'none') return img;
+  return null;
+}
+
+function _positionLvOverlay(svg){
+  const wrap = byId('liveViewWrap');
+  const mediaEl = _activeLvMediaEl();
+  if (!wrap || !mediaEl || !svg) return;
+  const wrapBox = wrap.getBoundingClientRect();
+  const mBox = mediaEl.getBoundingClientRect();
+  if (wrapBox.width <= 0 || mBox.width <= 0) return;
+  const fit = fittedRect(mediaEl);
+  const dx = (mBox.left - wrapBox.left) + fit.x;
+  const dy = (mBox.top  - wrapBox.top)  + fit.y;
+  svg.style.left = `${dx}px`;
+  svg.style.top  = `${dy}px`;
+  svg.style.width  = `${fit.w}px`;
+  svg.style.height = `${fit.h}px`;
+  svg.style.right  = 'auto';
+  svg.style.bottom = 'auto';
+  svg.style.inset  = 'auto';
+}
+
+function _renderLvBboxOverlay(data){
+  const svg = _ensureLvBboxOverlay();
+  if (!svg) return;
+  _positionLvOverlay(svg);
+  const fs = (data && data.frame_size) || { w: 1920, h: 1080 };
+  svg.setAttribute('viewBox', `0 0 ${fs.w} ${fs.h}`);
+  const dets = (data && data.detections) || [];
+  // Only paint PASS verdicts in the regular Live modal — the user
+  // wants the same picture they get in normal operation, not the
+  // raw coral firehose (that's what the Simulieren mode is for).
+  const passes = dets.filter(d => d.verdict === 'pass');
+  svg.innerHTML = passes.map(d => {
+    const c = colors[d.label] || '#cbd5e1';
+    const [x, y, w, h] = d.bbox;
+    const pct = Math.round((d.score || 0) * 100);
+    const label = `${d.label} · ${pct}%`;
+    return `<g>
+      <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="${c}" stroke-width="3" vector-effect="non-scaling-stroke"/>
+      <text x="${x + 4}" y="${y + 18}" fill="${c}" font-size="14" font-family="system-ui, sans-serif" font-weight="700" paint-order="stroke" stroke="rgba(0,0,0,0.7)" stroke-width="3">${label}</text>
+    </g>`;
+  }).join('');
+}
+
+async function _lvDetectTick(){
+  if (!_liveViewCamId) return;
+  try { _lvDetectAbort?.abort(); } catch { /* ignore */ }
+  _lvDetectAbort = new AbortController();
+  const start = performance.now();
+  try {
+    const r = await fetch(
+      `/api/cameras/${encodeURIComponent(_liveViewCamId)}/test-detection?no_snapshot=1`,
+      { method: 'POST', signal: _lvDetectAbort.signal },
+    );
+    if (!_liveViewCamId) return;
+    let data = null;
+    try { data = await r.json(); } catch { /* keep null */ }
+    if (data && data.ok){
+      _renderLvBboxOverlay(data);
+    }
+  } catch (e) {
+    if (e?.name === 'AbortError') return;
+    /* network blip — keep polling, no toast */
+  }
+  if (!_liveViewCamId) return;
+  // Adaptive cadence — when the detector is fast, run again right
+  // away (capped at 1 Hz); when it's slow, back off naturally.
+  const cycle = performance.now() - start;
+  const delay = Math.max(_LV_DETECT_INTERVAL_MS, Math.round(cycle * 1.1));
+  _lvDetectTimer = setTimeout(_lvDetectTick, delay);
+}
+
+function _startLvDetectPolling(){
+  _stopLvDetectPolling();
+  // Kick the first tick immediately so the bbox layer paints within
+  // the first detection cycle rather than waiting a full second.
+  _lvDetectTimer = setTimeout(_lvDetectTick, 250);
+}
+
+function _stopLvDetectPolling(){
+  try { _lvDetectAbort?.abort(); } catch { /* ignore */ }
+  _lvDetectAbort = null;
+  if (_lvDetectTimer){ clearTimeout(_lvDetectTimer); _lvDetectTimer = null; }
+  const svg = byId('liveViewBboxOverlay');
+  if (svg) svg.remove();
 }
 
 // Internal — wire either HLS (preferred) or MJPEG into the modal's
@@ -154,6 +278,7 @@ export function _setLiveViewStream(hd){
 export function closeLiveView(){
   const modal = byId('liveViewModal');
   if (!modal) return;
+  _stopLvDetectPolling();
   _teardownHls();
   const video = byId('liveViewVideo');
   if (video){
