@@ -11,16 +11,19 @@ from datetime import datetime
 
 from flask import Blueprint, jsonify, request
 
-from .. import app_state
+from .. import app_state, trash as _trash
 
 bp = Blueprint("events", __name__)
 
 
 @bp.delete('/api/camera/<cam_id>/events/<event_id>')
 def api_event_delete(cam_id, event_id):
-    store = app_state.store
+    """Soft-delete: move the event into ``storage/.trash/`` instead
+    of hard-deleting. The trash entry sits for ``trash.grace_days``
+    days before the daily sweep removes it. /api/trash/<id>/restore
+    moves it back; /api/trash/empty hard-deletes everything now."""
     storage_root = app_state.storage_root
-    result = store.delete_event(cam_id, event_id)
+    result = _trash.move_to_trash(cam_id, event_id)
     # Timelapse fallback: tl_<stem> events live in storage/timelapse/<cam>/
     # and may not have an EventStore JSON yet (the migration that
     # registers them on boot can race against the user clicking delete
@@ -50,7 +53,9 @@ def api_event_delete(cam_id, event_id):
 
 @bp.post('/api/camera/<cam_id>/events/delete-bulk')
 def api_event_delete_bulk(cam_id):
-    store = app_state.store
+    """Bulk soft-delete — every successfully-moved event lands in
+    the trash. Frontend URL stays the same so no client change is
+    needed; the only behavioural difference is restorability."""
     payload = request.get_json(force=True, silent=True) or {}
     raw_ids = payload.get("event_ids")
     if not isinstance(raw_ids, list):
@@ -64,14 +69,17 @@ def api_event_delete_bulk(cam_id):
     failed = []
     for eid in event_ids:
         try:
-            result = store.delete_event(cam_id, eid)
+            result = _trash.move_to_trash(cam_id, eid)
             if result.get("json_deleted"):
                 deleted += 1
             else:
                 failed.append(eid)
         except Exception:
             failed.append(eid)
-    logging.getLogger(__name__).info("[bulk-delete] cam=%s deleted=%d failed=%d", cam_id, deleted, len(failed))
+    logging.getLogger(__name__).info(
+        "[bulk-delete→trash] cam=%s trashed=%d failed=%d",
+        cam_id, deleted, len(failed),
+    )
     return jsonify({"ok": True, "deleted": deleted, "failed": failed})
 
 

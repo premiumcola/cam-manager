@@ -37,6 +37,7 @@ def register_blueprints(app) -> None:
         timelapse,
         timeline_stats,
         tracking,
+        trash,
         weather,
     )
     app.register_blueprint(tracking.bp)
@@ -53,3 +54,4 @@ def register_blueprints(app) -> None:
     app.register_blueprint(weather.bp)
     app.register_blueprint(telegram.bp)
     app.register_blueprint(detection_cloud.bp)
+    app.register_blueprint(trash.bp)
