@@ -156,29 +156,22 @@
 .cv-chrome-btn[data-state="muted"]{opacity:.38}
 .cv-chrome-btn.has-text{padding:0 12px}
 .cv-chrome-btn::before{content:"";position:absolute;inset:-7px;border-radius:14px;pointer-events:auto}
-/* Class-tinted variants keep their icon tint when the bg inverts —
+/* Class-tinted variant keeps its icon tint when the bg inverts —
    flipping to white with an unchanged tinted icon reads cleanly,
-   and on solid-black the tint still sits well. The base rule
-   above sets color: #000 on hover for non-tinted buttons; we
-   override for the tinted family so their --icon-tint (class pill)
-   or hardcoded blue/amber (TG / MQTT) colour stays. The TG / MQTT
-   rules use `color: revert-layer` so the badge's own color rule
-   (cv-tg-badge → #5eb6ff, cv-mqtt-badge → #d6a06b) wins back over
-   the cv-chrome-btn :hover override. */
+   and on solid-black the tint still sits well. (TG / MQTT badge
+   overrides retired in B2 — channels are full pills now.) */
 @media (hover: hover){
   .cv-class-pill:hover{background:#fff;color:var(--icon-tint, #000)}
-  .cv-tg-badge:hover{background:#fff;color:#5eb6ff}
-  .cv-mqtt-badge:hover{background:#fff;color:#d6a06b}
 }
 .cv-class-pill:active{background:#000;color:var(--icon-tint, #fff)}
-.cv-tg-badge:active{background:#000;color:#5eb6ff}
-.cv-mqtt-badge:active{background:#000;color:#d6a06b}
 
 /* zg531 — class filter pill. ``color: var(--icon-tint)`` is set per
    instance to var(--class-<cls>); the SVG strokes inherit via
    currentColor so each pill's glyph renders in its class colour
    against the uniform dark chrome bg. Muted state drops the tint
-   to a soft grey so the visual reads as "configured but off". */
+   to a soft grey so the visual reads as "configured but off".
+   Telegram + MQTT no longer ride this base — they're full
+   .cv-pill-channel-wrap pills now (see further down). */
 .cv-class-pill{width:30px;color:var(--icon-tint, #fff)}
 .cv-class-pill[data-state="muted"]{color:rgba(255,255,255,.5)}
 .cv-class-pill svg{width:18px;height:18px;display:block}
@@ -200,9 +193,12 @@
    cluster renders and the label appears if a schedule window is
    actually configured. */
 .cv-channel-cluster{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
-/* gp538 — TG + MQTT badge pair tight together, mirrors the
-   .cv-class-cluster gap above. */
-.cv-channel-row{display:flex;align-items:center;gap:2px}
+/* TG + MQTT pill pair. After B2 these are full .cv-pill-channel-wrap
+   pills (wider than the old 30 × 30 badges), so the gap bumps from
+   2 px (button-tight) to 6 px (pill-comfortable). The cluster
+   wrapper itself is being retired in B3 — only the pills will
+   remain in bottom-right after that. */
+.cv-channel-row{display:flex;align-items:center;gap:6px}
 .cv-channel-schedule{
   font-size:10px;font-weight:500;letter-spacing:.02em;
   color:rgba(255,255,255,.62);
@@ -384,33 +380,90 @@
 .cv-sim-btn svg{flex-shrink:0}
 .cv-cog{width:30px}
 
-/* Channel badges — Telegram blue + MQTT amber tint via parent's
-   ``color``. State-dot in the top-right corner reads the channel's
-   armed × in-schedule state computed in dashboard.js#_channelState.
-   xq583 — when the camera is currently armed within its alarm
-   schedule, the badge picks up .has-text and grows to fit a
-   "noch Xh Ym" / "aktiv" suffix; icon-only badges keep the 30 × 30
-   chrome-pill footprint. */
-.cv-tg-badge{color:#5eb6ff}
-.cv-tg-badge:not(.has-text){width:30px}
-.cv-mqtt-badge{color:#d6a06b}
-.cv-mqtt-badge:not(.has-text){width:30px}
-.cv-chan-dur{
-  font-size:11px;font-weight:600;line-height:1;
-  color:rgba(255,255,255,.85);
-  font-variant-numeric:tabular-nums;
-  font-feature-settings:"tnum" 1;
+/* ── Channel pills (Telegram + MQTT) ─────────────────────────────────
+   Expandable Live-pill clones. Collapsed: [pulsing coloured dot]
+   [label] [chevron]. Open: same display:none → display:flex panel
+   swap as .cv-pill-live-wrap.cv-lp-open, but in Telegram-blue / MQTT-
+   violet tints. Click handling is shared (see _wirePillOpenClose in
+   dashboard.js — both wraps match the same .cv-lp-open class). The
+   base structure mirrors the Live-pill; per-kind colour comes from
+   .cv-tg-wrap / .cv-mqtt-wrap below. */
+.cv-pill-channel-wrap{
+  position:relative;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:3px 8px 3px 6px;
+  border-radius:999px;
+  border:1.5px solid rgba(255,255,255,.18);
+  background:rgba(0,0,0,.45);
+  font-size:10.5px;
+  font-weight:700;
+  line-height:1;
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  cursor:pointer;
   white-space:nowrap;
+  transition:background .18s,border-color .18s,padding .18s,border-radius .18s;
 }
-.cv-tg-badge.has-text,
-.cv-mqtt-badge.has-text{gap:6px;padding:0 10px}
-.cv-state-dot{
-  position:absolute;top:4px;right:4px;
-  width:6px;height:6px;border-radius:50%;
-  box-shadow:0 0 0 2px rgba(0,0,0,.65);
+.cv-pill-channel-wrap .cv-channel-label{flex-shrink:0}
+.cv-pill-channel-wrap .cv-live-arrow{opacity:.55;flex-shrink:0}
+/* Hidden until the pill opens — same display:none gate the Live-pill
+   uses so the panel's intrinsic content width never leaks into the
+   collapsed pill's flex sizing. */
+.cv-channel-detail{display:none}
+.cv-pill-channel-wrap.cv-lp-open{
+  flex-direction:column;
+  align-items:stretch;
+  gap:4px;
+  padding:8px 12px;
+  border-radius:14px;
+  white-space:normal;
 }
-.cv-state-dot[data-state="on"]{background:#22c55e}
-.cv-state-dot[data-state="muted"]{background:#f59e0b}
+.cv-pill-channel-wrap.cv-lp-open > .cv-pdot,
+.cv-pill-channel-wrap.cv-lp-open > .cv-channel-label,
+.cv-pill-channel-wrap.cv-lp-open > .cv-live-arrow{display:none}
+.cv-pill-channel-wrap.cv-lp-open > .cv-channel-detail{display:flex;flex-direction:column;gap:4px}
+.cv-channel-detail-header{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;padding-bottom:4px;border-bottom:1px solid rgba(255,255,255,.12);margin-bottom:1px}
+
+/* Telegram variant — brand blue #229ED9. Active dot pulses; idle dot
+   fades to .4 with no pulse; muted dot greys out. The dot's pulse
+   keyframe (cv-pulse-tg) is at the bottom of this file next to the
+   green Live-pill pulse. */
+.cv-tg-wrap{
+  border-color:rgba(34,158,217,.55);
+  background:rgba(34,158,217,.16);
+  color:#cbe9f9;
+}
+.cv-tg-wrap.cv-lp-open{
+  background:rgba(8,40,60,.92);
+  border-color:rgba(34,158,217,.7);
+}
+.cv-tg-wrap .cv-channel-detail-header{color:#cbe9f9;border-bottom-color:rgba(34,158,217,.25)}
+.cv-tg-wrap[data-state="on"] .cv-pdot{background:#229ED9;animation:cv-pulse-tg 2s ease-in-out infinite}
+.cv-tg-wrap[data-state="idle"] .cv-pdot{background:#229ED9;opacity:.4;animation:none}
+.cv-tg-wrap[data-state="muted"] .cv-pdot{background:rgba(255,255,255,.3);animation:none}
+.cv-tg-wrap[data-state="muted"]{opacity:.6}
+
+/* MQTT variant — violet #a78bfa to keep it visually distinct from the
+   Telegram blue (and the Live-pill green). Same state matrix. */
+.cv-mqtt-wrap{
+  border-color:rgba(167,139,250,.55);
+  background:rgba(167,139,250,.16);
+  color:#e2dafa;
+}
+.cv-mqtt-wrap.cv-lp-open{
+  background:rgba(28,18,55,.92);
+  border-color:rgba(167,139,250,.7);
+}
+.cv-mqtt-wrap .cv-channel-detail-header{color:#e2dafa;border-bottom-color:rgba(167,139,250,.25)}
+.cv-mqtt-wrap[data-state="on"] .cv-pdot{background:#a78bfa;animation:cv-pulse-mqtt 2s ease-in-out infinite}
+.cv-mqtt-wrap[data-state="idle"] .cv-pdot{background:#a78bfa;opacity:.4;animation:none}
+.cv-mqtt-wrap[data-state="muted"] .cv-pdot{background:rgba(255,255,255,.3);animation:none}
+.cv-mqtt-wrap[data-state="muted"]{opacity:.6}
+
+@keyframes cv-pulse-tg{0%,100%{box-shadow:0 0 0 0 rgba(34,158,217,.55)}50%{box-shadow:0 0 0 6px rgba(34,158,217,0)}}
+@keyframes cv-pulse-mqtt{0%,100%{box-shadow:0 0 0 0 rgba(167,139,250,.55)}50%{box-shadow:0 0 0 6px rgba(167,139,250,0)}}
 
 /* Tile body must NOT show a click-pointer anymore — the article-level
    onclick is gone (cm-52 task 2). Buttons inside the tile keep their

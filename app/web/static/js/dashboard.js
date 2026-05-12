@@ -635,11 +635,11 @@ function _chromeClassSvg(cls){
 
 
 // tw284 — currentColor chrome icons for the bottom-right cluster.
-// Telegram + MQTT badges + the settings cog. Each glyph uses
-// stroke="currentColor" so the parent pill's ``color`` value tints
-// it (Telegram brand blue, MQTT amber, white for the cog).
-const _CHROME_TG_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 4L3 11l6 2 2 6 3-4 5 4z"/><path d="M9 13l8-7"/></svg>`;
-const _CHROME_MQTT_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7c4-4 10-4 14 0"/><path d="M7.5 10c2.5-2.5 6.5-2.5 9 0"/><path d="M10 13a2.5 2.5 0 0 1 4 0"/><circle cx="12" cy="17" r="1.2" fill="currentColor"/></svg>`;
+// Settings cog glyph for the bottom-right cluster. Uses
+// stroke="currentColor" so the parent .cv-chrome-btn's color tints it
+// (white in default chrome state). Telegram + MQTT now render as
+// dot-and-label pills (see _channelPill) so their dedicated SVGs were
+// retired in B2.
 const _CHROME_COG_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
 const _CHROME_SIM_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>`;
 
@@ -682,19 +682,31 @@ function _channelDurationText(c, state){
   return `noch ${h}h ${min}m`;
 }
 
-// xq583 — human-readable tooltip backing the channel badges. Plain
-// `title` attr (consistent with the other chrome buttons) so the
-// browser handles hover/long-press for free.
-function _channelTooltip(c, kind){
-  const sch = (c.schedule_notify && c.schedule_notify.enabled)
-    ? c.schedule_notify
-    : ((c.schedule && c.schedule.enabled) ? c.schedule : null);
-  const label = kind === 'mqtt' ? 'MQTT-Kanal' : 'Telegram-Kanal';
-  if (!c.armed) return `${label} — Kamera nicht scharf`;
-  if (sch && sch.from && sch.to){
-    return `${label} · Alarmfenster ${sch.from}–${sch.to}`;
-  }
-  return `${label} · dauerhaft aktiv`;
+// Channel pill — expandable Live-pill clone for the Telegram / MQTT
+// notification channels. Collapsed: [pulsing dot] [label] [chevron].
+// Open: same dark detail-panel pattern as the Live-pill, with rows
+// populated below (B3 — Alarmfenster / Status / Kanal-Mix). The dot's
+// pulse cadence and colour come from the kind + state attributes;
+// every visual variant lives in 03-dashboard.css under .cv-tg-wrap /
+// .cv-mqtt-wrap. The wrap shares the .cv-lp-open click pattern with
+// .cv-pill-live-wrap so the same wiring loop handles both.
+function _channelPill(c, kind, state){
+  const label = kind === 'mqtt' ? 'MQTT' : 'Telegram';
+  const headerLabel = kind === 'mqtt' ? 'MQTT-Kanal' : 'Telegram-Kanal';
+  const headerSuffix = state === 'on' ? 'aktiv'
+    : state === 'idle' ? 'wartet'
+    : 'stumm';
+  return `<div class="cv-pill-channel-wrap cv-${kind}-wrap" data-state="${state}" aria-label="${esc(headerLabel)}">
+    <span class="cv-pdot"></span>
+    <span class="cv-channel-label">${esc(label)}</span>
+    <svg class="cv-live-arrow" width="8" height="8" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 4.5l3 3 3-3"/></svg>
+    <div class="cv-channel-detail">
+      <div class="cv-channel-detail-header">
+        <span class="cv-pdot"></span>
+        <span>${esc(headerLabel + ' ' + headerSuffix)}</span>
+      </div>
+    </div>
+  </div>`;
 }
 
 // pq924 — schedule window label that sits ABOVE the TG/MQTT channel
@@ -750,23 +762,13 @@ export function renderDashboard(){
         + ` aria-label="${esc(lbl)}${muted ? ' — stumm' : ''}">`
         + `${_chromeClassSvg(cls)}</div>`;
     }).join('');
-    // Telegram + MQTT channel badges. When the camera is currently
-    // armed within its alarm schedule, the pill grows with a duration
-    // text suffix ("noch 6h 12m" / "aktiv"). State-dot colour reflects
-    // armed × in-schedule semantics (see _channelState).
+    // Telegram + MQTT channel pills. Both render as expandable
+    // Live-pill clones (see _channelPill above) — dot + label +
+    // chevron, click to expand. Dot's pulse cadence + colour come
+    // from the kind + state attributes in CSS.
     const _chanState = _channelState(c);
-    const _stateDot = (state) => state === 'idle'
-      ? ''
-      : `<span class="cv-state-dot" data-state="${state}" aria-hidden="true"></span>`;
-    const _chanDur = _channelDurationText(c, _chanState);
-    const _chanText = _chanDur ? `<span class="cv-chan-dur">${esc(_chanDur)}</span>` : '';
-    const _chanCls = _chanDur ? 'cv-chrome-btn has-text' : 'cv-chrome-btn';
-    const _tgBadge = c.telegram_enabled
-      ? `<div class="${_chanCls} cv-tg-badge" data-state="${_chanState}" title="${esc(_channelTooltip(c, 'tg'))}" aria-label="Telegram-Kanal">${_CHROME_TG_SVG}${_chanText}${_stateDot(_chanState)}</div>`
-      : '';
-    const _mqttBadge = c.mqtt_enabled
-      ? `<div class="${_chanCls} cv-mqtt-badge" data-state="${_chanState}" title="${esc(_channelTooltip(c, 'mqtt'))}" aria-label="MQTT-Kanal">${_CHROME_MQTT_SVG}${_chanText}${_stateDot(_chanState)}</div>`
-      : '';
+    const _tgBadge = c.telegram_enabled ? _channelPill(c, 'tg', _chanState) : '';
+    const _mqttBadge = c.mqtt_enabled ? _channelPill(c, 'mqtt', _chanState) : '';
     // pq924 — channel cluster (schedule label + TG/MQTT badges).
     // Schedule label is a muted text line ABOVE the badges, semantically
     // attached to the notification icon below it (the schedule defines
@@ -852,24 +854,47 @@ ${isActive ? `
   // it survives the innerHTML rebuild above; the wired-flag inside
   // the helper prevents double-binding across re-renders.
   _wireHdIdleReset();
-  byId('cameraCards').querySelectorAll('.cv-pill-live-wrap').forEach(el => {
-    // Open/close on CLICK (desktop) and tap (mobile) — never on
-    // hover. The pill flips between collapsed row and expanded
-    // detail panel via .cv-lp-open. ng542: the previous mouseenter
-    // trigger caused the pill to widen every time the user moved
-    // their cursor over it, which displaced neighbouring chrome
-    // buttons in the same cluster — the "breathing" regression the
-    // user reported. Click-only matches what touch already did and
-    // keeps every chrome button rock-stable under pointer hover.
-    let _t = null;
-    el.addEventListener('click', e => {
-      e.stopPropagation();
-      el.classList.toggle('cv-lp-open');
+  _wirePillOpenClose();
+}
+
+// Open/close wiring for every expandable pill on the dashboard —
+// Live-pill + Telegram pill + MQTT pill share the .cv-lp-open class
+// and the same click pattern. Delegated via #cameraCards so the
+// listener survives renderDashboard's innerHTML rebuilds; the
+// _pillWired flag (same idea as _hdIdleWired above) means we only
+// bind once per page lifetime. Only ONE pill per tile may be open at
+// a time — opening a new pill closes any open sibling in the same
+// card (B3 spec: "if Telegram is open and the user clicks Live,
+// Telegram collapses first"). A document-level outside-click handler
+// closes every open pill when the user taps elsewhere; same
+// wire-once guard.
+const _PILL_SELECTOR = '.cv-pill-live-wrap, .cv-pill-channel-wrap';
+let _pillWired = false;
+function _wirePillOpenClose(){
+  if (_pillWired) return;
+  const grid = byId('cameraCards');
+  if (!grid) return;
+  const togglePill = (el) => {
+    const wasOpen = el.classList.contains('cv-lp-open');
+    const card = el.closest('.cv-card');
+    if (card) card.querySelectorAll('.cv-lp-open').forEach(other => {
+      if (other !== el) other.classList.remove('cv-lp-open');
     });
-    el.addEventListener('touchstart', e => { e.stopPropagation(); clearTimeout(_t); const open = el.classList.toggle('cv-lp-open'); if (!open) clearTimeout(_t); }, { passive: true });
-    document.addEventListener('click', e => { if (!el.contains(e.target)) el.classList.remove('cv-lp-open'); });
-    document.addEventListener('touchstart', e => { if (!el.contains(e.target)) { clearTimeout(_t); el.classList.remove('cv-lp-open'); } }, { passive: true });
+    el.classList.toggle('cv-lp-open', !wasOpen);
+  };
+  grid.addEventListener('click', e => {
+    const pill = e.target.closest(_PILL_SELECTOR);
+    if (!pill || !grid.contains(pill)) return;
+    e.stopPropagation();
+    togglePill(pill);
   });
+  const closeAllOutside = (e) => {
+    if (e.target.closest(_PILL_SELECTOR)) return;
+    document.querySelectorAll('.cv-lp-open').forEach(p => p.classList.remove('cv-lp-open'));
+  };
+  document.addEventListener('click', closeAllOutside);
+  document.addEventListener('touchstart', closeAllOutside, { passive: true });
+  _pillWired = true;
 }
 
 // Reload-state animation. Either targets a single camera by id (after
