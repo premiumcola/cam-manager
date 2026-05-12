@@ -134,11 +134,21 @@
 .cv-class-pill svg{width:18px;height:18px;display:block}
 /* Schedule pill — tabular nums keep the time digits aligned. */
 .cv-schedule-pill{font-feature-settings:"tnum" 1;font-size:11px;letter-spacing:.01em}
-.cv-name{color:#fff;font-weight:700;font-size:15px;text-shadow:0 1px 6px rgba(0,0,0,.8);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.cv-name{color:#fff;font-weight:700;font-size:15px;text-shadow:0 1px 6px rgba(0,0,0,.8);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;max-width:50%}
 .cv-title-icon{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px;line-height:1;filter:drop-shadow(0 1px 4px rgba(0,0,0,.6))}
 .cv-loc{color:rgba(255,255,255,.7);font-size:11px;text-shadow:0 1px 4px rgba(0,0,0,.8)}
 .cv-group-pill{display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.18);color:rgba(255,255,255,.55);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-top:2px;width:fit-content}
-.cv-name-row{display:flex;align-items:center;gap:8px;min-width:0}
+/* gh418 — icon-to-name gap 6 px, then a wider 14 px gap before the
+   Live pill via margin-left:8 px (6 base + 8 = 14). Keeps the three
+   groups visually separated while the name truncates with ellipsis
+   (cv-name max-width:50%) before it could push the Live pill into
+   the top-right cluster. flex-shrink:0 on the pill protects its
+   natural width. align-items:flex-start so the row keeps its layout
+   when the pill expands vertically on open. */
+.cv-name-row{display:flex;align-items:flex-start;gap:6px;min-width:0}
+.cv-name-row .cv-title-icon,
+.cv-name-row .cv-name{align-self:center}
+.cv-name-row .cv-pill-live-wrap{margin-left:8px;flex-shrink:0}
 .cv-tr-row{display:flex;gap:6px;align-items:center}
 
 /* Live + FS pills now live inside .cv-chrome-top-right (above).
