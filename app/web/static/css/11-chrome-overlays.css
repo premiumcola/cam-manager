@@ -40,7 +40,7 @@
 .lvm-wrap{position:relative;width:100%;height:100dvh;
           display:flex;align-items:center;justify-content:center;
           background:#000}
-.lvm-img{max-width:100%;max-height:100dvh;object-fit:contain;display:block}
+.lvm-img{width:100%;height:100%;object-fit:contain;display:block;background:#000}
 .lvm-top{position:absolute;
          top:max(12px, env(safe-area-inset-top, 0px));
          left:0;right:0;
@@ -89,4 +89,34 @@
             -webkit-backdrop-filter:blur(8px);
             transition:background .15s ease}
 .lvm-fs-btn:hover{background:rgba(0,0,0,.75)}
+
+/* ── Live-view modal fullscreen ──────────────────────────────────────
+   When the FS button promotes #liveViewWrap into browser fullscreen,
+   the wrap fills the viewport and the img inside fills the wrap with
+   object-fit:contain — letterbox / pillarbox depending on viewport
+   aspect ratio. Symmetric to .cv-img-wrap:fullscreen in
+   03-dashboard.css. The .fake-fullscreen class covers the iOS Safari
+   fallback where requestFullscreen rejects on a <div>. */
+.lvm-wrap:fullscreen,
+.lvm-wrap:-webkit-full-screen,
+.lvm-wrap.fake-fullscreen{
+  width:100% !important;
+  height:100% !important;
+  max-width:none;
+  max-height:none;
+  background:#000;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.lvm-wrap:fullscreen .lvm-img,
+.lvm-wrap:-webkit-full-screen .lvm-img,
+.lvm-wrap.fake-fullscreen .lvm-img{
+  width:100% !important;
+  height:100% !important;
+  max-width:none !important;
+  max-height:none !important;
+  object-fit:contain;
+  background:#000;
+}
 
