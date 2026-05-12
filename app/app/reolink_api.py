@@ -95,9 +95,17 @@ def login(host: str, username: str, password: str, timeout: float = 5.0) -> str 
 _REOLINK_RSPCODE_HINTS: dict[int, str] = {
      0: "ok",
     -1: "ungültige Parameter (Firmware erwartet andere Feldnamen?)",
+    -2: "Antwort fehlerhaft / unerwartetes Format",
+    -3: "Antwort konnte nicht geparst werden",
     -6: "kein Admin-Recht — User-Account hat keine ISP-Rechte",
     -7: "Login fehlgeschlagen / Token ungültig",
+    -8: "zu viele gleichzeitige Verbindungen — Kamera lehnt weitere Sessions ab",
    -10: "Fähigkeit nicht unterstützt (Firmware kennt SetIspCfg.dayNight nicht)",
+   -11: "Token abgelaufen — bitte neu verbinden",
+   -13: ("Funktion nicht unterstützt — diese Kamera/Firmware bietet kein "
+         "S/W-Schalten über die API. Manche älteren Modelle "
+         "(z. B. RLC-410/420 ohne Plus-Suffix) können das nicht."),
+  -502: "Zeitüberschreitung beim Warten auf die Kamera",
 }
 
 

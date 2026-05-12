@@ -76,9 +76,16 @@ async function _onClickMode(mode) {
   if (res && res.ok) {
     _setFeedback(`✓ Modus ${mode} gesetzt`, 'ok');
   } else {
-    const detail = (res && (res.detail || res.error)) || 'Unbekannter Fehler';
+    // vk257 — backend now maps rc=-13 (and the other common Reolink
+    // failure codes) onto German hint strings in
+    // _REOLINK_RSPCODE_HINTS, so res.detail already carries a useful
+    // human-readable message in the rc-mapped case. When the backend
+    // returns an empty detail we fall back to the generic Reolink
+    // wording instead of "Unbekannter Fehler" so the (rc=-13) suffix
+    // isn't the only signal the user has to work with.
+    const detail = (res && (res.detail || res.error)) || 'set config failed';
     const rc = res && res.rc != null ? ` (rc=${res.rc})` : '';
-    _setFeedback(`✗ ${detail}${rc}`, 'error');
+    _setFeedback(`❌ ${detail}${rc}`, 'error');
   }
 }
 
