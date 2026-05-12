@@ -1,10 +1,131 @@
 // ─── mediaview/canvas/zone-layer.js ────────────────────────────────────────
-// Read-only camera-zone polygon overlay. Renders the zones defined in
-// the camera's settings (zones field) as semi-transparent fills. The
-// shell exposes a "Zonen" canvas toggle; this layer only draws when
-// the toggle is on. Editing remains in cam-edit's zone editor — this
-// layer is strictly read-only.
+// Read-only camera-zone / mask polygon overlay shared by every
+// viewing context (lightbox, live view, coral test, timelapse).
+// Pure function — caller owns the canvas + the redraw cadence (RAF
+// or ResizeObserver). Reads colours / line widths from
+// core/zone-tokens.js so the visual matches the cam-edit polygon
+// editor 1 : 1; nothing else in the codebase should be drawing
+// zones / masks except by calling this.
 //
-// SKELETON — task #3 fills this in.
+// Coordinate handling — the hard part:
+//   * Polygons arrive as arrays of {x, y} in SOURCE pixel space
+//     (srcW × srcH).
+//   * The canvas is sized to the OUTER element's CSS pixel rect
+//     (typically the <video> / <img>'s getBoundingClientRect()).
+//   * The media element itself uses `object-fit: contain` so the
+//     visible pixels sit inside a letterbox sub-rect of that
+//     bounding box. fittedRect() returns that sub-rect.
+//
+// The transform is:
+//   on_canvas_x = fitted.x + (src_x / srcW) * fitted.w
+//   on_canvas_y = fitted.y + (src_y / srcH) * fitted.h
+//
+// hideMasks=true draws zones only (timelapse playback hides masks
+// because they'd visually clutter a sped-up overview without
+// adding info).
 
-export function renderZoneLayer(/* canvas, cameraZones */){}
+import {
+  ZONE_STROKE, ZONE_FILL, MASK_STROKE, MASK_FILL, LINE_W,
+} from '../../core/zone-tokens.js';
+import { fittedRect } from '../../core/video-fit.js';
+
+/**
+ * Compute the source-to-canvas-coord mapping for a single polygon.
+ * Exposed so tests can pin the letterbox math without invoking the
+ * full render pass.
+ */
+export function mapPolygonToCanvas(poly, srcW, srcH, fitted){
+  if (!poly || !Array.isArray(poly) || srcW <= 0 || srcH <= 0) return [];
+  const sx = fitted.w / srcW;
+  const sy = fitted.h / srcH;
+  return poly.map(pt => {
+    const px = (pt && (pt.x ?? pt[0])) ?? 0;
+    const py = (pt && (pt.y ?? pt[1])) ?? 0;
+    return {
+      x: fitted.x + px * sx,
+      y: fitted.y + py * sy,
+    };
+  });
+}
+
+function _drawPoly(ctx, mapped, stroke, fill){
+  if (!mapped || mapped.length < 2) return;
+  ctx.beginPath();
+  for (let i = 0; i < mapped.length; i++){
+    const p = mapped[i];
+    if (i === 0) ctx.moveTo(p.x, p.y);
+    else ctx.lineTo(p.x, p.y);
+  }
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = LINE_W;
+  ctx.stroke();
+}
+
+/**
+ * Public entry — clear the canvas + render every zone + mask
+ * polygon scaled into the source-to-canvas coordinate space.
+ *
+ * @param {HTMLCanvasElement} canvas  — the overlay canvas. Caller
+ *   pre-sizes its `width`/`height` attributes to match the displayed
+ *   element's rect (CSS px × devicePixelRatio is fine; the function
+ *   doesn't introspect transform).
+ * @param {{zones?: Array, masks?: Array}} polygons — each polygon is
+ *   an array of `{x, y}` or `[x, y]` points in source coords.
+ * @param {number} srcW — source image width (e.g. videoWidth).
+ * @param {number} srcH — source image height (e.g. videoHeight).
+ * @param {{hideMasks?: boolean}} opts — set `hideMasks` true to
+ *   suppress masks (timelapse playback uses this).
+ * @param {{x:number,y:number,w:number,h:number}} fitted — fitted
+ *   rect from `core/video-fit.js#fittedRect`. Caller computes this
+ *   once per redraw — the renderer is pure.
+ */
+export function renderZoneLayer(canvas, polygons, srcW, srcH, opts = {}, fitted = null){
+  if (!canvas || !canvas.getContext) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!polygons || (!polygons.zones?.length && !polygons.masks?.length)) return;
+  const fit = fitted || { x: 0, y: 0, w: canvas.width, h: canvas.height };
+  if (fit.w <= 0 || fit.h <= 0) return;
+  const zones = polygons.zones || [];
+  const masks = opts.hideMasks ? [] : (polygons.masks || []);
+  // Masks drawn FIRST so the green inclusion lines sit on top — when
+  // a zone overlaps a mask the user sees the inclusion edge clearly.
+  for (const m of masks){
+    const poly = Array.isArray(m) ? m : (m?.points || m?.poly || []);
+    const mapped = mapPolygonToCanvas(poly, srcW, srcH, fit);
+    _drawPoly(ctx, mapped, MASK_STROKE, MASK_FILL);
+  }
+  for (const z of zones){
+    const poly = Array.isArray(z) ? z : (z?.points || z?.poly || []);
+    const mapped = mapPolygonToCanvas(poly, srcW, srcH, fit);
+    _drawPoly(ctx, mapped, ZONE_STROKE, ZONE_FILL);
+  }
+}
+
+/**
+ * Caller helper — convenience to size canvas + draw in one call,
+ * given an outer media element (the <video> / <img>). The canvas's
+ * CSS width / height should already match the element's bounding
+ * rect (parent's position:absolute inset:0 covers this).
+ */
+export function renderZoneLayerForMediaEl(canvas, mediaEl, polygons, opts = {}){
+  if (!canvas || !mediaEl) return;
+  const fit = fittedRect(mediaEl);
+  const srcW = mediaEl.videoWidth || mediaEl.naturalWidth || 0;
+  const srcH = mediaEl.videoHeight || mediaEl.naturalHeight || 0;
+  // Re-size the canvas drawing buffer to match its CSS rect so the
+  // 1:1 pixel mapping works at any device-pixel-ratio. Skip when
+  // the element hasn't painted yet — the ResizeObserver in the
+  // caller will fire as soon as it does.
+  const box = mediaEl.getBoundingClientRect();
+  if (box.width <= 0 || box.height <= 0) return;
+  if (canvas.width !== Math.round(box.width)
+      || canvas.height !== Math.round(box.height)){
+    canvas.width = Math.round(box.width);
+    canvas.height = Math.round(box.height);
+  }
+  renderZoneLayer(canvas, polygons, srcW, srcH, opts, fit);
+}
