@@ -149,6 +149,12 @@ CAMERA_SCHEMA: dict = {
     # Reolink CX810 strip the 2026-05-12 sunset test exposed). Opt out
     # entirely with ``{"enabled": false}``.
     "timestamp_overlay_zone": (dict, {}),
+    # Per-camera streaming preferences. Currently carries a single
+    # opt-out flag ``hls_enabled`` (default true) for the native HLS
+    # live-view path; the MJPEG fallback always remains available.
+    # A Pi-grade host can disable HLS on a noisy camera to keep the
+    # CPU budget free.
+    "streaming": (dict, {}),
     "timelapse":           (dict,  {}),
     "schedule":            (dict,  {}),
     # Two independent schedules — one for notifications (Telegram/MQTT),
