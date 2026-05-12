@@ -12,7 +12,14 @@ _pkg_root = str(Path(__file__).parent.parent)
 if _pkg_root not in sys.path:
     sys.path.insert(0, _pkg_root)
 
-from app.camera_id import build_camera_id  # noqa: E402
+from app.camera_id import build_camera_id, camera_slug  # noqa: E402
+
+
+class _FakeSettings:
+    """Minimal settings stand-in — duck-typed ``data`` dict with a
+    ``cameras`` list, same shape as the real SettingsStore exposes."""
+    def __init__(self, cameras):
+        self.data = {"cameras": list(cameras)}
 
 
 class TestBuildCameraId:
@@ -94,3 +101,99 @@ class TestBuildCameraId:
         again = build_camera_id("Reolink", "RLC-810A", "Werkstatt rechts oben",
                                 "192.0.2.42")
         assert first == again
+
+
+class TestCameraSlug:
+    """The slug appended to timelapse output filenames so two cameras
+    producing builds on the same day don't collide in a shared
+    folder. Resolution order: display name → camera_id → ``"unknown"``."""
+
+    def test_umlaut_display_name(self):
+        s = _FakeSettings([
+            {"id": "cam_a", "name": "Garten 'Pförtnerhäuschen'"},
+        ])
+        assert camera_slug(s, "cam_a") == "gartenpfoertnerhaeuschen"
+
+    def test_symbols_only_display_name_falls_back_to_camera_id(self):
+        s = _FakeSettings([
+            {"id": "reolink_rlc810a_garten_42", "name": "!@#$%^&*()"},
+        ])
+        # The display name slugs to empty, so the canonical id wins.
+        assert camera_slug(s, "reolink_rlc810a_garten_42") == \
+            "reolinkrlc810agarten42"
+
+    def test_empty_display_name_falls_back_to_camera_id(self):
+        s = _FakeSettings([{"id": "reolink_cx810_werkstatt_172", "name": ""}])
+        assert camera_slug(s, "reolink_cx810_werkstatt_172") == \
+            "reolinkcx810werkstatt172"
+
+    def test_missing_camera_in_settings_falls_back_to_camera_id(self):
+        s = _FakeSettings([])
+        assert camera_slug(s, "reolink_cx810_terrasse_181") == \
+            "reolinkcx810terrasse181"
+
+    def test_none_settings_falls_back_to_camera_id(self):
+        assert camera_slug(None, "reolink_cx810_terrasse_181") == \
+            "reolinkcx810terrasse181"
+
+    def test_empty_camera_id_returns_unknown(self):
+        s = _FakeSettings([])
+        # No display name, no camera_id — last-resort sentinel.
+        assert camera_slug(s, "") == "unknown"
+
+    def test_distinct_slugs_for_slug_collision_first_letters(self):
+        """Two cameras whose display names share their leading
+        substring still produce distinct slugs — the slug captures
+        the full sanitised name, not just the first token. Pins the
+        collision-free invariant that the bug-fix prompt called
+        out: "two cameras whose display names slug-collide on the
+        first letters but differ later — assert both produce
+        distinct filenames"."""
+        s = _FakeSettings([
+            {"id": "cam_a", "name": "Squirrel Town Nut Bar"},
+            {"id": "cam_b", "name": "Squirrel Town Bird House"},
+        ])
+        slug_a = camera_slug(s, "cam_a")
+        slug_b = camera_slug(s, "cam_b")
+        assert slug_a != slug_b
+        assert slug_a == "squirreltownnutbar"
+        assert slug_b == "squirreltownbirdhouse"
+
+
+class TestMakeOutputName:
+    """The TimelapseBuilder.make_output_name helper composes filename
+    stems for custom-window timelapse builds. The slug append at the
+    tail is the bug-fix pivot — cross-camera builds must NOT share
+    stems on the same window/profile/period combination."""
+
+    def test_no_slug_keeps_legacy_stem(self):
+        from app.timelapse import TimelapseBuilder
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            tb = TimelapseBuilder(td)
+            name = tb.make_output_name("2026-05-12_020435", "custom", 60, 10)
+            assert name == "2026-05-12_020435_custom_1min_to_10sec"
+
+    def test_slug_appended_at_tail(self):
+        from app.timelapse import TimelapseBuilder
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            tb = TimelapseBuilder(td)
+            name = tb.make_output_name("2026-05-12_020435", "custom", 60, 10,
+                                       cam_slug="gartenterrasse")
+            assert name.endswith("_gartenterrasse")
+            assert name == "2026-05-12_020435_custom_1min_to_10sec_gartenterrasse"
+
+    def test_slug_makes_two_cameras_distinct(self):
+        """Two cameras with the same window/profile/period/duration
+        but distinct slugs must produce distinct stems — the whole
+        point of the fix."""
+        from app.timelapse import TimelapseBuilder
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            tb = TimelapseBuilder(td)
+            a = tb.make_output_name("2026-05-12", "day", 0, 60,
+                                    cam_slug="squirreltownnutbar")
+            b = tb.make_output_name("2026-05-12", "day", 0, 60,
+                                    cam_slug="gartenterrasse")
+            assert a != b

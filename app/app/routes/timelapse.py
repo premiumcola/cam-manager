@@ -100,12 +100,19 @@ def api_camera_timelapse(cam_id):
     target_s = int(tl_cfg.get("daily_target_seconds", 60))
     target_fps = int(tl_cfg.get("fps", 25))
     period = tl_cfg.get("period", "day")
+    # Resolve a per-camera filename slug so multi-camera installs
+    # downloading the same day's timelapses don't end up with
+    # colliding filenames in a single folder. Falls back through
+    # display-name → camera_id → "unknown"; never raises.
+    from ..camera_id import camera_slug
+    cam_slug = camera_slug(app_state.store, cam_id)
     path = timelapse_builder.build_period(
         cam_id, day,
         target_duration_s=target_s,
         target_fps=target_fps,
         period=period,
-        force=force
+        force=force,
+        cam_slug=cam_slug,
     )
     if not path:
         frames_dir = storage_root / "timelapse_frames" / cam_id / day
@@ -116,7 +123,8 @@ def api_camera_timelapse(cam_id):
             return jsonify({"ok": False, "error": "no_frames", "day": day}), 404
         def _bg_build():
             timelapse_builder.build_period(cam_id, day, target_duration_s=target_s,
-                                           target_fps=target_fps, period=period, force=True)
+                                           target_fps=target_fps, period=period,
+                                           force=True, cam_slug=cam_slug)
         _thr.Thread(target=_bg_build, daemon=True).start()
         return jsonify({"ok": False, "error": "building", "day": day, "retry_after": 15}), 202
     rel = Path(path).relative_to(storage_root)
@@ -225,13 +233,16 @@ def api_camera_timelapse_rolling(cam_id):
         return jsonify({"ok": False, "error": "not_enough_frames", "minutes": minutes}), 404
     target_fps = int(tl_cfg.get("fps", 25))
     target_s = max(5, int(tl_cfg.get("daily_target_seconds", 60)) // 10)
+    from ..camera_id import camera_slug
+    cam_slug = camera_slug(app_state.store, cam_id)
     path = timelapse_builder.build_period(
         cam_id, day,
         target_duration_s=target_s,
         target_fps=target_fps,
         period=f"rolling{minutes}min",
         force=True,
-        images_override=images
+        images_override=images,
+        cam_slug=cam_slug,
     )
     if not path:
         return jsonify({"ok": False, "error": "build_failed"}), 500

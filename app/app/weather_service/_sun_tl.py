@@ -535,10 +535,18 @@ class SunTimelapseMixin:
         # Test captures get a `_test_<HHMMSS>_` prefix so they show up
         # in Sichtungen alongside real captures but are trivially
         # identifiable (and bulk-deletable) by the user.
+        # Every stem also carries a camera slug as a trailing
+        # fragment so two cameras producing a sunrise/sunset
+        # timelapse on the same day don't collide when the user
+        # downloads them into a shared folder. The slug is derived
+        # via ``camera_slug`` so it tracks the camera's display
+        # name when the user renames the camera.
+        from ..camera_id import camera_slug
+        cam_slug = camera_slug(self.settings_store, cam_id)
         if test_session is not None:
-            stem = f"_test_{datetime.now().strftime('%H%M%S')}_{date_label}_{phase}"
+            stem = f"_test_{datetime.now().strftime('%H%M%S')}_{date_label}_{phase}_{cam_slug}"
         else:
-            stem = f"{date_label}_{phase}"
+            stem = f"{date_label}_{phase}_{cam_slug}"
         mp4_path = out_dir / f"{stem}.mp4"
         thumb_path = out_dir / f"{stem}.jpg"
         # Frames go to a temporary scratch dir; deleted after encode.

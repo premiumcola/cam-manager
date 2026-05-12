@@ -302,7 +302,11 @@ class EventTimelapseMixin:
         out_dir = self._sightings_dir() / cam_id / "event_timelapse"
         out_dir.mkdir(parents=True, exist_ok=True)
         ts_label = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-        stem = f"{ts_label}_{trigger}"
+        # Camera slug appended so cross-camera downloads stay unique;
+        # see camera_id.camera_slug for the derivation order.
+        from ..camera_id import camera_slug
+        cam_slug = camera_slug(self.settings_store, cam_id)
+        stem = f"{ts_label}_{trigger}_{cam_slug}"
         mp4_path = out_dir / f"{stem}.mp4"
         thumb_path = out_dir / f"{stem}.jpg"
         frames_dir = out_dir / f".scratch_{stem}"

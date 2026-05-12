@@ -125,7 +125,15 @@ class TimelapseMixin:
         out_dir.mkdir(parents=True, exist_ok=True)
 
         builder = _TLB(storage_root)
-        stem = builder.make_output_name(window_key, profile_name, period_s, target_s)
+        # Pass a per-camera slug so cross-camera downloads of the
+        # same window/profile/target don't collide on the user's
+        # disk. Derived from the camera's display name with the
+        # canonical id as fallback. See camera_id.camera_slug.
+        from ..camera_id import camera_slug
+        from .. import app_state as _app_state
+        cam_slug = camera_slug(getattr(_app_state, "store", None), self.camera_id)
+        stem = builder.make_output_name(window_key, profile_name, period_s, target_s,
+                                        cam_slug=cam_slug)
         out_path = out_dir / f"{stem}.mp4"
         _t0 = time.monotonic()
         path = builder._write_video(images, out_path, target_s, target_fps)

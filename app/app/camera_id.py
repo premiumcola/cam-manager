@@ -86,6 +86,49 @@ def _ip_last_segment(ip: str) -> str:
     return ""
 
 
+def camera_slug(settings, camera_id: str) -> str:
+    """Return a filesystem-safe slug for a camera, used as a tail
+    fragment on timelapse output filenames so two cameras producing
+    builds on the same day (same date stem) don't collide when the
+    user downloads or aggregates them into a single folder.
+
+    Resolution order:
+      1. The camera's ``name`` field from settings (display label,
+         e.g. ``"Squirrel Town 'Nut Bar'"``) run through
+         :func:`_sanitise` (umlauts transliterated, non-alphanumerics
+         stripped, lowercase) → ``"squirreltownnutbar"``.
+      2. ``_sanitise(camera_id)`` — strips the underscore-separated
+         canonical id into a single lowercase token, e.g.
+         ``"reolinkrlc811asquirreltownnutbar183"``.
+      3. Literal ``camera_id`` or the string ``"unknown"`` as a
+         last resort. ``_sanitise`` on a non-empty input always
+         returns something so this branch only triggers when the
+         caller passed ``None`` or ``""`` for ``camera_id``.
+
+    Single source of truth — every timelapse build path
+    (``weather_service/_sun_tl.py``, ``_event_tl.py``,
+    ``timelapse.py``, ``camera_runtime/_timelapse.py``) calls
+    this; no ad-hoc slugging elsewhere.
+    """
+    name = ""
+    if settings is not None:
+        try:
+            data = getattr(settings, "data", None) or {}
+            for cam in (data.get("cameras") or []):
+                if isinstance(cam, dict) and cam.get("id") == camera_id:
+                    name = cam.get("name") or ""
+                    break
+        except Exception:
+            name = ""
+    slug = _sanitise(name)
+    if slug:
+        return slug
+    slug = _sanitise(camera_id or "")
+    if slug:
+        return slug
+    return camera_id or "unknown"
+
+
 def build_camera_id(manufacturer: str, model: str, name: str, ip: str) -> str:
     """Compose the canonical camera id from the four input fields.
 

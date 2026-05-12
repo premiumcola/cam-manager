@@ -542,12 +542,24 @@ class TimelapseBuilder:
     # ── Naming helpers ────────────────────────────────────────────────────────
 
     def make_output_name(self, window_key: str, profile_name: str,
-                         period_s: int, target_s: int) -> str:
+                         period_s: int, target_s: int,
+                         cam_slug: str = "") -> str:
         """Generate a human-readable filename stem.
-        Example: '2026-04-14_020435_custom_1min_to_10sec'"""
+
+        Example without slug: ``'2026-04-14_020435_custom_1min_to_10sec'``
+        Example with slug:    ``'2026-04-14_020435_custom_1min_to_10sec_garten'``
+
+        ``cam_slug`` is a filesystem-safe identifier
+        (``camera_id.camera_slug``) appended so cross-camera
+        downloads / shares don't collide on the same stem. Empty
+        string leaves the legacy filename unchanged — keeps the
+        callsite signature backward-compatible with any caller
+        that hasn't been updated to pass the slug.
+        """
         p_label = _period_label(period_s)
         d_label = _duration_label(target_s)
-        return f"{window_key}_{profile_name}_{p_label}_to_{d_label}"
+        stem = f"{window_key}_{profile_name}_{p_label}_to_{d_label}"
+        return f"{stem}_{cam_slug}" if cam_slug else stem
 
     # ── Profile-based (new) ───────────────────────────────────────────────────
 
@@ -560,8 +572,15 @@ class TimelapseBuilder:
 
     def build_profile(self, camera_id: str, profile_name: str, day: str,
                       target_duration_s: int = 60, target_fps: int = 30,
-                      force: bool = False) -> str | None:
-        """Build timelapse for a specific profile (new per-profile path structure)."""
+                      force: bool = False, cam_slug: str = "") -> str | None:
+        """Build timelapse for a specific profile (new per-profile path structure).
+
+        ``cam_slug`` is appended to the output filename stem so two
+        cameras producing the same-day same-profile build don't
+        collide on the user's drive. Empty string leaves the legacy
+        ``{day}_{profile}.mp4`` filename intact for backward
+        compatibility with callers that haven't been updated.
+        """
         frames_dir = self.root / "timelapse_frames" / camera_id / profile_name / day
         if not frames_dir.exists():
             return None
@@ -570,7 +589,8 @@ class TimelapseBuilder:
             return None
         out_dir = self.out_root / camera_id
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"{day}_{profile_name}.mp4"
+        stem = f"{day}_{profile_name}" + (f"_{cam_slug}" if cam_slug else "")
+        out_path = out_dir / f"{stem}.mp4"
         if out_path.exists() and not force:
             return str(out_path)
         return self._write_video(images, out_path, target_duration_s, target_fps)
@@ -582,8 +602,12 @@ class TimelapseBuilder:
                      target_fps: int = 30,
                      period: str = "day",
                      force: bool = False,
-                     images_override: list | None = None) -> str | None:
-        """Build from legacy flat timelapse_frames/<cam>/<day>/ directory."""
+                     images_override: list | None = None,
+                     cam_slug: str = "") -> str | None:
+        """Build from legacy flat ``timelapse_frames/<cam>/<day>/``
+        directory. ``cam_slug`` appended to the stem for unique
+        cross-camera download filenames; see :func:`make_output_name`.
+        """
         if images_override is not None:
             images = list(images_override)
         else:
@@ -597,18 +621,24 @@ class TimelapseBuilder:
 
         out_dir = self.out_root / camera_id
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"{day}_{period}.mp4"
+        stem = f"{day}_{period}" + (f"_{cam_slug}" if cam_slug else "")
+        out_path = out_dir / f"{stem}.mp4"
         if out_path.exists() and not force:
             return str(out_path)
         return self._write_video(images, out_path, target_duration_s, target_fps)
 
-    def build_for_day(self, camera_id: str, day: str, fps: int = 25, force: bool = False) -> str | None:
-        """Backward-compatible wrapper. Tries timelapse_frames first, falls back to event snapshots."""
+    def build_for_day(self, camera_id: str, day: str, fps: int = 25,
+                      force: bool = False, cam_slug: str = "") -> str | None:
+        """Backward-compatible wrapper. Tries timelapse_frames first,
+        falls back to event snapshots. ``cam_slug`` flows through to
+        both build paths so neither variant collides on cross-camera
+        downloads."""
         path = self.build_period(camera_id, day,
                                  target_duration_s=60,
                                  target_fps=fps,
                                  period="day",
-                                 force=force)
+                                 force=force,
+                                 cam_slug=cam_slug)
         if path:
             return path
 
@@ -618,11 +648,14 @@ class TimelapseBuilder:
             return None
         out_dir = self.out_root / camera_id
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"{day}.mp4"
+        stem = day + (f"_{cam_slug}" if cam_slug else "")
+        out_path = out_dir / f"{stem}.mp4"
         if out_path.exists() and not force:
             return str(out_path)
         return self._write_video(images, out_path, 60, fps)
 
-    def build_yesterday_if_missing(self, camera_id: str, fps: int = 25):
+    def build_yesterday_if_missing(self, camera_id: str, fps: int = 25,
+                                   cam_slug: str = ""):
         day = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-        return self.build_for_day(camera_id, day, fps=fps, force=False)
+        return self.build_for_day(camera_id, day, fps=fps, force=False,
+                                  cam_slug=cam_slug)
