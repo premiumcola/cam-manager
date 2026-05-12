@@ -60,9 +60,14 @@ body.media-select-mode .media-grid .mmc-img-wrap{cursor:pointer}
 
 
 /* ── QA pill on timelapse cards + modal panel ─────────────────────────── */
+/* tx518 — right offset lands the pill immediately LEFT of the
+   .mmc-delete X-button (30 px wide, anchored at right:6) with a 6 px
+   gap (6 + 30 + 6 = 42). The pill only renders for real green /
+   yellow / red grades now; n/a tiles stay clean (see qa-pill.js
+   #_renderPill). */
 .mmc-qa-pill{
   position:absolute;
-  top:7px;right:8px;
+  top:7px;right:42px;
   z-index:3;
   display:inline-flex;align-items:center;gap:6px;
   padding:5px 10px;

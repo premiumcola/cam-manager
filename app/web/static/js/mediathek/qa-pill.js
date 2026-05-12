@@ -69,21 +69,25 @@ async function _fetchQA(relpath){
 function _renderPill(card, qa){
   if (card.dataset.qaPainted === '1') return;
   card.dataset.qaPainted = '1';
+  // tx518 — n/a means "no QA sidecar exists" (legacy build before the
+  // quality-pass feature, or the sidecar hasn't been written yet).
+  // Painting an "n/a" placeholder pill was both confusing (users asked
+  // what it meant) and visually clashing with the delete-X in select
+  // mode. Render nothing in that case; the tile stays clean. Users
+  // who want to backfill grades can rebuild the timelapse via the
+  // camera-edit timelapse panel, which writes a fresh sidecar.
+  const grade = qa?.quality_grade || null;
+  if (!grade || grade === 'n/a' || grade === 'unknown') return;
+  const meta = _GRADE_CLASSES[grade];
+  if (!meta) return;
   const wrap = card.querySelector('.mmc-img-wrap');
   if (!wrap) return;
-  const grade = qa?.quality_grade || null;
-  const meta = grade ? _GRADE_CLASSES[grade] : null;
-  const cls  = meta ? meta.cls : 'mmc-qa-pill--na';
-  const lbl  = meta ? meta.label : 'n/a';
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = `mmc-qa-pill ${cls}`;
-  btn.setAttribute('aria-label',
-    qa ? `Qualität: ${lbl}` : 'Qualität: keine Daten');
-  btn.title = qa
-    ? `${lbl} · dup ${Math.round((qa.playback?.duplicate_ratio || 0) * 100)} %`
-    : 'Kein QA-Sidecar — auf Rebuild tippen';
-  btn.innerHTML = `<span class="mmc-qa-dot"></span><span>${lbl}</span>`;
+  btn.className = `mmc-qa-pill ${meta.cls}`;
+  btn.setAttribute('aria-label', `Qualität: ${meta.label}`);
+  btn.title = `${meta.label} · dup ${Math.round((qa.playback?.duplicate_ratio || 0) * 100)} %`;
+  btn.innerHTML = `<span class="mmc-qa-dot"></span><span>${meta.label}</span>`;
   btn.addEventListener('click', (ev) => {
     ev.stopPropagation();
     _openModal(card, qa);
