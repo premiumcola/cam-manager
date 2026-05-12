@@ -202,14 +202,12 @@ export function _makeConnectingPlaceholder(){
   const center = `
     <div class="cv-ph-stage">
       <svg class="cv-ph-guides" viewBox="-100 -100 200 200" aria-hidden="true">
-        <circle cx="0" cy="0" r="30" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
-        <circle cx="0" cy="0" r="55" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
-        <circle cx="0" cy="0" r="80" fill="none" stroke="rgba(59,130,246,0.1)" stroke-width="1"/>
+        <circle cx="0" cy="0" r="85" fill="rgba(59,130,246,0.05)"/>
+        <circle cx="0" cy="0" r="45" fill="rgba(59,130,246,0.07)"/>
       </svg>
       <svg class="cv-ph-radar" viewBox="-100 -100 200 200" aria-hidden="true">
-        <path d="M0,0 L85,-49 A98,98 0 0 1 85,49 Z" fill="rgba(59,130,246,0.12)"/>
-        <line x1="0" y1="0" x2="85" y2="49" stroke="rgba(59,130,246,0.5)" stroke-width="1.5"/>
-        <circle cx="85" cy="49" r="3" fill="rgba(59,130,246,0.9)"/>
+        <path d="M0,0 L85,-49 A98,98 0 0 1 85,49 Z" fill="rgba(59,130,246,0.2)"/>
+        <circle class="cv-ph-radar-dot" cx="85" cy="49" r="5" fill="rgba(59,130,246,0.95)"/>
       </svg>
       <span class="cv-ph-orbit cv-ph-orbit--1"></span>
       <span class="cv-ph-orbit cv-ph-orbit--2"></span>

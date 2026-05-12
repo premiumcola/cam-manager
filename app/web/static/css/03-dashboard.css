@@ -41,15 +41,22 @@
 .cv-ph-label--red{text-shadow:0 0 20px rgba(239,68,68,0.15)}
 .cv-ph-label--blue{color:rgba(59,130,246,0.55)}
 
-/* Offline (red): expanding rings + crosshair */
-.cv-ph-ring{position:absolute;top:50%;left:50%;width:60px;height:60px;margin:-30px 0 0 -30px;border:1.5px solid rgba(239,68,68,0.45);border-radius:50%;animation:ring1 4s ease-out infinite;pointer-events:none}
+/* Offline (red): expanding rings + crosshair. 3 px ring border + soft
+   halo via box-shadow so the line never thins to a hairline under
+   transform:scale; 2 px crosshair as flat solid lines (no gradient
+   fade) so they don't disappear at odd resolutions. */
+.cv-ph-ring{position:absolute;top:50%;left:50%;width:60px;height:60px;margin:-30px 0 0 -30px;border:3px solid rgba(239,68,68,0.45);border-radius:50%;box-shadow:0 0 14px 2px rgba(239,68,68,0.18);animation:ring1 4s ease-out infinite;pointer-events:none}
 .cv-ph-crosshair{position:absolute;top:50%;left:50%;width:55%;height:55%;transform:translate(-50%,-50%);pointer-events:none;background:
-  linear-gradient(to right, transparent 0%, rgba(239,68,68,0.35) 50%, transparent 100%) center/100% 1px no-repeat,
-  linear-gradient(to bottom, transparent 0%, rgba(239,68,68,0.35) 50%, transparent 100%) center/1px 100% no-repeat}
+  linear-gradient(rgba(239,68,68,0.32),rgba(239,68,68,0.32)) center/100% 2px no-repeat,
+  linear-gradient(rgba(239,68,68,0.32),rgba(239,68,68,0.32)) center/2px 100% no-repeat}
 
-/* Connecting (blue): radar sweep + guide rings + orbiting dots */
+/* Connecting (blue): radar sweep + filled-disc backdrop + orbiting
+   dots. Guides are two flat translucent discs (no stroke); the radar
+   wedge is a filled translucent path with a pulsing dot at the tip
+   (no thin line — would alias under rotation). */
 .cv-ph-guides,.cv-ph-radar{position:absolute;top:50%;left:50%;width:200px;height:200px;transform:translate(-50%,-50%);pointer-events:none}
 .cv-ph-radar{animation:radarSpin 3s linear infinite;transform-origin:100px 100px;transform:translate(-50%,-50%)}
+.cv-ph-radar-dot{transform-origin:85px 49px;animation:radarDotPulse 1.6s ease-in-out infinite}
 .cv-ph-orbit{position:absolute;top:50%;left:50%;border-radius:50%;pointer-events:none;transform-origin:0 0}
 .cv-ph-orbit--1{width:4px;height:4px;margin:-2px 0 0 -2px;background:rgba(59,130,246,0.8);box-shadow:0 0 6px rgba(59,130,246,0.8);animation:orbitDot 4s linear infinite}
 .cv-ph-orbit--2{width:5px;height:5px;margin:-2.5px 0 0 -2.5px;background:rgba(59,130,246,0.7);box-shadow:0 0 8px rgba(59,130,246,0.7);animation:orbitDot2 6s linear infinite}
@@ -62,6 +69,7 @@
 @keyframes bracketJitter{0%,95%,100%{transform:translate(0,0)}96%{transform:translate(1px,0)}97%{transform:translate(0,1px)}98%{transform:translate(-1px,0)}99%{transform:translate(0,0)}}
 @keyframes ring1{0%{transform:scale(0.3);opacity:.6}100%{transform:scale(2.8);opacity:0}}
 @keyframes radarSpin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+@keyframes radarDotPulse{0%,100%{opacity:.55;transform:scale(.85)}50%{opacity:1;transform:scale(1.2)}}
 @keyframes orbitDot{from{transform:rotate(0deg) translateX(40px)}to{transform:rotate(360deg) translateX(40px)}}
 @keyframes orbitDot2{from{transform:rotate(0deg) translateX(52px)}to{transform:rotate(-360deg) translateX(52px)}}
 @keyframes orbitDot3{from{transform:rotate(0deg) translateX(28px)}to{transform:rotate(360deg) translateX(28px)}}
