@@ -1,7 +1,7 @@
 // ─── mediaview/shell.js ────────────────────────────────────────────────────
 // Composes the six structural pieces of the MediaView modal: TitleBar,
 // Canvas (with bbox + trail + zone layers), PlayBar (scrubber, axis,
-// per-class swimlanes, confirmer row, playhead line), DetailPill,
+// per-class swimlanes, playhead line), DetailPill,
 // PanelTabs (Detections · Tracks · Settings · Weather · Nach-Erkennung),
 // and FineAnalysisFold. The shell wires their cross-references and
 // exposes the open/close lifecycle.

@@ -193,13 +193,13 @@ export function _setupVideoChrome(item){
   // the polygons aligned with the video element through every
   // layout change (fullscreen enter/exit, address-bar collapse).
   mountZoneOverlayForLightbox(item, { hideMasks: item?.type === 'timelapse' });
-  // Overlay-toggles pill bar — Mediathek motion clips get all five
-  // pills (bboxes/trails/zones/masks/confirmer), weather timelapses
-  // get just zones+masks. Toggling zones/masks flips the live
-  // visibility on the zone overlay above; bboxes/trails/confirmer
-  // persist their state in localStorage but the bbox-overlay
-  // show/hide wiring lands in a follow-up — for now those pills
-  // act as bookmarks for the user's preference.
+  // Overlay-toggles pill bar — Mediathek motion clips get all four
+  // pills (bboxes/trails/zones/masks), weather timelapses get just
+  // zones+masks. Toggling zones/masks flips the live visibility on
+  // the zone overlay above; bboxes/trails persist their state in
+  // localStorage but the bbox-overlay show/hide wiring lands in a
+  // follow-up — for now those pills act as bookmarks for the user's
+  // preference.
   mountWeatherToggleBar(item, (id, on, _all) => {
     if (id === 'zones' || id === 'masks'){
       window._setZoneOverlayVisibility?.({

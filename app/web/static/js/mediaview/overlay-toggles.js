@@ -4,14 +4,13 @@
 // the same five pills can mount in:
 //
 //   * Live view + Coral test mode — full set
-//     (bboxes / trails / zones / masks / confirmer).
+//     (bboxes / trails / zones / masks).
 //   * Mediathek motion-clip lightbox — full set; toggles flip the
 //     existing bbox-overlay layers plus the new zone overlay.
 //   * Weather / sunrise / sunset / event timelapse lightbox —
-//     ['zones', 'masks'] only. Bboxes / trails / confirmer have
-//     no meaning for a sped-up overview with no detections, so
-//     the bar renders with two pills rather than five greyed-out
-//     ones.
+//     ['zones', 'masks'] only. Bboxes / trails have no meaning for
+//     a sped-up overview with no detections, so the bar renders
+//     with two pills rather than four greyed-out ones.
 //
 // Persistence: per-context state lives in localStorage under
 // ``tamspy.overlayToggles.v1``; the caller passes a ``contextKey``
@@ -39,8 +38,6 @@ const _TOGGLES = {
                desc: 'Erkennungs-Zonen (grün) anzeigen' },
   masks:     { label: 'Masken',    default: false,
                desc: 'Ausschluss-Masken (rot) anzeigen' },
-  confirmer: { label: 'Confirmer', default: true,
-               desc: 'Bestätigungs-Fenster der Tracking-Pipeline anzeigen' },
 };
 
 // Tooltip popover — one element, reused across contexts. Re-uses
@@ -223,7 +220,7 @@ export function mountWeatherToggleBar(item, onChange){
   }
   const isTL = item?.type === 'timelapse';
   return renderOverlayToggles(row, {
-    available:  isTL ? ['zones', 'masks'] : ['bboxes', 'trails', 'zones', 'masks', 'confirmer'],
+    available:  isTL ? ['zones', 'masks'] : ['bboxes', 'trails', 'zones', 'masks'],
     contextKey: isTL ? 'timelapse' : 'mediathek',
     onChange,
     hintText:   'Lange drücken für Beschreibung',

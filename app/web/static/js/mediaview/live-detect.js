@@ -43,7 +43,7 @@ const _TRACE_CAP = 80;
 let _session = null;
 let _traceLines = [];
 let _detBuffer = [];  // [{ms, label, score, bbox, verdict}, …]
-let _overlays = { bboxes: true, trails: true, zones: false, masks: false, confirmer: true };
+let _overlays = { bboxes: true, trails: true, zones: false, masks: false };
 let _selectedLabel = null;  // for detail-pill pin
 
 export function openLiveDetect({ camId, cameraName }){
@@ -53,7 +53,7 @@ export function openLiveDetect({ camId, cameraName }){
   _traceLines = [];
   _detBuffer = [];
   _selectedLabel = null;
-  _overlays = { bboxes: true, trails: true, zones: false, masks: false, confirmer: true };
+  _overlays = { bboxes: true, trails: true, zones: false, masks: false };
   _setupLiveChrome(camId, cameraName);
   _mountPanels();
   _tick();
@@ -159,8 +159,6 @@ const _TOGGLES = [
     desc: 'Erkennungs-Zonen (grün) anzeigen' },
   { id: 'masks',     label: 'Masken',
     desc: 'Ausschluss-Masken (rot) anzeigen' },
-  { id: 'confirmer', label: 'Confirmer',
-    desc: 'Bestätigungs-Fenster der Tracking-Pipeline anzeigen' },
 ];
 
 // Shared tooltip popover state — one element, reused. Created lazily

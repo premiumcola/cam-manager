@@ -25,7 +25,6 @@
 //     scrubber.js
 //     time-axis.js
 //     swimlane.js            — per-class row builder
-//     confirmer-row.js
 //     playhead-line.js       — the ONE vertical line cutting every row
 //   panel-tabs.js
 //   panels/
@@ -73,7 +72,7 @@ export {
 //   { mode:    'recorded' | 'live' | 'live-detect' | 'timelapse',
 //     source:  { type: 'mp4'|'image'|'mjpeg', url, frameSize? },
 //     item:    <existing mediathek item passthrough — unchanged shape>,
-//     overlays:{ bboxes, trails, zones, masks, confirmer },
+//     overlays:{ bboxes, trails, zones, masks },
 //     panels:  { detections, tracksList, settings, weather },
 //     actions: { onConfirm, onDelete, onDownload, onPrev, onNext, onClose } }
 //
