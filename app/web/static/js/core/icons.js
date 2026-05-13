@@ -84,23 +84,25 @@ export const TL_LABELS = ['person', 'cat', 'bird', 'car', 'dog', 'squirrel', 'mo
 // E5 (re-rev) · Camera name → SVG keyword routing. MASSIVE filled
 // silhouettes — fill="currentColor", no strokes — so the icon reads
 // cleanly even at small dashboard tile sizes and never fades into a
-// hairline against a daylight snapshot. Width/height attributes are
-// stripped from the SVG strings; the surrounding .cv-cam-title-icon
-// CSS rule sizes the glyph (32 × 32 desktop / 26 × 26 mobile). The
-// lookup remains a keyword regex on the camera's display name; new
-// keys can be added without touching consumers. The returned HTML
-// inherits color via currentColor so the per-region data-bg overlay
-// palette flip (cv-overlay-region[data-region="identity"]) still
-// drives the glyph colour.
+// hairline against a daylight snapshot. Every entry carries an
+// explicit width/height attribute AND the shared ``.cam-ico`` class
+// so consumers without an override land at the canonical 20 × 20 px
+// baseline (CSS rule in 03-dashboard.css under the comment header
+// "cam-ico baseline") instead of inheriting the parent's intrinsic
+// size — which was the v17-followup-Auslöser: SVGs blowing up to
+// container size when the parent had no width/height set. Per-
+// consumer overrides (Dashboard tile 32 px, Mediathek placeholder
+// 56 px, Statistik donut 18 px, Heatmap 16 px) ride on top via the
+// container selector — see ``.cam-ico`` rule comments. */
 const _CAM_ICON_SVG = {
-  wrench: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.5 2.5a5.5 5.5 0 0 0-5.13 7.4L3 18.27a2.5 2.5 0 0 0 3.54 3.53l8.36-8.37A5.5 5.5 0 1 0 16.5 2.5zm0 8.5a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>`,
-  squirrel: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 6.5a2.5 2.5 0 1 1 5 0 2.5 2.5 0 0 1-5 0zm5.5 4c-3 0-6.5 2-7.5 5.5C4.5 18 5 21 8 21h7c2 0 3.5-1.5 3.5-3.5 0-1.5-.5-3-1.5-4 1.5 0 3-1 3-2.5s-1-3-3-3c-1 0-1.5.5-2 1-.5-.5-1.5-1-3-1z"/><circle cx="6" cy="4" r="1.5"/></svg>`,
-  bird: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22 3l-3.5 1c-3.5 1-6 3.5-7 7L9 17c-.5 1-1.5 1.5-2.5 1.5H4l1.5 1.5c1 1 3 1.5 5 1L13 19c3-1 5-3 6-6l1-4.5L22 3z"/><circle cx="19" cy="6" r=".7" fill="#fff"/></svg>`,
-  leaf: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 21c.5-5 2-10 7-13 4-2.5 8-2.5 9-2 .5 1 .5 5-2 9-3 5-8 6.5-13 7L5 21z"/></svg>`,
-  door: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 2v20h14V2H5zm10 11.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>`,
-  car: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 16h14v-3l-2-4h-10l-2 4v3zm2.5-3.5h9l1-2.5h-11l1 2.5zM7 17h2v1.5H7zM15 17h2v1.5h-2z"/></svg>`,
-  water: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C7 9 5 13 5 16a7 7 0 0 0 14 0c0-3-2-7-7-13z"/></svg>`,
-  camera: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 7v13h18V7h-5l-1.5-3h-5L8 7H3zm9 11a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-2.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>`,
+  wrench: `<svg class="cam-ico" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.5 2.5a5.5 5.5 0 0 0-5.13 7.4L3 18.27a2.5 2.5 0 0 0 3.54 3.53l8.36-8.37A5.5 5.5 0 1 0 16.5 2.5zm0 8.5a3 3 0 1 1 0-6 3 3 0 0 1 0 6z"/></svg>`,
+  squirrel: `<svg class="cam-ico" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 6.5a2.5 2.5 0 1 1 5 0 2.5 2.5 0 0 1-5 0zm5.5 4c-3 0-6.5 2-7.5 5.5C4.5 18 5 21 8 21h7c2 0 3.5-1.5 3.5-3.5 0-1.5-.5-3-1.5-4 1.5 0 3-1 3-2.5s-1-3-3-3c-1 0-1.5.5-2 1-.5-.5-1.5-1-3-1z"/><circle cx="6" cy="4" r="1.5"/></svg>`,
+  bird: `<svg class="cam-ico" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M22 3l-3.5 1c-3.5 1-6 3.5-7 7L9 17c-.5 1-1.5 1.5-2.5 1.5H4l1.5 1.5c1 1 3 1.5 5 1L13 19c3-1 5-3 6-6l1-4.5L22 3z"/><circle cx="19" cy="6" r=".7" fill="#fff"/></svg>`,
+  leaf: `<svg class="cam-ico" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 21c.5-5 2-10 7-13 4-2.5 8-2.5 9-2 .5 1 .5 5-2 9-3 5.5-8 6.5-13 7L5 21z"/></svg>`,
+  door: `<svg class="cam-ico" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 2v20h14V2H5zm10 11.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>`,
+  car: `<svg class="cam-ico" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 16h14v-3l-2-4h-10l-2 4v3zm2.5-3.5h9l1-2.5h-11l1 2.5zM7 17h2v1.5H7zM15 17h2v1.5h-2z"/></svg>`,
+  water: `<svg class="cam-ico" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3C7 9 5 13 5 16a7 7 0 0 0 14 0c0-3-2-7-7-13z"/></svg>`,
+  camera: `<svg class="cam-ico" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 7v13h18V7h-5l-1.5-3h-5L8 7H3zm9 11a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9zm0-2.5a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>`,
 };
 
 const _CAM_ICON_TONES = {

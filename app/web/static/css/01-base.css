@@ -160,3 +160,23 @@ input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;
 input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;border:none;background:var(--text);box-shadow:0 1px 4px rgba(0,0,0,.4);cursor:pointer}
 input[type=range]:focus-visible::-webkit-slider-thumb{outline:2px solid var(--accent);outline-offset:2px}
 input[type=range]:focus-visible::-moz-range-thumb{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ── Camera-icon baseline (cam-ico) ────────────────────────────────────
+   Every camera-glyph SVG returned by core/icons.js#getCameraIcon
+   carries this class. The baseline 20 × 20 keeps icons sane even
+   when a consumer forgets to set an explicit container size — the
+   v17-followup regression had filled SVGs blow up to the entire
+   parent because the SVG itself had no width/height. Per-consumer
+   overrides ride on higher-specificity selectors (Dashboard tile
+   cv-cam-title-icon 32 × 32, Mediathek placeholder cam-ico-
+   placeholder 56 × 56, Statistik donut + heatmap labels 16-18 px,
+   Timeline row icon). fill="currentColor" inside each SVG means
+   the surrounding element's ``color:`` sets the tint — that's how
+   the per-camera colour override (cam.color + getCameraColor)
+   propagates across every surface. */
+.cam-ico{
+  width:20px;height:20px;
+  flex-shrink:0;
+  display:inline-block;
+  vertical-align:-.2em;
+}
