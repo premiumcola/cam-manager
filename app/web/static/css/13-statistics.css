@@ -20,7 +20,13 @@
 .stat-donut-row.stat-drillable{cursor:pointer}
 .stat-donut-row.stat-drillable:hover{background:rgba(255,255,255,.04)}
 .stat-donut-sw{width:10px;height:10px;border-radius:3px;flex-shrink:0}
-.stat-donut-icon{display:inline-flex;font-size:16px;line-height:1;flex-shrink:0}
+.stat-donut-icon{display:inline-flex;line-height:1;flex-shrink:0}
+/* Donut-legend icon — 18 px size override on the cam-ico baseline.
+   Colour comes from the parent .stat-donut-icon's inline ``color:``
+   set in statistics.js so fill="currentColor" tints the glyph in
+   the camera's identity colour (same one used for the donut
+   segment). */
+.stat-donut-icon .cam-ico{width:18px;height:18px;vertical-align:-3px}
 .stat-donut-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;color:var(--text)}
 .stat-donut-cnt{font-weight:700;color:var(--text);min-width:28px;text-align:right}
 .stat-donut-pct{color:var(--muted);font-weight:600;min-width:36px;text-align:right}
@@ -44,6 +50,12 @@
 .stat-hm-header{margin-bottom:4px}
 .stat-hm-cam-col,.stat-hm-cam{padding-right:10px}
 .stat-hm-cam{font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:32px;display:flex;align-items:center}
+/* Heatmap row label icon — 16 px size override on cam-ico baseline.
+   The .stat-hm-cam-icon span around the icon (rendered in
+   statistics.js) carries an inline ``color:`` so fill="currentColor"
+   picks up the camera's identity tint. margin-right keeps a small
+   gap between icon + name without an HTML &nbsp;. */
+.stat-hm-cam .cam-ico{width:16px;height:16px;vertical-align:-3px;margin-right:6px}
 .stat-hm-hours{display:contents}
 .stat-hm-cells{display:contents}
 /* Each hour label sits in its own 1fr column. flex:1 is a leftover —

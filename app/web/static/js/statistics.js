@@ -187,7 +187,7 @@ function _renderStatistik(monthData, dayData){
             return `<div class="stat-hm-cell" style="background:${bg}" data-tip="${h0}:00–${h1}:00 · ${cnt} Events"></div>`;
           }).join('');
           return `<div class="stat-hm-row">
-            <div class="${hmCamCls}" title="${esc(c.name || c.id)}" ${hmCamClick}>${getCameraIcon(c.name || c.id)}&nbsp;${esc(c.name || c.id)}</div>
+            <div class="${hmCamCls}" title="${esc(c.name || c.id)}" ${hmCamClick}>${getCameraIcon(c.name || c.id)}${esc(c.name || c.id)}</div>
             <div class="stat-hm-cells">${cells}</div>
           </div>`;
         }).join('')}

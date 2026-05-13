@@ -778,6 +778,20 @@
 .moc-card.moc-active:hover{background:#3a3a40}
 .moc-thumb{width:100%;aspect-ratio:16/9;overflow:hidden;flex-shrink:0;background:#0a0a0a;position:relative}
 .moc-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+/* Mediathek-card placeholder when the thumbnail img fails to load.
+   Replaces the img element in-place via the inline onerror handler
+   in mediathek/orchestration.js. Centres the .cam-ico glyph inside
+   the 16:9 thumb at 56 px with the muted .25 opacity so the card
+   reads as "no snapshot yet" without going completely empty. The
+   surrounding ``style="color:…"`` (also set in orchestration.js)
+   tints the icon to the camera's identity colour. */
+.moc-thumb .cam-ico-placeholder{
+  display:flex;align-items:center;justify-content:center;
+  width:100%;height:100%;
+}
+.moc-thumb .cam-ico-placeholder .cam-ico{
+  width:56px;height:56px;opacity:.25;
+}
 /* "Alle Medien" tile placeholder. The aspect-ratio matches the
    per-camera tiles so the row reads as a uniform grid; padding gives
    the centred glyph generous margin to all four edges so the mark

@@ -326,9 +326,17 @@ export function renderMediaOverview(){
     const storedSnap = s.latest_object_snap_url || s.latest_snap_url || '';
     const liveSnap = `/api/camera/${encodeURIComponent(c.id)}/snapshot.jpg?t=${ts}`;
     const thumbSrc = storedSnap || liveSnap;
-    const placeholderInner = `<span style="font-size:48px;opacity:.25">${icon}</span>`;
-    const fallback = storedSnap ? `this.onerror=function(){this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'${placeholderInner}',style:'display:flex;align-items:center;justify-content:center;width:100%;height:100%'}))};this.src='${liveSnap}'`
-      : `this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'${placeholderInner}',style:'display:flex;align-items:center;justify-content:center;width:100%;height:100%'}))`;
+    // Camera-icon placeholder when the thumbnail img fails to load.
+    // Earlier this wrapped the icon in an inline ``font-size:48px;
+    // opacity:.25`` span — useless because SVGs ignore font-size for
+    // their own dimensions. The .cam-ico-placeholder rule in
+    // 03-dashboard.css now sizes the icon to 56 × 56 and centres it
+    // inside the .moc-thumb's 16:9 box.
+    const iconEsc = icon.replace(/'/g, "\\'");
+    const replaceWithPh = `const s=document.createElement('span');s.className='cam-ico-placeholder';s.innerHTML='${iconEsc}';this.replaceWith(s)`;
+    const fallback = storedSnap
+      ? `this.onerror=function(){${replaceWithPh}};this.src='${liveSnap}'`
+      : replaceWithPh;
     const locationDesc = c.location ? `<div class="moc-desc">${esc(c.location)}</div>` : '';
     return `<div class="moc-card" data-cam-id="${esc(c.id)}" onclick="openMediaDrilldown('${esc(c.id)}')">
       <div class="moc-thumb"><img src="${esc(thumbSrc)}" alt="${esc(c.name)}" onerror="${esc(fallback)}" loading="lazy"/><div style="${thumbBadgeStyle}">${_fmtMb(s.size_mb || 0)}</div></div>
