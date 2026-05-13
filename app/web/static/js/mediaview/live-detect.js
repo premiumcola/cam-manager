@@ -40,6 +40,22 @@ const _TICK_FACTOR = 1.2;
 // age out of the visible strip.
 const _LIVE_WINDOW_MS = 60_000;
 const _TRACE_CAP = 80;
+// gp384 — hold-time for bbox fade-out after the live tick goes
+// empty. Each live bbox lingers for this long after its last sight,
+// fading from full opacity down to zero. Without hold-time the
+// bboxes vanish the instant the 1 Hz detector misses a frame —
+// which on a fluttering bird or jittery score → "blinky" UX and
+// the user assumes the renderer is broken.
+const _HOLD_MS = 1500;
+// gp384 — "no detection on screen" hint banner threshold. Shows
+// only when the bboxes layer is enabled, no live OR held bbox is
+// visible, AND the detector has missed for this long.
+const _EMPTY_HINT_MS = 3000;
+// Refresh interval for the hold-time fade + empty-state banner.
+// Fires at ~24 Hz; the actual bbox repaints are cheap (innerHTML
+// of an SVG with < 10 elements) and only run while live-detect is
+// mounted, so the cost is negligible vs. the smoothness gain.
+const _HOLD_REFRESH_MS = 250;
 
 // hp651 — debug-only one-liner inside the toggle click handler.
 // Off by default; flip to true in the source file when chasing a
@@ -55,7 +71,13 @@ let _selectedLabel = null;  // for detail-pill pin
 export function openLiveDetect({ camId, cameraName }){
   if (!camId) return;
   closeLiveDetect();
-  _session = { camId, cameraName, abort: null, tickHandle: null, fold: null };
+  _session = {
+    camId, cameraName,
+    abort: null, tickHandle: null, fold: null,
+    startedMs: Date.now(),
+    lastNonEmptyTickMs: 0,
+    holdHandle: null,
+  };
   _traceLines = [];
   _detBuffer = [];
   _selectedLabel = null;
@@ -63,6 +85,7 @@ export function openLiveDetect({ camId, cameraName }){
   _setupLiveChrome(camId, cameraName);
   _mountPanels();
   _tick();
+  _startHoldRefresh();
   document.body.style.overflow = 'hidden';
 }
 
@@ -75,6 +98,7 @@ export function closeLiveDetect(){
   if (!session) return;
   try { session.abort?.abort(); } catch { /* ignore */ }
   if (session.tickHandle) clearTimeout(session.tickHandle);
+  if (session.holdHandle) clearInterval(session.holdHandle);
   const modal = byId('lightboxModal');
   if (modal) modal.classList.remove('lb-live-detect');
   const overlay = byId('lightboxLiveOverlay');
@@ -87,6 +111,23 @@ export function closeLiveDetect(){
   if (toggleRow) toggleRow.remove();
   const livePill = byId('mvLiveScrubPill');
   if (livePill) livePill.remove();
+  const emptyHint = byId('mvLdEmptyHint');
+  if (emptyHint) emptyHint.remove();
+}
+
+// gp384 — bbox hold + empty-banner refresh. Drives the per-frame
+// opacity fade-out for held detections and the show/hide of the
+// "Aktuell keine Detektionen" banner. setInterval rather than
+// requestAnimationFrame so the rate is fixed (the detector tick is
+// 1 Hz anyway — animating at 60 Hz would just burn CPU without
+// any visible benefit).
+function _startHoldRefresh(){
+  if (!_session) return;
+  if (_session.holdHandle) clearInterval(_session.holdHandle);
+  _session.holdHandle = setInterval(() => {
+    if (!_session) return;
+    _renderBboxOverlay();
+  }, _HOLD_REFRESH_MS);
 }
 
 function _setupLiveChrome(camId, cameraName){
@@ -504,6 +545,10 @@ function _renderFrame(data){
   // Frame state for the bbox + zone/mask overlays.
   _session.lastFrameSize = data.frame_size || { w: 1920, h: 1080 };
   _session.lastDetections = data.detections || [];
+  // gp384 — last-seen marker for the empty-state hint. Reset on
+  // every tick that brings at least one detection; the banner
+  // threshold (3 s) is measured from this stamp.
+  if (_session.lastDetections.length) _session.lastNonEmptyTickMs = Date.now();
   // vh729 — one-shot diagnostic. Fires once per Simulieren open
   // (right after the first tick lands real data) and prints the
   // state of every visual layer the user can't see when the
@@ -534,7 +579,12 @@ function _renderBboxOverlay(){
   const svg = _ensureBboxOverlay();
   if (!svg || !_session) return;
   svg.style.display = _overlays.bboxes ? 'block' : 'none';
-  if (!_overlays.bboxes){ svg.innerHTML = ''; return; }
+  if (!_overlays.bboxes){
+    svg.innerHTML = '';
+    _updateVerdictLegend(false);
+    _renderEmptyHint(false);
+    return;
+  }
   const fs = _session.lastFrameSize || { w: 1920, h: 1080 };
   svg.setAttribute('viewBox', `0 0 ${fs.w} ${fs.h}`);
   _positionSvgOverImage(svg);
@@ -559,6 +609,34 @@ function _renderBboxOverlay(){
     const zIndex = window.getComputedStyle(svg).zIndex;
     console.warn(`[sim-bbox] dets=${(_session.lastDetections || []).length} viewBox=${fs.w}x${fs.h} svgRect=${Math.round(rect.width)}x${Math.round(rect.height)} zIndex=${zIndex}`);
   }
+  // gp384 — hold-time merge. Prefer the live tick's detections
+  // (full opacity, _holdAge=0). If the tick is empty, fall back to
+  // the most recent detection per label from _detBuffer — each
+  // entry carries its age so the render can fade the bbox out over
+  // _HOLD_MS instead of vanishing instantly. One entry per label is
+  // enough; older entries on the same label are dominated by the
+  // most-recent one's opacity anyway.
+  const now = Date.now();
+  const liveDets = _session.lastDetections || [];
+  let renderDets;
+  if (liveDets.length){
+    renderDets = liveDets.map(d => ({ ...d, _holdAge: 0 }));
+  } else {
+    const seen = new Set();
+    const held = [];
+    for (let i = _detBuffer.length - 1; i >= 0; i--){
+      const e = _detBuffer[i];
+      const age = now - e.ms;
+      if (age > _HOLD_MS) break;          // _detBuffer is push-order → older entries follow
+      if (seen.has(e.label)) continue;     // one bbox per label, most-recent wins
+      seen.add(e.label);
+      held.push({
+        label: e.label, score: e.score, bbox: e.bbox, verdict: e.verdict,
+        _holdAge: age,
+      });
+    }
+    renderDets = held;
+  }
   // wv612 — verdict-aware rendering. Backend's test-detection
   // endpoint already tags each detection with a verdict — pass /
   // belowthresh / filtered (class not in object_filter). Render each
@@ -570,16 +648,17 @@ function _renderBboxOverlay(){
   //                  "label · gefiltert" (class-disabled by filter)
   // A small legend below the toggle row only renders while at least
   // one non-pass bbox is currently on screen.
-  const dets = _session.lastDetections || [];
   let _hasSuppressed = false;
-  svg.innerHTML = dets.map(d => {
+  svg.innerHTML = renderDets.map(d => {
     const baseC = colors[d.label] || colors.unknown;
     const isPass = d.verdict === 'pass';
     const isBelow = d.verdict === 'belowthresh';
     const isFiltered = !isPass && !isBelow;            // 'filtered' or absent
     if (!isPass) _hasSuppressed = true;
     const c = isFiltered ? '#94a3b8' : baseC;          // slate-grey for class-filtered
-    const op = isPass ? 1 : isBelow ? 0.55 : 0.45;
+    const verdictOp = isPass ? 1 : isBelow ? 0.55 : 0.45;
+    const holdMul = d._holdAge > 0 ? Math.max(0, 1 - d._holdAge / _HOLD_MS) : 1;
+    const op = verdictOp * holdMul;
     const dash = isFiltered ? '12 8' : isBelow ? '6 6' : 'none';
     const [x, y, bw, bh] = d.bbox;
     const lbl = OBJ_LABEL[d.label] || d.label;
@@ -591,12 +670,13 @@ function _renderBboxOverlay(){
     const txt = `${lbl} · ${suffix}`;
     const stroke = (_selectedLabel === d.label) ? 5 : 3;
     const dashAttr = dash === 'none' ? '' : ` stroke-dasharray="${dash}"`;
-    return `<g opacity="${op}" data-label="${esc(d.label)}" style="pointer-events:auto;cursor:pointer">
+    return `<g opacity="${op.toFixed(2)}" data-label="${esc(d.label)}" style="pointer-events:auto;cursor:pointer">
       <rect x="${x}" y="${y}" width="${bw}" height="${bh}" fill="none" stroke="${c}" stroke-width="${stroke}" vector-effect="non-scaling-stroke"${dashAttr}/>
       <text x="${x + 4}" y="${y + 20}" fill="${c}" font-size="14" font-family="system-ui, sans-serif" font-weight="700" paint-order="stroke" stroke="rgba(0,0,0,0.7)" stroke-width="3">${esc(txt)}</text>
     </g>`;
   }).join('');
-  _updateVerdictLegend(_hasSuppressed);
+  _updateVerdictLegend(_hasSuppressed && renderDets.length > 0);
+  _renderEmptyHint(renderDets.length === 0);
   // Click handler — toggle detail-pill selection.
   svg.style.pointerEvents = 'auto';
   svg.querySelectorAll('[data-label]').forEach(g => {
@@ -608,6 +688,40 @@ function _renderBboxOverlay(){
       _renderDetailPill();
     });
   });
+}
+
+// gp384 — empty-state banner. Mounts a small dark-glass pill at
+// the top of the media wrap when:
+//   1. the bbox layer is enabled, and
+//   2. no bbox is currently on screen (neither live nor held), and
+//   3. it's been at least _EMPTY_HINT_MS since the last non-empty
+//      tick (or since live-detect mount if no tick has ever
+//      brought detections).
+// Removes itself when any condition flips back. Idempotent — safe
+// to call from both the per-tick render path and the 250 ms
+// refresh loop.
+function _renderEmptyHint(noBboxes){
+  const wrap = byId('lightboxMediaWrap');
+  if (!wrap) return;
+  let banner = byId('mvLdEmptyHint');
+  const remove = () => { if (banner) banner.remove(); };
+  if (!noBboxes || !_overlays.bboxes || !_session){
+    remove();
+    return;
+  }
+  const now = Date.now();
+  const lastSeen = _session.lastNonEmptyTickMs || _session.startedMs || now;
+  if (now - lastSeen < _EMPTY_HINT_MS){
+    remove();
+    return;
+  }
+  if (!banner){
+    banner = document.createElement('div');
+    banner.id = 'mvLdEmptyHint';
+    banner.className = 'mv-ld-empty-hint';
+    banner.textContent = 'Aktuell keine Detektionen · der Detektor analysiert weiter';
+    wrap.appendChild(banner);
+  }
 }
 
 // Position an overlay SVG to cover the IMAGE's visible rect, not the
