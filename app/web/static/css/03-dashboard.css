@@ -448,13 +448,22 @@
 
 /* ── E3 · Channel clusters (Telegram + MQTT) ─────────────────────────
    3-column horizontal unit per cluster: paper-plane icon · 2 stacked
-   text rows (schedule mono + status) · active-dot SVG. The cluster
-   is NOT clickable — its info is always on display, no expand
+   text rows (schedule mono + status) · active-dot. The cluster is
+   NOT clickable — its info is always on display, no expand
    affordance. Per-kind colour comes from the cv-tg-cluster / cv-mqtt-
-   cluster modifiers below, which read the palette variables on .cv-
-   card so the colour flips with data-bg. */
+   cluster modifiers below, which read the palette variables on the
+   parent .cv-overlay-region[data-region="telegram"] so the icon
+   colour flips with the per-region data-bg.
+
+   Each cluster sits inside its own subtle pill — background tint +
+   thin border in the channel colour — so the icon · text · dot
+   triad reads as ONE unit, not three loose glyphs. */
 .cv-channel-cluster{
   display:inline-flex;align-items:center;gap:10px;
+  padding:4px 10px 4px 8px;
+  border-radius:14px;
+  background:var(--channel-pill-bg);
+  border:0.5px solid var(--channel-pill-bd);
   filter:drop-shadow(0 0 var(--overlay-halo-blur) var(--overlay-halo));
 }
 .cv-channel-icon{
@@ -500,12 +509,33 @@
   pointer-events:none;
 }
 
-/* Telegram cluster — color via --tg-fg, dot via --tg-active. */
+/* Telegram cluster — color via --tg-fg, dot via --tg-active. The
+   pill background + border tint comes from --channel-pill-bg /
+   --channel-pill-bd, scoped per-kind so the same .cv-channel-cluster
+   rule renders Telegram-blue or MQTT-magenta without a branching
+   selector. The light-mode overrides under .cv-overlay-region
+   [data-bg="light"] deepen both tints so the pill still reads
+   against a daylight snapshot. */
+.cv-tg-cluster{
+  --channel-pill-bg:rgba(34,158,217,.18);
+  --channel-pill-bd:rgba(34,158,217,.45);
+}
 .cv-tg-cluster .cv-channel-icon{color:var(--tg-fg)}
 .cv-tg-cluster .cv-channel-dot{color:var(--tg-active)}
-/* MQTT cluster — magenta family via --mqtt-fg / --mqtt-active. */
+.cv-mqtt-cluster{
+  --channel-pill-bg:rgba(192,72,191,.18);
+  --channel-pill-bd:rgba(192,72,191,.45);
+}
 .cv-mqtt-cluster .cv-channel-icon{color:var(--mqtt-fg)}
 .cv-mqtt-cluster .cv-channel-dot{color:var(--mqtt-active)}
+.cv-overlay-region[data-bg="light"] .cv-tg-cluster{
+  --channel-pill-bg:rgba(14,107,168,.22);
+  --channel-pill-bd:rgba(14,107,168,.55);
+}
+.cv-overlay-region[data-bg="light"] .cv-mqtt-cluster{
+  --channel-pill-bg:rgba(140,52,140,.22);
+  --channel-pill-bd:rgba(140,52,140,.55);
+}
 
 /* Active dot ring — pulses 1.6 s via transform:scale while
    state === 'on'. Static (no ring opacity) while idle. Amber +
