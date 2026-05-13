@@ -125,7 +125,7 @@ function _renderStatistik(monthData, dayData){
       const nm = x.c.name || x.c.id;
       return `<div class="${rowCls}" ${rowClick}>
         <span class="stat-donut-sw" style="background:${color}"></span>
-        <span class="stat-donut-icon">${getCameraIcon(nm)}</span>
+        <span class="stat-donut-icon" style="color:${color}">${getCameraIcon(nm)}</span>
         <span class="stat-donut-name" title="${esc(nm)}">${esc(nm)}</span>
         <span class="stat-donut-cnt">${x.cnt}</span>
         <span class="stat-donut-pct">${pct}%</span>
@@ -186,8 +186,9 @@ function _renderStatistik(monthData, dayData){
             const h1 = String(labelHour).padStart(2, '0');
             return `<div class="stat-hm-cell" style="background:${bg}" data-tip="${h0}:00–${h1}:00 · ${cnt} Events"></div>`;
           }).join('');
+          const _camColor = getCameraColor(c);
           return `<div class="stat-hm-row">
-            <div class="${hmCamCls}" title="${esc(c.name || c.id)}" ${hmCamClick}>${getCameraIcon(c.name || c.id)}${esc(c.name || c.id)}</div>
+            <div class="${hmCamCls}" title="${esc(c.name || c.id)}" ${hmCamClick}><span class="stat-hm-cam-icon" style="color:${_camColor}">${getCameraIcon(c.name || c.id)}</span>${esc(c.name || c.id)}</div>
             <div class="stat-hm-cells">${cells}</div>
           </div>`;
         }).join('')}

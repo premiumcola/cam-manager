@@ -25,7 +25,7 @@ import { byId, esc } from '../core/dom.js';
 import { state } from '../core/state.js';
 import { j } from '../core/api.js';
 import { showToast } from '../core/toast.js';
-import { colors, OBJ_LABEL, objIconSvg, objBubble, getCameraIcon } from '../core/icons.js';
+import { colors, OBJ_LABEL, objIconSvg, objBubble, getCameraIcon, getCameraColor } from '../core/icons.js';
 import { CAT_COLORS } from '../timeline.js';
 import { loadMediaStorageStats, refreshTimelineAndStats } from '../chrome/storage-stats.js';
 import { _exitMediaSelectMode, _updateMediaSelectToggle } from './bulk-delete.js';
@@ -321,6 +321,7 @@ export function renderMediaOverview(){
   const camCards = cams.map(c => {
     const s = statsByid[c.id] || {};
     const icon = getCameraIcon(c.name || c.id);
+    const camColor = getCameraColor(c);
     // Prefer newest object-labelled snapshot (person/cat/bird/car) over generic latest snap;
     // fall back to the generic latest, then the live snapshot.
     const storedSnap = s.latest_object_snap_url || s.latest_snap_url || '';
@@ -331,9 +332,11 @@ export function renderMediaOverview(){
     // opacity:.25`` span — useless because SVGs ignore font-size for
     // their own dimensions. The .cam-ico-placeholder rule in
     // 03-dashboard.css now sizes the icon to 56 × 56 and centres it
-    // inside the .moc-thumb's 16:9 box.
+    // inside the .moc-thumb's 16:9 box. The inline ``color:`` carries
+    // the camera's identity tint so the placeholder reads as that
+    // camera instead of a generic grey silhouette.
     const iconEsc = icon.replace(/'/g, "\\'");
-    const replaceWithPh = `const s=document.createElement('span');s.className='cam-ico-placeholder';s.innerHTML='${iconEsc}';this.replaceWith(s)`;
+    const replaceWithPh = `const s=document.createElement('span');s.className='cam-ico-placeholder';s.style.color='${camColor}';s.innerHTML='${iconEsc}';this.replaceWith(s)`;
     const fallback = storedSnap
       ? `this.onerror=function(){${replaceWithPh}};this.src='${liveSnap}'`
       : replaceWithPh;
@@ -341,7 +344,7 @@ export function renderMediaOverview(){
     return `<div class="moc-card" data-cam-id="${esc(c.id)}" onclick="openMediaDrilldown('${esc(c.id)}')">
       <div class="moc-thumb"><img src="${esc(thumbSrc)}" alt="${esc(c.name)}" onerror="${esc(fallback)}" loading="lazy"/><div style="${thumbBadgeStyle}">${_fmtMb(s.size_mb || 0)}</div></div>
       <div class="moc-body">
-        <div class="moc-name">${icon} ${esc(c.name)}</div>
+        <div class="moc-name"><span class="moc-name-icon" style="color:${camColor}">${icon}</span> ${esc(c.name)}</div>
         ${locationDesc}
         <div class="moc-counts">
           ${_buildMocChips(s)}

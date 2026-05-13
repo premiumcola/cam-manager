@@ -16,7 +16,7 @@
 import { state } from './core/state.js';
 import { byId, esc } from './core/dom.js';
 import { j } from './core/api.js';
-import { getCameraIcon, OBJ_LABEL } from './core/icons.js';
+import { getCameraIcon, getCameraColor, OBJ_LABEL } from './core/icons.js';
 
 // ── Dead-camera-id snapshot poll suppression ───────────────────────────────
 // After a camera rename (manuf/model edit triggers storage_migration to
@@ -928,7 +928,7 @@ export function renderDashboard(){
         onerror="_camImgRetry(this)" />
       <div class="cv-grad-bot"></div>
       <div class="cv-chrome-top-left cv-overlay-region" data-region="identity" data-bg="dark">
-        <span class="cv-cam-title-icon" aria-hidden="true">${getCameraIcon(c.name)}</span>
+        <span class="cv-cam-title-icon" aria-hidden="true" style="--cam-color:${getCameraColor(c)}">${getCameraIcon(c.name)}</span>
         <div class="cv-tl-stack">
           <div class="cv-name">${esc(c.name)}</div>
           ${_livePill}

@@ -199,7 +199,13 @@
 .cv-cam-title-icon{
   display:inline-flex;align-items:center;justify-content:center;
   width:32px;height:32px;flex-shrink:0;
-  color:var(--overlay-fg);
+  /* tx412 — per-camera identity colour tints the icon. The
+     --cam-color custom property is set inline on this span from
+     getCameraColor(cam); fallback to --overlay-fg keeps the legacy
+     "white on dark / dark on light" behaviour when no override is
+     active. Halo still comes from the identity region's data-bg
+     palette so the glow direction stays correct. */
+  color:var(--cam-color, var(--overlay-fg));
   filter:drop-shadow(0 0 var(--overlay-halo-blur) var(--overlay-halo));
 }
 .cv-cam-title-icon svg{width:100%;height:100%;display:block}
@@ -792,6 +798,11 @@
 .moc-thumb .cam-ico-placeholder .cam-ico{
   width:56px;height:56px;opacity:.25;
 }
+/* Camera-icon glyph rendered inline next to the camera name in
+   the Mediathek card body. 18 px size override on the cam-ico
+   baseline; inline ``color:`` in orchestration.js sets the tint
+   so the icon picks up the camera's identity colour. */
+.moc-name-icon .cam-ico{width:18px;height:18px;vertical-align:-3px;margin-right:2px}
 /* "Alle Medien" tile placeholder. The aspect-ratio matches the
    per-camera tiles so the row reads as a uniform grid; padding gives
    the centred glyph generous margin to all four edges so the mark
