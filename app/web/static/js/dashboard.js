@@ -816,10 +816,8 @@ function _channelCluster(c, kind, state){
       <span class="cv-channel-status">${esc(statusText)}</span>
     </div>
     <span class="cv-channel-dot" aria-hidden="true">
-      <svg width="20" height="20" viewBox="-10 -10 20 20" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
-        <circle class="cv-channel-dot-ring" r="8" stroke="currentColor" fill="none" opacity="0"/>
-        <circle r="4.5" fill="currentColor" stroke="none"/>
-      </svg>
+      <span class="cv-channel-dot-fill"></span>
+      <span class="cv-channel-dot-ring"></span>
     </span>
   </div>`;
 }

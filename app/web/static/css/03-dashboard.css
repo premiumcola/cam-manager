@@ -469,11 +469,32 @@
 .cv-channel-status{
   font-size:12px;font-weight:600;
 }
+/* Span-based dot — SVG with animated r-attribute didn't render
+   uniformly across Firefox + iOS Safari, so the active-dot pulse
+   was invisible to most browsers. The new markup is two <span>
+   children inside .cv-channel-dot: a solid fill on top and a
+   ring that scales out from the centre via transform animation —
+   bit-for-bit supported on every browser. */
 .cv-channel-dot{
+  position:relative;
   display:inline-flex;align-items:center;justify-content:center;
   width:20px;height:20px;flex-shrink:0;margin-left:4px;
 }
-.cv-channel-dot svg{display:block}
+.cv-channel-dot-fill{
+  position:relative;z-index:1;
+  width:9px;height:9px;
+  border-radius:50%;
+  background:currentColor;
+}
+.cv-channel-dot-ring{
+  position:absolute;top:50%;left:50%;
+  width:9px;height:9px;
+  border-radius:50%;
+  border:1.5px solid currentColor;
+  transform:translate(-50%,-50%) scale(1);
+  opacity:0;
+  pointer-events:none;
+}
 
 /* Telegram cluster — color via --tg-fg, dot via --tg-active. */
 .cv-tg-cluster .cv-channel-icon{color:var(--tg-fg)}
@@ -482,19 +503,20 @@
 .cv-mqtt-cluster .cv-channel-icon{color:var(--mqtt-fg)}
 .cv-mqtt-cluster .cv-channel-dot{color:var(--mqtt-active)}
 
-/* Active dot ring — pulses 1.6 s while state === 'on'. Static
-   (no ring opacity) while idle. Amber + static in muted state. */
+/* Active dot ring — pulses 1.6 s via transform:scale while
+   state === 'on'. Static (no ring opacity) while idle. Amber +
+   static in muted state. */
 .cv-channel-cluster[data-state="on"] .cv-channel-dot-ring{
-  animation:cv-channel-dot-pulse 1.6s ease-in-out infinite;
+  animation:cv-channel-pulse 1.6s ease-out infinite;
 }
 .cv-channel-cluster[data-state="idle"] .cv-channel-dot-ring{opacity:0}
 .cv-channel-cluster[data-state="muted"]{opacity:.7}
 .cv-channel-cluster[data-state="muted"] .cv-channel-dot{color:#f59e0b}
 .cv-channel-cluster[data-state="muted"] .cv-channel-dot-ring{opacity:0}
 
-@keyframes cv-channel-dot-pulse{
-  0%   { r:4.5; opacity:.45 }
-  100% { r:10;  opacity:0   }
+@keyframes cv-channel-pulse{
+  0%   {transform:translate(-50%,-50%) scale(1);   opacity:.55}
+  100% {transform:translate(-50%,-50%) scale(2.6); opacity:0}
 }
 
 /* Tile body must NOT show a click-pointer anymore — the article-level
