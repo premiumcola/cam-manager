@@ -313,25 +313,65 @@ function editCamera(camId){
   // an external template still mounts an icon field somewhere, but
   // setting its value would re-introduce the "<svg…> as input
   // value" bug and so is silently dropped.
-  // Colour picker — defaults to the user's override, falls back to
-  // the auto-tone keyed on the display name. The Auto button next
-  // to the input resets to that auto-tone and flags the field so
-  // the submit path writes "" rather than the matching hex (keeps
-  // settings.json from re-storing the derivable default).
+  // B1 · Identity row — colour + avatar tile. The avatar mirrors the
+  // dashboard tile + list-item icon (getCameraIcon(name)) and gets
+  // tinted via --cam-color on its button parent so the SVG's
+  // stroke="currentColor" picks up the active tone. Clicking the
+  // avatar forwards .click() to the visually-hidden native colour
+  // input. dataset.auto stays load-bearing for the submit path
+  // (writes "" when '1' so settings.json never persists the auto-
+  // tone hex) and now ALSO drives the visibility of the "↺ auto"
+  // reset link beneath the avatar — visible only on manual override.
+  const _avatarBtn  = byId('camAvatarBtn');
+  const _avatarIcon = byId('camAvatarIcon');
+  const _resetBtn   = byId('camColorReset');
+  const _syncAvatar = (color, isAuto) => {
+    if(_avatarBtn) _avatarBtn.style.setProperty('--cam-color', color);
+    if(_resetBtn)  _resetBtn.hidden = !!isAuto;
+  };
+  const _renderAvatarIcon = (name) => {
+    if(_avatarIcon) _avatarIcon.innerHTML = getCameraIcon(name || '');
+  };
   if(f['color']){
     const _autoTone = getCameraColor({ name: c.name || c.id });
     f['color'].value = c.color || _autoTone;
     f['color'].dataset.auto = c.color ? '0' : '1';
-    f['color'].oninput = () => { f['color'].dataset.auto = '0'; };
+    _renderAvatarIcon(c.name || c.id);
+    _syncAvatar(f['color'].value, f['color'].dataset.auto === '1');
+    f['color'].oninput = () => {
+      f['color'].dataset.auto = '0';
+      _syncAvatar(f['color'].value, false);
+    };
   }
-  const _resetBtn = byId('camColorReset');
+  if(_avatarBtn && f['color']){
+    _avatarBtn.onclick = (e) => {
+      e.preventDefault();
+      f['color'].click();
+    };
+  }
   if(_resetBtn){
     _resetBtn.onclick = () => {
       if(!f['color']) return;
       const _autoTone = getCameraColor({ name: f['name']?.value || c.name || c.id });
       f['color'].value = _autoTone;
       f['color'].dataset.auto = '1';
+      _syncAvatar(_autoTone, true);
     };
+  }
+  // Live-track display-name edits so the avatar icon + auto-tone
+  // follow what the user is typing. dataset.auto === '1' is the
+  // signal that the colour should track the name's auto-tone too;
+  // a manual override stays put.
+  if(f['name']){
+    f['name'].addEventListener('input', () => {
+      const _n = f['name'].value || c.name || c.id;
+      _renderAvatarIcon(_n);
+      if(f['color'] && f['color'].dataset.auto === '1'){
+        const _autoTone = getCameraColor({ name: _n });
+        f['color'].value = _autoTone;
+        _syncAvatar(_autoTone, true);
+      }
+    });
   }
   // Live preview of the canonical id derived from manufacturer/model/name/IP.
   _bindCamIdPreviewListeners();

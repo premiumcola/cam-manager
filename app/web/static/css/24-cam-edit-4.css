@@ -16,44 +16,80 @@
   min-width:0;overflow-wrap:anywhere;word-break:normal
 }
 
-/* Anzeigename + leading icon-emoji slot. The standalone "Icon
-   (Emoji)" row was removed because a tiny wrench-icon column on the
-   left and an empty input on the right read as a layout bug. The
-   emoji input is now a 56 px leading slot of the Anzeigename row,
-   with a tiny "Icon" microlabel underneath. The hidden form input
-   keeps name="icon" so submit semantics are unchanged. */
-.cam-name-row{display:grid;grid-template-columns:96px 1fr;gap:8px;align-items:end}
-.cam-name-row .cam-icon-slot{position:relative}
-.cam-name-row .cam-icon-slot input{text-align:center;font-size:18px;padding-left:8px;padding-right:8px}
-.cam-icon-microlabel{font-size:10.5px;font-style:italic}
-
-/* tx412 — colour picker slot. Replaces the legacy icon-emoji slot
-   in the cam-name-row. The colour <input> renders as a 36 × 36
-   square swatch with the Auto-reset button sitting next to it.
-   The Auto button reverts the value to getCameraColor(name) and
-   flags the field so the submit path writes "" rather than the
-   auto-tone hex. */
-.cam-name-row .cam-color-slot{position:relative;display:flex;align-items:end;gap:6px}
-.cam-name-row .cam-color-slot input[type="color"]{
-  -webkit-appearance:none;appearance:none;
-  width:36px;height:38px;
-  border:none;outline:none;border-radius:10px;
-  background:var(--surface);
-  padding:2px;cursor:pointer;
+/* B1 · Identity row — avatar tile + Anzeigename. The legacy "Farbe"
+   label + native colour swatch + "Auto" button column wasted an
+   entire column of the panel; the new layout replaces it with a
+   single avatar tile that doubles as the colour-chooser trigger.
+   The avatar renders getCameraIcon(name) in the current --cam-color
+   tint (same hook the dashboard live cards use), and clicking it
+   forwards .click() to the visually-hidden native colour input.
+   "Symbolfarbe" microlabel sits underneath; a "↺ auto" reset link
+   surfaces only while the user has set a manual override (dataset
+   .auto === '0'). Auto-tone stays the default. */
+.cam-name-row{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
 }
-.cam-name-row .cam-color-slot input[type="color"]::-webkit-color-swatch-wrapper{padding:0;border-radius:8px}
-.cam-name-row .cam-color-slot input[type="color"]::-webkit-color-swatch{border:none;border-radius:8px}
-.cam-name-row .cam-color-slot input[type="color"]::-moz-color-swatch{border:none;border-radius:8px}
-.cam-color-reset{
-  height:38px;padding:0 10px;
-  background:var(--surface);color:var(--muted);
-  border:none;border-radius:10px;
-  font-size:11px;font-weight:700;letter-spacing:.04em;
+.cam-identity-avatar{
+  position:relative;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  flex-shrink:0;
+}
+.cam-avatar-btn{
+  width:56px;height:56px;
+  border-radius:14px;
+  border:0;outline:0;
+  background:rgba(127,174,201,.06);
+  display:inline-flex;align-items:center;justify-content:center;
   cursor:pointer;
+  /* --cam-color cascades into the SVG via stroke="currentColor".
+     Fallback to the muted text tone so the avatar still reads on
+     a brand-new camera that hasn't picked a color yet. */
+  color:var(--cam-color, #cbd5e1);
   -webkit-tap-highlight-color:transparent;
-  transition:background .15s,color .15s;
+  transition:background .15s,transform .1s;
 }
-.cam-color-reset:hover{background:#2a2a2a;color:var(--text)}
+.cam-avatar-btn:hover{background:rgba(127,174,201,.12)}
+.cam-avatar-btn:active{transform:scale(.96)}
+.cam-avatar-btn:focus-visible{
+  outline:2px solid var(--cam-color, rgba(127,174,201,.7));
+  outline-offset:2px;
+}
+.cam-avatar-icon{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:34px;height:34px;
+  /* Tone-coloured drop-shadow so the glyph has lift inside the
+     tile. Soft + small radius keeps it flat-design, not a heavy
+     glow. */
+  filter:drop-shadow(0 0 5px var(--cam-color, rgba(127,174,201,.35)));
+}
+.cam-avatar-icon svg{width:100%;height:100%;display:block}
+/* Visually-hidden native colour input. The avatar button forwards
+   .click() to it, so the chooser still opens; the input is the
+   form-submit source of truth and the JS sets its value directly. */
+.cam-name-row input[type="color"]{
+  position:absolute;
+  width:0;height:0;
+  padding:0;border:0;
+  opacity:0;pointer-events:none;
+}
+.cam-avatar-sublabel{
+  font-size:10.5px;font-style:italic;
+  color:var(--muted);
+  letter-spacing:.02em;
+  white-space:nowrap;
+}
+.cam-color-reset-link{
+  font-size:10.5px;font-weight:600;
+  background:transparent;border:0;outline:0;padding:0;
+  color:rgba(127,174,201,.75);
+  cursor:pointer;letter-spacing:.02em;
+  -webkit-tap-highlight-color:transparent;
+}
+.cam-color-reset-link:hover{color:var(--text)}
+.cam-color-reset-link[hidden]{display:none}
+.cam-name-field{
+  flex:1 1 auto;min-width:0;max-width:340px;
+}
 
 /* Manuf + model + labelled probe button row. The probe button shares
    the .btn-action.action-green token with the Netzwerk-Discovery
@@ -120,5 +156,13 @@
   .cam-id-row .field-wrap:first-of-type{grid-area:a}
   .cam-id-row .field-wrap:nth-of-type(2){grid-area:b}
   .cam-id-row .cam-probe-btn{grid-area:c;width:100%;justify-content:center;height:auto;min-height:44px}
+  /* Identity row · the Anzeigename input expands to fill the row
+     once the avatar has its 48 px slot. max-width cap drops on
+     mobile so the input doesn't look orphaned next to the avatar
+     on a 375 px screen. */
+  .cam-name-row{gap:10px}
+  .cam-avatar-btn{width:48px;height:48px;border-radius:12px}
+  .cam-avatar-icon{width:30px;height:30px}
+  .cam-name-field{max-width:none;flex:1 1 100%}
 }
 

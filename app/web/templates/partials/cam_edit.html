@@ -62,13 +62,25 @@
                      flagging the field so the form-submit path strips
                      it back to "" — keeping the JSON tidy when the
                      user picks the auto colour. -->
+                <!-- B1 · identity row redesign. The dead vertical column
+                     (label · color swatch · Auto button) collapsed into
+                     a single avatar tile: getCameraIcon(name) rendered
+                     in the current --cam-color tint, clicking the tile
+                     opens the (visually-hidden) native colour chooser.
+                     A small "↺ auto" link surfaces ONLY when the user
+                     has set a manual override; on auto-tone the row
+                     reads as just "icon · input". camColor + dataset.auto
+                     submit semantics are unchanged. -->
                 <div class="cam-name-row">
-                  <div class="field-wrap cam-color-slot">
-                    <input type="color" name="color" id="camColor" autocomplete="off" />
-                    <span class="field-label">Farbe</span>
-                    <button type="button" id="camColorReset" class="cam-color-reset" title="Auf Auto-Tone zurücksetzen">Auto</button>
+                  <div class="cam-identity-avatar">
+                    <button type="button" class="cam-avatar-btn" id="camAvatarBtn" title="Symbolfarbe ändern" aria-label="Symbolfarbe ändern">
+                      <span class="cam-avatar-icon" id="camAvatarIcon" aria-hidden="true"></span>
+                    </button>
+                    <input type="color" name="color" id="camColor" autocomplete="off" tabindex="-1" />
+                    <span class="cam-avatar-sublabel">Symbolfarbe</span>
+                    <button type="button" id="camColorReset" class="cam-color-reset-link" hidden>↺ auto</button>
                   </div>
-                  <div class="field-wrap">
+                  <div class="field-wrap cam-name-field">
                     <input name="name" placeholder="Werkstatt" required />
                     <span class="field-label">Anzeigename</span>
                   </div>
