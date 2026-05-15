@@ -674,8 +674,13 @@ def api_test_detection(cam_id: str):
             frame_age_ms_attempt = int((_time.time() - last_candidate_ts) * 1000)
         else:
             frame_age_ms_attempt = 0
-        log.info(
-            "[test-detection] cam=%s outcome=%s waited=%.2fs retries=%d frame_age_ms=%d num_dets=0",
+        # WARNING: no usable frame is a stream-side regression worth
+        # the higher log level. Same key set as the success log line
+        # below so an operator's grep matches both shapes.
+        log.warning(
+            "[test-detection] cam=%s outcome=%s waited=%.2fs retries=%d "
+            "frame_age_ms=%d frame_src=- raw=0 pass=0 belowthresh=0 "
+            "filtered=0 inference_ms=0 top_raw=[]",
             cam_id, code, waited_s, retries, frame_age_ms_attempt,
         )
         return jsonify({
@@ -685,14 +690,32 @@ def api_test_detection(cam_id: str):
             "frame_age_ms": frame_age_ms_attempt,
         }), 503
     frame_age_ms = int((_time.time() - frame_ts_accepted) * 1000)
+    # rt.frame is written by camera_runtime/_main_loop on every successful
+    # MAIN stream grab (RTSP main URL via cv2.VideoCapture). The sub-stream
+    # never touches it — so frame_src is always 'main' here. We capture the
+    # resolution explicitly so the operator-visible diag panel can flag a
+    # mis-routed sub-stream as soon as one is introduced.
+    src_h_raw, src_w_raw = frame.shape[:2]
+    frame_src_label = f"main {src_w_raw}×{src_h_raw}"
     detector = getattr(rt, "detector", None)
     if not detector or not getattr(detector, "available", False):
+        # WARNING level: a Coral-disabled test request is almost always
+        # a config bug worth surfacing in docker logs even when the
+        # frontend already shows a "Coral nicht verfügbar" banner.
+        log.warning(
+            "[test-detection] cam=%s outcome=coral_unavailable waited=%.2fs "
+            "retries=%d frame_age_ms=%d frame_src=%s raw=0 pass=0 "
+            "belowthresh=0 filtered=0 top_raw=[]",
+            cam_id, waited_s, retries, frame_age_ms, frame_src_label,
+        )
         return jsonify({"error": "Coral nicht verfügbar (motion-only?)"}), 503
+    inference_t0 = _time.monotonic()
     try:
         raw = detector.detect_frame_raw(frame, threshold=0.20)
     except Exception as e:
         log.warning("[test-detection] %s inference failed: %s", cam_id, e)
         return jsonify({"error": f"Inference fehlgeschlagen: {e}"}), 500
+    inference_ms = int(round((_time.monotonic() - inference_t0) * 1000))
     # Resolve the global confidence floor — empty/zero on the camera
     # means "use the global processing.detection.min_score". This must
     # match what camera_runtime actually applies at runtime so the
@@ -879,17 +902,36 @@ def api_test_detection(cam_id: str):
             f"[final] {len(pass_dets)} detection(s) would route through the push pipeline "
             f"(subject to gates above)"
         )
-    # One-line freshness log — operator can grep `[test-detection]` to
-    # confirm rt.frame is advancing while the live simulation polls. The
-    # main loop writes rt.frame on every successful grab (regardless of
-    # the detection branch firing), so a steady frame_age_ms ≈ interval
-    # is the healthy signature; values stuck at multi-second highs while
-    # the cam is otherwise believed live mean the RTSP feed is wedged.
-    log.info(
+    # C2 · freshness + gate-count log line. The operator can grep
+    # `[test-detection]` to confirm rt.frame is advancing AND see at a
+    # glance which gate dropped detections on this tick.
+    #   raw          — count of detections Coral returned at threshold 0.20
+    #   pass         — count that survived per-class threshold + object_filter
+    #   belowthresh  — count rejected by per-class / global threshold
+    #   filtered     — count dropped by object_filter
+    #   top_raw      — up to 3 highest-scoring raw hits (label, pct),
+    #                  including the ones that ended up filtered. With
+    #                  raw=0 the field collapses to [] — that single
+    #                  data point answers the "Coral returned nothing
+    #                  for this frame" question without DevTools.
+    # WARNING level when raw=0 OR outcome != ok so a regression
+    # surfaces in docker logs without --tail digging.
+    belowthresh_n = sum(1 for d in out if d["verdict"] == "belowthresh")
+    filtered_n    = sum(1 for d in out if d["verdict"] == "filtered")
+    top_raw_pairs = [(d["label"], int(round(d["score"] * 100)))
+                     for d in out[:3]]
+    top_raw_str = "[" + ", ".join(
+        f"({lab},{pct}%)" for lab, pct in top_raw_pairs
+    ) + "]"
+    log_fn = log.info if (final_outcome == "ok" and len(raw) > 0) else log.warning
+    log_fn(
         "[test-detection] cam=%s outcome=%s waited=%.2fs retries=%d "
-        "frame_age_ms=%d num_dets=%d (pass=%d)",
+        "frame_age_ms=%d frame_src=%s raw=%d pass=%d belowthresh=%d "
+        "filtered=%d inference_ms=%d top_raw=%s",
         cam_id, final_outcome, waited_s, retries,
-        frame_age_ms, len(out), len(pass_dets),
+        frame_age_ms, frame_src_label,
+        len(raw), len(pass_dets), belowthresh_n, filtered_n,
+        inference_ms, top_raw_str,
     )
     # ── Decoder-backlog heuristic ────────────────────────────────────
     # The runtime tracks an EMA of the wall-clock interval between
@@ -910,6 +952,32 @@ def api_test_detection(cam_id: str):
         and interval_ms > 0
         and ema_ms < 0.4 * interval_ms
     )
+    # C3 · diagnostic payload for the in-modal panel. Structured so
+    # the frontend doesn't have to re-derive counts from `detections`
+    # (and so future regression hunts have one canonical shape to
+    # read against). All values either appear in the WARNING log
+    # line above or extend it (per_class thresholds, inference_ms).
+    diag = {
+        "frame_src":       "main",
+        "frame_size":      {"w": int(src_w_raw), "h": int(src_h_raw)},
+        "frame_age_ms":    int(frame_age_ms),
+        "coral_available": bool(getattr(detector, "available", False)),
+        "inference_ms":    int(inference_ms),
+        "gates": {
+            "raw":         int(len(raw)),
+            "pass":        int(len(pass_dets)),
+            "belowthresh": int(belowthresh_n),
+            "filtered":    int(filtered_n),
+        },
+        "top_raw": [
+            {"label": d["label"], "score": d["score"]}
+            for d in out[:3]
+        ],
+        "thresholds": {
+            "global":    round(float(global_floor), 3),
+            "per_class": dict(per_class) if per_class else {},
+        },
+    }
     return jsonify({
         "ok":             True,
         "snapshot":       snapshot,
@@ -917,6 +985,7 @@ def api_test_detection(cam_id: str):
         "frame_age_ms":   frame_age_ms,
         "detections":     out,
         "decision_trace": trace,
+        "diag":           diag,
         "frame_interval_avg_ms":     int(round(ema_ms)) if ema_ms > 0 else 0,
         "decoder_backlog_suspected": bool(backlog),
     })
