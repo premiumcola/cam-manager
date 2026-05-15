@@ -1479,10 +1479,19 @@ class SunTimelapseMixin:
     # underneath. The runner attaches a logging.Handler that mirrors
     # matching log lines into a per-session ring buffer so the status
     # endpoint can return a live tail without reparsing docker logs.
-    # The longer durations (30 / 40 min) span enough real twilight to
-    # produce a usable MP4 that mirrors what a live sunset would write.
-    _SUN_TL_TEST_DURATIONS = (60, 120, 300, 1800, 2400)
-    _SUN_TL_TEST_TARGET_LENGTHS = (10, 15, 20, 30, 45)
+    #
+    # G5 · INVARIANT — these tuples MUST stay aligned with
+    #   web/static/js/weather/settings-suntltest.js
+    # specifically _DURATIONS (the window options) and _TARGET_LENGTHS
+    # (the video-length options). The frontend derives the live math
+    # readout's Capture-Budget + which target chips are valid from
+    # those constants; any divergence here silently breaks the
+    # configurator (UI sends 1200 s, backend coerces to 120 s,
+    # heatmap renders /15 instead of /150). Mismatched values now
+    # error explicitly below instead of falling back — keep the two
+    # files in sync.
+    _SUN_TL_TEST_DURATIONS = (300, 600, 900, 1200, 1800, 2700, 3600, 4500)
+    _SUN_TL_TEST_TARGET_LENGTHS = (5, 10, 15, 20, 30, 37)
 
     def start_sun_tl_test(self, cam_id: str, phase: str, duration_s: int,
                           target_duration_s: int | None = None) -> dict:
@@ -1493,21 +1502,37 @@ class SunTimelapseMixin:
         global _active_test_session, _active_test_handler
         if phase not in ("sunrise", "sunset"):
             return {"ok": False, "error": "phase must be sunrise or sunset"}
+        # G5 · explicit error instead of the previous silent fallback to
+        # 120 s. The frontend now ships values from a tightly-coupled
+        # allowlist (see settings-suntltest.js · _DURATIONS); a value
+        # outside this tuple means the two sides have drifted, and
+        # silently coercing it would produce the exact regression that
+        # motivated this fix (UI shows /150, backend logs /15). Loud
+        # failure stops the drift dead.
         try:
             duration_s = int(duration_s)
         except (TypeError, ValueError):
-            duration_s = 120
+            return {"ok": False,
+                    "error": f"duration_s must be an integer (got {duration_s!r})"}
         if duration_s not in self._SUN_TL_TEST_DURATIONS:
-            duration_s = 120
-        # Target encoded MP4 length — None means "let the legacy math
-        # decide". Validated against the same allowlist the UI exposes.
+            return {"ok": False,
+                    "error": f"duration_s {duration_s} not in allowlist "
+                             f"{list(self._SUN_TL_TEST_DURATIONS)}"}
+        # G5 · target encoded MP4 length. None means "let the legacy
+        # math decide" — that path is still supported. A value that's
+        # present but not in the allowlist errors out for the same
+        # reason as duration_s above.
         if target_duration_s is not None:
             try:
                 target_duration_s = int(target_duration_s)
             except (TypeError, ValueError):
-                target_duration_s = None
+                return {"ok": False,
+                        "error": f"target_duration_s must be an integer or null "
+                                 f"(got {target_duration_s!r})"}
             if target_duration_s not in self._SUN_TL_TEST_TARGET_LENGTHS:
-                target_duration_s = None
+                return {"ok": False,
+                        "error": f"target_duration_s {target_duration_s} not in "
+                                 f"allowlist {list(self._SUN_TL_TEST_TARGET_LENGTHS)}"}
         with _test_session_lock:
             existing = _active_test_session
             if existing is not None and not existing.finished:

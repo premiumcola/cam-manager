@@ -556,32 +556,58 @@ def api_weather_status():
 
 @bp.post('/api/weather/sun-tl/test')
 def api_weather_sun_tl_test_start():
-    """Start an ad-hoc sunrise/sunset capture (60/120/300 s) for live
-    diagnostic observation. Re-uses the production capture path so the
+    """Start an ad-hoc sunrise/sunset capture for live diagnostic
+    observation. Re-uses the production capture path so the
     bug we're chasing reproduces; surfaces frame counters and the
-    daynight-override result via /api/weather/sun-tl/test/status."""
+    daynight-override result via /api/weather/sun-tl/test/status.
+
+    G5 · duration_s + target_duration_s parsing fails LOUD (HTTP 400)
+    instead of silently defaulting to 120 / None. The full allowlists
+    live in app/app/weather_service/_sun_tl.py and must stay aligned
+    with web/static/js/weather/settings-suntltest.js · _DURATIONS /
+    _TARGET_LENGTHS; mismatched values bubble up as the start_sun_tl_
+    test() error reply, which we surface as 400."""
     ws = app_state.weather_service
     if ws is None:
         return jsonify({"ok": False, "error": "weather service not available"}), 503
     body = request.get_json(silent=True) or {}
     cam_id = (body.get("cam_id") or "").strip()
     phase = (body.get("phase") or "").strip()
+    # G5 · explicit 400 instead of the previous silent fallback to
+    # 120 s. A type error here means the frontend sent something
+    # malformed and the operator needs to see WHY, not get a quiet
+    # 120 s coercion that misaligns the math readout.
+    raw_duration = body.get("duration_s")
+    if raw_duration is None:
+        return jsonify({"ok": False,
+                        "error": "duration_s required"}), 400
     try:
-        duration_s = int(body.get("duration_s", 120))
+        duration_s = int(raw_duration)
     except (TypeError, ValueError):
-        duration_s = 120
-    target_duration_s = body.get("target_duration_s")
-    if target_duration_s is not None:
+        return jsonify({"ok": False,
+                        "error": f"duration_s must be an integer "
+                                 f"(got {raw_duration!r})"}), 400
+    raw_target = body.get("target_duration_s")
+    target_duration_s = None
+    if raw_target is not None:
         try:
-            target_duration_s = int(target_duration_s)
+            target_duration_s = int(raw_target)
         except (TypeError, ValueError):
-            target_duration_s = None
+            return jsonify({"ok": False,
+                            "error": f"target_duration_s must be an integer "
+                                     f"or null (got {raw_target!r})"}), 400
     if not cam_id or not phase:
         return jsonify({"ok": False, "error": "cam_id and phase required"}), 400
     res = ws.start_sun_tl_test(cam_id, phase, duration_s,
                                target_duration_s=target_duration_s)
     if not res.get("ok"):
-        return jsonify(res), 409
+        # G5 · "not in allowlist" errors from start_sun_tl_test fall
+        # under HTTP 400 (client supplied a value the server doesn't
+        # accept). The legacy "test already running" stays at 409 so
+        # the frontend's existing toast wording still applies.
+        err = (res.get("error") or "")
+        code = 400 if "allowlist" in err or "must be an integer" in err else 409
+        return jsonify(res), code
     return jsonify(res)
 
 
