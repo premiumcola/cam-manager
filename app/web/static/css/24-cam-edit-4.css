@@ -27,12 +27,25 @@
    surfaces only while the user has set a manual override (dataset
    .auto === '0'). Auto-tone stays the default. */
 .cam-name-row{
-  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  /* D2 · flex-wrap:nowrap keeps icon + Anzeigename on the same row
+     at iPhone portrait widths (375 px and up). The previous wrap +
+     a 100 % mobile flex-basis on the input cell forced the input
+     onto its own row beneath the avatar — that's the dead-space
+     bug the screenshot shows. .cam-name-field is allowed to shrink
+     to 0 below its natural content width thanks to min-width:0,
+     and the parent's overflow is non-existent because both
+     children declare their own min-widths. */
+  display:flex;align-items:center;gap:14px;flex-wrap:nowrap;
 }
 .cam-identity-avatar{
   position:relative;
   display:flex;flex-direction:column;align-items:center;gap:4px;
   flex-shrink:0;
+  /* D2 · width pinned to the avatar tile so the wider "Symbolfarbe"
+     sublabel can centre underneath without growing the column past
+     the tile. Allows the side-by-side row to fit on a 375 px panel
+     without the sublabel hogging the column width. */
+  width:56px;
 }
 .cam-avatar-btn{
   width:56px;height:56px;
@@ -76,7 +89,10 @@
   font-size:10.5px;font-style:italic;
   color:var(--muted);
   letter-spacing:.02em;
-  white-space:nowrap;
+  /* D2 · drop the nowrap so the sublabel can break in two lines
+     under the 56 px avatar tile if needed (e.g. "Symbol-/farbe"
+     on a narrow viewport) rather than widening the column. */
+  text-align:center;line-height:1.2;
 }
 .cam-color-reset-link{
   font-size:10.5px;font-weight:600;
@@ -156,13 +172,18 @@
   .cam-id-row .field-wrap:first-of-type{grid-area:a}
   .cam-id-row .field-wrap:nth-of-type(2){grid-area:b}
   .cam-id-row .cam-probe-btn{grid-area:c;width:100%;justify-content:center;height:auto;min-height:44px}
-  /* Identity row · the Anzeigename input expands to fill the row
-     once the avatar has its 48 px slot. max-width cap drops on
-     mobile so the input doesn't look orphaned next to the avatar
-     on a 375 px screen. */
+  /* D2 · Identity row stays side-by-side on iPhone portrait. The
+     previous `flex:1 1 100%` forced the input onto a new row
+     beneath the avatar — that was the regression. New rule:
+     flex-basis 0, allowed to grow with min-width:0 so it shrinks
+     below natural content width when the panel is narrow. Avatar
+     column width pinned to 48 px tile (matching .cam-avatar-btn
+     mobile size) so the wider sublabel can centre beneath without
+     hogging the row. */
   .cam-name-row{gap:10px}
+  .cam-identity-avatar{width:48px}
   .cam-avatar-btn{width:48px;height:48px;border-radius:12px}
   .cam-avatar-icon{width:30px;height:30px}
-  .cam-name-field{max-width:none;flex:1 1 100%}
+  .cam-name-field{max-width:none;flex:1 1 0;min-width:0}
 }
 
