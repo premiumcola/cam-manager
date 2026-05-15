@@ -209,8 +209,16 @@ body.sidebar-locked{overflow:hidden;touch-action:none}
      so the pill reads as a quieter overlay on a 375 px card. */
   .cv-pill-live-wrap{font-size:10px}
   .cv-pill-live-wrap.cv-lp-open{max-width:calc(100vw - 32px)}
-  .cv-channel-cluster .cv-channel-sched{font-size:10px}
-  .cv-channel-cluster .cv-channel-status{font-size:11px}
+  /* A3 mobile · the desktop badge already shrank to sched=10 /
+     status=11; mobile drops one more notch so two clusters can
+     coexist on a 375 px row without forcing the class-pill row
+     beneath them to wrap. Channel-row gap matches. */
+  .cv-channel-row{gap:8px}
+  .cv-channel-cluster{padding:2px 7px 2px 5px;gap:6px}
+  .cv-channel-cluster .cv-channel-icon{width:16px;height:16px}
+  .cv-channel-cluster .cv-channel-dot{width:14px;height:14px;margin-left:1px}
+  .cv-channel-cluster .cv-channel-sched{font-size:9px}
+  .cv-channel-cluster .cv-channel-status{font-size:10px}
   .cv-pill-tl{font-size:10px;padding:2px 7px}
 }
 

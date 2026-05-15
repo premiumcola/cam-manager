@@ -199,15 +199,21 @@
 /* Bottom-left v17 — stacked: TG/MQTT cluster row on top, class-icon
    row below it. align-items:flex-start so each row hugs the left edge.
    max-width keeps the cluster out of the centred ~220 px timestamp
-   strip and the bottom-right Sim/Cog block. */
+   strip and the bottom-right Sim/Cog block.
+
+   A3 · The row gap shrank from 20 px → 8 px so the channel cluster
+   visually anchors ON TOP of the class-icon row — the two read as
+   one stacked unit instead of two floating rows. The inter-cluster
+   gap (TG ↔ MQTT) also tightened 14 → 10 px so the badge feels
+   compact at 375 px without crowding. */
 .cv-chrome-bottom-left{
   position:absolute;left:var(--cv-overlay-inset);bottom:var(--cv-overlay-inset);
-  display:flex;flex-direction:column;align-items:flex-start;gap:20px;
+  display:flex;flex-direction:column;align-items:flex-start;gap:8px;
   max-width:calc(50% - 110px);
   z-index:3;pointer-events:none;
 }
 .cv-chrome-bottom-left > *{pointer-events:auto}
-.cv-channel-row{display:flex;align-items:center;gap:14px}
+.cv-channel-row{display:flex;align-items:center;gap:10px}
 .cv-chrome-bottom-right{
   position:absolute;right:var(--cv-overlay-inset);bottom:var(--cv-overlay-inset);
   display:flex;align-items:center;gap:4px;
@@ -493,29 +499,34 @@
    Each cluster sits inside its own subtle pill — background tint +
    thin border in the channel colour — so the icon · text · dot
    triad reads as ONE unit, not three loose glyphs. */
+/* A3 · the badge shrank in both dimensions to feel like a compact
+   chip instead of a 3-row card. Padding 4→3, inner gap 10→7, icon
+   22→18, dot outer 20→16, dot fill+ring 9→7, text gap 2→1, sched
+   11→10, status 12→11, line-height 1.2→1.15. Corner radius lands
+   at 11 px (≥ 8 px floor per the iOS rule in CLAUDE.md). */
 .cv-channel-cluster{
-  display:inline-flex;align-items:center;gap:10px;
-  padding:4px 10px 4px 8px;
-  border-radius:14px;
+  display:inline-flex;align-items:center;gap:7px;
+  padding:3px 8px 3px 6px;
+  border-radius:11px;
   background:var(--channel-pill-bg);
   border:0.5px solid var(--channel-pill-bd);
   filter:drop-shadow(0 0 var(--overlay-halo-blur) var(--overlay-halo));
 }
 .cv-channel-icon{
   display:inline-flex;align-items:center;justify-content:center;
-  width:22px;height:22px;flex-shrink:0;
+  width:18px;height:18px;flex-shrink:0;
 }
 .cv-channel-icon svg{width:100%;height:100%;display:block}
 .cv-channel-text{
-  display:flex;flex-direction:column;gap:2px;line-height:1.2;
+  display:flex;flex-direction:column;gap:1px;line-height:1.15;
   color:var(--overlay-fg);
 }
 .cv-channel-sched{
   font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
-  font-size:11px;font-weight:600;letter-spacing:.01em;
+  font-size:10px;font-weight:600;letter-spacing:.01em;
 }
 .cv-channel-status{
-  font-size:12px;font-weight:600;
+  font-size:11px;font-weight:600;
 }
 /* Span-based dot — SVG with animated r-attribute didn't render
    uniformly across Firefox + iOS Safari, so the active-dot pulse
@@ -526,17 +537,17 @@
 .cv-channel-dot{
   position:relative;
   display:inline-flex;align-items:center;justify-content:center;
-  width:20px;height:20px;flex-shrink:0;margin-left:4px;
+  width:16px;height:16px;flex-shrink:0;margin-left:2px;
 }
 .cv-channel-dot-fill{
   position:relative;z-index:1;
-  width:9px;height:9px;
+  width:7px;height:7px;
   border-radius:50%;
   background:currentColor;
 }
 .cv-channel-dot-ring{
   position:absolute;top:50%;left:50%;
-  width:9px;height:9px;
+  width:7px;height:7px;
   border-radius:50%;
   border:1.5px solid currentColor;
   transform:translate(-50%,-50%) scale(1);
