@@ -47,12 +47,24 @@ function _renderSunDnovRow(camId, phase, pcfg, isReolink){
     </div>`;
 }
 
-// Sun-timelapse video-length helpers. fps is fixed at 25 here — the user
-// picks a target duration in seconds; we derive the capture interval from
-// the configured window so the resulting video lands close to the target.
-const _WS_LENGTH_OPTIONS = [10, 15, 20, 30, 45];
-const _WS_DEFAULT_LENGTH_S = 20;
-const _WS_FPS = 25;
+// E3 · Sun-timelapse video-length helpers.
+// fps is now a system-wide constant of 15 (matches the backend's
+// hard 15 fps lock in settings/migrations.py and weather_service/
+// _sun_tl.py · target_fps). Capture interval has a hard floor of
+// 8 s — the Reolink snapshot endpoint cached identical buffers for
+// up to 14 consecutive 3 s pulls; 8 s pushes the cache window past
+// every fresh fetch.
+//
+// Window stays locked at 75 min (_SUN_TL_LOCKED_WINDOW_MIN). The
+// realisable target-duration ceiling is therefore:
+//   max_target = window_s / (floor × fps) = 4500 / 120 = 37 s
+// Above 37 s the interval clamps at 8 s and the realised video
+// shortens. The <select> options below stop at 37 s so the
+// "clamped to 8 s" warning only fires on user-poked stale settings.
+const _WS_LENGTH_OPTIONS = [12, 18, 24, 30, 37];
+const _WS_DEFAULT_LENGTH_S = 24;
+const _WS_FPS = 15;
+const _WS_MIN_INTERVAL_S = 8;
 // Mirror of _SUN_TL_LOCKED_WINDOW_MIN in app/app/weather_service/_sun_tl.py.
 // The UI no longer surfaces a duration slider — keep this constant in
 // sync with the backend if the lock value ever changes.
@@ -63,22 +75,31 @@ function _wsLengthPlan(window_min, target_duration_s){
   const target = parseInt(target_duration_s, 10) || _WS_DEFAULT_LENGTH_S;
   const window_s = (parseInt(window_min, 10) || _SUN_TL_LOCKED_WINDOW_MIN) * 60;
   const frames_target = Math.max(1, target * fps);
-  const interval_s = Math.max(1, Math.round(window_s / frames_target));
+  const interval_raw = window_s / frames_target;
+  const clamped_by_floor = interval_raw < _WS_MIN_INTERVAL_S;
+  const interval_s = clamped_by_floor
+    ? _WS_MIN_INTERVAL_S
+    : Math.max(1, Math.round(interval_raw));
   const actual_frames = Math.floor(window_s / interval_s);
   const actual_duration_s = Math.round((actual_frames / fps) * 10) / 10;
   return {
     target, fps, frames_target, interval_s,
+    interval_raw,
     actual_frames, actual_duration_s,
     was_clamped: actual_duration_s + 0.05 < target,
+    floor_clamped: clamped_by_floor,
   };
 }
 
 function _wsRenderLengthPreview(plan){
   const main = `→ <b>${plan.actual_frames}</b> Frames · 1 Bild alle <b>${plan.interval_s}</b> s · <b>${plan.fps}</b> fps`;
-  const warn = plan.was_clamped
+  const floorWarn = plan.floor_clamped
+    ? ` <span class="ws-sun-length-warn">Intervall auf Min ${_WS_MIN_INTERVAL_S} s — Video wird ~${plan.actual_duration_s} s</span>`
+    : '';
+  const targetWarn = !plan.floor_clamped && plan.was_clamped
     ? ` <span class="ws-sun-length-warn">Fenster zu kurz für ${plan.target} s — wird ~${plan.actual_duration_s} s</span>`
     : '';
-  return main + warn;
+  return main + floorWarn + targetWarn;
 }
 
 function _wsRenderLengthRow(phase, pcfg){
@@ -87,7 +108,14 @@ function _wsRenderLengthRow(phase, pcfg){
   // value so the on-screen frame-count preview matches actual
   // capture behaviour.
   const window_min = _SUN_TL_LOCKED_WINDOW_MIN;
-  const target = parseInt(pcfg.target_duration_s, 10) || _WS_DEFAULT_LENGTH_S;
+  const rawTarget = parseInt(pcfg.target_duration_s, 10) || _WS_DEFAULT_LENGTH_S;
+  // E3 · snap legacy target_duration_s values (the old list went up
+  // to 45 s) to the closest member of the new _WS_LENGTH_OPTIONS so
+  // the <select> shows a meaningful selected state and the plan
+  // reflects the value the user will actually save on next change.
+  const target = _WS_LENGTH_OPTIONS.reduce(
+    (a, b) => Math.abs(b - rawTarget) < Math.abs(a - rawTarget) ? b : a,
+  );
   const plan = _wsLengthPlan(window_min, target);
   const opts = _WS_LENGTH_OPTIONS.map(s =>
     `<option value="${s}"${s === plan.target ? ' selected' : ''}>${s} s</option>`
