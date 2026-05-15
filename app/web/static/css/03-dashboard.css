@@ -327,12 +327,15 @@
   -webkit-tap-highlight-color:transparent;
   -webkit-backdrop-filter:blur(8px);
   backdrop-filter:blur(8px);
-  /* Elevation via drop-shadow filter only — no 1 px ring-border
-     box-shadow. The dark fill + soft downward shadow + faint upward
-     light glow is enough to separate the button from any snapshot
-     underneath without re-introducing a hard hairline. */
-  filter:drop-shadow(0 1px 3px rgba(0,0,0,.45))
-         drop-shadow(0 0 1.5px rgba(255,255,255,.25));
+  /* Elevation via a single dark drop-shadow. F1 · the second layer
+     (drop-shadow(0 0 1.5px rgba(255,255,255,.25))) was meant as a
+     soft "upward edge light" but on a bright sky / daylight grass
+     frame, that omni-directional white halo around a dark or blue
+     HD-active button reads as a faint horizontal stripe — exactly
+     the rendering-artifact the user flagged. The remaining dark
+     drop-shadow already lifts the button off any background; we
+     don't need a second layer in the opposite tone for that. */
+  filter:drop-shadow(0 1px 3px rgba(0,0,0,.45));
   transition:background .14s cubic-bezier(.4,0,.2,1),
              color .14s cubic-bezier(.4,0,.2,1),
              transform .08s cubic-bezier(.4,0,.2,1);
@@ -355,7 +358,18 @@
   transform:scale(.94);
 }
 .cv-chrome-btn:focus{outline:none}
-.cv-chrome-btn:focus-visible{box-shadow:inset 0 0 0 2px rgba(255,255,255,.85)}
+/* F1 · focus indicator switched from `box-shadow: inset` (painted
+   INSIDE the button face — competes with the HD blue / icon glyph)
+   to `outline` (painted OUTSIDE the border-box) so a stuck-after-
+   tap iOS focus state can't leave a 2 px white inset visible. The
+   :not(:active) gate prevents the outline from being visible mid-
+   tap (combined with focus state) which on iOS reads as a flash.
+   Touch devices that never engage focus-visible see no ring at
+   all — that's the spec-correct behaviour. */
+.cv-chrome-btn:focus-visible:not(:active){
+  outline:2px solid rgba(255,255,255,.85);
+  outline-offset:2px;
+}
 .cv-chrome-btn[data-state="muted"]{opacity:.38}
 .cv-chrome-btn.has-text{padding:0 12px}
 .cv-chrome-btn::before{content:"";position:absolute;inset:-7px;border-radius:14px;pointer-events:auto}
