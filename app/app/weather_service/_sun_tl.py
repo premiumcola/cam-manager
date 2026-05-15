@@ -576,16 +576,27 @@ class SunTimelapseMixin:
             # Within limits but still record the drift for the UI to
             # show "right on time" without a warning pill.
             test_session.phase_drift_min = drift_min
-        interval_s = max(1, int(pcfg.get("interval_s", 3) or 3))
-        # Default fps lowered 25 → 10 (cm-37): two real sunrise mp4s
-        # on 2026-05-12 measured unique_fps ≈ 7.7-8.8 at declared 25
-        # fps (43 % duplicates), so the existing default was forcing
-        # the encoder to pad with dups for half the runtime. 10 fps
-        # matches what the validator + capture pipeline actually
-        # delivers. Existing users with an explicit ``fps`` set in
-        # settings keep their value — only the FALLBACK when the key
-        # is missing changes.
-        target_fps = max(1, int(pcfg.get("fps", 10) or 10))
+        # E1 · 8 s capture floor. The Reolink snapshot-API caches its
+        # last-served buffer for ~5–14 consecutive pulls on a 3 s
+        # cadence; an 8 s interval pushes the cache window past every
+        # subsequent grab so each frame is a fresh fetch. Anything
+        # below 8 s on legacy settings is clamped + logged so a future
+        # regression at the storage layer surfaces immediately.
+        _raw_interval = int(pcfg.get("interval_s", 8) or 8)
+        if _raw_interval < 8:
+            log.warning(
+                "[weather] %s %s: interval_s=%d below 8 s floor — "
+                "clamping (settings.json passed through without "
+                "migration?)",
+                cam_id, phase, _raw_interval,
+            )
+        interval_s = max(8, _raw_interval)
+        # E1 · output fps is fixed at 15 across all timelapse paths.
+        # The settings-side migration also forces fps=15, but if any
+        # legacy value slips through (user-edited settings.json, etc.)
+        # we land at 15 anyway — a per-build deviation here would just
+        # re-introduce the "stretched fps → choppy mp4" failure mode.
+        target_fps = 15
         cam_name = self._cam_name(cam_id)
         # Per-phase subdir so on-disk layout makes the kind obvious. The
         # legacy single "sun_timelapse/" directory is still walked at
@@ -1472,10 +1483,11 @@ class SunTimelapseMixin:
             return {"ok": False, "error": "camera not in config"}
 
         pcfg_user = (((cam.get("weather") or {}).get("sun_timelapse") or {}).get(phase) or {})
-        interval_s = max(1, int(pcfg_user.get("interval_s", 3) or 3))
-        # Default fps lowered 25 → 10 (cm-37) — see the matching
-        # comment a few hundred lines up. Existing user value wins.
-        target_fps = max(1, int(pcfg_user.get("fps", 10) or 10))
+        # E1 · same 8 s capture floor + fixed 15 fps the production
+        # schedule enforces. Mirror here so the test panel runs against
+        # exactly the values the real schedule will use.
+        interval_s = max(8, int(pcfg_user.get("interval_s", 8) or 8))
+        target_fps = 15
         # Carry the daynight_override block forward so the test
         # exercises the same Color/Auto flip the real schedule does.
         pcfg = {

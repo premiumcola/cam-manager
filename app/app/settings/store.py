@@ -30,6 +30,7 @@ from .migrations import (
     migrate_schedules,
     migrate_server_location_defaults,
     migrate_telegram_push_defaults,
+    migrate_timelapse_intervals,
     migrate_timelapse_profiles,
     migrate_timelapse_settings,
     migrate_weather_defaults,
@@ -70,6 +71,10 @@ class SettingsStore:
         migrate_telegram_push_defaults(self.data)
         migrate_server_location_defaults(self.data)
         migrate_weather_defaults(self.data)
+        # E1 · runs AFTER weather_defaults so newly-added sun_timelapse /
+        # event_timelapse blocks (from the additive backfill above)
+        # already exist when the clamp tries to read interval_s / fps.
+        migrate_timelapse_intervals(self.data)
         migrate_runtime_defaults(self.data)
         self._repair_snapshot_urls()
         # One-shot cleanup of any pre-existing duplicate camera rows.

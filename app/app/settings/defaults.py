@@ -101,7 +101,7 @@ def default_camera(cam: dict | None = None) -> dict:
         "whitelist_names": cam.get("whitelist_names", []),
         "resolution": cam.get("resolution", "auto"),
         "frame_interval_ms": cam.get("frame_interval_ms", 350),
-        "snapshot_interval_s": cam.get("snapshot_interval_s", 3),
+        "snapshot_interval_s": cam.get("snapshot_interval_s", 8),
         # Scroll-level per-camera tuning sliders — were missing from the
         # persisted dict so saves silently dropped them.
         "motion_sensitivity": float(cam.get("motion_sensitivity") or 0.5),

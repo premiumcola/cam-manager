@@ -124,22 +124,29 @@ CONFIRMATION_WINDOW_DEFAULTS = {
 
 
 # Per-camera sun-timelapse defaults — both phases off until the user
-# opts in. Window/interval/fps match the spec defaults for a 24-second
-# reel over a 30-minute span.
+# opts in. window_min is overridden at runtime by _SUN_TL_LOCKED_WINDOW_MIN
+# (75 min) and persisted here as 30 only for legacy round-trips.
+# E1 · interval_s 3 → 8 (defeats the Reolink snapshot-API cache that
+# bursts up to 14 identical frames on a 3 s pull), fps 25 → 15
+# (matches the cross-system fixed output rate so the encoder doesn't
+# have to "stretch" against a dedup-shortened frame budget). See
+# settings/migrations.py · _migrate_timelapse_intervals for the
+# matching clamp on legacy settings.json files.
 SUN_TL_DEFAULTS: dict = {
-    "sunrise": {"enabled": False, "window_min": 30, "interval_s": 3, "fps": 25},
-    "sunset":  {"enabled": False, "window_min": 30, "interval_s": 3, "fps": 25},
+    "sunrise": {"enabled": False, "window_min": 30, "interval_s": 8, "fps": 15},
+    "sunset":  {"enabled": False, "window_min": 30, "interval_s": 8, "fps": 15},
 }
 
 
 # Per-camera event-timelapse defaults — opt-in master switch + per-trigger
 # toggles. Default OFF so existing weather cameras don't suddenly start
 # producing 60-min timelapses without explicit consent.
+# E1 · interval_s 6 → 8, fps 24 → 15 — same rationale as SUN_TL above.
 EVENT_TL_DEFAULTS: dict = {
     "enabled":    False,
     "window_min": 60,
-    "interval_s": 6,
-    "fps":        24,
+    "interval_s": 8,
+    "fps":        15,
     "triggers": {
         "thunder_rising": True,
         "front_passing":  True,

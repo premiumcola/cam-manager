@@ -104,7 +104,7 @@ CAMERA_SCHEMA: dict = {
     "mqtt_enabled":        (bool,  True),
     "resolution":          (str,   "auto"),
     "frame_interval_ms":   (int,   350),
-    "snapshot_interval_s": (int,   3),
+    "snapshot_interval_s": (int,   8),
     "bottom_crop_px":      (int,   0),
     "motion_sensitivity":  (float, 0.5),
     # Higher = more sensitive (smaller motions count). Used as a parallel
