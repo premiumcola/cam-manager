@@ -545,8 +545,19 @@
 .cv-fs-btn .fs-icon-expand,
 .cv-fs-btn .fs-icon-minimize{display:inline-flex;line-height:0}
 .cv-fs-btn .fs-icon-minimize{display:none}
+/* J3.b · :fullscreen pseudo-class fallback so the icon swap stays
+   bulletproof even when the JS is-fs class hasn't landed yet (event-
+   timing edge case on some Chrome / Safari Desktop builds). The
+   :-webkit-full-screen variant exists for older Safari; CSS rules
+   that combine the prefixed and unprefixed pseudo-classes in one
+   comma-list invalidate the WHOLE rule in browsers that don't
+   recognise the prefix, so split them into separate rules. */
 .cv-img-wrap.is-fs .cv-fs-btn .fs-icon-expand{display:none}
 .cv-img-wrap.is-fs .cv-fs-btn .fs-icon-minimize{display:inline-flex}
+.cv-img-wrap:fullscreen .cv-fs-btn .fs-icon-expand{display:none}
+.cv-img-wrap:fullscreen .cv-fs-btn .fs-icon-minimize{display:inline-flex}
+.cv-img-wrap:-webkit-full-screen .cv-fs-btn .fs-icon-expand{display:none}
+.cv-img-wrap:-webkit-full-screen .cv-fs-btn .fs-icon-minimize{display:inline-flex}
 
 /* SIM + cog — 36 px corner family. SIM is .has-text (~120 px wide);
    cog is icon-only at the canonical 36 × 36. */

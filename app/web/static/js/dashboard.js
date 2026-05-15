@@ -556,10 +556,22 @@ export function _cvEnterFullscreen(camId){
   else _hdAtFsEntry.delete(camId);
   const req = wrap.requestFullscreen || wrap.webkitRequestFullscreen || wrap.mozRequestFullScreen;
   if (req){
-    req.call(wrap).catch(() => {
-      wrap.classList.add('fake-fullscreen');
-      wrap.classList.add('is-fs');
-    });
+    // J3.a · stamp `is-fs` IMMEDIATELY on the success path instead
+    // of waiting for the fullscreenchange event to fire. On Chrome
+    // / Safari Desktop the event can land late (or, on some Edge
+    // builds, after a higher-specificity :fullscreen UA rule has
+    // already painted the wrong icon). The fullscreenchange handler
+    // below is idempotent — toggling here just makes the swap fire
+    // at the same instant the browser enters FS rather than one
+    // event-loop turn later. The CSS in 03-dashboard.css also
+    // mirrors via the :fullscreen pseudo-class so this is belt +
+    // suspenders.
+    req.call(wrap)
+      .then(() => wrap.classList.add('is-fs'))
+      .catch(() => {
+        wrap.classList.add('fake-fullscreen');
+        wrap.classList.add('is-fs');
+      });
   } else {
     wrap.classList.add('fake-fullscreen');
     wrap.classList.add('is-fs');
