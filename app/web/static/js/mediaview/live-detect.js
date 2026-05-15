@@ -565,6 +565,32 @@ function _renderFrame(data){
   // Frame state for the bbox + zone/mask overlays.
   _session.lastFrameSize = data.frame_size || { w: 1920, h: 1080 };
   _session.lastDetections = data.detections || [];
+  // F2.b · one-shot per-session payload diagnostic. Answers the
+  // "did the response actually carry detections" question without
+  // requiring a tcpdump or the docker logs. Counts by verdict so
+  // the user can spot a serialisation drop between Flask and the
+  // frontend (rare but possible if response shaping went sideways).
+  // Single-line console.warn (lint-allowed escape hatch).
+  if (_session && !_session._frameDiagLogged){
+    _session._frameDiagLogged = true;
+    const dets = _session.lastDetections;
+    const np = dets.filter(d => d.verdict === 'pass').length;
+    const nb = dets.filter(d => d.verdict === 'belowthresh').length;
+    const nf = dets.filter(d => d.verdict === 'filtered').length;
+    const fs = _session.lastFrameSize;
+    const gates = data.diag?.gates || {};
+    console.warn(
+      `[sim-frame] dets=${dets.length} pass=${np} below=${nb} filtered=${nf} `
+      + `frame_size=${fs.w}x${fs.h} diag.raw=${gates.raw ?? '?'} `
+      + `outcome=${data.ok ? 'ok' : '?'}`,
+    );
+  }
+  // F2 · track the latest raw count from the backend's diag block so
+  // _renderEmptyHint can gate the banner on Coral-really-empty rather
+  // than render-buffer-empty. The held-buffer fallback briefly keeps
+  // dets on screen after a raw=0 tick; the banner shouldn't appear
+  // until BOTH the buffer drained AND the last tick truly had raw=0.
+  _session.lastRawCount = Number(data.diag?.gates?.raw ?? data.detections?.length ?? 0);
   // gp384 — last-seen marker for the empty-state hint. Reset on
   // every tick that brings at least one detection; the banner
   // threshold (3 s) is measured from this stamp.
@@ -781,22 +807,39 @@ function _renderBboxOverlay(){
   });
 }
 
-// gp384 — empty-state banner. Mounts a small dark-glass pill at
-// the top of the media wrap when:
+// F2 · empty-state banner. Mounts a small dark-glass pill at the
+// top of the media wrap when:
 //   1. the bbox layer is enabled, and
-//   2. no bbox is currently on screen (neither live nor held), and
-//   3. it's been at least _EMPTY_HINT_MS since the last non-empty
+//   2. the latest BACKEND tick truly returned raw=0 from Coral
+//      (i.e. Coral found nothing — not "all dets below threshold"),
+//      and
+//   3. no held bbox is still visible from a previous tick, and
+//   4. it's been at least _EMPTY_HINT_MS since the last non-empty
 //      tick (or since live-detect mount if no tick has ever
 //      brought detections).
-// Removes itself when any condition flips back. Idempotent — safe
-// to call from both the per-tick render path and the 250 ms
-// refresh loop.
+// The (2) gate is the F2 tightening: previously the banner could
+// appear whenever the render buffer was empty even though backend
+// might have returned belowthresh/filtered dets in the most recent
+// tick. Reading data.diag.gates.raw directly via _session
+// .lastRawCount makes the banner's meaning exactly "Coral found
+// nothing for this frame". Removes itself when any condition
+// flips back. Idempotent.
 function _renderEmptyHint(noBboxes){
   const wrap = byId('lightboxMediaWrap');
   if (!wrap) return;
   let banner = byId('mvLdEmptyHint');
   const remove = () => { if (banner) banner.remove(); };
   if (!noBboxes || !_overlays.bboxes || !_session){
+    remove();
+    return;
+  }
+  // F2 · last raw count must be 0 to show the banner. A
+  // belowthresh-only tick (raw>0 pass=0) leaves lastRawCount>0;
+  // even if every bbox is currently faded out, the banner stays
+  // suppressed because Coral DID find something — the threshold
+  // just rejected it. Default 0 (no tick yet) → mount-time silence
+  // is governed by the lastSeen condition below.
+  if ((_session.lastRawCount ?? 0) > 0){
     remove();
     return;
   }
@@ -810,7 +853,7 @@ function _renderEmptyHint(noBboxes){
     banner = document.createElement('div');
     banner.id = 'mvLdEmptyHint';
     banner.className = 'mv-ld-empty-hint';
-    banner.textContent = 'Aktuell keine Detektionen · der Detektor analysiert weiter';
+    banner.textContent = 'Coral findet aktuell nichts · der Detektor analysiert weiter';
     wrap.appendChild(banner);
   }
 }
@@ -914,6 +957,21 @@ function _renderZoneMaskOverlay(){
   svg.setAttribute('viewBox', `0 0 ${fs.w} ${fs.h}`);
   _positionSvgOverImage(svg);
   const cam = (state.cameras || []).find(c => c.id === _session.camId) || {};
+  // F2.c · one-shot diag the first time zones OR masks turn on. Logs
+  // the raw counts pulled from state.cameras + the SVG's current rect
+  // so a "toggle is ON but nothing paints" symptom can be split into
+  // "the camera has no zones/masks configured" vs "the SVG is zero-
+  // sized" without DevTools.
+  if (_session && !_session._zoneMaskDiagLogged && (showZones || showMasks)){
+    _session._zoneMaskDiagLogged = true;
+    const rect = svg.getBoundingClientRect();
+    console.warn(
+      `[sim-zonemask] zones=${(cam.zones||[]).length} `
+      + `masks=${(cam.masks||[]).length} viewBox=${fs.w}x${fs.h} `
+      + `svgRect=${Math.round(rect.width)}x${Math.round(rect.height)} `
+      + `zonesOn=${showZones} masksOn=${showMasks}`,
+    );
+  }
   // Stroke / fill colours pulled from core/zone-tokens.js so the
   // visual matches the cam-edit polygon editor + every other
   // read-only overlay context exactly (cm-43). SVG viewBox is
