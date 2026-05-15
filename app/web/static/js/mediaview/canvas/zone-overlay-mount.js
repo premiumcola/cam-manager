@@ -122,6 +122,15 @@ export function mountZoneOverlayForLightbox(item, opts = {}){
  * second time. renderZoneLayer's own clearRect should already cover
  * this; the belt-and-suspenders clear here makes the round-trip
  * bulletproof against any future refactor of the layer renderer.
+ *
+ * K2 · undefined arguments mean "no change". The receiver-side
+ * `typeof X === 'boolean'` guards already implemented this contract,
+ * but the doc was implicit. Documenting + adding a console.warn when
+ * a visibility toggle fires while _redrawFn is null (would mean the
+ * mount was torn down between the user's click and this handler)
+ * so the user-reported "mask off → on doesn't repaint" symptom has
+ * a one-shot diagnostic. The actual repaint regression was fixed in
+ * zone-layer.js · renderZoneLayerForMediaEl (transient 0×0 bail).
  */
 export function setZoneOverlayVisibility({ showZones, showMasks }){
   if (typeof showZones === 'boolean') _visibility.showZones = showZones;
@@ -131,7 +140,14 @@ export function setZoneOverlayVisibility({ showZones, showMasks }){
     const ctx = c.getContext('2d');
     if (ctx) ctx.clearRect(0, 0, c.width, c.height);
   }
-  if (_redrawFn) _redrawFn();
+  if (_redrawFn) {
+    _redrawFn();
+  } else {
+    // One-shot diagnostic: the visibility setter ran but the mount
+    // was already torn down. Earlier symptom of K2 — the canvas
+    // gets cleared, no redraw fires, polygons stay invisible.
+    console.warn('[zone-overlay] setZoneOverlayVisibility ran without _redrawFn — mount torn down?');
+  }
 }
 window._setZoneOverlayVisibility = setZoneOverlayVisibility;
 

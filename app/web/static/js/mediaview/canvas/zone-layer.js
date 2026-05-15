@@ -126,19 +126,39 @@ export function renderZoneLayer(canvas, polygons, srcW, srcH, opts = {}, fitted 
  */
 export function renderZoneLayerForMediaEl(canvas, mediaEl, polygons, opts = {}){
   if (!canvas || !mediaEl) return;
-  const fit = fittedRect(mediaEl);
   const srcW = mediaEl.videoWidth || mediaEl.naturalWidth || 0;
   const srcH = mediaEl.videoHeight || mediaEl.naturalHeight || 0;
-  // Re-size the canvas drawing buffer to match its CSS rect so the
-  // 1:1 pixel mapping works at any device-pixel-ratio. Skip when
-  // the element hasn't painted yet — the ResizeObserver in the
-  // caller will fire as soon as it does.
+  // K2 · don't bail when the media element is transiently 0×0.
+  // The previous early-return on box=0 caused the user's mask-toggle
+  // round-trip (off → on) to leave the canvas blank: the visibility
+  // setter cleared the canvas, then the redraw fired against a
+  // transiently-zero box and never re-painted. ResizeObserver only
+  // fires on size CHANGES — if the box flicked 0 mid-event, it
+  // didn't re-trigger after the box was restored to its prior size.
+  // Fallback: when the media box is 0 but the canvas has a known
+  // previous size, draw against the canvas's own buffer dims. The
+  // polygon mapping math is independent of mediaEl, so the redraw
+  // lands on the right pixels at the same scale as the last good
+  // paint.
   const box = mediaEl.getBoundingClientRect();
-  if (box.width <= 0 || box.height <= 0) return;
-  if (canvas.width !== Math.round(box.width)
-      || canvas.height !== Math.round(box.height)){
-    canvas.width = Math.round(box.width);
-    canvas.height = Math.round(box.height);
+  let drawW = Math.round(box.width);
+  let drawH = Math.round(box.height);
+  if (drawW <= 0 || drawH <= 0){
+    if (canvas.width > 0 && canvas.height > 0){
+      drawW = canvas.width;
+      drawH = canvas.height;
+    } else {
+      return;
+    }
   }
+  if (canvas.width !== drawW || canvas.height !== drawH){
+    canvas.width = drawW;
+    canvas.height = drawH;
+  }
+  // fittedRect handles the srcW/srcH=0 case internally; the
+  // drawing buffer dims feed the fit math via the canvas itself.
+  const fit = (box.width > 0 && box.height > 0)
+    ? fittedRect(mediaEl)
+    : { x: 0, y: 0, w: drawW, h: drawH };
   renderZoneLayer(canvas, polygons, srcW, srcH, opts, fit);
 }
