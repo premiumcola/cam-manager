@@ -27,7 +27,6 @@
 import {
   ZONE_STROKE, ZONE_FILL, MASK_STROKE, MASK_FILL, LINE_W,
 } from '../../core/zone-tokens.js';
-import { fittedRect } from '../../core/video-fit.js';
 
 /**
  * Compute the source-to-canvas-coord mapping for a single polygon.
@@ -121,13 +120,26 @@ export function renderZoneLayer(canvas, polygons, srcW, srcH, opts = {}, fitted 
 /**
  * Caller helper — convenience to size canvas + draw in one call,
  * given an outer media element (the <video> / <img>). The canvas's
- * CSS width / height should already match the element's bounding
- * rect (parent's position:absolute inset:0 covers this).
+ * CSS box typically matches a WRAP element (lightboxMediaWrap) that
+ * spans more than just the video — the video itself letterboxes
+ * inside it. Mirrors the bbox renderer's coord math
+ * (_lbDrawDetections) so zone / mask polygons sit exactly on the
+ * visible video content, with no overhang on the sides.
+ *
+ * The wrap is auto-detected from ``canvas.parentElement`` so callers
+ * don't need to pass it explicitly. The drawing buffer is sized to
+ * the WRAP rect (not the media rect), and the fitted rect is
+ * computed in wrap-coords: ``(mediaRect.left - wrapRect.left) +
+ * letterbox-offset``. Polygons drawn at source-px coords land on
+ * the pixels the user actually sees.
  */
 export function renderZoneLayerForMediaEl(canvas, mediaEl, polygons, opts = {}){
   if (!canvas || !mediaEl) return;
   const srcW = mediaEl.videoWidth || mediaEl.naturalWidth || 0;
   const srcH = mediaEl.videoHeight || mediaEl.naturalHeight || 0;
+  const wrap = canvas.parentElement || mediaEl;
+  const wrapRect = wrap.getBoundingClientRect();
+  const mediaRect = mediaEl.getBoundingClientRect();
   // K2 · don't bail when the media element is transiently 0×0.
   // The previous early-return on box=0 caused the user's mask-toggle
   // round-trip (off → on) to leave the canvas blank: the visibility
@@ -136,13 +148,9 @@ export function renderZoneLayerForMediaEl(canvas, mediaEl, polygons, opts = {}){
   // fires on size CHANGES — if the box flicked 0 mid-event, it
   // didn't re-trigger after the box was restored to its prior size.
   // Fallback: when the media box is 0 but the canvas has a known
-  // previous size, draw against the canvas's own buffer dims. The
-  // polygon mapping math is independent of mediaEl, so the redraw
-  // lands on the right pixels at the same scale as the last good
-  // paint.
-  const box = mediaEl.getBoundingClientRect();
-  let drawW = Math.round(box.width);
-  let drawH = Math.round(box.height);
+  // previous size, draw against the canvas's own buffer dims.
+  let drawW = Math.round(wrapRect.width);
+  let drawH = Math.round(wrapRect.height);
   if (drawW <= 0 || drawH <= 0){
     if (canvas.width > 0 && canvas.height > 0){
       drawW = canvas.width;
@@ -155,10 +163,22 @@ export function renderZoneLayerForMediaEl(canvas, mediaEl, polygons, opts = {}){
     canvas.width = drawW;
     canvas.height = drawH;
   }
-  // fittedRect handles the srcW/srcH=0 case internally; the
-  // drawing buffer dims feed the fit math via the canvas itself.
-  const fit = (box.width > 0 && box.height > 0)
-    ? fittedRect(mediaEl)
-    : { x: 0, y: 0, w: drawW, h: drawH };
+  // Letterbox math in WRAP coordinates — matches the bbox renderer.
+  let fit;
+  if (srcW > 0 && srcH > 0 && mediaRect.width > 0 && mediaRect.height > 0){
+    const scale = Math.min(mediaRect.width / srcW, mediaRect.height / srcH);
+    const renderedW = srcW * scale;
+    const renderedH = srcH * scale;
+    fit = {
+      x: (mediaRect.width - renderedW) / 2 + (mediaRect.left - wrapRect.left),
+      y: (mediaRect.height - renderedH) / 2 + (mediaRect.top - wrapRect.top),
+      w: renderedW,
+      h: renderedH,
+    };
+  } else {
+    // Source dimensions not yet known — fall back to filling the
+    // wrap so the redraw on loadedmetadata can correct the math.
+    fit = { x: 0, y: 0, w: drawW, h: drawH };
+  }
   renderZoneLayer(canvas, polygons, srcW, srcH, opts, fit);
 }
