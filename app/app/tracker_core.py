@@ -252,7 +252,8 @@ class Track:
         self.last_bbox_frac_area: float | None = None
 
     def add_sample(self, frame_idx: int, t_s: float, bbox_dict: dict,
-                   score: float | None, source: str):
+                   score: float | None, source: str,
+                   label: str | None = None):
         # Squelch micro-jitter samples — only emit when the bbox moved
         # by ≥ SAMPLE_BBOX_DELTA_PX pixels at the centroid OR this is a
         # detection sample (always kept so score history is preserved).
@@ -264,12 +265,14 @@ class Track:
             last = self.samples[-1]["bbox"]
             if bbox_centroid_dist(last, bbox_dict) < SAMPLE_BBOX_DELTA_PX:
                 return
+        sample_label = label if label else self.label
         self.samples.append({
             "f": frame_idx,
             "t": round(t_s, 3),
             "bbox": bbox_dict,
             "score": (round(float(score), 4) if score is not None else None),
             "source": source,
+            "label": sample_label,
         })
         self.last_frame = frame_idx
         if score is not None and score > self.best_score:
@@ -282,6 +285,32 @@ class Track:
         # track from ever timing out.
         if source != "predicted":
             self.missed_windows = 0
+        # J5 · sliding-window majority vote on the dominant label.
+        # Only DETECT samples vote (predicted ones inherit and would
+        # feed back on themselves). Window of 5 lets the track
+        # correctly relabel after a misclassified spawn-frame once
+        # the truth wins majority, while a single off-label blip on
+        # a long track never overturns the established label. Tie
+        # breaks TOWARD the current label so a 1-frame flip can't
+        # ever relabel: we only switch when strictly more frames
+        # vote for the new label than for the current one.
+        if source in ("detect", "track"):
+            recent_labels: list[str] = []
+            for s in reversed(self.samples):
+                if s.get("source") not in ("detect", "track"):
+                    continue
+                recent_labels.append(s.get("label") or self.label)
+                if len(recent_labels) >= 5:
+                    break
+            if recent_labels:
+                counts: dict[str, int] = {}
+                for lbl in recent_labels:
+                    counts[lbl] = counts.get(lbl, 0) + 1
+                max_count = max(counts.values())
+                current_count = counts.get(self.label, 0)
+                if max_count > current_count:
+                    self.label = max(
+                        counts.items(), key=lambda kv: kv[1])[0]
 
     def close(self, reason: str, frame_w: int, frame_h: int) -> None:
         """Mark the track inactive and capture diagnostic fields from
@@ -774,7 +803,7 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
             bbox_dict = {"x1": int(d.bbox[0]), "y1": int(d.bbox[1]),
                          "x2": int(d.bbox[2]), "y2": int(d.bbox[3])}
             tr.add_sample(frame_idx, t_s, bbox_dict,
-                          float(d.score), "detect")
+                          float(d.score), "detect", d.label)
             state.samples_emitted += 1
             update_best_top(state, d, frame_idx, t_s)
             matches.append((di, tr))
@@ -842,33 +871,27 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
                      "x2": int(d.bbox[2]), "y2": int(d.bbox[3])}
         blocker = _spawn_blocking_track(d)
         if blocker is not None:
-            if blocker.label == d.label:
-                # Same subject the predictor lost — attach the det
-                # as a normal detect sample so the existing track
-                # continues without spawning a parallel id.
-                blocker.add_sample(frame_idx, t_s, bbox_dict,
-                                   float(d.score), "detect")
-                blocker.missed_windows = 0
-                state.samples_emitted += 1
-                update_best_top(state, d, frame_idx, t_s)
-                matches.append((di, blocker))
-                # Mark the track as taken so the age-out loop below
-                # doesn't penalise it for missing this frame.
-                try:
-                    ti = state.active.index(blocker)
-                    taken_tracks.add(ti)
-                except ValueError:
-                    pass
-            # Cross-label spawn-block: drop the det silently — it's
-            # a misclassification of the already-tracked subject.
+            # J5 · attach the det to the blocker REGARDLESS of label.
+            # The per-sample label is preserved on the new sample and
+            # the track's dominant label re-votes inside add_sample;
+            # a single off-label frame (the SSD's occasional "Vogel"
+            # on a person) gets absorbed into the same track and the
+            # majority "person" wins, so no parallel cross-label
+            # ghost ever materialises.
+            blocker.add_sample(frame_idx, t_s, bbox_dict,
+                               float(d.score), "detect", d.label)
+            blocker.missed_windows = 0
+            state.samples_emitted += 1
+            update_best_top(state, d, frame_idx, t_s)
+            matches.append((di, blocker))
+            try:
+                ti = state.active.index(blocker)
+                taken_tracks.add(ti)
+            except ValueError:
+                pass
             continue
         revived = _try_reidentify(state, d, t_s)
         if revived is not None:
-            # Resurrect: move from closed → active, reset miss
-            # counter, append the matching detection as the next
-            # sample. The track keeps its original id, color, and
-            # sample history — downstream consumers see one
-            # continuous identity.
             try:
                 state.closed.remove(revived)
             except ValueError:
@@ -877,7 +900,7 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
             revived.end_reason = None
             revived.missed_windows = 0
             revived.add_sample(frame_idx, t_s, bbox_dict,
-                               float(d.score), "detect")
+                               float(d.score), "detect", d.label)
             state.active.append(revived)
             state.samples_emitted += 1
             update_best_top(state, d, frame_idx, t_s)
@@ -886,7 +909,7 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
         tid = short_id()
         tr = Track(tid, d.label, frame_idx)
         tr.add_sample(frame_idx, t_s, bbox_dict,
-                      float(d.score), "detect")
+                      float(d.score), "detect", d.label)
         state.active.append(tr)
         state.samples_emitted += 1
         update_best_top(state, d, frame_idx, t_s)
