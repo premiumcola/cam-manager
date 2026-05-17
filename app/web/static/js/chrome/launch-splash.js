@@ -21,9 +21,19 @@
 //     `background_color` (#111111) so iOS's native splash → web app
 //     transition is a single visual continuum.
 
+import { IS_IOS } from '../core/state.js';
+
 const SESSION_FLAG = 'tamspy.launchSplashShown';
 
 function _shouldRun(){
+  // H1 · the zoom-out reveal exists primarily because iOS Safari's
+  // native apple-touch-startup-image splash hands off to a black
+  // page-load gap that reads as "did the app crash?"; the animation
+  // bridges that with a continuous shrink to the hero header. On
+  // desktop browsers there's no native splash to bridge to, so the
+  // animation just delays first paint without adding context — show
+  // the hero logo static instead.
+  if (!IS_IOS) return false;
   // PWA cold launch (added-to-home-screen, display-mode: standalone):
   // iOS already shows the apple-touch-startup-image splash with the
   // squirrel icon on the cream plate, then hands off to the web app.
