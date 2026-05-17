@@ -196,6 +196,97 @@ def _detect_and_filter(detector, frame, allowed, *, floor_score: float):
 
 
 
+# K1 · gates for the static-false-positive sweep. A tracklet is
+# DROPPED at payload build when ALL of these hold:
+#   * has at least STATIC_FP_MIN_DETECTS detect samples (so the
+#     stats are meaningful — a 2-sample blip is left alone),
+#   * MEDIAN of its detect-source scores < the clip's spawn
+#     threshold (the model never had real confidence in this
+#     subject — best_score sometimes spikes once just above spawn
+#     for a chair/pole, but the median stays low),
+#   * net centroid displacement from first to last detect sample
+#     is < STATIC_FP_DISP_FRAC × min(median_bw, median_bh) (it
+#     didn't move enough to be a person walking),
+#   * max single-frame centroid step is also < the same fraction
+#     (no momentary motion in the middle either — fully static).
+# Real persons standing still consistently score ≥ spawn, so the
+# score gate alone protects them. Real persons who walk fail the
+# displacement gate.
+STATIC_FP_MIN_DETECTS = 3
+STATIC_FP_DISP_FRAC = 0.5
+
+
+def _is_static_false_positive(track, spawn_score: float):
+    """Return ``(drop: bool, reason: str)`` per the static-FP gates."""
+    det = [s for s in (track.samples or [])
+           if s.get("source") in ("detect", "track")]
+    if len(det) < STATIC_FP_MIN_DETECTS:
+        return False, ""
+    scores = sorted(float(s.get("score") or 0.0) for s in det)
+    median_score = scores[len(scores) // 2]
+    if median_score >= spawn_score:
+        return False, ""  # genuinely confident → keep regardless of motion
+    bb0 = det[0]["bbox"]
+    bbN = det[-1]["bbox"]
+    cx0 = (bb0["x1"] + bb0["x2"]) / 2.0
+    cy0 = (bb0["y1"] + bb0["y2"]) / 2.0
+    cxN = (bbN["x1"] + bbN["x2"]) / 2.0
+    cyN = (bbN["y1"] + bbN["y2"]) / 2.0
+    net_px = ((cxN - cx0) ** 2 + (cyN - cy0) ** 2) ** 0.5
+    bws = sorted(s["bbox"]["x2"] - s["bbox"]["x1"] for s in det)
+    bhs = sorted(s["bbox"]["y2"] - s["bbox"]["y1"] for s in det)
+    med_bw = bws[len(bws) // 2]
+    med_bh = bhs[len(bhs) // 2]
+    med_dim = min(med_bw, med_bh)
+    if med_dim <= 0:
+        return False, ""
+    motion_floor = STATIC_FP_DISP_FRAC * med_dim
+    if net_px >= motion_floor:
+        return False, ""  # walked enough to be a real subject
+    # Maximum single-step displacement — if even ONE pair of
+    # consecutive samples shifted significantly, treat as moving
+    # (could be a partly-visible person who paused briefly).
+    max_step = 0.0
+    for i in range(1, len(det)):
+        a = det[i - 1]["bbox"]
+        b = det[i]["bbox"]
+        ax = (a["x1"] + a["x2"]) / 2.0
+        ay = (a["y1"] + a["y2"]) / 2.0
+        bx = (b["x1"] + b["x2"]) / 2.0
+        by = (b["y1"] + b["y2"]) / 2.0
+        step = ((bx - ax) ** 2 + (by - ay) ** 2) ** 0.5
+        if step > max_step:
+            max_step = step
+    if max_step >= motion_floor:
+        return False, ""
+    reason = (
+        f"static-fp · median_score={median_score:.2f}<spawn={spawn_score:.2f}, "
+        f"net={net_px:.0f}px<{motion_floor:.0f}, max_step={max_step:.0f}px"
+    )
+    return True, reason
+
+
+def _filter_static_false_positives(state: _TrackerState, spawn_score: float):
+    """In-place purge of static-FP tracklets from ``state.closed``.
+    Each drop logs one INFO line so the operator can audit which
+    tracks were silenced and why.
+    """
+    survivors = []
+    for tr in state.closed:
+        drop, reason = _is_static_false_positive(tr, spawn_score)
+        if drop:
+            n = sum(1 for s in (tr.samples or [])
+                    if s.get("source") in ("detect", "track"))
+            log.info(
+                "[tracking] drop tid=%s n=%d best=%.2f label=%s · %s",
+                tr.track_id, n, float(tr.best_score or 0.0),
+                tr.label, reason,
+            )
+            continue
+        survivors.append(tr)
+    state.closed = survivors
+
+
 def _build_payload(state: _TrackerState, fps: float, frame_count: int,
                    duration_s: float, allowed, video_path: Path,
                    storage_root: Path,
@@ -486,6 +577,14 @@ class TrackingWorker(threading.Thread):
                 tr.close("ended_at_clip", frame_w, frame_h)
             state.closed.extend(state.active)
             state.active = []
+
+            # K1 · global static-FP sweep on the closed tracklets
+            # BEFORE payload build. Catches the chair/pole/lamp/
+            # shadow-as-person cluster — sub-spawn median score AND
+            # < 0.5 × bbox-dim net motion — that floods the timeline
+            # with whole-clip lanes for objects that never moved.
+            # Each drop emits one [tracking] INFO line.
+            _filter_static_false_positives(state, spawn_score)
 
             # gates.min_confidence reflects the LIVE spawn threshold so
             # the timeline panel's "<spawn>% Spuren bestätigt" copy
