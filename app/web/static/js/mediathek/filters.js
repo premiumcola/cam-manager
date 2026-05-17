@@ -76,7 +76,14 @@ export function renderMediaFilterPills(mode){
     if (d) return d;
     return MEDIA_FILTER_LABELS.indexOf(a) - MEDIA_FILTER_LABELS.indexOf(b);
   });
-  const labels = mode === 'overview' ? sorted : sorted.filter(l => (counts[l] || 0) > 0);
+  // L3 · render the SAME chips in both modes — categories with zero
+  // available items are surfaced as greyed/disabled (`media-pill--empty`
+  // + non-tappable), not removed entirely, so the operator sees the
+  // full taxonomy at a glance and knows what is/isn't available right
+  // now. Recomputed from the same `_aggregateMediaCounts()` source as
+  // the badge counts in L2 (single source of truth); the post-delete
+  // refresh in chrome/storage-stats.js re-fetches + re-renders.
+  const labels = sorted;
   let html = labels.map(l => {
     const cnt = counts[l] || 0;
     const empty = cnt === 0;
