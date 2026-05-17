@@ -441,6 +441,18 @@ class TrackingWorker(threading.Thread):
             spawn_score, floor_score, grace_s, iou_thresh = _resolve_track_thresholds(
                 self._cam_cfg_getter, job.camera_id,
             )
+            # The live runtime needs spawn=0.5 to suppress false-trigger
+            # notifications. The post-clip worker only writes a
+            # visualization sidecar — every detection above the raw
+            # floor is worth recording so the user sees WHAT the model
+            # found, even at moderate confidence. CPU-fallback on
+            # main-stream 4K frames frequently sits in [0.20, 0.50]
+            # for clearly-visible subjects (the model is shape-trained
+            # for 320×320 inputs); the live spawn threshold would
+            # discard those entirely and produce tracks=[] sidecars.
+            # Detections are still tagged via score so the renderer
+            # can paint sub-original-spawn samples as tentative.
+            effective_spawn = floor_score
             state = _TrackerState()
             frame_idx = 0
             sample_interval = meta["sample_interval"]
@@ -461,7 +473,7 @@ class TrackingWorker(threading.Thread):
                 _associate_detections(
                     state, dets, frame_idx, t_s,
                     frame_w=frame_w, frame_h=frame_h,
-                    spawn_score=spawn_score,
+                    spawn_score=effective_spawn,
                     iou_threshold=iou_thresh,
                 )
                 frame_idx += sample_interval
@@ -475,6 +487,12 @@ class TrackingWorker(threading.Thread):
             state.closed.extend(state.active)
             state.active = []
 
+            # gates.min_confidence reflects the LIVE spawn threshold so
+            # the timeline panel's "<spawn>% Spuren bestätigt" copy
+            # stays aligned with what the runtime would have notified
+            # on. The worker's permissive effective spawn (== floor) is
+            # an internal detail; surfacing it would make the gate
+            # values misleading.
             payload = _build_payload(
                 state, fps, frame_count, meta["duration_s"],
                 allowed, job.video_path, self._storage_root,
