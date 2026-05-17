@@ -59,12 +59,43 @@ export function mountZoneOverlayForLightbox(item, opts = {}){
   _videoEl = mediaEl;
   const canvas = _ensureCanvas(wrap);
   const cam = (state.cameras || []).find(c => c.id === item.camera_id) || {};
-  // Sanitise polygons into the shape renderZoneLayer expects —
-  // both editor-source ({points:[{x,y}]}) and legacy ({poly:[...]})
-  // forms come through.
+  // Parse preview_resolution ("640×360") into a fallback source size.
+  // Used for LEGACY polygons that don't stamp their own
+  // source_w/source_h (pre-pn834). Those polygons were drawn against
+  // the substream snapshot in the cam-edit canvas, so reading the
+  // camera's reported preview resolution recovers the original
+  // reference frame even when source_w/source_h are absent.
+  let fallbackW = 0, fallbackH = 0;
+  const pres = String(cam.preview_resolution || '');
+  const presM = pres.match(/(\d+)\s*[x×]\s*(\d+)/);
+  if (presM){
+    fallbackW = parseInt(presM[1], 10) || 0;
+    fallbackH = parseInt(presM[2], 10) || 0;
+  }
+  // Preserve the WRAPPER objects (with `points`, `source_w`, `source_h`)
+  // so zone-layer can read source_w/source_h per-polygon. The previous
+  // shape pre-extracted `.points` and silently lost the dims —
+  // legacy polygons saved against the substream snapshot then mapped
+  // 1 : 1 onto a 4K main-stream clip and shrank to invisible specks in
+  // the top-left corner. For polygons without source_w/h, inject the
+  // camera's preview resolution as a sensible fallback.
+  const _normalize = (p) => {
+    if (!p) return null;
+    if (Array.isArray(p)){
+      // Pure points array — preserve as-is; zone-layer's _src() falls
+      // back to the caller's srcW/srcH. With our fallback below, that
+      // becomes the camera's preview resolution rather than the 4K
+      // main-stream's native dims.
+      return p;
+    }
+    const out = { ...p };
+    if (!out.source_w && fallbackW > 0) out.source_w = fallbackW;
+    if (!out.source_h && fallbackH > 0) out.source_h = fallbackH;
+    return out;
+  };
   const polygons = {
-    zones: (cam.zones || []).map(z => z.points || z.poly || z),
-    masks: (cam.masks || []).map(m => m.points || m.poly || m),
+    zones: (cam.zones || []).map(_normalize).filter(Boolean),
+    masks: (cam.masks || []).map(_normalize).filter(Boolean),
   };
   const isTL = item.type === 'timelapse';
   // Initial visibility — zones always on, masks hidden by default

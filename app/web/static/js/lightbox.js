@@ -26,6 +26,7 @@ import { lbState } from './mediathek/state.js';
 import {
   lbLoadTracksForItem, lbStopTrackingPlayback,
   lbRenderTrackTimeline, lbClearTrackTimeline,
+  setBboxOverlayVisibility,
 } from './mediathek/bbox-overlay/index.js';
 import { openMediaView } from './mediaview/index.js';
 import { mountRecordedPanels } from './mediaview/panels/orchestration.js';
@@ -195,29 +196,37 @@ export function _setupVideoChrome(item){
   mountZoneOverlayForLightbox(item, { hideMasks: item?.type === 'timelapse' });
   // Overlay-toggles pill bar — Mediathek motion clips get all four
   // pills (bboxes/trails/zones/masks), weather timelapses get just
-  // zones+masks. Toggling zones/masks flips the live visibility on
-  // the zone overlay above; bboxes/trails persist their state in
-  // localStorage but the bbox-overlay show/hide wiring lands in a
-  // follow-up — for now those pills act as bookmarks for the user's
-  // preference.
+  // zones+masks. Each pill flips its corresponding layer's visibility
+  // live on the current viewport — zones/masks reach into the zone
+  // overlay, bboxes/trails reach into the bbox-overlay renderer.
   const _toggleHandle = mountWeatherToggleBar(item, (id, on, _all) => {
     if (id === 'zones' || id === 'masks'){
       window._setZoneOverlayVisibility?.({
         showZones: id === 'zones' ? on : undefined,
         showMasks: id === 'masks' ? on : undefined,
       });
+    } else if (id === 'bboxes'){
+      setBboxOverlayVisibility({ showBboxes: on });
+    } else if (id === 'trails'){
+      setBboxOverlayVisibility({ showTrails: on });
     }
   });
-  // Sync the zone-overlay's initial visibility to whatever the
-  // toggle bar resolved (persisted localStorage state if present,
-  // otherwise _TOGGLES defaults). Without this the mount helper's
-  // own initial showZones=true could diverge from a remembered
-  // "user turned zones off last time" preference.
+  // Sync ALL four layers' initial visibility to whatever the toggle
+  // bar resolved (persisted localStorage values for bboxes/trails;
+  // declared defaults for zones/masks). Without this the layer
+  // renderers' own defaults could diverge from a remembered
+  // "user turned X off last time" preference.
   const _initial = _toggleHandle?.getState?.() || {};
   if ('zones' in _initial || 'masks' in _initial){
     window._setZoneOverlayVisibility?.({
       showZones: !!_initial.zones,
       showMasks: !!_initial.masks,
+    });
+  }
+  if ('bboxes' in _initial || 'trails' in _initial){
+    setBboxOverlayVisibility({
+      showBboxes: !!_initial.bboxes,
+      showTrails: !!_initial.trails,
     });
   }
 }
