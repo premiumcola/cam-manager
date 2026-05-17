@@ -53,7 +53,18 @@ def api_media_storage_stats():
                         jpg_count += 1
                     except Exception:
                         pass
-            json_files = list(cam_dir.rglob("*.json"))
+            # L2 · count EVENT JSONs only. The post-clip tracking
+            # worker writes a `<event>.tracks.json` sidecar next to
+            # each motion clip — those are NOT events, they're
+            # diagnostic data for ONE existing event. Including them
+            # inflated event_count (and downstream motionOnly =
+            # event_count - objTotal) by ~one per indexed clip,
+            # producing the "Garten 7 files but 11 motion" badge
+            # mismatch the user reported.
+            json_files = [
+                p for p in cam_dir.rglob("*.json")
+                if not p.name.endswith(".tracks.json")
+            ]
             json_count = len(json_files)
             # Sorted reverse → newest first; break out of the snap searches once both are populated.
             for jf in sorted(json_files, reverse=True):
