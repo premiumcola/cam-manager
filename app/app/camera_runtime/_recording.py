@@ -339,11 +339,50 @@ class RecordingMixin:
                 })
             except Exception:
                 pass
+
+        # Tracking sidecar — enqueue once per finalized clip so the
+        # next Mediathek open finds <event>.tracks.json on disk. The
+        # ffmpeg re-encode path used to skip this step; the legacy
+        # OpenCV-buffer finalize did it, so the Lightbox kept showing
+        # "Tracking wird generiert" on every first open of an
+        # ffmpeg-recorded clip. video_relpath is the source of truth
+        # for the playable file (vid_path on success, raw_path on
+        # fallback) — derive the absolute path from it.
+        if video_url and video_relpath:
+            playable = storage_root / video_relpath
+            snap = (storage_root / thumb_rel) if thumb_rel else None
+            self._enqueue_tracks_for_clip(event_id, playable, snap)
         # Telegram alert is fired once, by the modern push pipeline in
         # _finalize_motion_clip via TelegramService.send_event_alert. The
         # legacy send_alert_sync alert that used to live here was a duplicate
         # — it produced a second bubble per detection with a different button
         # layout and confused users. Removed.
+
+    def _enqueue_tracks_for_clip(self, event_id: str, video_path: Path,
+                                 snapshot_path: Path | None) -> None:
+        """Hand the freshly-finalized clip to the post-clip tracking worker so
+        the next Mediathek open finds a populated <video>.tracks.json sidecar.
+
+        Called from BOTH finalize paths (ffmpeg re-encode AND OpenCV
+        fallback) so every recorded clip ships with a sidecar — the
+        Lightbox's reindex banner is meant for genuinely missing/corrupt
+        sidecars, not for every fresh recording.
+        """
+        if not video_path or not video_path.exists():
+            return
+        try:
+            from ..tracking_worker import TrackingJob, singleton as _tw_singleton
+            worker = _tw_singleton()
+            if worker is None:
+                return
+            worker.enqueue(TrackingJob(
+                event_id=event_id,
+                video_path=video_path,
+                snapshot_path=snapshot_path,
+                camera_id=self.camera_id,
+            ))
+        except Exception as _te:
+            log.debug("[%s] tracking enqueue failed: %s", self.camera_id, _te)
 
     def _build_recording_settings_snapshot(self) -> dict:
         """Capture the detection config active at clip-finalize time.
@@ -613,19 +652,8 @@ class RecordingMixin:
         # set) or when the tracking worker hasn't been built yet
         # (early boot).
         if video_relpath and vid_path is not None and vid_path.exists():
-            try:
-                from ..tracking_worker import TrackingJob, singleton as _tw_singleton
-                worker = _tw_singleton()
-                if worker is not None:
-                    snap_path = (storage_root / thumb_rel) if thumb_rel else None
-                    worker.enqueue(TrackingJob(
-                        event_id=event_id,
-                        video_path=vid_path,
-                        snapshot_path=snap_path,
-                        camera_id=self.camera_id,
-                    ))
-            except Exception as _te:
-                log.debug("[%s] tracking enqueue failed: %s", self.camera_id, _te)
+            snap = (storage_root / thumb_rel) if thumb_rel else None
+            self._enqueue_tracks_for_clip(event_id, vid_path, snap)
 
         if self.mqtt and self.cfg.get("mqtt_enabled", True):
             self.mqtt.publish(f"events/{self.camera_id}", event)
