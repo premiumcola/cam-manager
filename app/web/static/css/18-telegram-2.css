@@ -15,17 +15,23 @@
    empty     = greyed and non-interactive (.media-pill--empty rule below). */
 .media-pill.cat-filter-btn{
   border:none;padding:6px 14px;border-radius:10px;min-width:0;min-height:36px;
-  /* Idle now carries a faint --cb-tinted bg so each filter hints at its
-     own colour on the surface, not just on the icon/label — keeping the
-     two-tier hierarchy with active. Fallback grey for any pill missing
-     a --cb (e.g. an "alle Filter aus" residual). */
-  background:color-mix(in srgb,var(--cb,#94a3b8) 10%,transparent);
-  color:color-mix(in srgb,var(--cb,#94a3b8) 70%,transparent);
+  /* L4 · idle chip needs a SOLID dark surface so every category's
+     icon (the canonical multi-color glyphs from core/icons.js) has
+     a consistent dark backdrop to contrast against — the dark-fill
+     icons (dog #7c2d12, squirrel #7c4a1f) used to disappear into
+     the previous color-mix tint of their OWN hue. Keep a small
+     --cb-tinted overlay via the inset shadow so the chip still
+     hints at its category color without becoming the icon's
+     backdrop. */
+  background:rgba(15,23,42,.55);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cb,#94a3b8) 30%,transparent);
+  color:color-mix(in srgb,var(--cb,#94a3b8) 75%,#e2e8f0);
   font-weight:600;
 }
 .media-pill.cat-filter-btn:hover{
-  background:color-mix(in srgb,var(--cb,#94a3b8) 18%,transparent);
-  color:color-mix(in srgb,var(--cb,#94a3b8) 88%,transparent);
+  background:rgba(15,23,42,.72);
+  box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--cb,#94a3b8) 50%,transparent);
+  color:color-mix(in srgb,var(--cb,#94a3b8) 90%,#e2e8f0);
 }
 .media-pill.cat-filter-btn.active{
   background:color-mix(in srgb,var(--cb,#94a3b8) 25%,transparent);
@@ -63,8 +69,12 @@
 .media-section-title .mst-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .media-pill.cat-filter-btn .mp-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 6px;margin-left:4px;border-radius:999px;background:rgba(0,0,0,.32);color:inherit;font-size:11px;font-weight:700;line-height:1}
 .media-pill.cat-filter-btn.active .mp-count{background:rgba(0,0,0,.45)}
-.media-pill.cat-filter-btn.media-pill--empty{background:rgba(255,255,255,.05)!important;color:#6b7280!important;opacity:1;pointer-events:none;cursor:default;box-shadow:none!important}
-.media-pill.cat-filter-btn.media-pill--empty .cfb-icon{filter:grayscale(1) brightness(.75) contrast(1.1)}
+.media-pill.cat-filter-btn.media-pill--empty{background:rgba(15,23,42,.4)!important;color:#94a3b8!important;opacity:1;pointer-events:none;cursor:default;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)!important}
+/* L4 · empty-chip icon stays visibly muted instead of being washed
+   to invisibility — grayscale + brightness-up so even the dark-
+   fill glyphs (dog/squirrel/car) remain clearly readable as a
+   "this category exists but is currently unavailable" cue. */
+.media-pill.cat-filter-btn.media-pill--empty .cfb-icon{filter:grayscale(1) brightness(1.4) contrast(.9);opacity:.65}
 /* Section-rhythm gap between the chip strip and the cards grid.
    Tightened from 22 → 14 px so the gap below the filter row
    roughly mirrors the gap above it (section-head 12 + collapsed
