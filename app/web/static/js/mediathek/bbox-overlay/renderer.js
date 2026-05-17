@@ -168,7 +168,8 @@ export function _lbDrawDetections(){
           ? _firstSampleOfTrack(tr)
           : _interpolateTrackAt(tr, t);
         if (!sample) continue;
-        _drawTrackBox(ctx, sample, tr.color, offX, offY, scale, spawnThreshold);
+        const status = _classifyTrackStatus(tr, sample, spawnThreshold);
+        _drawTrackBox(ctx, sample, tr.color, offX, offY, scale, status);
       }
     }
     return;
@@ -204,41 +205,80 @@ export function _lbDrawDetections(){
   if (!dets.length) return;
   for (const d of dets){
     const c = colors[d.label] || colors.unknown;
-    _drawTrackBox(ctx, { bbox: d.bbox, score: d.score, label: d.label },
-                  c, offX, offY, scale, spawnThreshold);
+    const sample = { bbox: d.bbox, score: d.score, label: d.label };
+    const status = _classifyTrackStatus(null, sample, spawnThreshold);
+    _drawTrackBox(ctx, sample, c, offX, offY, scale, status);
   }
 }
 
-function _drawTrackBox(ctx, sample, color, offX, offY, scale, spawnThreshold){
+/**
+ * Classify a track-or-detection sample against the spawn threshold.
+ *
+ *   confirmed — the SAMPLE's score is ≥ threshold right now.
+ *   weak      — the track's best_score reached threshold at some
+ *               point, but the CURRENT sample is below it.
+ *   ghost     — best_score NEVER reached threshold (the track was
+ *               kept alive entirely on tentative continuation).
+ *
+ * Legacy fallback path (single detection, no track): treat as
+ * confirmed/weak based purely on score vs threshold — there's no
+ * track history to derive a "best ever" from.
+ */
+export function _classifyTrackStatus(track, sample, threshold){
+  const t = (typeof threshold === 'number') ? threshold : _TRACK_SPAWN_SCORE;
+  const cur = (sample && sample.score != null) ? sample.score : null;
+  const best = (track && track.best_score != null) ? track.best_score : null;
+  // Track history available — three-tier classification.
+  if (best != null){
+    if (best < t) return 'ghost';
+    if (cur != null && cur < t) return 'weak';
+    return 'confirmed';
+  }
+  // No track context — collapse to the two-tier legacy view.
+  if (cur != null && cur < t) return 'weak';
+  return 'confirmed';
+}
+
+// Style table for the three tracking-status categories. The bbox
+// renderer AND the legend component read these (the legend swatch is
+// just a 24×16 stroke painted with the same lineDash + alpha), so
+// changing a number here propagates to every status surface.
+export const _STATUS_STYLE = {
+  confirmed: { dash: [],     alpha: 1.00, marker: ''   },
+  weak:      { dash: [6, 4], alpha: 1.00, marker: '↓ ' },
+  ghost:     { dash: [2, 4], alpha: 0.55, marker: '≈ ' },
+};
+
+function _drawTrackBox(ctx, sample, color, offX, offY, scale, status){
   const b = sample.bbox;
   const x1 = offX + b.x1 * scale, y1 = offY + b.y1 * scale;
   const x2 = offX + b.x2 * scale, y2 = offY + b.y2 * scale;
   const w = x2 - x1, h = y2 - y1;
   if (w <= 0 || h <= 0) return;
   const c = color || '#22c55e';
-  // Two-tier visual: confirmed (≥ spawn) keeps the solid 2 px stroke;
-  // tentative (< spawn) uses a dashed stroke + a "↓" prefix on the
-  // score label so the operator sees the SAME track id continuing
-  // through low-confidence frames without confusing it with a fresh
-  // detection.
-  const tentativeThreshold = (typeof spawnThreshold === 'number')
-    ? spawnThreshold : _TRACK_SPAWN_SCORE;
-  const tentative = sample.score != null && sample.score < tentativeThreshold;
+  const cat = (status && _STATUS_STYLE[status]) ? status : 'confirmed';
+  const style = _STATUS_STYLE[cat];
+  ctx.save();
+  ctx.globalAlpha = style.alpha;
   ctx.strokeStyle = c;
   ctx.lineWidth = 2;
-  ctx.setLineDash(tentative ? [5, 4] : []);
+  ctx.setLineDash(style.dash);
   ctx.strokeRect(x1, y1, w, h);
   ctx.setLineDash([]);
+  ctx.globalAlpha = 1;
   const lblName = OBJ_LABEL[sample.label] || sample.label || '';
-  if (!lblName) return;
-  const pct = sample.score != null ? Math.round(sample.score * 100) : null;
-  const scoreText = pct != null ? `${tentative ? '↓ ' : ''}${pct}%` : '';
-  const text = scoreText ? `${lblName} · ${scoreText}` : lblName;
-  const padX = 6, pillH = 18;
-  const tw = ctx.measureText(text).width;
-  const pillY = Math.max(0, y1 - pillH - 2);
-  ctx.fillStyle = 'rgba(0,0,0,0.72)';
-  ctx.fillRect(x1, pillY, tw + padX * 2, pillH);
-  ctx.fillStyle = c;
-  ctx.fillText(text, x1 + padX, pillY + 3);
+  if (lblName){
+    const pct = sample.score != null ? Math.round(sample.score * 100) : null;
+    const scoreText = pct != null ? `${style.marker}${pct}%` : '';
+    const text = scoreText ? `${lblName} · ${scoreText}` : lblName;
+    const padX = 6, pillH = 18;
+    const tw = ctx.measureText(text).width;
+    const pillY = Math.max(0, y1 - pillH - 2);
+    ctx.globalAlpha = style.alpha;
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillRect(x1, pillY, tw + padX * 2, pillH);
+    ctx.fillStyle = c;
+    ctx.fillText(text, x1 + padX, pillY + 3);
+  }
+  ctx.restore();
 }
