@@ -134,12 +134,26 @@ export function _renderErkSimResult(data){
       ? `${passCount} Treffer würden Alarm auslösen`
       : (dets.length === 0 ? 'Keine Erkennung' : 'Kein Treffer würde Alarm auslösen');
   }
-  // Boxes — paint-order=stroke on the label so the dark halo stays
-  // readable above bright snapshot regions. font-size scales with the
-  // viewBox; an absolute "10 px" on a 1920-wide viewBox shows up as
-  // ~10 px in screen pixels regardless of how the wrapper scales.
+  // Reset the SVG overlay to layer skeletons. Each layer renders its
+  // own content into the matching <g class="erk-layer ..."> so the
+  // pill bar can hide an entire layer with a single attribute flip
+  // (visibility="hidden") without re-running inference. Order in the
+  // DOM = paint order: zones/masks at the back, trails next, bboxes
+  // in front — matches the Mediathek lightbox layering.
   if (ovl){
-    ovl.innerHTML = dets.map(d => {
+    ovl.innerHTML = `
+      <g class="erk-layer erk-zonemask-layer" data-layer="zones"></g>
+      <g class="erk-layer erk-trails-layer" data-layer="trails"></g>
+      <g class="erk-layer erk-bboxes-layer" data-layer="bboxes"></g>`;
+  }
+  // Bboxes paint into the dedicated layer group. paint-order=stroke
+  // on the label so the dark halo stays readable above bright
+  // snapshot regions. font-size scales with the viewBox; an absolute
+  // "10 px" on a 1920-wide viewBox shows up as ~10 px in screen
+  // pixels regardless of how the wrapper scales.
+  const boxLayer = ovl?.querySelector('.erk-bboxes-layer');
+  if (boxLayer){
+    boxLayer.innerHTML = dets.map(d => {
       const cls = `erk-det-box is-${d.verdict}`;
       const labelText = `${d.label} ${Math.round(d.score * 100)}%`;
       const fontSize = Math.max(10, Math.round(fs.w / 100));

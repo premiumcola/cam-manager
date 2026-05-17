@@ -11,10 +11,15 @@
 // against AND that the result panel is still visible. Either failing
 // silently stops the loop — no hard coupling to editCamera() or the
 // panel-close handler.
-import { byId } from '../../core/dom.js';
+import { byId, esc } from '../../core/dom.js';
+import { state as appState } from '../../core/state.js';
 import { _renderErkSimError, _renderErkSimResult } from './snapshot.js';
 import { IoUTracker } from './tracker.js';
 import { LiveTimeline } from './timeline.js';
+import { renderOverlayToggles } from '../../mediaview/overlay-toggles.js';
+import {
+  ZONE_STROKE, ZONE_FILL, MASK_STROKE, MASK_FILL,
+} from '../../core/zone-tokens.js';
 
 // Floor/ceiling for the adaptive polling cadence. Fast healthy ticks
 // stay at 1 Hz (the floor); a backend that takes ~3 s to deliver a
@@ -27,6 +32,16 @@ const _TICK_FACTOR = 1.2;
 const _PATH_CAP = 12;     // points painted per trail; tracker stores up to 60
 
 let _session = null;      // null when idle; one object per active live run
+
+// Layer visibility flags driven by the overlay-toggles pill bar.
+// Module-scoped so the SVG layer renderers and the toggle handler
+// share state without round-tripping through DOM attributes.
+const _layerVisible = { bboxes: true, trails: true, zones: false, masks: false };
+// Cached frame_size so the pill-toggle redraws can re-render zones /
+// masks without needing a fresh inference response (zones don't
+// change per tick — they're static camera config). Trails / bboxes
+// have no stand-alone redraw because they need fresh tick data.
+let _lastFrameSize = null;
 
 const _IDLE_HTML = `
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -55,10 +70,14 @@ export function _onErkSimulateClick(ev){
 // stops the loop synchronously, not "next tick".
 export function stopLive(){
   if (!_session) return;
-  const { btn, abort, tickHandle } = _session;
+  const { btn, abort, tickHandle, toggleHandle } = _session;
   try { abort?.abort(); } catch { /* ignore */ }
   if (tickHandle) clearTimeout(tickHandle);
+  try { toggleHandle?.teardown?.(); } catch { /* ignore */ }
+  const togRow = byId('erkSimToggles');
+  if (togRow) togRow.remove();
   _session = null;
+  _lastFrameSize = null;
   if (btn){
     btn.classList.remove('is-live');
     btn.disabled = false;
@@ -77,11 +96,29 @@ function startLive(btn){
     tlHost.hidden = false;
     timeline.render(tlHost, Date.now(), Date.now());  // empty-state hello
   }
+  // Overlay-toggles pill bar — same component the Mediathek and live-
+  // view contexts mount. Lives just above the snapshot wrap so the
+  // pills sit naturally next to the frame they affect; the
+  // contextKey scopes localStorage so bboxes/trails persist across
+  // page loads but zones/masks always re-open at the declared default.
+  const toggleHandle = _mountToggleBar();
+  // Sync the initial layer state to whatever the toggle bar resolved
+  // (persisted user preference for bboxes/trails; declared defaults
+  // for zones/masks). Without this the layer renderers' own defaults
+  // could diverge from a remembered "user turned X off last time"
+  // preference.
+  const initial = toggleHandle?.getState?.() || {};
+  if ('bboxes' in initial) _layerVisible.bboxes = !!initial.bboxes;
+  if ('trails' in initial) _layerVisible.trails = !!initial.trails;
+  if ('zones'  in initial) _layerVisible.zones  = !!initial.zones;
+  if ('masks'  in initial) _layerVisible.masks  = !!initial.masks;
+  _applyLayerVisibility();
   _session = {
     btn,
     camId,
     tracker: new IoUTracker(),
     timeline,
+    toggleHandle,
     startedAt: Date.now(),
     abort: null,
     tickHandle: null,
@@ -89,6 +126,108 @@ function startLive(btn){
   // Kick the first tick immediately so the user sees a frame within
   // a couple hundred ms; subsequent ticks are paced by _scheduleNext.
   _tick();
+}
+
+function _mountToggleBar(){
+  const wrap = byId('erkSimResult');
+  if (!wrap) return null;
+  // Insert the bar between the result-head and the live body so the
+  // pills sit above the snapshot — matches the Mediathek lightbox
+  // layout where the pill row is the first thing under the close × bar.
+  let row = byId('erkSimToggles');
+  const body = byId('erkSimLiveBody');
+  if (!row){
+    row = document.createElement('div');
+    row.id = 'erkSimToggles';
+    row.className = 'mv-live-toggles erk-sim-toggles';
+    if (body && body.parentNode){
+      body.parentNode.insertBefore(row, body);
+    } else {
+      wrap.appendChild(row);
+    }
+  }
+  return renderOverlayToggles(row, {
+    available:  ['bboxes', 'trails', 'zones', 'masks'],
+    contextKey: 'erk-sim',
+    hintText:   'Lange drücken für Beschreibung',
+    onChange: (id, on, _all) => {
+      if (!(id in _layerVisible)) return;
+      _layerVisible[id] = !!on;
+      _applyLayerVisibility();
+      // Zones / masks don't get re-painted from a tick (they're
+      // static camera config), so force a redraw of just that layer
+      // whenever the user flips their pills. Bboxes / trails are
+      // tick-driven so toggling them is purely a visibility flip
+      // — the next tick redraws into the layer either way.
+      if (id === 'zones' || id === 'masks') _redrawZoneMaskLayer();
+    },
+  });
+}
+
+function _applyLayerVisibility(){
+  const ovl = byId('erkSimOverlay');
+  if (!ovl) return;
+  for (const id of ['bboxes', 'trails', 'zones', 'masks']){
+    // zones and masks share one layer group (erk-zonemask-layer);
+    // either flag visible → render group; both off → hide.
+    let g = null;
+    if (id === 'bboxes') g = ovl.querySelector('.erk-bboxes-layer');
+    else if (id === 'trails') g = ovl.querySelector('.erk-trails-layer');
+    // Zone/mask group visibility is computed once below — the
+    // individual zones/masks pills affect _what_ paints into the
+    // group, not whether the group itself is hidden.
+    if (g) g.setAttribute('visibility', _layerVisible[id] ? 'visible' : 'hidden');
+  }
+  const zg = ovl.querySelector('.erk-zonemask-layer');
+  if (zg){
+    const anyOn = _layerVisible.zones || _layerVisible.masks;
+    zg.setAttribute('visibility', anyOn ? 'visible' : 'hidden');
+  }
+}
+
+function _redrawZoneMaskLayer(){
+  const ovl = byId('erkSimOverlay');
+  const layer = ovl?.querySelector('.erk-zonemask-layer');
+  if (!layer || !_session) return;
+  const cam = (appState.cameras || []).find(c => (c.id || '') === _session.camId);
+  if (!cam){ layer.innerHTML = ''; return; }
+  const fs = _lastFrameSize || { w: 1920, h: 1080 };
+  // Parse preview_resolution ("640×360") for legacy polygons missing
+  // source_w/source_h — same fallback the Mediathek mount uses, so
+  // legacy zones drawn against the substream snapshot keep mapping
+  // correctly onto the simulation snapshot's frame size.
+  let fbW = 0, fbH = 0;
+  const pres = String(cam.preview_resolution || '');
+  const presM = pres.match(/(\d+)\s*[x×]\s*(\d+)/);
+  if (presM){ fbW = parseInt(presM[1], 10) || 0; fbH = parseInt(presM[2], 10) || 0; }
+  // SVG strokeWidth scales with the viewBox; use vector-effect so a
+  // 2 px stroke reads the same regardless of frame_size.
+  const polyToSvg = (poly, stroke, fill) => {
+    const points = (poly.points || poly.poly || poly);
+    if (!Array.isArray(points) || points.length < 2) return '';
+    const srcW = poly.source_w || fbW || fs.w;
+    const srcH = poly.source_h || fbH || fs.h;
+    const sx = fs.w / Math.max(1, srcW);
+    const sy = fs.h / Math.max(1, srcH);
+    const pts = points.map(pt => {
+      const x = (pt.x ?? pt[0]) ?? 0;
+      const y = (pt.y ?? pt[1]) ?? 0;
+      return `${x * sx},${y * sy}`;
+    }).join(' ');
+    return `<polygon points="${pts}" fill="${esc(fill)}" stroke="${esc(stroke)}" stroke-width="2" vector-effect="non-scaling-stroke" />`;
+  };
+  const parts = [];
+  if (_layerVisible.masks){
+    for (const m of (cam.masks || [])){
+      parts.push(polyToSvg(m, MASK_STROKE, MASK_FILL));
+    }
+  }
+  if (_layerVisible.zones){
+    for (const z of (cam.zones || [])){
+      parts.push(polyToSvg(z, ZONE_STROKE, ZONE_FILL));
+    }
+  }
+  layer.innerHTML = parts.join('');
 }
 
 async function _tick(){
@@ -137,6 +276,9 @@ async function _tick(){
 
     _renderErkSimResult(data);
     if (wrap) wrap.dataset.everShown = '1';
+    _lastFrameSize = data.frame_size || _lastFrameSize;
+    _redrawZoneMaskLayer();
+    _applyLayerVisibility();
 
     const dets = (data.detections || []).map(d => ({
       label: d.label,
@@ -184,29 +326,53 @@ function _trailColorForTrack(id){
   return _TRAIL_PALETTE[n % _TRAIL_PALETTE.length];
 }
 
-// Paint per-track polyline trails into the same SVG overlay
-// _renderErkSimResult just populated. Insert at the top of the SVG
-// so trails sit BEHIND the bboxes (SVG paints in document order).
+// Paint per-track polyline trails into the dedicated layer group
+// inside the SVG overlay. The layer's z-order (declared in
+// snapshot.js's overlay skeleton) keeps trails BEHIND bboxes.
+//
 // Stroke is per-TRACK-id so two simultaneous subjects get visibly
-// distinct trails; the verdict drives stroke-opacity (pass=1,
-// belowthresh=.5, filtered=.25) so the alarm-vs-noise signal stays
-// readable. Both attributes are inline so the existing
-// .erk-track-trail CSS no longer fights the per-track colour.
+// distinct trails. Each polyline is split into per-segment lines
+// with linearly-ramped stroke-opacity so the newest segment reads
+// nearly solid and the oldest fades toward transparent — matches
+// the Mediathek lightbox trail layer's visual treatment so the
+// user sees the same UI between the recorded and live contexts.
 function _renderTrails(tracks, frame_size){
   const ovl = byId('erkSimOverlay');
-  if (!ovl || tracks.length === 0) return;
+  const layer = ovl?.querySelector('.erk-trails-layer');
+  if (!layer){ return; }
+  if (!tracks || tracks.length === 0){
+    layer.innerHTML = '';
+    return;
+  }
   const fs = frame_size || { w: 1920, h: 1080 };
   const strokeW = Math.max(2, Math.round(fs.w / 720));
-  const trails = tracks.map(t => {
+  const verdictMul = (v) => v === 'pass' ? 1
+                          : v === 'belowthresh' ? 0.7
+                          : v === 'filtered' ? 0.4 : 0.85;
+  const parts = [];
+  for (const t of tracks){
     const path = t.path.slice(-_PATH_CAP);
-    if (path.length < 2) return '';
-    const points = path.map(p => `${p.cx},${p.cy}`).join(' ');
+    if (path.length < 2) continue;
     const c = _trailColorForTrack(t.id);
-    const op = t.last_verdict === 'pass' ? 1
-             : t.last_verdict === 'belowthresh' ? 0.5
-             : t.last_verdict === 'filtered' ? 0.25
-             : 0.6;
-    return `<polyline class="erk-track-trail" points="${points}" fill="none" stroke="${c}" stroke-opacity="${op}" stroke-width="${strokeW}" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>`;
-  }).join('');
-  if (trails) ovl.insertAdjacentHTML('afterbegin', trails);
+    const verdictScale = verdictMul(t.last_verdict);
+    // Per-segment lines with a ramped opacity. 0.10 → 0.95 across
+    // the polyline length, scaled by the track's verdict (so a
+    // filtered track's whole trail reads dimmer than a passing
+    // track's). Single SVG `g` per track keeps the DOM compact.
+    const lines = [];
+    for (let i = 1; i < path.length; i++){
+      const a = path[i - 1];
+      const b = path[i];
+      const segIdx = (i - 1) / Math.max(1, path.length - 2);
+      const alpha = (0.10 + segIdx * 0.85) * verdictScale;
+      lines.push(`<line x1="${a.cx}" y1="${a.cy}" x2="${b.cx}" y2="${b.cy}" stroke="${c}" stroke-opacity="${alpha.toFixed(3)}" stroke-width="${strokeW}" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`);
+    }
+    // Anchor dot at the leading edge of the trail — solid colour so
+    // the eye lands on the current track position even at a glance.
+    const head = path[path.length - 1];
+    const dotR = Math.max(strokeW + 1, Math.round(fs.w / 360));
+    lines.push(`<circle cx="${head.cx}" cy="${head.cy}" r="${dotR}" fill="${c}" />`);
+    parts.push(`<g class="erk-track-trail" data-track="${t.id}">${lines.join('')}</g>`);
+  }
+  layer.innerHTML = parts.join('');
 }

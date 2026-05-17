@@ -57,15 +57,34 @@
   .erk-live-dot{ animation:none; }
 }
 
+/* ── SVG overlay layer groups ──────────────────────────────────────────────
+   The erk-sim overlay paints all annotation layers into one SVG with
+   named groups (zones/masks at the back, trails in the middle,
+   bboxes in front). overlay-toggles pill bar flips group
+   `visibility` to show/hide an entire layer in one attribute write —
+   keeps the per-tick redraw cheap and lets the layers paint in
+   strict document order. */
+.erk-layer{ pointer-events:none; }
+
 /* ── Path trails painted under each confirmed track ────────────────────────
-   Sibling polylines inside the same SVG overlay as the bbox <rect>s.
-   Trails sit BEHIND the boxes (live.js inserts them with
-   `afterbegin` so SVG paints them first). Stroke colour is now per
-   TRACK ID (set inline by live.js from a 12-hue palette) so two
-   simultaneous subjects paint distinguishable trails; verdict drives
-   stroke-opacity (pass=1, belowthresh=.5, filtered=.25) — also
-   inline. The base rule only enforces fill:none here. */
+   Per-track <g> groups in the trails layer; each contains a series
+   of <line> segments with linearly-ramped stroke-opacity (older
+   segments fade) plus a solid <circle> anchor at the leading edge.
+   Stroke colour is per TRACK ID (set inline by live.js from a
+   12-hue palette) so two simultaneous subjects paint distinguishable
+   trails; the verdict scales the ramp uniformly so a filtered
+   track's whole trail reads dimmer than a passing one's. */
 .erk-track-trail{ fill:none; }
+
+/* ── Live-sim toggle bar ───────────────────────────────────────────────────
+   Shared overlay-toggles pill bar mounted by live.js · startLive.
+   Re-uses the same .mv-live-toggles base from the Mediathek
+   lightbox; this rule only adds the camera-edit-context spacing so
+   the pills don't crowd the snapshot wrap. */
+.erk-sim-toggles{
+  display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+  margin:0 0 10px 0;
+}
 
 
 /* ── Live presence timeline (sliding 30 s, per class) ──────────────────────
