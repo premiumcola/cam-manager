@@ -12,7 +12,6 @@ import {
   _REINDEX_RETRY_INTERVAL_MS,
   _reindexFinalFailed,
   _reindexInflight,
-  _reindexedThisSession,
 } from './_state.js';
 import { _logDiag } from './debug.js';
 import { _lbDrawDetections } from './renderer.js';
@@ -29,7 +28,6 @@ export async function _kickReindexFor(item){
   const eid = item.event_id;
   const cam = item.camera_id || '';
   if (!eid) return;
-  _reindexedThisSession.add(eid);
   _reindexInflight.add(eid);
   _showReindexBannerPending(item);
   _logDiag(`event=${eid} kicking reindex (camera_id=${cam})`, 'warn');

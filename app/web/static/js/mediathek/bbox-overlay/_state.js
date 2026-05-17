@@ -16,19 +16,22 @@ export const _tracksInflight = new Map(); // event_id → Promise
 
 // ── Auto-reindex bookkeeping ────────────────────────────────────────────
 // All keyed by event_id.
-//   _reindexedThisSession → events we've already POSTed at least once.
-//     Prevents reopen-spam re-queueing the worker.
 //   _reindexInflight      → reindex retry-loop is currently running.
 //     Legacy fallback bbox is suppressed for these so the user doesn't
-//     stare at a stationary mis-positioned box for ~17 s.
-//   _reindexFinalFailed   → 3 retries elapsed without a usable sidecar.
-export const _reindexedThisSession = new Set();
+//     stare at a stationary mis-positioned box during indexing.
+//   _reindexFinalFailed   → retry budget exhausted without a usable sidecar.
+// G2 · the per-session "already kicked" set was retired — clip opens
+// now always re-kick, so the only relevant signals are inflight + final-fail.
 export const _reindexInflight = new Set();
 export const _reindexFinalFailed = new Set();
 
+// G2 · CPU-fallback reindex on a 30 s clip routinely takes 12-18 s
+// (measured on the dev box: dur=15.4s for a 40 s clip). The retry
+// budget covers that with one cycle to spare:
+//   initial 5 s + 6 attempts × 5 s = 35 s total before declaring fail.
 export const _REINDEX_INITIAL_WAIT_MS = 5000;
-export const _REINDEX_RETRY_INTERVAL_MS = 4000;
-export const _REINDEX_MAX_RETRIES = 3;
+export const _REINDEX_RETRY_INTERVAL_MS = 5000;
+export const _REINDEX_MAX_RETRIES = 6;
 
 // Mirrors tracking_worker.TRACK_SPAWN_SCORE — a sample below this
 // floor is tentative (extends an existing track but couldn't spawn

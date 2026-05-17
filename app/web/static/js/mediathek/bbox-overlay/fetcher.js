@@ -7,7 +7,6 @@ import { lbState } from '../state.js';
 import {
   _reindexFinalFailed,
   _reindexInflight,
-  _reindexedThisSession,
   _tracksCache,
   _tracksInflight,
 } from './_state.js';
@@ -82,60 +81,68 @@ export function lbInvalidateTracks(eventId){
 // Public entry: load tracks for the just-opened item and prime the
 // timeline. Called from openLightbox after the video src is set; the
 // RAF loop kicks off via the play/loadedmetadata listeners.
+//
+// G2 · every clip open now ALWAYS kicks a fresh tracking re-index
+// (was: only when the sidecar was missing/empty). Cached tracks
+// (if any) render immediately so the user gets a swimlane right
+// away; the indexer runs in the background and the polling loop
+// swaps in a fresher payload when it lands. Motion clips with no
+// trigger detection (motion-only events) skip the auto-kick — there
+// is nothing for the tracker to spawn against.
 export async function lbLoadTracksForItem(item){
   if (!item) return;
   const tracks = await _fetchTracks(item);
   item._tracks = tracks;
   if (lbState.item !== item) return;
 
-  // Decide whether to kick the auto-reindex flow:
-  //   * no sidecar (null) AND event has ≥1 trigger detection
-  //   * sidecar with empty tracks AND event has ≥1 trigger detection
   const haveAnyTracks = !!(tracks
     && Array.isArray(tracks.tracks) && tracks.tracks.length > 0);
   const triggerDetCount = (item.detections || [])
     .filter(d => d && d.bbox && typeof d.bbox.x1 === 'number').length;
-  const sidecarMissing = tracks === null;
-  const sidecarEmpty = !!(tracks
-    && Array.isArray(tracks.tracks) && tracks.tracks.length === 0);
-  const shouldKick = (sidecarMissing || sidecarEmpty) && triggerDetCount >= 1;
-
-  if (shouldKick){
-    if (_reindexFinalFailed.has(item.event_id)){
-      _showReindexBannerError(item);
-      lbRenderTrackTimeline(item);
-      _lbDrawDetections();
-      return;
-    }
-    if (!_reindexedThisSession.has(item.event_id)){
-      _kickReindexFor(item);
-    } else if (_reindexInflight.has(item.event_id)){
-      _showReindexBannerPending(item);
-    }
-    lbRenderTrackTimeline(item);
-    _lbDrawDetections();
-    return;
-  }
-
-  if (!_reindexInflight.has(item.event_id)) _hideReindexBanner();
-
+  // Render any cached tracks immediately so the user isn't staring
+  // at an "Indexierung läuft" placeholder when usable data is
+  // already on disk. The fresher payload, when the reindex
+  // completes, replaces these via _retrySidecarFetch.
   lbRenderTrackTimeline(item);
   _lbDrawDetections();
-  // Kick the meter the moment tracks land. The RAF loop normally
-  // updates it, but on a paused / pre-play video the loop hasn't
-  // started yet — without this, the user sees no meter until they
-  // hit play even though a track might already be active at t=0.
-  _renderConfidenceMeter();
+  if (haveAnyTracks) _renderConfidenceMeter();
+
+  // Always kick a fresh reindex on open — unless this event has
+  // already exhausted the retry budget THIS session (final-failed),
+  // in which case re-kicking would just churn for nothing.
+  if (triggerDetCount === 0){
+    // Motion-only event: tracker has no spawnable detection to work
+    // with, so kicking the indexer is pointless. Hide any stale
+    // banner left over from a previous open.
+    if (!_reindexInflight.has(item.event_id)) _hideReindexBanner();
+    return;
+  }
+  if (_reindexFinalFailed.has(item.event_id)){
+    _showReindexBannerError(item);
+    return;
+  }
+  if (_reindexInflight.has(item.event_id)){
+    // A re-index started by a previous open is still polling — let
+    // it finish; its retry loop will update the swimlane when the
+    // new sidecar lands. Surface the pending banner so the user
+    // sees the progress.
+    _showReindexBannerPending(item);
+    return;
+  }
+  // Fresh kick. The once-per-session gate was retired (see G2)
+  // so reopens also trigger a re-run — matches the brief's
+  // "every time a clip is opened" requirement.
+  _kickReindexFor(item);
 
   if (!haveAnyTracks){
     _logDiag(
       `event=${item.event_id} render path=legacy `
-      + `(no tracks, ${triggerDetCount} trigger dets)`,
-      'warn');
+      + `(no tracks yet, ${triggerDetCount} trigger dets) — reindexing`,
+      'info');
   } else {
     _logDiag(
       `event=${item.event_id} render path=tracks `
-      + `(${tracks.tracks.length} tracks)`,
+      + `(${tracks.tracks.length} tracks) — reindex refresh kicked`,
       'info');
   }
 }
