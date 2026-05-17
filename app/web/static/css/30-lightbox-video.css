@@ -427,6 +427,19 @@
   text-align:left;
   cursor:help;
 }
+/* ⊘ Maskiert — track sits inside an exclusion mask for the majority
+   of its samples. Bar background is already overridden inline; this
+   adds the corner glyph so the strip visually agrees with the
+   bbox's ⊘ corner badge on the video. */
+.lbtt-bar-masked{
+  position:absolute;top:50%;right:4px;transform:translate(0,-50%);
+  font-size:12px;line-height:12px;font-weight:600;
+  color:#fff;
+  pointer-events:none;
+}
+.lbtt-bar[data-masked="1"]{
+  opacity:.78;
+}
 
 /* Badges in the sidebar — height matches the strip (48 px) and the
    inner circle is 30 px so the avatar reads at desktop density. */

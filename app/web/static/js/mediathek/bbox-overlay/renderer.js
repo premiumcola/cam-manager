@@ -12,6 +12,14 @@ import { _TRACK_SPAWN_SCORE } from './_state.js';
 import { _isReindexBannerActive } from './reindex.js';
 import { _getHiddenClassesForCam } from './hidden-classes.js';
 import { renderTrailLayer } from '../../mediaview/canvas/trail-layer.js';
+import { _pointInPoly, _polyPoints } from '../../shape-editor/geometry.js';
+
+// Neutral gray for the ⊘ Maskiert modifier. Replaces the track's
+// per-identity color (the per-track hue still drives the timeline
+// row and the legend's "Farbe = Person" hint, but a masked-out
+// subject is rendered in neutral so it's visually clear it has
+// been filtered out of alerting).
+const _MASKED_STROKE = '#94a3b8';
 
 // Bbox + trail visibility — flipped by the overlay-toggles pill bar
 // (bboxes/trails). Module-scoped so the RAF redraw loop and the
@@ -161,6 +169,7 @@ export function _lbDrawDetections(){
       }
     }
 
+    const camMasks = _resolveMaskPolygonsForCam(lbState.item?.camera_id);
     if (_overlayVisibility.showBboxes){
       for (const tr of tracks.tracks){
         if (!isVisible(tr.label)) continue;
@@ -169,7 +178,8 @@ export function _lbDrawDetections(){
           : _interpolateTrackAt(tr, t);
         if (!sample) continue;
         const status = _classifyTrackStatus(tr, sample, spawnThreshold);
-        _drawTrackBox(ctx, sample, tr.color, offX, offY, scale, status);
+        const masked = _isSampleMasked(sample, natW, natH, camMasks);
+        _drawTrackBox(ctx, sample, tr.color, offX, offY, scale, status, masked);
       }
     }
     return;
@@ -203,12 +213,76 @@ export function _lbDrawDetections(){
     .filter(d => d && d.bbox && typeof d.bbox.x1 === 'number')
     .filter(d => isVisible(d.label));
   if (!dets.length) return;
+  const camMasks = _resolveMaskPolygonsForCam(lbState.item?.camera_id);
   for (const d of dets){
     const c = colors[d.label] || colors.unknown;
     const sample = { bbox: d.bbox, score: d.score, label: d.label };
     const status = _classifyTrackStatus(null, sample, spawnThreshold);
-    _drawTrackBox(ctx, sample, c, offX, offY, scale, status);
+    const masked = _isSampleMasked(sample, natW, natH, camMasks);
+    _drawTrackBox(ctx, sample, c, offX, offY, scale, status, masked);
   }
+}
+
+// Ground point = bottom-center of bbox. A subject is considered
+// inside an exclusion mask when its feet land there — head-in-bush
+// shouldn't trigger the mask filter when the body is in the open.
+function _isSampleMasked(sample, natW, natH, masks){
+  if (!sample || !sample.bbox) return false;
+  const cx = (sample.bbox.x1 + sample.bbox.x2) / 2;
+  const cy = sample.bbox.y2;
+  return _isPointInAnyMask(cx, cy, natW, natH, masks);
+}
+
+/**
+ * Resolve the camera's exclusion-mask polygons with normalized
+ * source_w/source_h. Legacy masks without explicit source dims fall
+ * back to the camera's preview_resolution — same logic the overlay
+ * paint uses in zone-overlay-mount.js, so the "is this bbox in a
+ * mask" test scales identically to what the user sees painted on
+ * the video.
+ */
+export function _resolveMaskPolygonsForCam(camId){
+  if (!camId) return [];
+  const cam = (state.cameras || []).find(c => (c.id || '') === camId);
+  if (!cam || !Array.isArray(cam.masks) || !cam.masks.length) return [];
+  let fallbackW = 0, fallbackH = 0;
+  const pres = String(cam.preview_resolution || '');
+  const presM = pres.match(/(\d+)\s*[x×]\s*(\d+)/);
+  if (presM){
+    fallbackW = parseInt(presM[1], 10) || 0;
+    fallbackH = parseInt(presM[2], 10) || 0;
+  }
+  return cam.masks.map(m => {
+    if (Array.isArray(m)){
+      return { points: m, source_w: fallbackW, source_h: fallbackH };
+    }
+    const out = { ...m };
+    if (!out.source_w && fallbackW > 0) out.source_w = fallbackW;
+    if (!out.source_h && fallbackH > 0) out.source_h = fallbackH;
+    return out;
+  });
+}
+
+/**
+ * Test whether the source-frame point (px, py) lies inside any of
+ * the camera's exclusion-mask polygons. Mask polygons may carry
+ * their own source_w/source_h (when the editor was authored
+ * against a substream snapshot); the test point is scaled into the
+ * mask's own source space before the ray-cast, so a 2560×1440 bbox
+ * coordinate maps correctly onto a mask drawn at 640×360.
+ */
+export function _isPointInAnyMask(px, py, srcW, srcH, masks){
+  if (!masks || !masks.length) return false;
+  for (const m of masks){
+    const points = _polyPoints(m);
+    if (points.length < 3) continue;
+    const msrcW = (m && typeof m === 'object' && m.source_w) || srcW;
+    const msrcH = (m && typeof m === 'object' && m.source_h) || srcH;
+    const sx = (msrcW > 0 && srcW > 0) ? (msrcW / srcW) : 1;
+    const sy = (msrcH > 0 && srcH > 0) ? (msrcH / srcH) : 1;
+    if (_pointInPoly({ x: px * sx, y: py * sy }, points)) return true;
+  }
+  return false;
 }
 
 /**
@@ -249,18 +323,22 @@ export const _STATUS_STYLE = {
   ghost:     { dash: [2, 4], alpha: 0.55, marker: '≈ ' },
 };
 
-function _drawTrackBox(ctx, sample, color, offX, offY, scale, status){
+function _drawTrackBox(ctx, sample, color, offX, offY, scale, status, masked){
   const b = sample.bbox;
   const x1 = offX + b.x1 * scale, y1 = offY + b.y1 * scale;
   const x2 = offX + b.x2 * scale, y2 = offY + b.y2 * scale;
   const w = x2 - x1, h = y2 - y1;
   if (w <= 0 || h <= 0) return;
-  const c = color || '#22c55e';
   const cat = (status && _STATUS_STYLE[status]) ? status : 'confirmed';
   const style = _STATUS_STYLE[cat];
+  // Masked-out overrides the track's per-identity color to a neutral
+  // gray and adds a ⊘ corner badge, but PRESERVES the ①/②/③ dash
+  // style + alpha so the operator can still read the underlying
+  // tracking status of a filtered-out subject.
+  const stroke = masked ? _MASKED_STROKE : (color || '#22c55e');
   ctx.save();
   ctx.globalAlpha = style.alpha;
-  ctx.strokeStyle = c;
+  ctx.strokeStyle = stroke;
   ctx.lineWidth = 2;
   ctx.setLineDash(style.dash);
   ctx.strokeRect(x1, y1, w, h);
@@ -269,7 +347,8 @@ function _drawTrackBox(ctx, sample, color, offX, offY, scale, status){
   const lblName = OBJ_LABEL[sample.label] || sample.label || '';
   if (lblName){
     const pct = sample.score != null ? Math.round(sample.score * 100) : null;
-    const scoreText = pct != null ? `${style.marker}${pct}%` : '';
+    const prefix = `${masked ? '⊘ ' : ''}${style.marker}`;
+    const scoreText = pct != null ? `${prefix}${pct}%` : '';
     const text = scoreText ? `${lblName} · ${scoreText}` : lblName;
     const padX = 6, pillH = 18;
     const tw = ctx.measureText(text).width;
@@ -277,8 +356,36 @@ function _drawTrackBox(ctx, sample, color, offX, offY, scale, status){
     ctx.globalAlpha = style.alpha;
     ctx.fillStyle = 'rgba(0,0,0,0.72)';
     ctx.fillRect(x1, pillY, tw + padX * 2, pillH);
-    ctx.fillStyle = c;
+    ctx.fillStyle = stroke;
     ctx.fillText(text, x1 + padX, pillY + 3);
+  }
+  // ⊘ corner badge — top-right of the box. Sits on its own small
+  // backdrop so it's readable against any video content. Drawn at
+  // full alpha (status alpha doesn't apply to the badge — it's a
+  // category indicator).
+  if (masked){
+    const badge = 14;
+    const bx = x2 - badge - 2;
+    const by = y1 + 2;
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.beginPath();
+    ctx.arc(bx + badge / 2, by + badge / 2, badge / 2 + 1, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = _MASKED_STROKE;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(bx + badge / 2, by + badge / 2, badge / 2 - 1, 0, Math.PI * 2);
+    ctx.stroke();
+    // Diagonal slash.
+    const r = badge / 2 - 2;
+    const cxBadge = bx + badge / 2;
+    const cyBadge = by + badge / 2;
+    const off = r / Math.SQRT2;
+    ctx.beginPath();
+    ctx.moveTo(cxBadge - off, cyBadge - off);
+    ctx.lineTo(cxBadge + off, cyBadge + off);
+    ctx.stroke();
   }
   ctx.restore();
 }

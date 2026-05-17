@@ -12,7 +12,12 @@ import {
   _getHiddenClassesForCam,
   _setHiddenClassesForCam,
 } from './hidden-classes.js';
-import { _lbDrawDetections, _resolveAllowedLabels } from './renderer.js';
+import {
+  _isPointInAnyMask,
+  _lbDrawDetections,
+  _resolveAllowedLabels,
+  _resolveMaskPolygonsForCam,
+} from './renderer.js';
 import { lbInvalidateTracks, lbLoadTracksForItem } from './fetcher.js';
 import {
   _updatePlayPct,
@@ -21,6 +26,26 @@ import {
   _wireScrubBar,
 } from './time-axis.js';
 import { _wireBarEndTooltips } from './track-loss-tooltip.js';
+
+// Per-track masked classification. Walks each sample's ground point
+// (bottom-center of bbox) and counts how many fall inside an exclusion
+// mask. A track whose majority of samples sit inside a mask is
+// rendered gray on the timeline + carries the ⊘ corner badge in the
+// row's bar so the operator sees the same alert-filtered indication
+// they see on the video bbox. C7 will refine this to per-segment.
+function _maskedRatioForTrack(track, srcW, srcH, masks){
+  if (!masks || !masks.length) return 0;
+  const samples = track?.samples || [];
+  if (!samples.length) return 0;
+  let masked = 0;
+  for (const s of samples){
+    const bb = s.bbox || {};
+    const cx = (bb.x1 + bb.x2) / 2;
+    const cy = bb.y2;
+    if (_isPointInAnyMask(cx, cy, srcW, srcH, masks)) masked++;
+  }
+  return masked / samples.length;
+}
 
 export function lbClearTrackTimeline(){
   const host = byId('lightboxBottomStack');
@@ -111,6 +136,13 @@ export function lbRenderTrackTimeline(item){
       <div class="lb-scrub-hit"></div>
     </div>`);
 
+  // Mask resolution + source dims for the per-track masked test. Read
+  // once per render so the inner loop doesn't re-resolve the camera /
+  // re-parse preview_resolution per track.
+  const camMasks = _resolveMaskPolygonsForCam(camId);
+  const _natW = videoEl?.videoWidth || 0;
+  const _natH = videoEl?.videoHeight || 0;
+
   // Per-class strips + matching badges. Skip when there are no
   // tracks (motion clips trigger the auto-reindex banner in that
   // case; timelapses fall through to the "Nach-Erkennung starten"
@@ -179,9 +211,22 @@ export function lbRenderTrackTimeline(item){
         const predictedOverlay = hasPredictedTail
           ? `<span class="lbtt-bar-predicted" style="left:${predLeftPct}%;width:${predWidthPct}%"></span>`
           : '';
-        return `<button type="button" class="lbtt-bar${hasPredictedTail ? ' lbtt-bar-has-pred' : ''}" data-seek="${t0.toFixed(3)}" title="${tt}" aria-label="${tt}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%;background:${c}">
+        // ⊘ Maskiert — track whose subject sits inside an exclusion
+        // mask the majority of the time. Bar background overrides
+        // the track color to neutral gray and shows the ⊘ corner
+        // glyph so the row visually matches the bbox's masked
+        // modifier on the video.
+        const maskedRatio = _maskedRatioForTrack(tr, _natW, _natH, camMasks);
+        const isMasked = maskedRatio >= 0.5;
+        const barBg = isMasked ? '#94a3b8' : c;
+        const maskedAttrs = isMasked ? ' data-masked="1"' : '';
+        const maskedBadge = isMasked
+          ? `<span class="lbtt-bar-masked" aria-label="Maskiert" title="Außerhalb Alarmierung (Maskiert)">⊘</span>`
+          : '';
+        return `<button type="button" class="lbtt-bar${hasPredictedTail ? ' lbtt-bar-has-pred' : ''}"${maskedAttrs} data-seek="${t0.toFixed(3)}" title="${tt}" aria-label="${tt}" style="left:${left.toFixed(2)}%;width:${width.toFixed(2)}%;background:${barBg}">
           ${predictedOverlay}
-          <span class="lbtt-bar-num" style="color:${c}">#${tr._num}</span>
+          <span class="lbtt-bar-num" style="color:${barBg}">#${tr._num}</span>
+          ${maskedBadge}
           ${showEndX ? `<span class="lbtt-bar-end" data-track-idx="${idx}" data-track-num="${tr._num}" tabindex="0" role="button" aria-label="Track #${tr._num} verloren" style="right:-${endRight.toFixed(2)}%">×</span>` : ''}
         </button>`;
       }).join('');
