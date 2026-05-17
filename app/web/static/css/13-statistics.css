@@ -163,16 +163,28 @@
 .stat-dc-view-btn:hover{color:var(--text)}
 .stat-dc-view-btn.is-active{background:rgba(255,255,255,.10);color:var(--text)}
 .stat-dc-view-btn svg{flex-shrink:0}
-.stat-dc-live,.stat-dc-refresh{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.04);border:0;color:var(--muted);font-size:12px;font-weight:700;padding:8px 12px;border-radius:11px;cursor:pointer;min-height:36px;transition:background .15s,color .15s,box-shadow .15s}
-.stat-dc-live:hover,.stat-dc-refresh:hover{background:rgba(255,255,255,.10);color:var(--text)}
+.stat-dc-live{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:0;color:var(--muted);font-size:12px;font-weight:700;padding:8px 12px;border-radius:11px;cursor:pointer;min-height:36px;transition:background .15s,color .15s,box-shadow .15s}
+.stat-dc-live:hover{background:rgba(255,255,255,.10);color:var(--text)}
 .stat-dc-live.is-on{background:rgba(34,197,94,.16);color:#86efac;box-shadow:inset 0 0 0 1px rgba(34,197,94,.32)}
-.stat-dc-live .stat-dc-live-dot{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;color:#64748b}
-.stat-dc-live.is-on .stat-dc-live-dot{color:#22c55e;animation:stat-dc-livepulse 1.4s ease-in-out infinite}
-@keyframes stat-dc-livepulse{
-  0%,100%{transform:scale(1);opacity:.95}
-  50%{transform:scale(1.4);opacity:.55}
+/* D2 · Live status dot — pure CSS circle. Muted slate when OFF,
+   solid green token (#22c55e) when ON with a subtle pulse so the
+   user can tell at a glance whether polling is active. */
+.stat-dc-live .stat-dc-live-dot{
+  display:inline-block;
+  width:9px;height:9px;
+  border-radius:50%;
+  background:#64748b;
+  transition:background .2s,box-shadow .2s;
 }
-.stat-dc-refresh svg{flex-shrink:0}
+.stat-dc-live.is-on .stat-dc-live-dot{
+  background:#22c55e;
+  box-shadow:0 0 0 3px rgba(34,197,94,.22);
+  animation:stat-dc-livepulse 1.6s ease-in-out infinite;
+}
+@keyframes stat-dc-livepulse{
+  0%,100%{box-shadow:0 0 0 3px rgba(34,197,94,.22)}
+  50%    {box-shadow:0 0 0 5px rgba(34,197,94,.10)}
+}
 
 /* D1 · filter rows side-by-side on desktop (cameras + classes share
    one horizontal band, each row still wraps internally if overflow).
@@ -282,7 +294,7 @@
   .stat-dc-pillrow{gap:5px;flex:0 0 auto}
   .stat-dc-pill{font-size:11.5px;padding:0 10px;max-width:100%}
   .stat-dc-pill-text{max-width:90px}
-  .stat-dc-view-btn,.stat-dc-live,.stat-dc-refresh{min-height:40px}
+  .stat-dc-view-btn,.stat-dc-live{min-height:40px}
 }
 
 @media (prefers-reduced-motion: reduce){

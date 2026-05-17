@@ -14,10 +14,8 @@ import { colors, OBJ_LABEL, OBJ_SVG, objIconSvg, getCameraIcon, getCameraColor }
 // Title icons — match statistics.js stroke style so the section reads
 // as one coherent column.
 const _DC_TITLE_SVG = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="4" cy="11" r="1.6"/><circle cx="8" cy="6.5" r="1.6"/><circle cx="12.5" cy="9" r="1.6"/><circle cx="11" cy="13" r="1.2"/><circle cx="5.5" cy="5" r="1.2"/></svg>`;
-const _DC_LIVE_SVG  = `<svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><circle cx="8" cy="8" r="3.5" fill="currentColor"/></svg>`;
 const _DC_VIEW_TIME = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6"/><polyline points="8,4.5 8,8 10.5,9.5"/></svg>`;
 const _DC_VIEW_CLS  = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="2.5" width="4" height="4" rx=".7"/><rect x="9.5" y="2.5" width="4" height="4" rx=".7"/><rect x="2.5" y="9.5" width="4" height="4" rx=".7"/><rect x="9.5" y="9.5" width="4" height="4" rx=".7"/></svg>`;
-const _DC_REFRESH   = `<svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 8A6 6 0 0 1 2 8a6 6 0 0 1 10.3-4.2"/><polyline points="14,2 14,6 10,6"/></svg>`;
 
 // Persistent UI/runtime state — module-private, no state.js leakage.
 // The points map is keyed by sample_key so the live-poll merge is
@@ -156,9 +154,8 @@ function _renderShell() {
             <button type="button" class="stat-dc-view-btn" data-view="class" role="tab" aria-selected="false">${_DC_VIEW_CLS}<span>Klasse</span></button>
           </div>
           <button type="button" class="stat-dc-live" data-live="0" aria-pressed="false" title="Live-Polling alle 20 s">
-            <span class="stat-dc-live-dot">${_DC_LIVE_SVG}</span><span>Live</span>
+            <span class="stat-dc-live-dot" aria-hidden="true"></span><span>Live</span>
           </button>
-          <button type="button" class="stat-dc-refresh" title="Jetzt aktualisieren">${_DC_REFRESH}</button>
         </div>
       </div>
       <div class="stat-dc-filters">
@@ -676,12 +673,11 @@ function _wireHandlers() {
     hoursDebounce = setTimeout(() => _fetchAndRender(true), 250);
   });
 
-  // Live + refresh.
+  // Live toggle. The 20 s polling + the filter-change path both
+  // refresh data already; the standalone "Jetzt aktualisieren"
+  // button was redundant and got dropped (D2).
   card.querySelector('.stat-dc-live')?.addEventListener('click', () => {
     _setLive(!_dc.filter.live);
-  });
-  card.querySelector('.stat-dc-refresh')?.addEventListener('click', () => {
-    _fetchAndRender(true);
   });
 }
 
