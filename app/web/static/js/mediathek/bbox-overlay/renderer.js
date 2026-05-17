@@ -5,7 +5,7 @@
 // palette so multiple subjects in one clip get distinguishable strokes.
 import { byId } from '../../core/dom.js';
 import { state } from '../../core/state.js';
-import { colors, OBJ_LABEL } from '../../core/icons.js';
+import { colors } from '../../core/icons.js';
 import { _lbClearDetections } from '../../lightbox.js';
 import { lbState } from '../state.js';
 import { _TRACK_SPAWN_SCORE } from './_state.js';
@@ -21,6 +21,25 @@ import { normalizePolygon } from '../../core/polygon-source.js';
 // subject is rendered in neutral so it's visually clear it has
 // been filtered out of alerting).
 const _MASKED_STROKE = '#94a3b8';
+
+/**
+ * Darken a hex color toward black for label-text use. Keeps the
+ * hue family so the pill text reads as "the same color, but dark"
+ * — never plain black. factor 0..1, smaller = darker.
+ */
+function _darkenHex(hex, factor){
+  const fb = '#0a0a0a';
+  if (!hex || typeof hex !== 'string' || hex[0] !== '#') return fb;
+  let h = hex.slice(1);
+  if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  if (h.length !== 6) return fb;
+  const n = parseInt(h, 16);
+  if (!Number.isFinite(n)) return fb;
+  const r = Math.floor(((n >> 16) & 0xff) * factor);
+  const g = Math.floor(((n >>  8) & 0xff) * factor);
+  const b = Math.floor((n & 0xff) * factor);
+  return `rgb(${r},${g},${b})`;
+}
 
 // Bbox + trail visibility — flipped by the overlay-toggles pill bar
 // (bboxes/trails). Module-scoped so the RAF redraw loop and the
@@ -180,7 +199,7 @@ export function _lbDrawDetections(){
         if (!sample) continue;
         const status = _classifyTrackStatus(tr, sample, spawnThreshold);
         const masked = _isSampleMasked(sample, natW, natH, camMasks);
-        _drawTrackBox(ctx, sample, tr.color, offX, offY, scale, status, masked);
+        _drawTrackBox(ctx, sample, tr.color, offX, offY, scale, status, masked, tr._num);
       }
     }
     return;
@@ -220,7 +239,7 @@ export function _lbDrawDetections(){
     const sample = { bbox: d.bbox, score: d.score, label: d.label };
     const status = _classifyTrackStatus(null, sample, spawnThreshold);
     const masked = _isSampleMasked(sample, natW, natH, camMasks);
-    _drawTrackBox(ctx, sample, c, offX, offY, scale, status, masked);
+    _drawTrackBox(ctx, sample, c, offX, offY, scale, status, masked, null);
   }
 }
 
@@ -309,7 +328,7 @@ export const _STATUS_STYLE = {
   ghost:     { dash: [2, 4], alpha: 0.55, marker: '≈ ' },
 };
 
-function _drawTrackBox(ctx, sample, color, offX, offY, scale, status, masked){
+function _drawTrackBox(ctx, sample, color, offX, offY, scale, status, masked, trackNum){
   const b = sample.bbox;
   const x1 = offX + b.x1 * scale, y1 = offY + b.y1 * scale;
   const x2 = offX + b.x2 * scale, y2 = offY + b.y2 * scale;
@@ -317,11 +336,15 @@ function _drawTrackBox(ctx, sample, color, offX, offY, scale, status, masked){
   if (w <= 0 || h <= 0) return;
   const cat = (status && _STATUS_STYLE[status]) ? status : 'confirmed';
   const style = _STATUS_STYLE[cat];
-  // Masked-out overrides the track's per-identity color to a neutral
-  // gray and adds a ⊘ corner badge, but PRESERVES the ①/②/③ dash
-  // style + alpha so the operator can still read the underlying
-  // tracking status of a filtered-out subject.
-  const stroke = masked ? _MASKED_STROKE : (color || '#22c55e');
+  // H2 · stroke COLOR is the per-track identity color (each track in
+  // the clip gets its own hue from tracks.json — confirmed AND weak
+  // AND ghost all use that same hue). Status is encoded purely by the
+  // LINE STYLE (solid / dashed / fine-dotted) + the marker prefix in
+  // the label pill. The only color exception is ⊘ Maskiert, which
+  // flips the stroke to neutral gray to read as "filtered out of
+  // alerting" while still preserving its underlying dash pattern.
+  const trackColor = color || '#22c55e';
+  const stroke = masked ? _MASKED_STROKE : trackColor;
   ctx.save();
   ctx.globalAlpha = style.alpha;
   ctx.strokeStyle = stroke;
@@ -330,19 +353,30 @@ function _drawTrackBox(ctx, sample, color, offX, offY, scale, status, masked){
   ctx.strokeRect(x1, y1, w, h);
   ctx.setLineDash([]);
   ctx.globalAlpha = 1;
-  const lblName = OBJ_LABEL[sample.label] || sample.label || '';
-  if (lblName){
-    const pct = sample.score != null ? Math.round(sample.score * 100) : null;
-    const prefix = `${masked ? '⊘ ' : ''}${style.marker}`;
-    const scoreText = pct != null ? `${prefix}${pct}%` : '';
-    const text = scoreText ? `${lblName} · ${scoreText}` : lblName;
+  // Pill label — "↓ #N · X %" (status marker + person number + score).
+  // Background uses the per-track color; text uses a DARKENED shade
+  // of that hue (never plain black) so the pill reads as "the
+  // person's color, intense fill, deep text" — matches the same
+  // family across the bbox + the characteristic card + the timeline.
+  const hasNum = typeof trackNum === 'number';
+  const pct = sample.score != null ? Math.round(sample.score * 100) : null;
+  const prefix = `${masked ? '⊘ ' : ''}${style.marker}`;
+  const numText = hasNum ? `#${trackNum}` : '';
+  let text;
+  if (numText && pct != null) text = `${prefix}${numText} · ${pct}%`;
+  else if (numText)           text = `${prefix}${numText}`.trim();
+  else if (pct != null)       text = `${prefix}${pct}%`;
+  else                        text = '';
+  if (text){
     const padX = 6, pillH = 18;
     const tw = ctx.measureText(text).width;
     const pillY = Math.max(0, y1 - pillH - 2);
+    const pillBg = masked ? 'rgba(148,163,184,0.92)' : trackColor;
+    const pillTextColor = _darkenHex(masked ? _MASKED_STROKE : trackColor, 0.18);
     ctx.globalAlpha = style.alpha;
-    ctx.fillStyle = 'rgba(0,0,0,0.72)';
+    ctx.fillStyle = pillBg;
     ctx.fillRect(x1, pillY, tw + padX * 2, pillH);
-    ctx.fillStyle = stroke;
+    ctx.fillStyle = pillTextColor;
     ctx.fillText(text, x1 + padX, pillY + 3);
   }
   // ⊘ corner badge — top-right of the box. Sits on its own small

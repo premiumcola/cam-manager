@@ -223,16 +223,15 @@ export function lbRenderTrackTimeline(item){
   _state.timelineTrackIndex = haveTracks ? tracks.tracks : [];
 
   // Group tracks → per-class buckets, ordered by OBJ_LABEL so the
-  // strip stack stays stable across re-opens.
+  // strip stack stays stable across re-opens. `_num` was stamped at
+  // fetch time (fetcher.js) so this loop only needs to bucket.
   const byLabel = new Map();
-  let perClipNum = 0;
   if (haveTracks){
     for (const tr of tracks.tracks){
-      perClipNum++;
       const lbl = tr.label || 'unknown';
       if (allowed !== null && !allowed.has(lbl)) continue;
       if (!byLabel.has(lbl)) byLabel.set(lbl, []);
-      byLabel.get(lbl).push({ ...tr, _num: perClipNum });
+      byLabel.get(lbl).push(tr);
     }
   }
   const orderedLabels = Object.keys(OBJ_LABEL).filter(l => byLabel.has(l));

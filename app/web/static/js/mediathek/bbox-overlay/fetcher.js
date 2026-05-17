@@ -49,8 +49,16 @@ export async function _fetchTracks(item){
         return null;
       }
       const data = await r.json();
+      // Sort each track's samples by frame index AND stamp a stable
+      // per-clip 1-based number (`_num`) onto every track. The
+      // bbox renderer + the timeline panel both read this for the
+      // visible "#N" badge — stamping once here keeps them in sync
+      // without each consumer having to re-derive the index.
+      let _num = 0;
       for (const tr of (data.tracks || [])){
         (tr.samples || []).sort((a, b) => a.f - b.f);
+        _num += 1;
+        tr._num = _num;
       }
       _tracksCache.set(eid, data);
       const fa = Array.isArray(data.filter_applied)

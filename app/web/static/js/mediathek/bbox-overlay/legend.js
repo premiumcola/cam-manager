@@ -33,7 +33,7 @@ const _ROWS = [
 // color to neutral gray; the other three use a representative
 // per-track color (#22c55e, the palette's first slot) so the legend
 // has visual weight without claiming ownership of a specific hue
-// (the muted tail "Farbe = Person" makes the identity-color story
+// (the muted tail "Farbe = Person-Nr." makes the identity-color story
 // explicit).
 function _swatchSvg(key){
   if (key === 'masked'){
@@ -76,7 +76,7 @@ function _showTip(target){
   const tip = _ensureTip();
   tip.innerHTML = `<div class="lb-legend-tip-body">
     ${_ROWS.map(_rowHtml).join('')}
-    <div class="lb-legend-tip-tail">Farbe = Person</div>
+    <div class="lb-legend-tip-tail">Farbe = Person-Nr.</div>
   </div>`;
   tip.hidden = false;
   const r = target.getBoundingClientRect();
@@ -117,7 +117,7 @@ export function mountStatusLegend(host){
   wrap.innerHTML = `
     <div class="lb-legend-desktop" aria-label="Status-Legende">
       ${_ROWS.map(_rowHtml).join('')}
-      <span class="lb-legend-tail">Farbe = Person</span>
+      <span class="lb-legend-tail">Farbe = Person-Nr.</span>
     </div>
     <button type="button" class="lb-legend-chip" aria-label="Status-Legende anzeigen" title="Status-Legende">?</button>`;
   row.appendChild(wrap);
