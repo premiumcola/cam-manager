@@ -71,6 +71,17 @@ def api_cameras():
         s["detection_trigger"] = cam.get("detection_trigger", "motion_and_objects")
         s["post_motion_tail_s"] = float(cam.get("post_motion_tail_s") or 0.0)
         s["alarm_profile"] = cam.get("alarm_profile") or ""
+        # L1 · per-camera tracker overrides — the cam-edit Erkennung
+        # tab's "Objekt-Tracking" inputs read these. Missing the keys
+        # here means the form always shows 0 even after a save (the
+        # frontend's `parseFloat(undefined) || 0` collapses to 0),
+        # so the user-entered values appeared to never persist. 0 /
+        # None remain the "use module default" sentinel — surfaced as
+        # 0 in the input so the placeholder hint still wins.
+        s["track_spawn_min_score"] = float(cam.get("track_spawn_min_score") or 0.0)
+        s["track_continue_min_score"] = float(cam.get("track_continue_min_score") or 0.0)
+        s["track_miss_grace_seconds"] = float(cam.get("track_miss_grace_seconds") or 0.0)
+        s["track_iou_match_threshold"] = float(cam.get("track_iou_match_threshold") or 0.0)
         s["zones"] = cam.get("zones", [])
         s["masks"] = cam.get("masks", [])
         s["resolution"] = cam.get("resolution", "auto")
