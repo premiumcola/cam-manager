@@ -159,8 +159,14 @@ function _renderShell() {
         </div>
       </div>
       <div class="stat-dc-filters">
-        <div class="stat-dc-pillrow" id="dcCamPills"></div>
-        <div class="stat-dc-pillrow" id="dcClsPills"></div>
+        <div class="stat-dc-filtergrp">
+          <span class="stat-dc-filtergrp-lbl">Kameras</span>
+          <div class="stat-dc-pillrow" id="dcCamPills"></div>
+        </div>
+        <div class="stat-dc-filtergrp">
+          <span class="stat-dc-filtergrp-lbl">Objekte</span>
+          <div class="stat-dc-pillrow" id="dcClsPills"></div>
+        </div>
       </div>
       <div class="stat-dc-chart-wrap">
         <div class="stat-dc-chart" id="dcChart"></div>
