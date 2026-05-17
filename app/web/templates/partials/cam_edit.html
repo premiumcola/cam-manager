@@ -230,9 +230,8 @@
                   <span class="reolink-imgmode-sub">Reolink-Override · manueller Test, Speichern vorab nötig</span>
                 </div>
                 <div class="reolink-imgmode-row">
-                  <div class="field-wrap" style="max-width:130px">
-                    <input name="reolink_http_port" type="number" min="1" max="65535" inputmode="numeric" placeholder="80" />
-                    <span class="field-label">HTTP-Port</span>
+                  <div class="field-wrap reolink-imgmode-port">
+                    <input name="reolink_http_port" type="number" min="1" max="65535" inputmode="numeric" placeholder="HTTP-Port · 80" aria-label="HTTP-Port" title="HTTP-Port (Default 80)" />
                   </div>
                   <div class="reolink-imgmode-seg" role="group" aria-label="Bild-Modus">
                     <button type="button" class="reolink-imgmode-btn" data-mode="color"><span class="reolink-imgmode-ico" aria-hidden="true">🎨</span><span>Farbe</span></button>
@@ -240,7 +239,7 @@
                     <button type="button" class="reolink-imgmode-btn" data-mode="bw"><span class="reolink-imgmode-ico" aria-hidden="true">⚫</span><span>S/W</span></button>
                   </div>
                 </div>
-                <div class="reolink-imgmode-feedback" id="reolinkImageModeFeedback" aria-live="polite"></div>
+                <div class="reolink-imgmode-feedback" id="reolinkImageModeFeedback" aria-live="polite" hidden></div>
               </div>
             </div>
 

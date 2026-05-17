@@ -20,6 +20,11 @@ function _setFeedback(text, kind /* 'ok' | 'error' | 'info' */) {
   if (!el) return;
   el.textContent = text || '';
   el.dataset.kind = kind || '';
+  // L5 · hidden attribute toggles the CSS [hidden] display rule so
+  // the feedback row collapses fully when empty — no dead band
+  // below the mode buttons.
+  if (text) el.removeAttribute('hidden');
+  else el.setAttribute('hidden', '');
   if (_feedbackTimer) {
     clearTimeout(_feedbackTimer);
     _feedbackTimer = null;
@@ -28,6 +33,7 @@ function _setFeedback(text, kind /* 'ok' | 'error' | 'info' */) {
   _feedbackTimer = setTimeout(() => {
     el.textContent = '';
     delete el.dataset.kind;
+    el.setAttribute('hidden', '');
     _feedbackTimer = null;
   }, FEEDBACK_CLEAR_MS);
 }
