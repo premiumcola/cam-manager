@@ -35,6 +35,7 @@ import {
 } from './mediaview/canvas/zone-overlay-mount.js';
 import { mountWeatherToggleBar } from './mediaview/overlay-toggles.js';
 import { mountStatusLegend } from './mediathek/bbox-overlay/legend.js';
+import { mountReindexButton } from './mediathek/bbox-overlay/reindex-button.js';
 import { _iosNativeVideoOpen } from './mediathek/ios-video.js';
 import { closeLiveView } from './chrome/live-view.js';
 import { _initFsBtn } from './chrome/fullscreen.js';
@@ -212,6 +213,12 @@ export function _setupVideoChrome(item){
       setBboxOverlayVisibility({ showTrails: on });
     }
   });
+  // Regenerate-tracking action — sits next to the Masken pill so the
+  // operator can re-run the post-clip tracker without paging into a
+  // tab (the retired Nach-Erkennung tab's only purpose).
+  if (item.type !== 'timelapse'){
+    mountReindexButton('mvLiveToggles');
+  }
   // Status legend — appended to the toggle row so the same band
   // explains both "what layers are on" and "what each track stroke
   // style means". Self-contained popover handles the mobile collapse.

@@ -175,13 +175,23 @@ export function _isReindexBannerActive(){
   return !!eid && _reindexInflight.has(eid);
 }
 
-async function _onReindexClick(ev){
-  ev.stopPropagation();
+/**
+ * Trigger a manual re-index for the currently-open lightbox item.
+ * Same flow as the banner's retry button + the new always-visible
+ * button in the overlay-toggles row: POST → pulse the pending
+ * banner → poll for the fresh sidecar.
+ *
+ * ``btn`` is the originating button so we can disable it while the
+ * POST is in flight. Pass null when there's no UI handle (callers
+ * that want to fire and forget).
+ */
+export async function triggerManualReindex(btn){
   const item = lbState.item;
   if (!item || !item.event_id) return;
-  const btn = ev.currentTarget;
-  btn.disabled = true;
-  btn.style.opacity = '.5';
+  if (btn){
+    btn.disabled = true;
+    btn.style.opacity = '.5';
+  }
   _reindexFinalFailed.delete(item.event_id);
   try {
     const r = await fetch(
@@ -215,7 +225,14 @@ async function _onReindexClick(ev){
       `event=${item.event_id} manual reindex error: ${e?.message || e}`,
       'error');
   } finally {
-    btn.disabled = false;
-    btn.style.opacity = '';
+    if (btn){
+      btn.disabled = false;
+      btn.style.opacity = '';
+    }
   }
+}
+
+async function _onReindexClick(ev){
+  ev.stopPropagation();
+  await triggerManualReindex(ev.currentTarget);
 }

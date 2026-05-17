@@ -2,8 +2,11 @@
 // Composes the recorded-mode panel tabs and the fine-analysis fold
 // into the existing #lightboxSettings host. Replaces the direct call
 // to lbRenderSettingsPanel(item) from lightbox.js so the same DOM
-// real-estate now carries: tabs ("Aufnahme-Settings" · "Nach-Erkennung"
-// · optional "Wetter") + the always-on fine-analysis fold below.
+// real-estate now carries: tabs ("Aufnahme-Settings" · optional
+// "Wetter") + the always-on fine-analysis fold below. The
+// regenerate-tracking action lives in the overlay-toggles pill row
+// (see lightbox.js · mountReindexButton) so it's always visible
+// without paging into a tab.
 //
 // The settings tab is auto-expanded — inside a tab the user has
 // already chosen to look at it, so the inner collapsible header from
@@ -11,7 +14,6 @@
 // kept (a second click hides the body again) so muscle-memory still
 // works.
 import { byId } from '../../core/dom.js';
-import { showToast } from '../../core/toast.js';
 import { lbRenderSettingsPanel } from '../../mediathek/bbox-overlay/settings-panel.js';
 import { renderPanelTabs } from '../panel-tabs.js';
 import { renderFineAnalysisFold } from '../fine-analysis-fold.js';
@@ -27,54 +29,6 @@ function _renderSettingsTab(host, item){
     body.hidden = false;
     header.setAttribute('aria-expanded', 'true');
   }
-}
-
-function _renderRescanTab(host, item){
-  const eventId = item?.event_id;
-  const camId = item?.camera_id || '';
-  if (!eventId){
-    host.innerHTML = `<div class="mv-rescan-empty">Event-ID fehlt — Re-Index nicht möglich</div>`;
-    return;
-  }
-  host.innerHTML = `
-    <div class="mv-rescan">
-      <p class="mv-rescan-hint">Erkennt Objekte und Tracks für diese Aufnahme neu — nützlich nach Modell- oder Settings-Wechseln.</p>
-      <button type="button" class="mv-rescan-btn">
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 8A5.5 5.5 0 0 1 13 5M13.5 8A5.5 5.5 0 0 1 3 11"/><polyline points="12,2 12,5.5 8.5,5.5"/><polyline points="4,14 4,10.5 7.5,10.5"/></svg>
-        <span>Tracking neu indexieren</span>
-      </button>
-      <div class="mv-rescan-status" hidden></div>
-    </div>`;
-  const btn = host.querySelector('.mv-rescan-btn');
-  const status = host.querySelector('.mv-rescan-status');
-  btn.addEventListener('click', async () => {
-    btn.disabled = true;
-    status.hidden = false;
-    status.textContent = 'Wird neu indexiert …';
-    status.dataset.tone = 'pending';
-    try {
-      const r = await fetch(
-        `/api/events/${encodeURIComponent(eventId)}/rescan?camera_id=${encodeURIComponent(camId)}`,
-        { method: 'POST' });
-      const d = await r.json().catch(() => ({}));
-      if (r.ok && d.ok){
-        showToast('Tracking neu generiert', 'success');
-        status.textContent = '✓ Worker hat den Job übernommen — Swimlane aktualisiert sich automatisch';
-        status.dataset.tone = 'ok';
-      } else {
-        showToast(`Re-Index fehlgeschlagen: ${d.error || r.statusText}`, 'error');
-        status.textContent = `Fehler: ${d.error || r.statusText}`;
-        status.dataset.tone = 'err';
-        btn.disabled = false;
-      }
-    } catch (err){
-      const msg = err?.message || String(err);
-      showToast(`Re-Index Fehler: ${msg}`, 'error');
-      status.textContent = `Fehler: ${msg}`;
-      status.dataset.tone = 'err';
-      btn.disabled = false;
-    }
-  });
 }
 
 // Field-label / unit lookup for weather-sighting api_snapshot rows.
@@ -180,11 +134,12 @@ function _renderWeatherTab(host, item){
 }
 
 // Public entry — called from lightbox.js for BOTH motion clips and
-// timelapses. Motion clips get the full tab set; timelapses get the
-// Wetter + Nach-Erkennung pair plus the fold (no Aufnahme-Settings
-// since timelapses don't carry recording_settings — they're not
-// produced by the alarm pipeline). The fine-analysis fold renders
-// for both kinds.
+// timelapses. Motion clips get Aufnahme-Settings + optional Wetter;
+// timelapses get Wetter when present (no Aufnahme-Settings since
+// timelapses don't carry recording_settings — they're not produced
+// by the alarm pipeline). The Nach-Erkennung tab was retired —
+// its single regenerate action moved into the overlay-toggles row
+// (lightbox.js · mountReindexButton) so it's always visible.
 export function mountRecordedPanels(item){
   const host = byId('lightboxSettings');
   if (!host) return;
@@ -206,9 +161,6 @@ export function mountRecordedPanels(item){
       label: 'Aufnahme-Settings',
       render: (h) => _renderSettingsTab(h, item) });
   }
-  tabs.push({ id: 'rescan',
-    label: 'Nach-Erkennung',
-    render: (h) => _renderRescanTab(h, item) });
   // Weather tab — mounted whenever the item carries a weather
   // snapshot. Two shapes are accepted: item.weather (normalised
   // pairs) and item.api_snapshot (raw Open-Meteo dict, used by
@@ -221,15 +173,15 @@ export function mountRecordedPanels(item){
       label: 'Wetter',
       render: (h) => _renderWeatherTab(h, item) });
   }
-  // Initial tab — for timelapses default to Wetter when there's
-  // weather data (the most useful view for a sun/event clip);
-  // otherwise Nach-Erkennung. Motion clips keep Aufnahme-Settings
-  // as the entry point.
+  // Initial tab — Aufnahme-Settings for motion clips; Wetter for
+  // timelapses when present. Timelapses with no weather data fall
+  // through to the empty tab strip + fold below.
   let initialId;
   if (isTimelapse && hasWeather) initialId = 'weather';
-  else if (isTimelapse) initialId = 'rescan';
-  else initialId = 'settings';
-  renderPanelTabs(tabsHost, tabs, { initialId });
+  else if (!isTimelapse) initialId = 'settings';
+  if (tabs.length){
+    renderPanelTabs(tabsHost, tabs, { initialId });
+  }
   // Recorded clips don't carry a server-side decision trace today —
   // the fold renders the standard "Trace nur im Live-Test verfügbar"
   // empty state. When the trace gets persisted (future change), pass
