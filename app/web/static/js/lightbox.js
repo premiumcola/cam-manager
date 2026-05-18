@@ -37,7 +37,7 @@ import { mountWeatherToggleBar } from './mediaview/overlay-toggles.js';
 import { mountStatusLegend } from './mediathek/bbox-overlay/legend.js';
 import { mountReindexButton } from './mediathek/bbox-overlay/reindex-button.js';
 import { _iosNativeVideoOpen } from './mediathek/ios-video.js';
-import { closeLiveView, iosLiveFsNative } from './chrome/live-view.js';
+import { closeLiveView } from './chrome/live-view.js';
 import { _initFsBtn } from './chrome/fullscreen.js';
 import { refreshTimelineAndStats } from './chrome/storage-stats.js';
 import {
@@ -770,21 +770,11 @@ document.addEventListener('keydown', (e) => {
 
 _updateLbConfirmBtn(false);
 byId('lightboxDelete').innerHTML = _LB_TRASH_HTML;
-// O1 · on iOS the live-modal FS button jumps straight to
-// webkitEnterFullscreen on the HLS <video> — one tap → native
-// iOS system player (Apple's Liquid-Glass-styled fullscreen
-// player on iOS 26). The generic requestFullscreen + .fake-
-// fullscreen wrap path is bypassed so no app overlay stage
-// appears before the native player. Other browsers stay on
-// the generic path — requestFullscreen on the wrap works there.
-if (IS_IOS){
-  byId('liveViewFsBtn')?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    iosLiveFsNative();
-  });
-} else {
-  _initFsBtn('liveViewFsBtn', byId('liveViewWrap'), () => byId('liveViewWrap'));
-}
+// Desktop-only — the live modal is never shown on iOS
+// (openLiveViewIosNative keeps it hidden and hands directly to
+// the native iOS system player), so the FS button inside the
+// modal is unreachable on iOS. No iOS gate needed here.
+_initFsBtn('liveViewFsBtn', byId('liveViewWrap'), () => byId('liveViewWrap'));
 
 // Swipe navigation on the lightbox media area (mobile). Horizontal
 // swipe = prev/next, vertical swipe ≥ 80 px down = dismiss.

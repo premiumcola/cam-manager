@@ -1,16 +1,24 @@
 // ─── chrome/live-view.js ───────────────────────────────────────────────────
-// Per-camera live-view modal. Default path uses a native <video>
-// element fed HLS (hls.js on Chrome / Firefox / Edge, native on
-// Safari + iOS). The inline preview is `playsinline` and shows the
-// modal's own X / HD / FS overlay chrome; native controls are
-// suppressed in the template so the inline player is uncluttered.
-// On iOS the maximize button explicitly triggers the native iOS
-// system video player via webkitEnterFullscreen() on the <video>
-// (iosLiveFsNative below) — Apple's Liquid-Glass fullscreen player
-// on iOS 26 with its own Play/Pause/±10/AirPlay/... chrome. The
-// legacy <img>+MJPEG path stays alongside as a fallback for the
-// rare browser that can't do HLS at all (and for cameras where
-// the per-cam streaming.hls_enabled is false).
+// Per-camera live-view. Two visibly distinct paths:
+//
+//   · Desktop / non-iOS — openLiveView() shows #liveViewModal with
+//     the X / HD / FS overlay chrome over a HLS <video> (or MJPEG
+//     <img> fallback). Tap FS → wrap-level requestFullscreen with
+//     .fake-fullscreen fallback.
+//
+//   · iOS — openLiveViewIosNative() does NOT show #liveViewModal.
+//     A separate #liveViewLoadingOverlay (Matrix-mono logs style)
+//     fills the screen while HLS warms up against the still-hidden
+//     <video>; on loadedmetadata the loading overlay hides and
+//     video.webkitEnterFullscreen() hands off to the native iOS
+//     system player. When the user dismisses the native player
+//     (webkitendfullscreen / presentation-mode → 'inline') we run
+//     the full teardown and return to the all-cams home — the app
+//     modal chrome is never rendered.
+//
+// HD/SD toggle is irrelevant once HLS is engaged (one stream per
+// camera) — the HD button hides itself in that mode and only
+// surfaces when the MJPEG fallback drives the desktop modal.
 //
 // HD/SD toggle is irrelevant once HLS is engaged (one stream per
 // camera) — the HD button hides itself in that mode and only
@@ -43,9 +51,8 @@ export function openLiveView(camId, camName){
   _attachLiveStream();
   const imgEl = byId('liveViewImg');
   // Image click is intentionally NOT a fullscreen toggle — only the
-  // FS button on the modal owns that. On iOS the FS button routes
-  // to iosLiveFsNative → the native iOS system video player; on
-  // desktop the wrap-level requestFullscreen path is used.
+  // FS button on the modal owns that. Desktop path; iOS doesn't
+  // reach this function (openLiveViewIosNative is used instead).
   if (imgEl) imgEl.onclick = null;
   modal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
@@ -294,31 +301,88 @@ export function closeLiveView(){
   const wrap = byId('liveViewWrap');
   if (wrap) wrap.classList.remove('fake-fullscreen');
   modal.classList.add('hidden');
+  // iOS-only loading overlay — hidden defensively on every close,
+  // whether or not the iOS native path is what opened it.
+  const loadingOverlay = byId('liveViewLoadingOverlay');
+  if (loadingOverlay) loadingOverlay.classList.add('hidden');
   document.body.style.overflow = '';
   _liveViewCamId = null;
 }
 
-// O1 · iOS native fullscreen entry. iOS Safari only allows true
-// fullscreen on <video> via webkitEnterFullscreen — Apple's player
-// chrome (Play/Pause/±10/Volume/AirPlay/expand/close, Liquid-Glass
-// look on iOS 26) takes over the whole screen, which is the iOS-
-// conform UX the user wants. Routing the iOS FS button directly
-// here collapses tile-maximize → in-app modal → native FS into a
-// single tap on the live-tile FS button.
+// P1 · iOS-only entry. The whole live-modal chrome (#liveViewModal
+// + #liveViewTitle + X + FS + #liveViewWrap letterbox) stays
+// hidden the entire time on iOS — only a minimal Matrix-mono
+// loading overlay is visible between the user's tap and Apple's
+// native fullscreen player taking over. Once the HLS source
+// reaches HAVE_METADATA (readyState ≥ 1) we hide the loading
+// overlay and call video.webkitEnterFullscreen() — the same
+// user-gesture context carries the FS entry through.
 //
-// webkitEnterFullscreen is only valid when the <video> has at
-// least HAVE_METADATA (readyState ≥ 1). Right after src is set
-// on a fresh HLS source the readyState is 0; we wait once for
-// loadedmetadata to fire (the iOS-Safari source pipeline normally
-// reaches it well within the user-gesture grace window) before
-// triggering. Returns true if the call could be issued or queued.
-export function iosLiveFsNative(){
+// webkitendfullscreen + webkitpresentationmodechanged listeners
+// route the native-player dismissal to closeLiveView() so the
+// user lands back on the all-cams home, never on the live modal.
+//
+// The 1 Hz bbox detect polling is intentionally skipped here —
+// it would render to an invisible SVG and waste detector cycles
+// while the native iOS player occupies the screen.
+function _setLoadingText(text){
+  const t = byId('liveViewLoadingOverlay')?.querySelector('.lv-loading-text');
+  if (t) t.textContent = text;
+}
+
+function _iosLoadingFail(){
+  _setLoadingText('~/ Stream nicht verfügbar');
+  setTimeout(closeLiveView, 1500);
+}
+
+export function openLiveViewIosNative(camId){
+  const overlay = byId('liveViewLoadingOverlay');
   const video = byId('liveViewVideo');
-  if (!video) return false;
-  if (typeof video.webkitEnterFullscreen !== 'function') return false;
+  if (!video || typeof video.webkitEnterFullscreen !== 'function') return false;
+
+  _liveViewCamId = camId;
+  window._liveViewHd = _hdCards.has(camId);
+
+  // Lock body scroll and show only the loading overlay. The live
+  // modal stays .hidden — never revealed on the iOS path.
+  document.body.style.overflow = 'hidden';
+  if (overlay){
+    _setLoadingText('~/ Verbinde …');
+    overlay.classList.remove('hidden');
+  }
+
+  // Attach HLS to the hidden <video>. MJPEG fallback isn't useful
+  // here — only <video> can enter the native iOS FS player, so
+  // HLS failure routes to a short error toast + close-to-home.
+  _teardownHls();
+  video.pause();
+  video.removeAttribute('src');
+  video.load?.();
+
+  _hlsHandle = tryAttachHls(camId, video, {
+    onFatalError: () => { _teardownHls(); _iosLoadingFail(); },
+  });
+  if (!_hlsHandle){
+    _iosLoadingFail();
+    return false;
+  }
+  _liveViewUsingHls = true;
+
   const enter = () => {
+    if (_liveViewCamId !== camId) return; // teardown raced metadata
+    if (overlay) overlay.classList.add('hidden');
     try { video.webkitEnterFullscreen(); } catch { /* ignore */ }
   };
+  const onEnd = () => { closeLiveView(); };
+  const onPresChange = () => {
+    if (video.webkitPresentationMode === 'inline'){
+      video.removeEventListener('webkitpresentationmodechanged', onPresChange);
+      closeLiveView();
+    }
+  };
+  video.addEventListener('webkitendfullscreen', onEnd, { once: true });
+  video.addEventListener('webkitpresentationmodechanged', onPresChange);
+
   if (video.readyState >= 1){
     enter();
   } else {

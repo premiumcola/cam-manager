@@ -82,18 +82,16 @@
   <div id="liveViewModal" class="modal hidden lvm">
     <div id="liveViewWrap" class="lvm-wrap">
       <!-- Native <video> with hls.js handles the live stream by
-           default. Inline preview is uncluttered: native controls
-           are omitted so only the modal's own X / HD / FS overlay
-           chrome shows over the autoplay-muted stream. The FS
-           button explicitly calls webkitEnterFullscreen on iOS
-           (chrome/live-view.js · iosLiveFsNative) to hand off to
-           the native iOS system video player — Apple's controls
-           (Play/Pause/±10/AirPlay/Liquid-Glass on iOS 26) appear
-           there. playsinline + webkit-playsinline prevent iOS
+           default. On desktop the modal renders with X / HD / FS
+           chrome over the autoplay-muted stream; on iOS the modal
+           stays hidden entirely (openLiveViewIosNative keeps it
+           off-screen) and the <video> is only used as a metadata
+           host for webkitEnterFullscreen → native iOS system
+           player. playsinline + webkit-playsinline prevent iOS
            Safari from auto-promoting playback to native FS until
-           the user taps maximize. The sibling <img> below is the
-           MJPEG fallback for the rare browser that can't do HLS
-           at all — live-view.js picks between them on
+           the explicit handoff. The sibling <img> below is the
+           MJPEG fallback for the rare desktop browser that can't
+           do HLS at all — live-view.js picks between them on
            openLiveView. -->
       <video id="liveViewVideo" class="lvm-video"
              playsinline webkit-playsinline muted autoplay
@@ -135,6 +133,17 @@
         </button>
       </div>
     </div>
+  </div>
+
+  <!-- iOS-only minimal loading overlay shown while HLS warms up
+       before webkitEnterFullscreen takes over. Matches the
+       Matrix/logs-panel monospace aesthetic. Sibling of
+       #liveViewModal (not inside) so it can be the only visible
+       layer during the iOS native-player handoff — the live modal
+       chrome stays hidden the whole time. -->
+  <div id="liveViewLoadingOverlay" class="lv-loading-overlay hidden"
+       aria-live="polite" aria-hidden="true">
+    <div class="lv-loading-text">~/ Verbinde …</div>
   </div>
 
   <!-- Toast container -->

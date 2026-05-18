@@ -154,3 +154,26 @@
   object-fit:contain;
 }
 
+/* iOS-only loading overlay shown for the brief window between
+   the FS-button tap and webkitEnterFullscreen taking over the
+   screen. Matches the Matrix / #logs.panel monospace aesthetic
+   (#00ff41 on pure black) so it reads as the app's trace-log
+   surface, not as a new visual style. Uses 100dvh so the iOS
+   address-bar collapse doesn't yank the bottom edge mid-load. */
+.lv-loading-overlay{
+  position:fixed;inset:0;z-index:1200;
+  background:#000;
+  display:flex;align-items:center;justify-content:center;
+  padding:max(18px, env(safe-area-inset-top, 0px))
+          max(18px, env(safe-area-inset-right, 0px))
+          max(18px, env(safe-area-inset-bottom, 0px))
+          max(18px, env(safe-area-inset-left, 0px));
+}
+.lv-loading-overlay.hidden{display:none}
+.lv-loading-text{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  font-size:13px;letter-spacing:.05em;
+  color:#00ff41;
+  text-align:center;
+}
+
