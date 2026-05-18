@@ -88,18 +88,13 @@
 .stat-drillable:hover{background:rgba(255,255,255,.04)}
 .stat-drillable:active{opacity:.7}
 
-/* D3 · flatter timeline hierarchy. The "5 Tage" / 12 h range
-   chooser used to ride in a tinted pill (.tl-range-wrap with
-   background #1f1f24 + padding + radius — legacy rule in
-   04-coral-1.css); strip those so it reads as a plain inline
-   control beside the Timeline title — same shape as the Zeit /
-   Klasse / Live chooser above the Erkennungswolke. */
-.stat-tl-card-hdr .tl-range-wrap{
-  background:transparent;
-  padding:0;
-  border-radius:0;
-  gap:8px;
-}
+/* R1 · the .tl-range-wrap base rule (04-coral-1.css) no longer
+   carries a tinted box (background/padding/border-radius were
+   dropped), so the chooser reads as a plain inline control beside
+   the Timeline title — same shape as the Zeit / Klasse / Live
+   chooser above the Erkennungswolke. Tighten the in-card gap so
+   the label sits snug against the slider on iPhone width. */
+.stat-tl-card-hdr .tl-range-wrap{gap:8px}
 
 /* D3 · each camera block is vertical: heading row (icon + name)
    on top, lanes below. Drops the .tl-cam-sidebox column + the
