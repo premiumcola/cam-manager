@@ -39,7 +39,6 @@ import { mountReindexButton } from './mediathek/bbox-overlay/reindex-button.js';
 import { _iosNativeVideoOpen } from './mediathek/ios-video.js';
 import { closeLiveView, iosLiveFsNative } from './chrome/live-view.js';
 import { _initFsBtn } from './chrome/fullscreen.js';
-import { IS_IOS } from './core/state.js';
 import { refreshTimelineAndStats } from './chrome/storage-stats.js';
 import {
   calcItemsPerPage, renderMediaGrid, renderMediaPagination, closeMediaDrilldown,

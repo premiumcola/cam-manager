@@ -13,7 +13,6 @@
 import { byId } from '../core/dom.js';
 import { _hdCards } from '../dashboard.js';
 import { colors } from '../core/icons.js';
-import { IS_IOS } from '../core/state.js';
 import { fittedRect } from '../core/video-fit.js';
 import { tryAttachHls } from '../core/hls-attach.js';
 
