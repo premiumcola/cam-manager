@@ -18,7 +18,7 @@ import { byId, esc } from './core/dom.js';
 import { j } from './core/api.js';
 import { getCameraIcon, getCameraColor, OBJ_LABEL } from './core/icons.js';
 import { isIOS } from './core/ios-video.js';
-import { openLiveView } from './chrome/live-view.js';
+import { openLiveView, iosLiveFsNative } from './chrome/live-view.js';
 
 // ── Dead-camera-id snapshot poll suppression ───────────────────────────────
 // After a camera rename (manuf/model edit triggers storage_migration to
@@ -536,19 +536,20 @@ export function _cvEnterFullscreen(camId){
   const card = byId('cameraCards')?.querySelector(`[data-camid="${CSS.escape(camId)}"]`);
   const wrap = card?.querySelector('.cv-img-wrap');
   if (!wrap) return;
-  // I1 · iOS Safari doesn't implement requestFullscreen on <div>
-  // (only on <video>). The fallback path adds .fake-fullscreen
-  // (position:fixed; inset:0) and the MJPEG <img> inside stops
-  // rendering frames — long-standing iOS Safari bug: MJPEG inside
-  // a position:fixed full-viewport element goes black. Route to
-  // the HLS video modal instead — its <video> element gets the
-  // platform-native player + true fullscreen via the built-in
-  // controls. Bbox overlay still paints inside the modal; iOS
-  // owns the layer once the user enters real fullscreen via the
-  // video chrome (overlays drop there, unavoidable, fine).
+  // I1 / M1 · iOS Safari doesn't implement requestFullscreen on
+  // <div> (only on <video>). Open the HLS live modal so the HLS
+  // pipeline attaches to `<video id="liveViewVideo">`, then
+  // IMMEDIATELY trigger the native iOS fullscreen on that video
+  // (webkitEnterFullscreen). Result: a single tap on the tile's
+  // FS button lands the user in the Apple-native player — no
+  // intermediate .fake-fullscreen wrap stage with the app's own
+  // glass X / HD / FS chrome anymore. iosLiveFsNative waits for
+  // loadedmetadata if HLS isn't ready yet, so the same user-
+  // gesture context carries the fullscreen entry through.
   if (isIOS){
     const camName = (state.cameras || []).find(c => c.id === camId)?.name || camId;
     openLiveView(camId, camName);
+    iosLiveFsNative();
     return;
   }
   // Snapshot HD state at FS-enter — drives the auto-drop rule below.

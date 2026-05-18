@@ -13,6 +13,7 @@
 import { byId } from '../core/dom.js';
 import { _hdCards } from '../dashboard.js';
 import { colors } from '../core/icons.js';
+import { IS_IOS } from '../core/state.js';
 import { fittedRect } from '../core/video-fit.js';
 import { tryAttachHls } from '../core/hls-attach.js';
 
@@ -291,6 +292,37 @@ export function closeLiveView(){
   modal.classList.add('hidden');
   document.body.style.overflow = '';
   _liveViewCamId = null;
+}
+
+// M1 · iOS native fullscreen entry. iOS Safari only allows true
+// fullscreen on <video> via webkitEnterFullscreen — Apple's player
+// chrome (Play/Pause/±10/Volume/AirPlay/expand/close) takes over
+// the whole screen, which is the iOS-conform UX we want. The
+// previous .fake-fullscreen wrap stage with the app's own glass
+// X / HD / FS buttons (rendered on top of a CSS-fullscreen wrap)
+// was an intermediate "first" fullscreen that forced the user
+// into a second maximize tap to reach the native player. Routing
+// the iOS FS button directly here collapses both into one tap.
+//
+// webkitEnterFullscreen is only valid when the <video> has at
+// least HAVE_METADATA (readyState ≥ 1). Right after src is set
+// on a fresh HLS source the readyState is 0; we wait once for
+// loadedmetadata to fire (the iOS-Safari source pipeline normally
+// reaches it well within the user-gesture grace window) before
+// triggering. Returns true if the call could be issued or queued.
+export function iosLiveFsNative(){
+  const video = byId('liveViewVideo');
+  if (!video) return false;
+  if (typeof video.webkitEnterFullscreen !== 'function') return false;
+  const enter = () => {
+    try { video.webkitEnterFullscreen(); } catch { /* ignore */ }
+  };
+  if (video.readyState >= 1){
+    enter();
+  } else {
+    video.addEventListener('loadedmetadata', enter, { once: true });
+  }
+  return true;
 }
 
 // Inline onclick callsites in the static template + the dashboard.js
