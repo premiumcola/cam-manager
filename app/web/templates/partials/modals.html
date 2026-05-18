@@ -82,14 +82,17 @@
   <div id="liveViewModal" class="modal hidden lvm">
     <div id="liveViewWrap" class="lvm-wrap">
       <!-- Native <video> with hls.js handles the live stream by
-           default. Browser-built-in controls give the user Play /
-           Pause / Volume / Picture-in-Picture / native fullscreen
-           (true iOS full-screen player on iPhone Safari). The
-           sibling <img> below is the MJPEG fallback for the rare
-           browser that can't do HLS at all — live-view.js picks
-           between them on openLiveView. -->
+           default. Native controls are intentionally OMITTED so
+           iOS Safari can't escalate to its native fullscreen
+           player from the in-page control bar — the modal's own
+           Liquid-Glass overlays (X / HD / FS) own all chrome.
+           playsinline + webkit-playsinline keep video rendering
+           inline rather than auto-promoting to native FS on play.
+           The sibling <img> below is the MJPEG fallback for the
+           rare browser that can't do HLS at all — live-view.js
+           picks between them on openLiveView. -->
       <video id="liveViewVideo" class="lvm-video"
-             playsinline muted autoplay controls
+             playsinline webkit-playsinline muted autoplay
              style="display:none"></video>
       <img id="liveViewImg" class="lvm-img" src="" alt=""
            style="display:none" />

@@ -1,11 +1,13 @@
 // ─── chrome/live-view.js ───────────────────────────────────────────────────
 // Per-camera live-view modal. Default path uses a native <video>
 // element fed HLS (hls.js on Chrome / Firefox / Edge, native on
-// Safari + iOS) so the browser's built-in controls give the user
-// Play / Pause / Volume / Picture-in-Picture / true iOS fullscreen
-// for free. The legacy <img>+MJPEG path stays alongside as a
-// fallback for the rare browser that can't do HLS at all (and for
-// cameras where the per-cam streaming.hls_enabled is false).
+// Safari + iOS). Native controls are deliberately suppressed in
+// the template — the modal's own Liquid-Glass overlay chrome
+// (close X, HD toggle, FS button) owns all interaction so iOS
+// Safari can't escalate to its native fullscreen player. The
+// legacy <img>+MJPEG path stays alongside as a fallback for the
+// rare browser that can't do HLS at all (and for cameras where
+// the per-cam streaming.hls_enabled is false).
 //
 // HD/SD toggle is irrelevant once HLS is engaged (one stream per
 // camera) — the HD button hides itself in that mode and only
@@ -38,9 +40,9 @@ export function openLiveView(camId, camName){
   _attachLiveStream();
   const imgEl = byId('liveViewImg');
   // Image click is intentionally NOT a fullscreen toggle — only the
-  // FS button on the modal owns that. (HLS path uses the native
-  // <video> controls' own fullscreen icon, which is the YouTube-
-  // style native player on iPhone.)
+  // FS button on the modal owns that. Same on the HLS <video> path:
+  // native controls are suppressed in the template, so the wrap-
+  // level .fake-fullscreen overlay is the single FS target on iOS.
   if (imgEl) imgEl.onclick = null;
   modal.classList.remove('hidden');
   document.body.style.overflow = 'hidden';
@@ -291,37 +293,6 @@ export function closeLiveView(){
   modal.classList.add('hidden');
   document.body.style.overflow = '';
   _liveViewCamId = null;
-}
-
-// M1 · iOS native fullscreen entry. iOS Safari only allows true
-// fullscreen on <video> via webkitEnterFullscreen — Apple's player
-// chrome (Play/Pause/±10/Volume/AirPlay/expand/close) takes over
-// the whole screen, which is the iOS-conform UX we want. The
-// previous .fake-fullscreen wrap stage with the app's own glass
-// X / HD / FS buttons (rendered on top of a CSS-fullscreen wrap)
-// was an intermediate "first" fullscreen that forced the user
-// into a second maximize tap to reach the native player. Routing
-// the iOS FS button directly here collapses both into one tap.
-//
-// webkitEnterFullscreen is only valid when the <video> has at
-// least HAVE_METADATA (readyState ≥ 1). Right after src is set
-// on a fresh HLS source the readyState is 0; we wait once for
-// loadedmetadata to fire (the iOS-Safari source pipeline normally
-// reaches it well within the user-gesture grace window) before
-// triggering. Returns true if the call could be issued or queued.
-export function iosLiveFsNative(){
-  const video = byId('liveViewVideo');
-  if (!video) return false;
-  if (typeof video.webkitEnterFullscreen !== 'function') return false;
-  const enter = () => {
-    try { video.webkitEnterFullscreen(); } catch { /* ignore */ }
-  };
-  if (video.readyState >= 1){
-    enter();
-  } else {
-    video.addEventListener('loadedmetadata', enter, { once: true });
-  }
-  return true;
 }
 
 // Inline onclick callsites in the static template + the dashboard.js
