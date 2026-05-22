@@ -243,6 +243,39 @@ def _reload_telegram_service():
     unchanged — the common case for camera-config saves."""
     global telegram_service, _last_telegram_cfg_snapshot
     log = logging.getLogger(__name__)
+    # T61 diagnostic — during the first 120 s after boot, log every
+    # caller stack + cfg-snapshot diff so the double-fire on boot can
+    # be traced to its source. Cheap (one log line per call), bounded
+    # in time, no behavioural change.
+    uptime_s = time.time() - _BOOT_TS
+    if uptime_s < 120:
+        import traceback as _tb
+        stack = "".join(_tb.format_stack(limit=8))
+        log.warning(
+            "[tg] _reload_telegram_service called at uptime=%.1fs · caller stack:\n%s",
+            uptime_s, stack,
+        )
+        try:
+            _new_cfg = get_effective_config()
+            _new_tg = _new_cfg.get("telegram", {}) or {}
+            if _last_telegram_cfg_snapshot is None:
+                log.warning("[tg] snapshot diff: prev=None")
+            elif _last_telegram_cfg_snapshot == _new_tg:
+                log.warning(
+                    "[tg] snapshot diff: IDENTICAL — skip-guard should have fired",
+                )
+            else:
+                a = _last_telegram_cfg_snapshot
+                b = _new_tg
+                only_in_a = sorted(set(a) - set(b))
+                only_in_b = sorted(set(b) - set(a))
+                changed = sorted(k for k in set(a) & set(b) if a[k] != b[k])
+                log.warning(
+                    "[tg] snapshot diff: only_in_prev=%s · only_in_new=%s · changed_keys=%s",
+                    only_in_a, only_in_b, changed,
+                )
+        except Exception as _e:
+            log.warning("[tg] snapshot diff failed: %s", _e)
     with _telegram_reload_lock:
         new_cfg = get_effective_config()
         new_tg_cfg = new_cfg.get("telegram", {}) or {}
