@@ -316,13 +316,27 @@
   margin-bottom: 6px;
   cursor: pointer;
   position: relative;
-  min-height: 32px;
+  /* iOS touch-target rule: the whole label is the hit area; bump
+     to 44 px so a tap anywhere on the row toggles the switch. */
+  min-height: 44px;
 }
+/* .sched-name + .switch on the same flex row hits the same iOS
+   overflow pattern as .sched-times below: a long title with
+   flex:1 (no min-width:0) refuses to shrink below intrinsic
+   width, so the flex-shrink:0 .switch ends up clipped past the
+   right edge of .sched-block at 375 px viewport. min-width:0 +
+   ellipsis keeps the toggle reachable without rewrapping the
+   title onto two lines (which would push the switch vertically
+   off-centre). */
 .sched-name {
   font-size: 11.5px;
   font-weight: 700;
   color: #fff;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 /* From/to time pair as a 3-column grid: [input] [auto-sep] [input].
    The two 1fr cells share remaining space evenly and shrink without
