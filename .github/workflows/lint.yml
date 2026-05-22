@@ -13,6 +13,26 @@ on:
     branches: [main]
 
 jobs:
+  tests:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install runtime + dev requirements
+        run: |
+          pip install -r app/requirements.txt
+          pip install -r app/requirements-dev.txt
+
+      - name: pytest
+        working-directory: app
+        run: pytest tests/ -q
+
   python:
     name: Python (ruff + mypy)
     runs-on: ubuntu-latest
@@ -27,18 +47,16 @@ jobs:
       - name: Install dev requirements
         run: pip install -r app/requirements-dev.txt
 
-      - name: ruff check (warning-only baseline)
-        # Stage-1 linter foundation. Baseline still has ~100 pre-existing
-        # violations (mostly E702 inline-semicolons, E402 late imports, the
-        # E741 single-letter `l` convention). The `|| true` keeps the step
-        # surfaced in CI logs but non-blocking until a dedicated cleanup
-        # pass lands. Mirrors the mypy stance below.
-        run: ruff check app/ || true
+      - name: ruff check (key families blocking)
+        # P27 · post-M06 the baseline is clean for the F/E9/B904/B905/F401
+        # families — gate on these. Other families (E402 late imports,
+        # E741 single-letter `l` etc.) stay non-blocking for now via
+        # the explicit --select list.
+        run: ruff check app/ --select F,E9,B904,B905,F401
 
       - name: ruff format check (warning-only baseline)
-        # Same rationale as ruff check — large parts of the codebase
-        # predate the formatter. Running `ruff format` would mass-rewrite
-        # ~50 files; that lives in its own future PR with explicit review.
+        # Codebase was mass-formatted in M04. Still non-blocking for the
+        # rare partial-format diff that might slip through pre-commit.
         run: ruff format --check app/ || true
 
       - name: mypy (permissive baseline)
@@ -63,7 +81,9 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: eslint
-        run: npx eslint app/web/static/js --max-warnings 999
+        # P27 · errors block, warnings allowed up to the same 50 ratchet
+        # pre-commit enforces locally.
+        run: npx eslint app/web/static/js --max-warnings 50
         # Prettier check intentionally skipped in this round — the
         # codebase predates prettier and a mass --write would rewrite
         # ~48 files at once. Prettier runs in pre-commit on edited files
