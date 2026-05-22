@@ -196,3 +196,156 @@
   .erk-tl-badge-text{ display:none; }
   .erk-tl-badge{ min-width:44px;padding:6px; }
 }
+
+/* ── K13 · Tracking-threshold info strip ───────────────────────────────────
+   Four-row strip rendered by thresholds.js between the live timeline
+   and the detection list while live-detect is running. Each row pairs
+   the user's configured limit (left) with the simulator's measured
+   "Ist-Wert" (right) so the user can dial values in empirically.
+
+   No frame-borders — depth via background-color tiers (success /
+   warning / idle). Monospaced numeric cells for column alignment.
+   Each row is ≥ 44 px tall on mobile so the strip stays touch-target
+   friendly even though the row itself isn't clickable. */
+.erk-thr-strip{
+  margin-top:10px;
+  padding:8px 10px;
+  background:rgba(255,255,255,.03);
+  border-radius:10px;
+  display:flex;flex-direction:column;gap:4px;
+}
+.erk-thr-row{
+  display:grid;
+  grid-template-columns:
+    minmax(140px, auto)      /* label */
+    minmax(72px, auto)       /* limit */
+    auto                     /* sep · */
+    minmax(140px, auto)      /* actual label */
+    minmax(72px, 1fr)        /* actual value */
+    auto                     /* mark */
+    auto;                    /* track tag */
+  align-items:center;gap:8px;
+  min-height:36px;
+  padding:6px 10px;
+  border-radius:8px;
+  background:rgba(255,255,255,.025);
+  transition:background-color .35s ease;
+}
+.erk-thr-row--ok{
+  background:rgba(34,197,94,.10);
+}
+.erk-thr-row--warn{
+  background:rgba(248,113,113,.12);
+}
+.erk-thr-row--idle{
+  background:rgba(255,255,255,.025);
+}
+.erk-thr-lbl{
+  font-size:12.5px;font-weight:600;
+  color:rgba(255,255,255,.82);
+  letter-spacing:.01em;
+}
+.erk-thr-limit,
+.erk-thr-actual{
+  /* Numerics — monospaced and tabular so the columns line up across
+     rows regardless of digit width. */
+  font-family: ui-monospace, 'SF Mono', 'Cascadia Mono', 'Roboto Mono', Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size:13px;
+  color:rgba(255,255,255,.92);
+}
+.erk-thr-limit{
+  font-weight:600;
+}
+.erk-thr-limit--default{
+  /* Dimmed when the form input is 0 / blank and the strip is showing
+     the module fallback. Tells the user "this is the system default
+     because you haven't set a per-camera override." */
+  color:rgba(255,255,255,.55);
+  font-style:italic;
+}
+.erk-thr-sep{
+  color:rgba(255,255,255,.30);
+  font-size:12px;
+}
+.erk-thr-actual-lbl{
+  font-size:12px;
+  color:rgba(255,255,255,.55);
+}
+.erk-thr-actual{
+  color:rgba(255,255,255,.95);
+}
+.erk-thr-mark{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:18px;height:18px;border-radius:50%;
+  font-size:12px;font-weight:700;
+  line-height:1;
+}
+.erk-thr-mark--ok{
+  background:rgba(34,197,94,.20);
+  color:#86efac;
+}
+.erk-thr-mark--warn{
+  background:rgba(248,113,113,.22);
+  color:#fca5a5;
+}
+.erk-thr-mark--idle{
+  background:rgba(255,255,255,.06);
+  color:rgba(255,255,255,.4);
+}
+.erk-thr-tag{
+  /* Small pill listing the backing track id. Stays neutral-tone so it
+     doesn't compete with the status mark for attention. */
+  font-size:11px;font-weight:600;
+  padding:2px 8px;
+  border-radius:999px;
+  background:rgba(255,255,255,.08);
+  color:rgba(255,255,255,.75);
+  white-space:nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width:640px){
+  /* iPhone width: collapse to a flex stack so limit + actual stay
+     readable without overflowing the modal. Each row stays ≥ 44 px
+     (label line + value line + padding) so the strip remains touch-
+     target friendly even though the row itself isn't clickable. */
+  .erk-thr-row{
+    display:flex;flex-wrap:wrap;
+    align-items:center;
+    gap:6px 8px;
+    min-height:48px;
+    padding:8px 10px;
+  }
+  /* Label takes the first column; limit pushes to the right end of
+     the first visual line via margin-left:auto so the line reads
+     "Spawn-Schwelle … 0,50". */
+  .erk-thr-lbl{ flex:0 0 auto; }
+  .erk-thr-limit{ flex:0 0 auto; margin-left:auto; text-align:right; }
+  .erk-thr-sep{ display:none; }
+  /* Forces a line break before the actual-label so it starts a new
+     visual row. Width:100% on an empty pseudo would also work; using
+     order:0 / flex-basis:100% on a real flex child is the cleaner
+     wrap-control trick.  */
+  .erk-thr-actual-lbl{
+    flex:1 1 100%;
+    font-size:11.5px;
+    margin-top:2px;
+  }
+  /* Wrap the actual-related cells onto their own flex line so the
+     break above doesn't push limit + actual onto the same row. */
+  .erk-thr-actual-lbl,
+  .erk-thr-actual,
+  .erk-thr-mark,
+  .erk-thr-tag{
+    /* Reset any grid-cell side-effects from desktop. */
+    grid-column:auto;
+  }
+  .erk-thr-actual{
+    margin-left:auto;
+    text-align:right;
+    flex:0 0 auto;
+  }
+  .erk-thr-mark{ flex:0 0 auto; }
+  .erk-thr-tag { flex:0 0 auto; }
+}

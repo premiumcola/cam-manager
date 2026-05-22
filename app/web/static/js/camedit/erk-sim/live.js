@@ -16,6 +16,7 @@ import { state as appState } from '../../core/state.js';
 import { _renderErkSimError, _renderErkSimResult } from './snapshot.js';
 import { IoUTracker } from './tracker.js';
 import { LiveTimeline } from './timeline.js';
+import { renderThresholdStrip, hideThresholdStrip } from './thresholds.js';
 import { renderOverlayToggles } from '../../mediaview/overlay-toggles.js';
 import {
   ZONE_STROKE, ZONE_FILL, MASK_STROKE, MASK_FILL,
@@ -77,6 +78,7 @@ export function stopLive(){
   try { toggleHandle?.teardown?.(); } catch { /* ignore */ }
   const togRow = byId('erkSimToggles');
   if (togRow) togRow.remove();
+  hideThresholdStrip();
   _session = null;
   _lastFrameSize = null;
   if (btn){
@@ -288,12 +290,35 @@ async function _tick(){
       verdict: d.verdict,
     }));
     const now_ms = Date.now();
+    // Push the latest form thresholds into the tracker BEFORE the tick
+    // so editing track_iou_match_threshold / track_miss_grace_seconds
+    // takes effect immediately. The IoU and grace thresholds are the
+    // two the tracker actually uses for matching/expiry; spawn/cont
+    // floors are scoring-only and reported via the strip below.
+    const formEl = byId('cameraForm');
+    const fF = formEl?.elements;
+    const _live = (name) => {
+      const v = parseFloat(fF?.[name]?.value);
+      return Number.isFinite(v) && v > 0 ? v : null;
+    };
+    session.tracker.setThresholds({
+      minIou: _live('track_iou_match_threshold'),
+      missGraceMs: (() => {
+        const s = _live('track_miss_grace_seconds');
+        return s != null ? s * 1000 : null;
+      })(),
+    });
     const confirmed = session.tracker.tick(dets, now_ms);
     const dropped = session.tracker.lastDropped();
     _renderTrails(confirmed, data.frame_size);
     session.timeline.observe(confirmed, dropped, now_ms);
     const tlHost = byId('erkSimTimeline');
     if (tlHost) session.timeline.render(tlHost, now_ms, session.startedAt);
+    // K13 · threshold info strip — paints AFTER tick() so the strip
+    // reads the freshest tracker state. Hidden on stopLive() so a
+    // frozen frame doesn't show stale "aktuell" numbers as if the
+    // loop were still running.
+    if (formEl) renderThresholdStrip(formEl, session.tracker, now_ms);
   } catch (e) {
     if (e?.name === 'AbortError') return;
     // network error — keep polling, intentionally silent (a toast on
