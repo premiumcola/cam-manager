@@ -1,0 +1,37 @@
+/* ── Typography token system ────────────────────────────────────────────────
+   Centralised font-size ladder. Before this file 538 hardcoded
+   font-size:Npx values lived scattered across the partials; adjusting
+   the overall reading register required a file-by-file sweep.
+
+   Token ladder:
+     --text-2xs  9px    micro labels, single-letter chips
+     --text-xs   10px   secondary chrome, hints
+     --text-sm   11px   small body, dense info rows
+     --text-base 12px   default body
+     --text-md   13px   primary body (most common)
+     --text-lg   14px   emphasised body / section titles
+     --text-xl   16px   panel titles / form inputs (iOS no-auto-zoom)
+     --text-2xl  18px   large titles / hero-adjacent
+
+   Migration policy: as partials get edited, hardcoded values get
+   replaced with the nearest token. Mass --write is intentionally
+   deferred to keep diffs reviewable. Half-step sizes (10.5, 11.5,
+   12.5) stay as-is for now — they're typically inside dense layouts
+   tuned by eye.
+*/
+:root {
+  --text-2xs:  9px;
+  --text-xs:   10px;
+  --text-sm:   11px;
+  --text-base: 12px;
+  --text-md:   13px;
+  --text-lg:   14px;
+  --text-xl:   16px;
+  --text-2xl:  18px;
+
+  /* Line-height tokens — keep light/normal/tight as named values so
+     the ladder reads in CSS without remembering ratios. */
+  --leading-tight:  1.15;
+  --leading-normal: 1.35;
+  --leading-loose:  1.55;
+}

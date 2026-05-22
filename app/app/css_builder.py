@@ -26,6 +26,9 @@ LOAD_ORDER = [
     # can reference --z-modal / --z-toast etc. Pure variables, no
     # selectors yet.
     "00-elevation-tokens.css",
+    # Typography tokens — load before class-tokens so future migrations
+    # of partial files have access to --text-sm / --text-md / etc.
+    "00-text-tokens.css",
     # Class-colour tokens — load FIRST so every later partial can
     # reference --class-person / --class-cat etc. Mirrors
     # core/class-colors.js.
