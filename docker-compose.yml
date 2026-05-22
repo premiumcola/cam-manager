@@ -14,10 +14,17 @@ services:
     restart: unless-stopped
     ports:
       - "8099:8099"
+    # P29 · production base — only DATA mounts, no code mounts. The
+    # built image holds the canonical app/web. Local development adds
+    # the code mounts back via docker-compose.override.yml which
+    # docker-compose merges automatically when present.
+    #
+    # Storage carries user data (event JSONs, mp4s, settings.json);
+    # models holds the .tflite files that ship out-of-band; app/config
+    # is the bundled config.yaml that's read-only at runtime but lives
+    # outside the image so an operator can edit it without rebuilding.
     volumes:
-      - ./app/app:/app/app
       - ./app/config:/app/config
-      - ./app/web:/app/web
       - ./storage:/app/storage
       - ./models:/app/models
     # Pass every USB device through so the Coral Edge TPU is visible inside

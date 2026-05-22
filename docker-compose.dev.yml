@@ -1,0 +1,25 @@
+# P29 · Dev-mode overlay for docker-compose.yml.
+#
+# Adds the code mounts back so a Python/JS/HTML edit on disk shows up
+# in the running container without a rebuild. Use:
+#
+#     docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# Production deploys keep the plain command:
+#
+#     docker compose up -d                 # picks up override.yml too
+#     docker compose -f docker-compose.yml up -d   # pure prod, no overrides
+#
+# The personal `docker-compose.override.yml` stays gitignored so each
+# host can set its own non-shared overrides (e.g. devices: !override
+# [] on Windows-Docker hosts that lack /dev/bus/usb).
+services:
+  tam-spy:
+    # CSS partials rebuild app.css at container boot, so CSS changes
+    # still need a docker restart. Python/JS/HTML edits are picked up
+    # on the next request — Flask serves static assets without an
+    # in-memory cache, and gunicorn is configured to reload on
+    # source-file changes.
+    volumes:
+      - ./app/app:/app/app
+      - ./app/web:/app/web
