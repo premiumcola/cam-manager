@@ -22,7 +22,7 @@ from pathlib import Path
 
 import requests
 
-from ._consts import (
+from .._consts import (
     EVENT_ICON_HEX,
     EVENT_LABEL_DE,
     HISTORY_FIELD_TO_EVENT,
