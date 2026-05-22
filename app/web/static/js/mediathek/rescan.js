@@ -6,7 +6,7 @@
 // at 1.5 s tick and renders a sticky bottom bar with done/total + a
 // per-file detail log.
 import { byId } from '../core/dom.js';
-import { j } from '../core/api.js';
+import { j, apiGet, apiPost } from '../core/api.js';
 import { showToast } from '../core/toast.js';
 import { loadMediaStorageStats } from '../chrome/storage-stats.js';
 import { state } from '../core/state.js';
@@ -155,11 +155,15 @@ byId('reindexTrackingBtn')?.addEventListener('click', async () => {
   try {
     const url = '/api/tracking/reindex-all'
       + (camId ? `?camera_id=${encodeURIComponent(camId)}` : '');
-    const r = await fetch(url, { method: 'POST' });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.ok){
-      const msg = (d.error || r.statusText || 'Fehler');
-      showToast('Tracking-Re-Index: ' + msg, 'error');
+    let d;
+    try {
+      d = await apiPost(url);
+    } catch (e) {
+      showToast('Tracking-Re-Index: ' + (e.message || 'Fehler'), 'error');
+      return;
+    }
+    if (!d?.ok) {
+      showToast('Tracking-Re-Index: ' + (d?.error || 'Fehler'), 'error');
       return;
     }
     const queued = d.queued || 0;
@@ -174,7 +178,7 @@ byId('reindexTrackingBtn')?.addEventListener('click', async () => {
     const tick = async () => {
       if (Date.now() - t0 > 60_000) return;  // hand off to background
       let s;
-      try { s = await (await fetch('/api/tracking/status')).json(); }
+      try { s = await apiGet('/api/tracking/status'); }
       catch { s = null; }
       if (!s || !s.alive){
         showToast('Tracking-Worker nicht erreichbar', 'error');

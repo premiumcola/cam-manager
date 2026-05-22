@@ -23,6 +23,7 @@
 import { byId, esc } from '../core/dom.js';
 import { state } from '../core/state.js';
 import { showToast } from '../core/toast.js';
+import { apiGet } from '../core/api.js';
 
 const _GRADE_CLASSES = {
   green:   { cls: 'mmc-qa-pill--green',  label: 'clean' },
@@ -54,12 +55,10 @@ function _relpathOf(item){
 async function _fetchQA(relpath){
   if (_qaCache.has(relpath)) return _qaCache.get(relpath);
   const promise = (async () => {
+    // 404 is the common case (clip never had QA run); apiGet throws on
+    // non-2xx so we collapse all error paths to null here.
     try {
-      const r = await fetch(`/api/timelapse/${relpath}/qa`,
-                            { headers: { Accept: 'application/json' } });
-      if (r.status === 404) return null;
-      if (!r.ok) return null;
-      return await r.json();
+      return await apiGet(`/api/timelapse/${relpath}/qa`);
     } catch { return null; }
   })();
   _qaCache.set(relpath, promise);
@@ -251,7 +250,7 @@ function _renderModal(item, qa){
       }
       rb.disabled = true;
       try {
-        await fetch(`/api/camera/${encodeURIComponent(camId)}/timelapse?day=${encodeURIComponent(day)}&force=1`);
+        await apiGet(`/api/camera/${encodeURIComponent(camId)}/timelapse?day=${encodeURIComponent(day)}&force=1`);
         showToast('Rebuild läuft — Sidecar erscheint nach Encode', 'info');
       } catch {
         showToast('Rebuild-Request fehlgeschlagen', 'error');

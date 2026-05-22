@@ -8,6 +8,7 @@
 // computes an event's effective severity by reading the detected
 // labels and picking the highest-rank entry from class_severity[].
 import { byId, esc } from './core/dom.js';
+import { apiGet, apiPost } from './core/api.js';
 import { _fmtRelativeAgeS } from './camedit/detection.js';
 
 const _ALERT_SEV_CLASSES = [
@@ -218,8 +219,7 @@ async function _onAlertTestClick(ev){
   result.hidden = true;
   let data = null;
   try {
-    const r = await fetch(`/api/cameras/${encodeURIComponent(camId)}/test-alert`, { method: 'POST' });
-    try { data = await r.json(); } catch {}
+    data = await apiPost(`/api/cameras/${encodeURIComponent(camId)}/test-alert`);
   } catch {
     data = null;
   }
@@ -257,8 +257,7 @@ export async function _renderAlertStatusStrip(){
   if (!host) return;
   let data = null;
   try {
-    const r = await fetch('/api/system/telegram');
-    if (r.ok) data = await r.json();
+    data = await apiGet('/api/system/telegram');
   } catch {}
   const dot = byId('alertStatusDot');
   const txt = byId('alertStatusBot');

@@ -11,7 +11,7 @@
 //      device; only IP + suggested RTSP path are written into the form.
 //      User enters credentials and uses the normal Save button.
 import { byId, esc } from '../core/dom.js';
-import { j } from '../core/api.js';
+import { j, apiGet, apiPost } from '../core/api.js';
 import { showToast } from '../core/toast.js';
 import { panelState, _closeEditPanel } from './panel.js';
 import { _rtspEnc, parseRtspUrl } from './rtsp.js';
@@ -56,8 +56,8 @@ async function loadCamRecoveryBackups(){
   wrap.innerHTML = `<div class="muted small">Lade Sicherungen…</div>`;
   let items = [];
   try {
-    const r = await fetch(`/api/settings/backups?cam_id=${encodeURIComponent(panelState.camId)}`);
-    items = (await r.json()).items || [];
+    const d = await apiGet(`/api/settings/backups?cam_id=${encodeURIComponent(panelState.camId)}`);
+    items = d.items || [];
   } catch (e){
     wrap.innerHTML = `<div class="cam-recovery-empty">Sicherungen nicht abrufbar (${esc(String(e))}).</div>`;
     return;
@@ -92,14 +92,9 @@ window.applyCamRecoveryBackup = async function(filename){
   const camId = panelState.camId;
   if (!camId) return;
   try {
-    const r = await fetch(`/api/settings/cameras/${encodeURIComponent(camId)}/restore-connection`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename }),
-    });
-    const d = await r.json();
-    if (!r.ok || !d.ok){
-      showToast(`Wiederherstellen fehlgeschlagen: ${d.error || r.statusText}`, 'error');
+    const d = await apiPost(`/api/settings/cameras/${encodeURIComponent(camId)}/restore-connection`, { filename });
+    if (!d?.ok){
+      showToast(`Wiederherstellen fehlgeschlagen: ${d?.error || 'Fehler'}`, 'error');
       return;
     }
     showToast(`Verbindung aus ${filename} wiederhergestellt — Kamera startet neu`, 'success');
@@ -144,8 +139,8 @@ window.loadCamRecoveryDiscovery = async function(){
   if (status) status.textContent = 'Scanne Subnetz…';
   let items = [];
   try {
-    const r = await fetch('/api/discover');
-    items = (await r.json()).devices || [];
+    const d = await apiGet('/api/discover');
+    items = d.devices || [];
   } catch {
     if (status) status.textContent = 'Scan fehlgeschlagen';
     return;

@@ -6,6 +6,7 @@
 import { byId, esc } from './core/dom.js';
 import { state } from './core/state.js';
 import { showToast } from './core/toast.js';
+import { apiGet, apiPost } from './core/api.js';
 
 let _tgPollStatusTimer = null;
 
@@ -33,8 +34,7 @@ async function refreshTelegramPollingStatus(){
   const badge = byId('tgStatusBadge');
   if (!badge) return;
   try {
-    const r = await fetch('/api/telegram/status');
-    const d = await r.json();
+    const d = await apiGet('/api/telegram/status');
     const s = d.state || 'off';
     if (s === 'active'){
       const mins = Math.floor((d.since_seconds || 0) / 60);
@@ -102,7 +102,7 @@ byId('telegramForm')?.addEventListener('submit', async e => {
     chat_id: byId('tg_chat_id')?.value || '',
     format: (state.config?.telegram || {}).format || 'photo',
   }};
-  await fetch('/api/settings/app', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  await apiPost('/api/settings/app', payload);
   showToast('Telegram-Verbindung gespeichert.', 'success');
   if (typeof window.loadAll === 'function') await window.loadAll();
 });
@@ -115,7 +115,7 @@ byId('saveTgFormatBtn')?.addEventListener('click', async () => {
   const fmt = [...document.querySelectorAll('[name="tg_format"]')].find(r => r.checked)?.value || 'photo';
   const existing = state.config?.telegram || {};
   const payload = { telegram: { ...existing, format: fmt } };
-  await fetch('/api/settings/app', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  await apiPost('/api/settings/app', payload);
   showToast('Format gespeichert.', 'success');
   if (typeof window.loadAll === 'function') await window.loadAll();
 });
@@ -126,8 +126,7 @@ byId('telegramTestBtn')?.addEventListener('click', async () => {
   btn.disabled = true; btn.textContent = 'Sende …';
   if (res){ res.style.display = 'inline'; res.style.color = 'var(--muted)'; res.textContent = '...'; }
   try {
-    const r = await fetch('/api/telegram/test', { method: 'POST' });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || 'Fehler');
+    await apiPost('/api/telegram/test');
     if (res){ res.style.color = 'var(--good)'; res.textContent = '✓ Gesendet'; }
   } catch (e){
     let msg = 'Fehler';

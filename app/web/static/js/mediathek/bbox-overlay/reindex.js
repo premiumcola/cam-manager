@@ -5,6 +5,7 @@
 // the sidecar fetch up to _REINDEX_MAX_RETRIES times.
 import { byId } from '../../core/dom.js';
 import { showToast } from '../../core/toast.js';
+import { apiPost } from '../../core/api.js';
 import { lbState } from '../state.js';
 import {
   _REINDEX_INITIAL_WAIT_MS,
@@ -32,15 +33,11 @@ export async function _kickReindexFor(item){
   _showReindexBannerPending(item);
   _logDiag(`event=${eid} kicking reindex (camera_id=${cam})`, 'warn');
   try {
-    const r = await fetch(
+    const d = await apiPost(
       `/api/tracking/reindex/${encodeURIComponent(eid)}`
-      + `?camera_id=${encodeURIComponent(cam)}`,
-      { method: 'POST' });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.ok){
-      _logDiag(
-        `event=${eid} reindex POST failed: ${d.error || r.statusText}`,
-        'error');
+      + `?camera_id=${encodeURIComponent(cam)}`);
+    if (!d?.ok){
+      _logDiag(`event=${eid} reindex POST failed: ${d?.error || 'Fehler'}`, 'error');
       _failReindex(item);
       return;
     }
@@ -192,19 +189,13 @@ export async function triggerManualReindex(btn){
   }
   _reindexFinalFailed.delete(item.event_id);
   try {
-    const r = await fetch(
+    const d = await apiPost(
       `/api/tracking/reindex/${encodeURIComponent(item.event_id)}`
-      + `?camera_id=${encodeURIComponent(item.camera_id || '')}`,
-      { method: 'POST' });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.ok){
-      showToast(
-        'Tracking-Re-Index fehlgeschlagen: ' + (d.error || r.statusText),
-        'error');
-      _logDiag(
-        `event=${item.event_id} manual reindex failed: `
-        + `${d.error || r.statusText}`,
-        'error');
+      + `?camera_id=${encodeURIComponent(item.camera_id || '')}`);
+    if (!d?.ok){
+      const msg = d?.error || 'Fehler';
+      showToast('Tracking-Re-Index fehlgeschlagen: ' + msg, 'error');
+      _logDiag(`event=${item.event_id} manual reindex failed: ${msg}`, 'error');
       return;
     }
     showToast('Tracking neu generiert', 'success');
