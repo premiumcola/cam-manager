@@ -20,72 +20,23 @@ import { getCameraIcon, getCameraColor, OBJ_LABEL, DASHBOARD_SVG } from './core/
 import { isIOS } from './core/ios-video.js';
 import { openLiveViewIosNative } from './chrome/live-view.js';
 
-// ── Dead-camera-id snapshot poll suppression ───────────────────────────────
-// After a camera rename (manuf/model edit triggers storage_migration to
-// compute a new canonical id), the old <img src="/api/camera/<old-id>/
-// snapshot.jpg"> elements stay in the DOM until the next renderDashboard.
-// The 5 fps preview refresh keeps bumping their timestamps, producing a
-// 404 storm in the console. _failedSnapshotIds tracks ids whose snapshot
-// endpoint has 404'd two times in a row; _camImgRetry stops retrying
-// once that threshold is hit, and the preview-refresh loop in legacy.js
-// skips them. loadAll() resets the map (via _resetFailedSnapshotIds)
-// since the next dashboard re-render will use the fresh ids.
-export const _failedSnapshotIds = new Map();
-export function _resetFailedSnapshotIds(){ _failedSnapshotIds.clear(); }
-export function _isSnapshotIdDead(camId){
-  return camId ? (_failedSnapshotIds.get(camId) || 0) >= 2 : false;
-}
-export function _camIdFromImg(img){
-  return img?.closest?.('[data-camid]')?.dataset?.camid || null;
-}
-
-// ── Camera snapshot retry (handles 503 on initial load before stream is ready) ─
-export function _camImgRetry(img){
-  const camId = _camIdFromImg(img);
-  // Two consecutive failures is the threshold for marking the id dead —
-  // catches a real rename (the new img element will carry the fresh id)
-  // while tolerating one transient 503 during cam restart.
-  if (camId) {
-    const n = (_failedSnapshotIds.get(camId) || 0) + 1;
-    _failedSnapshotIds.set(camId, n);
-    if (n >= 2) {
-      img.style.display = 'none';
-      return;
-    }
-  }
-  const retries = parseInt(img.dataset.snapRetry || '0');
-  if (retries >= 12) { img.style.display = 'none'; return; }
-  img.dataset.snapRetry = retries + 1;
-  // Exponential backoff: 500ms, 1s, 1.5s … capped at 3s
-  const delay = Math.min(500 * (retries + 1), 3000);
-  setTimeout(() => {
-    if (!img.isConnected) return; // card removed from DOM
-    const base = img.src.split('?')[0];
-    img.src = base + '?t=' + Date.now();
-  }, delay);
-}
-window._camImgRetry = _camImgRetry;
-
-// Snapshot loaded — fade in, hide the placeholder, and apply the
-// stream's actual aspect ratio to the parent .cv-frame so the
-// container matches the camera (4:3, 16:9, 16:10 …) instead of
-// being locked to a single 16:9 default. Combined with the
-// `object-fit:contain` rule on .cv-img this means the full sensor
-// frame is always visible — no cropping, no squashing. The frame
-// resizes once when the first snapshot decodes (the placeholder
-// hides at the same moment, so the resize is hidden behind that
-// transition and reads as the layout settling, not a snap).
-export function _cvImgLoaded(img){
-  img.classList.add('loaded');
-  const placeholder = img.previousElementSibling;
-  if (placeholder) placeholder.style.display = 'none';
-  const w = img.naturalWidth, h = img.naturalHeight;
-  if (w > 0 && h > 0) {
-    const frame = img.closest('.cv-frame');
-    if (frame) frame.style.setProperty('--cv-aspect', `${w} / ${h}`);
-  }
-}
-window._cvImgLoaded = _cvImgLoaded;
+// ── Snapshot polling — moved to dashboard/snapshot-poll.js (N15) ───────────
+// Re-export every name so existing imports of these from '../dashboard.js'
+// resolve unchanged; window.* bridges below carry the inline-onclick path.
+export {
+  _failedSnapshotIds,
+  _resetFailedSnapshotIds,
+  _isSnapshotIdDead,
+  _camIdFromImg,
+  _camImgRetry,
+  _cvImgLoaded,
+} from './dashboard/snapshot-poll.js';
+import {
+  _camImgRetry as _camImgRetryFn,
+  _cvImgLoaded as _cvImgLoadedFn,
+} from './dashboard/snapshot-poll.js';
+window._camImgRetry = _camImgRetryFn;
+window._cvImgLoaded = _cvImgLoadedFn;
 
 // ── Camera-grid column class — picks the right cam-grid-N class so CSS
 //     can size tiles based on count without JS math. -n = generic flow. ─
