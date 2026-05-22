@@ -29,6 +29,7 @@ def register_blueprints(app) -> None:
         bootstrap,
         cameras,
         coral,
+        coral_test_detection,
         detection_cloud,
         events,
         media,
@@ -53,6 +54,8 @@ def register_blueprints(app) -> None:
     app.register_blueprint(timeline_stats.bp)
     app.register_blueprint(timelapse.bp)
     app.register_blueprint(coral.bp)
+    # N14 · per-cam test-detection lives in its own module now.
+    app.register_blueprint(coral_test_detection.bp)
     app.register_blueprint(weather.bp)
     app.register_blueprint(telegram.bp)
     app.register_blueprint(detection_cloud.bp)
