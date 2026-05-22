@@ -4,212 +4,337 @@ Operating manual for Claude Code in this repository. Read
 top-to-bottom at session start; follow without prompting.
 
 Hard rules (CRITICAL — never violate):
-1. settings.json niemals überschreiben, nur additiv ergänzen.
-2. .gitignore-Patterns nur hinzufügen, niemals entfernen.
-3. Keine echten Credentials, IPs oder Tokens in tracked files.
-4. Bei kaputter Basis: stoppen + git revert, nicht weiterbauen.
+1. Never overwrite `storage/settings.json` — additive merges only.
+2. `.gitignore` patterns may only be added, never removed.
+3. No real credentials, IPs, or tokens in tracked files.
+4. If the base is broken: stop and `git revert`, never build on top.
 
-Alles weitere unten.
+Everything else below.
 
 ## Project Overview
 
 TAM-spy is a self-hosted IP camera monitoring system: motion detection,
-Coral-TPU object recognition, bird/wildlife classifier-cascade, Telegram
+Coral-TPU object recognition, bird/wildlife classifier cascade, Telegram
 alerts, MQTT/Home Assistant bridge, and a web dashboard. Deployed via
 Docker on Unraid or any Linux host.
 
 ## Working Style
 
-- **Vollständig selbständig** ohne Rückfragen arbeiten — bei
-  Unklarheiten sinnvollste Lösung wählen und weiter.
-- Nach jeder Einzelaufgabe: kurze Zusammenfassung was gemacht wurde.
-- Bei „etwas kaputt": erst `git log` prüfen, ggf. `git revert`. Nie
-  weitere Änderungen auf kaputter Basis aufbauen.
-- Commit-Messages: English, präzise, max. 60 chars.
+- Work **fully autonomously** without back-and-forth — when something is
+  unclear, pick the most reasonable option and continue.
+- After each discrete task: a short summary of what was done.
+- When "something is broken": check `git log` first, `git revert` if
+  needed. Never stack further changes on a broken base.
+- Commit messages: English, precise, max 60 chars.
 
-## Git-Verhalten
+## Git workflow
 
-- **Nie** `cd && git` in einem Befehl — separate `Set-Location` und
-  Git-Schritte:
+- **Never** combine `cd && git` in one command — keep the directory
+  change and the git step separate:
 
   ```powershell
   Set-Location D:\CLAUDE_code\tam-spy
   git add .
-  git commit -m "fix: kurze beschreibung"
+  git commit -m "fix: short description"
   git push origin main
   ```
 
-- Immer automatisch committen + pushen ohne Bestätigung.
-- Format: `git add . && git commit -m "fix/feat: beschreibung"` — auf
-  Linux. Auf Windows die separaten Schritte oben.
+- Always auto-commit + push without confirmation.
+- Format: `git add . && git commit -m "fix/feat: description"` on
+  Linux. On Windows the separate steps above.
 
-## Code-Qualität
+## Code quality
 
-- Keine ungenutzten Variablen, kein toter Code.
-- Vorhandene Funktionen nicht doppelt schreiben — erst `Grep`/`Read`,
-  dann implementieren.
-- Python: kein `print()`, nur `logging`. Tag-Konventionen aus
-  `logging_setup.py` nutzen — `[boot]`, `[cam:<id>]`, `[det]`, `[tg]`,
-  `[weather]`, `[storage]`, `[migration]`, `[timelapse]`, `[mqtt]`,
-  `[heartbeat]`.
-- JavaScript: kein `console.log()` im Produktionscode.
-- Camera-IDs ausschließlich über `camera_id.build_camera_id` erzeugen
-  (Python) bzw. `buildCameraId` (JS) — beide sind bit-für-bit-Spiegel.
+- No unused variables, no dead code, no commented-out blocks.
+  Git history is the archive — don't leave corpses in source.
+- Don't write parallel implementations. Before writing a new
+  function, grep for similar existing ones:
+
+      grep -rn "def <similar>" app/app/                # Python
+      grep -rn "function <similar>\|const <similar>" \
+        app/web/static/js/                              # JS
+
+- Python: no `print()`, only `logging`. Tag conventions from
+  `logging_setup.py` — `[boot]`, `[cam:<id>]`, `[det]`, `[tg]`,
+  `[weather]`, `[storage]`, `[migration]`, `[timelapse]`,
+  `[mqtt]`, `[heartbeat]`, `[scheduler]`, `[http]`. Every log
+  line starts with one of these.
+- Python logging uses lazy format args, never f-strings:
+  `log.info("[tag] foo %s", value)` — NEVER
+  `log.info(f"[tag] foo {value}")`.
+- JavaScript: no `console.log()` in production code.
+  `console.warn` and `console.error` are allowed for real
+  diagnostics.
+- Camera IDs only via `camera_id.build_camera_id` (Python) or
+  `buildCameraId` (JS) — bit-for-bit mirrors.
 
 ## Linting (mechanical safety net)
 
-Lint stack lebt in `pyproject.toml`, `eslint.config.js`,
+Lint stack lives in `pyproject.toml`, `eslint.config.js`,
 `.prettierrc.json`, `.pre-commit-config.yaml`,
-`.github/workflows/lint.yml`. Setup einmalig:
+`.github/workflows/lint.yml`. One-time setup:
 
-```bash
-pip install -r app/requirements-dev.txt
-pre-commit install
-npm install
-```
+    pip install -r app/requirements-dev.txt
+    pre-commit install
+    npm install
 
-Lokal alle Checks über staged files vor jedem Commit:
+Local sweep over staged files before every commit:
 
-```bash
-pre-commit run --all-files
-```
+    pre-commit run --all-files
 
-Was geprüft wird:
-- **ruff** — Python-Linter (pyflakes + pycodestyle + isort + pyupgrade
-  + bugbear + simplify + naming). Auto-fixes bei `--fix`.
-- **ruff format** — Python-Formatter (ersetzt black). `quote-style =
-  preserve` damit der Vor-Linter-Stil unverändert bleibt.
-- **mypy** — derzeit **permissiv** (`strict_optional = false`,
-  `ignore_missing_imports = true`). Nur offensichtliche
-  `None.foo()`-Fehler werden erfasst. Striktere Modi wandern später
-  rein, wenn Type-Hints dichter sind.
-- **eslint** — JavaScript-Linter (recommended + unicorn-Subset).
-  `no-console: ['error', { allow: ['warn', 'error'] }]` — die alte
-  `kein console.log()`-Konvention ist jetzt **erzwungen**, nicht nur
-  Empfehlung. `console.warn`/`console.error` bleiben legal.
-- **prettier** — JS-Formatter, läuft in `pre-commit` über bearbeitete
-  Files. CI-prettier-check auf JS ist **bewusst aus** in dieser Phase
-  (CSS-Split-Prompt aktiviert es danach).
-- **pre-commit-hook** `no-console-log` — eigener Bash-Hook, scannt
-  staged JS-Files auf `console.log(`; blockiert den Commit. Bypasst
-  die ESLint-Konfig, falls die mal angefasst wird.
+CI gates (lint.yml) on push + pull_request:
+- ruff check app/ --select F,E9,B904,B905,F401  — BLOCKING
+- ruff format --check app/                       — currently
+  non-blocking
+- mypy app/app/                                  — currently
+  non-blocking (warning collector)
+- npx eslint app/web/static/js                   — BLOCKING for
+  errors (warnings tolerated)
+- pytest tests/  (from app/)                     — BLOCKING
 
-Baseline-Zahlen (Stand: linter foundation merge):
-- ruff post auto-fix: 160 verbleibende violations (E702, B007, UP032
-  dominieren — schrittweiser Cleanup in späteren PRs).
-- mypy: ungezählt — derzeit nicht-blockierend, gibt warnings für
-  Sichtbarkeit.
-- eslint post auto-fix: 88 problems (59 errors, 29 warnings) — die
-  meisten errors sind `eqeqeq` und ein paar `no-undef`-Hänger zu
-  Helpers, die nie definiert wurden (`_setActiveNav`).
-- prettier: ~48 JS-files würden durch eine Mass-`--write` umformatiert;
-  bewusst übersprungen bis CSS-Split-Prompt.
+If CI is red on main: revert or hotfix immediately. Never push
+on top of a red main.
 
-Diese Zahlen sind die Untergrenze für künftige Refactor-Stufen — kein
-Commit darf sie schlechter machen, ohne explizite Begründung.
+## Pre-flight checks (before declaring done)
 
-## Fehlerbehandlung
+Every task ends with these commands run AND their exit codes
+reported in the completion summary. A task is NOT done until
+they're green (or any failure is explicitly justified):
 
-- Bei Fehlern: 2× selbst zu fixen versuchen.
-- Erst nach 3 fehlgeschlagenen Versuchen stoppen und genau erklären
-  was das Problem ist — den exakten Fehlertext zeigen, nicht
-  paraphrasieren.
-- Niemals weitere Änderungen auf einer kaputten Basis aufbauen —
-  erst `git log` prüfen, ggf. `git revert`, dann weiter.
-- Bei "Daten weg"-Symptomen ZUERST diese drei Checks bevor Datenverlust
-  angenommen wird:
-    1. Browser hard-reload (Strg+Shift+R) — der häufigste Grund.
-    2. `docker volume ls` und docker-compose.yml Bind-Mounts prüfen.
-    3. `storage/settings.json.bak.*` durchsehen — Backups sind da.
+    # Python lint — F/E9/B families must be clean
+    ruff check app/ --select F,E9,B904,B905,F401
 
-## Design-Prinzipien
+    # Python format — must match
+    ruff format --check app/
 
-- Weniger Text, mehr individuell designte flat-design Icons.
-- Modern, edel, flach, sauber — kein buntes Chaos.
-- Keine Doppelungen, jede Info nur einmal.
-- Buttons: nie dunkel auf dunkel.
-- Keine dünnen Rahmenlinien — Tiefe durch Farbunterschiede.
-- Abgerundete Ecken überall (≥ 8 px).
-- Mobil-first: alles muss auf iPhone gut aussehen.
+    # Python tests — must all pass
+    cd app && python3 -m pytest tests/ -q
 
-## iOS-Kompatibilität
+    # JS lint — 0 errors (warnings tolerated)
+    npx eslint app/web/static/js
 
-- Touch-Targets ≥ 44×44 px.
-- Kein hover-only — Touch-Alternativen einbauen.
-- `dvh` statt `vh` für volle Höhe (sonst spring-loaded Address Bar).
-- `safe-area-inset-*` für Notch / Home-Indicator.
-- Inputs mindestens 16 px font-size (sonst Auto-Zoom auf Focus).
-- `@media (max-width: 768px)` als Pflicht-Breakpoint für jedes neue
-  Layout — desktop unverändert bleiben.
-- Swipe-Gesten wo sinnvoll: Lightbox-Navigation prev/next, Modals
-  swipe-to-dismiss.
-- Lightbox, Modals, Overlays explizit auf iPhone-Width testen — der
-  Edge-Case sind 375 px (iPhone SE) und Safe-Area-Insets bei Notch-
-  Geräten.
-- Keine `position: fixed`-Elemente, die auf iOS bei
-  Address-Bar-Collapse springen — `position: sticky` oder
-  `dvh`-basierte Layouts bevorzugen.
+    # Container boot — no traceback
+    docker compose up --build -d
+    docker logs tam-spy --tail 50
 
-## Daten-Schutz (CRITICAL — repo is public)
+Completion summary format:
 
-- `storage/settings.json` enthält User-Daten + Credentials (Telegram
-  Token, Chat-IDs, RTSP-Passwörter). **Niemals überschreiben**, nur
-  additiv via `setdefault()` / `update_section`.
-- `.gitignore` strikt halten — Patterns nur **hinzufügen**, nie entfernen.
-- Bei Doc-Änderungen niemals echte IPs / Tokens / Passwörter — nur
-  Platzhalter:
-  - `192.0.2.x`, `198.51.100.x`, `203.0.113.x` (RFC 5737)
-  - `2001:db8::*` (RFC 3849)
-  - `<BOT_TOKEN>`, `<CHAT_ID>`, `<user>:<pass>`, `cam.lan` / `cam01`
-- Vor jedem `git push` läuft dieser Audit auf dem Working Tree:
+  Done. Ran:
+  - ruff: exit 0
+  - ruff format: exit 0
+  - pytest: 160 passed
+  - eslint: 0 errors, 18 warnings
+  - docker boot: clean, no traceback
 
-  ```bash
-  git ls-files | xargs grep -EnIH \
-      -e 'rtsp://[^/]*:[^@]*@' \
-      -e '\b(bot)?[0-9]{8,12}:[A-Za-z0-9_-]{30,}\b' \
-      -e '"chat_id"\s*:\s*-?[0-9]{6,}' \
-      -e '"token"\s*:\s*"[A-Za-z0-9_:-]{20,}"' \
-      -e '\b(192\.168\.[0-9]+\.[0-9]+)\b' \
-      -e '\b(10\.[0-9]+\.[0-9]+\.[0-9]+)\b' \
-      -- ':!docs/screenshots' ':!*.svg' || \
-      echo "audit OK"
-  ```
+Never say "should work", "looks good", "probably fine". Run
+the check. Report the number.
 
-  Treffer außerhalb von Doc-Placeholders fixen, nicht ignorieren.
-  Erst dann pushen.
+## Refactor discipline
 
-## Docker Workflow (IMPORTANT — read before every build)
+These two patterns cause repeat regressions. Read before
+moving any code.
 
-**Nur rebuild bei Änderungen an:**
+### JS: re-export does NOT bring a symbol into local scope
+
+`export { x } from './mod.js'` only makes `x` visible to OTHER
+importers. The current file does NOT have `x` in its scope. If
+the file ALSO uses `x` locally, both statements are required:
+
+    import { x } from './mod.js';   // local availability
+    export { x };                   // re-export for callers
+
+Or as two separate lines pointing at the same module — same
+effect, more grep-friendly:
+
+    import { x } from './mod.js';
+    export { x } from './mod.js';
+
+Before moving a function out of a file but leaving a back-
+compat re-export, grep for local callsites:
+
+    grep -n "\b<symbolName>\b" path/to/file.js
+
+If any hit is NOT the export line, the import statement is
+mandatory.
+
+### Python: package conversion shifts every relative import
+
+When `module.py` becomes `module/__init__.py`:
+
+- Old  app/X/module.py  — `from ..Y` resolves to `app.Y`
+- New  app/X/module/__init__.py  — `from ..Y` resolves to
+  `app.X.Y` (probably wrong)
+
+Audit every relative import after the conversion:
+
+    grep -n "^from \.\." new_package/*.py
+
+For each: ask where the target lives. Add a dot for every
+level the package is now deeper than the original file.
+
+Smoke test BEFORE declaring the conversion done:
+
+    python3 -c "from app.app.<package> import *"
+
+Must not raise. If it does, the dot-count is wrong somewhere.
+
+## File & function size budgets
+
+Modularize up front. The retroactive refactor of a 1800-line
+file costs ten times more than splitting at 500 lines.
+
+### Hard ceilings — split BEFORE crossing:
+
+- Python file: 500 lines
+- JavaScript file: 400 lines
+- Python function/method: 80 lines
+- JavaScript function: 60 lines
+- Mixin with 8+ methods: split into multiple mixins
+
+When an edit would push a file or function past a ceiling:
+
+1. STOP. Do not add the new code first and split later.
+2. Identify the natural seam (sub-step, helper, sub-concern).
+3. Extract first, into a new module or function.
+4. Then add the new code into the new location.
+
+### Preferred package layouts
+
+Python service module with multiple concerns:
+
+    app/app/<service>/
+    +-- __init__.py     - public re-exports only
+    +-- _consts.py      - module-level constants
+    +-- _helpers.py     - pure helper functions
+    +-- _state.py       - dataclasses, state containers
+    +-- _<concern>.py   - one file per orthogonal concern
+    +-- _mixin.py       - thin mixin composing the others
+
+JS feature module:
+
+    app/web/static/js/<feature>/
+    +-- index.js          - public API + composition + window.* bridges
+    +-- _<sub>.js         - one file per UI sub-section
+    +-- _helpers.js       - pure helpers
+
+Underscore prefix = private to the package by convention.
+
+### Before adding a new function
+
+    grep -rn "def <similar_name>" app/app/
+    grep -rn "function <similarName>\|const <similarName>" \
+      app/web/static/js/
+
+If a near-duplicate exists: use it, extend it, or refactor it.
+NEVER write a parallel implementation.
+
+## Error handling
+
+- Two self-fix attempts before stopping.
+- After three failed attempts: stop and explain. Show the exact
+  error text, not a paraphrase.
+- Cite the file:line of the failing assertion / exception, not
+  just the test name.
+- For settings/storage failures: take a backup of
+  `storage/settings.json` BEFORE retrying. Recovery is cheap if
+  the backup is on disk, expensive if not.
+
+## Design principles
+
+- Less text, more flat-design icons.
+- Modern, refined, flat, clean — no colorful chaos.
+- No duplications — every piece of info shown once.
+- Buttons: never dark-on-dark.
+- No thin border lines — depth via color contrast.
+- Rounded corners everywhere (>= 8 px).
+- Mobile-first: must look right on iPhone.
+
+## iOS compatibility — check EVERY UI change
+
+The single most recurring regression class. Every UI-touching
+commit verifies:
+
+- [ ] `dvh` not `vh` for full-height layouts
+- [ ] Touch targets >= 44 x 44 px
+- [ ] `@media (hover: hover)` guard for hover-only states
+- [ ] `safe-area-inset-*` for notch + home indicator
+- [ ] Input font-size >= 16 px (else iOS auto-zooms on focus)
+- [ ] No `position: fixed` without `dvh` fallback (address-bar
+      collapse jumps)
+- [ ] Visual smoke at 375 px width (iPhone SE) AND 393 px
+      (iPhone 14)
+- [ ] Swipe-to-dismiss on modals where it makes sense
+
+Recurring root cause for Live-Pill / Live-Chrome layout bugs:
+`margin-left: auto` + `inline-flex` interaction on iOS. If a
+component has been patched more than twice for the same iOS
+symptom: read ALL existing rules first, then rewrite from
+scratch — don't patch a third time.
+
+## Data protection (CRITICAL — repo is public)
+
+`storage/settings.json` carries user data + credentials
+(Telegram token, chat IDs, RTSP passwords). It is the most
+regression-prone file in the project.
+
+### Rules:
+- NEVER write `settings.json` wholesale. Only additive merges
+  via `setdefault()` or `update_section()`.
+- Before any settings-touching change: take a backup —
+  `cp storage/settings.json storage/settings.json.bak.<ts>`.
+- Round-trip verify: load → modify → save → reload → diff. The
+  modified fields must be the only difference.
+- DOM-walk collectors on cam-edit forms: walk every input,
+  build the payload from current form state. NEVER from
+  in-memory JS cached state — that cache drifts.
+
+### Public-repo audit before every push
+
+    git ls-files | xargs grep -EnIH \
+        -e 'rtsp://[^/]*:[^@]*@' \
+        -e '\b(bot)?[0-9]{8,12}:[A-Za-z0-9_-]{30,}\b' \
+        -e '"chat_id"\s*:\s*-?[0-9]{6,}' \
+        -e '"token"\s*:\s*"[A-Za-z0-9_:-]{20,}"' \
+        -e '\b(192\.168\.[0-9]+\.[0-9]+)\b' \
+        -e '\b(10\.[0-9]+\.[0-9]+\.[0-9]+)\b' \
+        -- ':!docs/screenshots' ':!*.svg' || echo "audit OK"
+
+In docs use only RFC placeholders — `192.0.2.x`,
+`198.51.100.x`, `203.0.113.x`, `2001:db8::*`, `<BOT_TOKEN>`,
+`<CHAT_ID>`, `cam.lan`.
+
+## Docker workflow (IMPORTANT — read before every build)
+
+**Rebuild only when these change:**
 - `app/docker/Dockerfile`
 - `app/requirements.txt`
 
-**Sonst (Python, JS, CSS, HTML) — nur restart:**
+**Otherwise (Python, JS, CSS, HTML) — restart only:**
 ```bash
 docker restart tam-spy
 docker logs tam-spy --tail 30
 ```
-`web/` und `app/` sind Volume-Mounted — kein Rebuild nötig.
+`web/` and `app/` are volume-mounted — no rebuild required.
 
-**Full rebuild (nur bei Dockerfile/requirements.txt-Änderung):**
+**Full rebuild (only when Dockerfile / requirements.txt change):**
 ```powershell
 Set-Location D:\CLAUDE_code\tam-spy
 docker compose up --build -d
 docker logs tam-spy --tail 50
 ```
 
-**Nach jedem Full-Rebuild prunen:**
+**Prune after every full rebuild:**
 ```bash
 docker image prune -f
 ```
 
-**Coral-Variante (optional):**
+**Coral variant (optional):**
 ```bash
 cd app
 docker build -t tam-spy-coral -f docker/Dockerfile.coral .
 ```
-Standard-Image erkennt den TPU automatisch — Coral-Variante nur, wenn
-ein Tier-1-Pin auf EdgeTPU gewünscht ist.
+The standard image auto-detects the TPU — the Coral variant is only
+needed when a tier-1 pin to EdgeTPU is required.
 
 ## Local Development (without Docker)
 
@@ -218,148 +343,152 @@ cd app
 pip install -r requirements.txt
 python -m app.server
 ```
-Flask-Server lauscht auf Port 8099.
+Flask server listens on port 8099.
 
 ## Configuration
 
-Zwei Schichten:
+Two layers:
 
-1. **`config/config.yaml`** — Read-only Base. Defaults, Storage-Pfade,
-   Pipeline-Parameter, Seed-Cams. Geladen von `config_loader.py` beim
-   Start.
-2. **`storage/settings.json`** — GUI-Settings, zur Laufzeit geschrieben
-   via `SettingsStore`. Beim ersten Start aus `config.yaml` geseedet,
-   danach Source of Truth.
+1. **`config/config.yaml`** — read-only base. Defaults, storage paths,
+   pipeline parameters, seed cams. Loaded by `config_loader.py` at
+   startup.
+2. **`storage/settings.json`** — GUI settings, written at runtime via
+   `SettingsStore`. Seeded from `config.yaml` on first start, source
+   of truth thereafter.
 
-`SettingsStore.export_effective_config()` mergt beide Schichten und
-liefert die maßgebliche Runtime-Config.
+`SettingsStore.export_effective_config()` merges both layers and
+returns the authoritative runtime config.
 
-## Architektur · `app/app/`
+## Architecture · `app/app/`
 
-77 Python-Dateien insgesamt — 22 Top-Level-Module + fünf Pakete
+77 Python files total — 22 top-level modules + five packages
 (`routes/`, `detectors/`, `camera_runtime/`, `weather_service/`,
-`telegram_bot/`). Vollständige Aufstellung in `app/README.md`.
+`telegram_bot/`). Full breakdown in `app/README.md`.
 
 ### Boot + HTTP
 
-- **`server.py`** — Flask app + Boot-Sequenz (Config laden, Stores
-  bauen, `register_blueprints(app)`, `rebuild_services` /
-  `rebuild_runtimes`, Migrationen anstoßen, Heartbeat, Shutdown-Hooks).
-  Keine `@app.route`-Definitionen mehr — alle Routen liegen in
-  `routes/`.
-- **`app_state.py`** — geteilte Singletons (`store`, `settings`,
+- **`server.py`** — Flask app + boot sequence (load config, build
+  stores, `register_blueprints(app)`, `rebuild_services` /
+  `rebuild_runtimes`, kick off migrations, heartbeat, shutdown hooks).
+  No more `@app.route` definitions — every route lives in `routes/`.
+- **`app_state.py`** — shared singletons (`store`, `settings`,
   `runtimes`, `mqtt_service`, `telegram_service`, `weather_service`,
-  Registries, Builder). Jedes Blueprint liest hier per Request frisch.
-- **`migrations.py`** — boot-only Migrations-Helfer
+  registries, builder). Every blueprint reads fresh per request.
+- **`migrations.py`** — boot-only migration helpers
   (`migrate_timelapse_events`, `generate_missing_thumbnails`,
-  `migrate_timelapse_to_eventstore`). Jede läuft im eigenen
-  Daemon-Thread.
+  `migrate_timelapse_to_eventstore`). Each runs in its own daemon
+  thread.
 
-### `routes/` · 14 Blueprint-Module + zwei `_*_helpers`
+### `routes/` · 14 blueprint modules + two `_*_helpers`
 
 - **`bootstrap.py`** — `/`, `/media/<path>`, `/api/bootstrap`,
   `/api/config`, `/api/system`, `/api/status`, `/api/discover`,
   `/api/wizard/complete`, `/api/settings/{import,export}`.
-- **`cameras.py`** — Camera-CRUD (`/api/cameras`, `/api/settings/{cameras,app,backups}`,
-  Probe / Reload / Merge / Arm / Restore).
-- **`streams.py`** — Snapshot-JPEG + zwei MJPEG-Streams + Per-Cam-Status.
-- **`media.py`** — `/api/media/*` (Storage-Stats, Rescan,
-  Fix-Thumbs, Purge-Orphans, Cleanup) + `/api/camera/<id>/media` +
+- **`cameras.py`** — camera CRUD (`/api/cameras`,
+  `/api/settings/{cameras,app,backups}`, probe / reload / merge /
+  arm / restore).
+- **`streams.py`** — snapshot JPEG + two MJPEG streams + per-cam
+  status.
+- **`media.py`** — `/api/media/*` (storage stats, rescan, fix-thumbs,
+  purge-orphans, cleanup) + `/api/camera/<id>/media` +
   `/api/event/<id>`.
-- **`events.py`** — Event-CRUD (Single-Delete, Bulk-Delete, Confirm,
-  Labels, Review).
-- **`timeline_stats.py`** — `/api/timeline` + `/api/camera/<id>/stats_range`.
-- **`timelapse.py`** — Status, globaler Save, Per-Cam-Build / List /
-  Delete / Rolling.
-- **`tracking.py`** — Phase-1 Object-Tracking-Sidecar
+- **`events.py`** — event CRUD (single-delete, bulk-delete, confirm,
+  labels, review).
+- **`timeline_stats.py`** — `/api/timeline` +
+  `/api/camera/<id>/stats_range`.
+- **`timelapse.py`** — status, global save, per-cam build / list /
+  delete / rolling.
+- **`tracking.py`** — phase-1 object-tracking sidecar
   (`/api/tracking/*`).
-- **`sichtungen.py`** — Cat- / Person-Identity, Achievements
+- **`sichtungen.py`** — cat / person identity, achievements
   (`/api/{cats,persons,achievements,…}`).
-- **`coral.py`** — Coral-Test-Panel (Single, Test-Images, 421-Zeilen
-  Test-Batch, Models-List + Switch) + Per-Cam-Test-Detection.
-- **`weather.py`** — Wetter-Sichtungen, Sun-Times, Recaps, Status,
-  History.
-- **`telegram.py`** — Polling-Status, Test, Per-Cam-Test-Alert,
-  System-Telegram-Health.
+- **`coral.py`** — Coral test panel (single, test images, 421-line
+  test batch, model list + switch) + per-cam test detection.
+- **`weather.py`** — weather sightings, sun times, recaps, status,
+  history.
+- **`telegram.py`** — polling status, test, per-cam test alert,
+  system telegram health.
 - **`admin.py`** — `/api/logs`, `/api/admin/timelapse/cleanup`,
   `/api/reload`.
-- **`_camera_helpers.py`** + **`_coral_helpers.py`** — gemeinsame
-  Hilfen (Auto-Detect, Mask-Password, Backup-File-Liste, TFLite-
-  Filename-Heuristik).
+- **`_camera_helpers.py`** + **`_coral_helpers.py`** — shared helpers
+  (auto-detect, mask password, backup file list, TFLite filename
+  heuristic).
 
-### Camera Pipeline + Klassifizierer
+### Camera pipeline + classifiers
 
-- **`camera_runtime/`** — Paket (11 Dateien). `RuntimeThread` pro
-  Kamera plus Mixins für Capture, Motion, Recording, Zonen, Timelapse,
-  Lifecycle, Status. 24-h-Reconnect-Counter pro Kamera.
-- **`detectors/`** — Paket (9 Dateien). `CoralObjectDetector` →
-  `BirdSpeciesClassifier` → `WildlifeClassifier` (je eigenes Modul);
-  geteilte Primitive in `_types.py` (Detection + Region-Filter),
-  `_label_loader.py`, `_wildlife_rules.py`; `discovery.py` für die
-  Auto-Discovery, `draw.py` für die Bbox-Overlay-Renderer.
-- **`detection_confirmer.py`** — Zwei-Frame-Bestätigung gegen
-  Einzelbild-Fehlalarme.
-- **`tracking_worker.py`** — Hintergrund-Thread, schreibt
-  `tracks.json`-Sidecars für Lightbox-Bbox-Overlay; Recent-Failures-
-  Ring fürs UI.
-- **`frame_helpers.py`** — `is_valid_frame` + `grab_valid_frame`-Retry.
+- **`camera_runtime/`** — package (11 files). `RuntimeThread` per
+  camera plus mixins for capture, motion, recording, zones,
+  timelapse, lifecycle, status. 24-h reconnect counter per camera.
+- **`detectors/`** — package (9 files). `CoralObjectDetector` →
+  `BirdSpeciesClassifier` → `WildlifeClassifier` (each its own
+  module); shared primitives in `_types.py` (detection + region
+  filter), `_label_loader.py`, `_wildlife_rules.py`; `discovery.py`
+  for auto-discovery, `draw.py` for the bbox-overlay renderer.
+- **`detection_confirmer.py`** — two-frame confirmation against
+  single-image false alarms.
+- **`tracking_worker.py`** — background thread, writes
+  `tracks.json` sidecars for lightbox bbox overlay; recent-failures
+  ring for the UI.
+- **`frame_helpers.py`** — `is_valid_frame` + `grab_valid_frame`
+  retry.
 
 ### Services
 
-- **`telegram_bot/`** + **`telegram_helpers.py`** — Paket (7 Dateien)
-  mit `TelegramService` und Mixins für Lifecycle, In-/Outbound,
-  Formatting; Anchor-Bubble Edit-in-Place, Backoff-Polling, deutsche
-  Labels.
-- **`weather_service/`** — Paket (11 Dateien). Open-Meteo-Polling,
-  History, Wetter-Sichtungen, Sun-/Event-Timelapse, Recaps.
-- **`mqtt_service.py`** — paho-mqtt-Wrapper mit Rate-Limit-Logging
-  bei publish-Fehlern.
+- **`telegram_bot/`** + **`telegram_helpers.py`** — package (7
+  files) with `TelegramService` and mixins for lifecycle, in/out,
+  formatting; anchor-bubble edit-in-place, backoff polling, German
+  labels.
+- **`weather_service/`** — package (11 files). Open-Meteo polling,
+  history, weather sightings, sun- / event-timelapse, recaps.
+- **`mqtt_service.py`** — paho-mqtt wrapper with rate-limited
+  logging on publish failures.
 
-### Storage + Config
+### Storage + config
 
-- **`settings_store.py`** — Source of Truth für `settings.json`.
-- **`storage.py`** — `EventStore`, Per-Cam-Event-JSONs (atomar via
+- **`settings_store.py`** — source of truth for `settings.json`.
+- **`storage.py`** — `EventStore`, per-cam event JSONs (atomic via
   `_atomic_write_text`).
-- **`storage_migration.py`** — idempotenter Boot-Reconcile.
-- **`camera_id.py`** — Schema `manufacturer_model_name_iplastoctet`.
-- **`schema.py`** — JSON-Schema-Validierung.
-- **`config_loader.py`** — `config.yaml`-Loader.
-- **`logging_setup.py`** — zentrales Logging, Tag-Schema, Ringbuffer.
+- **`storage_migration.py`** — idempotent boot reconcile.
+- **`camera_id.py`** — schema `manufacturer_model_name_iplastoctet`.
+- **`schema.py`** — JSON-schema validation.
+- **`config_loader.py`** — `config.yaml` loader.
+- **`logging_setup.py`** — centralised logging, tag schema, ring
+  buffer.
 
-### Sonstiges
+### Other
 
-- **`discovery.py`** — Two-Phase-Subnet-Scan.
-- **`event_logic.py`** — Schedule + Alarm-Profile.
-- **`cat_identity.py`** — Histogramm-Re-ID für Katzen/Personen.
-- **`reolink_api.py`** — Reolink-spezifische API-Helpers.
-- **`css_builder.py`** — Build-Helper, der `app.css` aus `web/static/css/`
-  zusammensetzt.
-- **`timelapse.py`** + **`timelapse_cleanup.py`** — Daily-MP4-Builder
-  und Frame-Cleanup-Helfer.
+- **`discovery.py`** — two-phase subnet scan.
+- **`event_logic.py`** — schedule + alarm profiles.
+- **`cat_identity.py`** — histogram re-ID for cats / persons.
+- **`reolink_api.py`** — Reolink-specific API helpers.
+- **`css_builder.py`** — build helper that assembles `app.css` from
+  `web/static/css/`.
+- **`timelapse.py`** + **`timelapse_cleanup.py`** — daily MP4
+  builder and frame-cleanup helper.
 
 ## Web Frontend · `app/web/`
 
 SPA — `web/templates/index.html` + `web/static/app.js` + `app.css`.
-Spricht ausschließlich `/api/*`. Wichtige Flows:
+Talks exclusively to `/api/*`. Key flows:
 
-- Load → `GET /api/bootstrap` → Wizard oder Dashboard.
+- Load → `GET /api/bootstrap` → wizard or dashboard.
 - Wizard → `POST /api/wizard/complete`.
-- Camera-List → `GET /api/cameras` (Snapshot-URLs + Zonen).
-- Save → `POST /api/settings/{cameras,app}` → server-internes
+- Camera list → `GET /api/cameras` (snapshot URLs + zones).
+- Save → `POST /api/settings/{cameras,app}` → server-internal
   `rebuild_runtimes()`.
 
 ## Storage layout
 
 ```
 storage/
-  settings.json                 # GUI-Source-of-Truth
-  settings.json.bak / .bak2     # 2-tief Rotation
-  settings.json.bak.<ts>        # Migration-Tagged-Backups
-  weather_history.json          # Open-Meteo Sliding-History
+  settings.json                 # GUI source of truth
+  settings.json.bak / .bak2     # 2-deep rotation
+  settings.json.bak.<ts>        # migration-tagged backups
+  weather_history.json          # Open-Meteo sliding history
   motion_detection/<cam_id>/<date>/<event_id>.{jpg,json,mp4}
   timelapse/<cam_id>/<date>.mp4
   timelapse_frames/<cam_id>/<profile>/<date>/<HHMMSS>.jpg
-  weather/<cam_id>/             # Wetter-Clips
+  weather/<cam_id>/             # weather clips
   logs/                         # *.log gitignored
   cat_registry.json             # gitignored
   person_registry.json          # gitignored
@@ -372,22 +501,22 @@ cd app
 python -m pytest tests/
 ```
 
-Einzelne Datei: `python -m pytest tests/test_camera_id.py -v`. Tests
-sind stub-basiert — keine echte Coral-Hardware, keine echten APIs.
-Fixtures verwenden RFC-5737-Doc-IPs (`192.0.2.x`).
+Single file: `python -m pytest tests/test_camera_id.py -v`. Tests
+are stub-based — no real Coral hardware, no real APIs. Fixtures use
+RFC-5737 doc IPs (`192.0.2.x`).
 
 ## Maintenance
 
 ```powershell
-# Monatlich:
+# Monthly:
 docker builder prune -f --filter "until=168h"
 docker image prune -f
 ```
 
 ## Known Limitations (by design)
 
-- Keine echte 5-s-Clip-Aufnahme für Telegram bei jedem Event (Snapshots
-  + on-demand-Recording stattdessen).
-- Zone/Mask-Editor speichert simple Polygone; kein Point-Drag in UI.
-- Keine Pagination im Event-Archiv bei sehr großen Mediatheken.
-- Person/Cat-Identity ist Histogramm-Match, kein neuronales Re-ID.
+- No true 5-second clip recording for Telegram on every event
+  (snapshots + on-demand recording instead).
+- Zone / mask editor stores simple polygons; no point-drag in UI.
+- No pagination in the event archive on very large media libraries.
+- Person / cat identity is a histogram match, not neural re-ID.
