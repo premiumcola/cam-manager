@@ -1,0 +1,503 @@
+/* ── Bottom stack — sidebar + time column ──────────────────────────────── */
+/* The shared time-axis lives here. .lb-time-stack carries the
+   --play-pct CSS variable that drives scrubber fill, scrubber thumb,
+   and play cursor positions. All three readers use:
+       left: calc(var(--play-pct) * 100%)
+   so a single write per rAF tick paints all three. */
+#lightboxBottomStack{
+  flex-shrink:0;
+  background:#000;
+}
+#lightboxModal.lb-fs-video #lightboxBottomStack{
+  display:block;
+}
+.lb-time-stack{
+  --play-pct:0;
+  display:flex;
+  gap:8px;
+  padding:8px 14px 10px 14px;
+  background:#000;
+  /* Anchors the stack-level .lb-play-cursor so the playhead line can
+     visually cut through both the sidebar (badges) and the time
+     column (strips) at the same vertical axis. */
+  position:relative;
+}
+.lb-sidebar{
+  /* 96 px fixed — house the play button, every class badge, and a
+     spacer aligned with the tick row. Each child's height matches
+     the time-col counterpart at the same index so badge[i] aligns
+     with strip[i]. */
+  flex:0 0 96px;
+  display:flex;flex-direction:column;
+  gap:6px;
+}
+.lb-time-col{
+  flex:1 1 auto;
+  min-width:0;
+  display:flex;flex-direction:column;
+  gap:6px;
+  /* position:relative kept so strips inside form their own z-index
+     stacking context (the older `defensive z-index on every sibling`
+     comment below); the play cursor moved up to .lb-time-stack so
+     it can visually span sidebar + time column. */
+  position:relative;
+}
+
+/* Sidebar — play button at the top, badges below, tick spacer at
+   the bottom. Heights line up with the time column's same-index
+   children. */
+.lb-play-btn{
+  width:32px;height:32px;min-width:32px;min-height:32px;
+  border:0;background:rgba(255,255,255,.14);
+  color:#f1f5f9;
+  border-radius:50%;
+  cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:0;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s;
+  align-self:flex-start;
+}
+.lb-play-btn:hover{ background:rgba(255,255,255,.24); }
+.lb-play-btn svg{ width:14px;height:14px; }
+.lb-tick-spacer{
+  height:12px;
+  flex:0 0 auto;
+}
+.lbtt-empty-side{ height:32px; }
+
+/* Time column — scrubber bar + strips + tick row + play cursor. */
+.lb-scrub-bar{
+  position:relative;
+  height:32px;
+  display:flex;align-items:center;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.lb-scrub-bar::before{
+  content:'';
+  position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);
+  height:4px;
+  background:rgba(255,255,255,.18);
+  border-radius:2px;
+  pointer-events:none;
+}
+.lb-scrub-fill{
+  position:absolute;left:0;top:50%;transform:translateY(-50%);
+  height:4px;
+  width:calc(var(--play-pct,0) * 100%);
+  background:#e2e8f0;
+  border-radius:2px;
+  pointer-events:none;
+}
+.lb-scrub-thumb{
+  position:absolute;
+  left:calc(var(--play-pct,0) * 100%);
+  top:50%;
+  transform:translate(-50%,-50%);
+  width:12px;height:12px;
+  border-radius:50%;
+  background:#fff;
+  pointer-events:none;
+  z-index:3;
+}
+.lb-scrub-hit{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  touch-action:none;
+  cursor:pointer;
+}
+/* G4 · Pre-roll / post-roll context bands — subtle gray segments
+   on the leading + trailing portions of the scrub bar. Operator
+   reads them as "before this is Vorlauf, after that is Nachlauf"
+   without any text legend; the title attr surfaces the seconds
+   on hover. Strokes the scrub track height + a tiny tick on the
+   inner edge so the boundary is visually crisp. */
+.lb-scrub-roll{
+  position:absolute;top:50%;transform:translateY(-50%);
+  height:4px;
+  background:rgba(148,163,184,.55);
+  border-radius:2px;
+  pointer-events:none;
+  z-index:1;
+}
+.lb-scrub-roll--pre  { left:0; }
+.lb-scrub-roll--post { right:0; }
+.lb-scrub-roll--pre::after,
+.lb-scrub-roll--post::after{
+  content:'';
+  position:absolute;top:-4px;bottom:-4px;
+  width:2px;
+  background:rgba(226,232,240,.85);
+  border-radius:1px;
+}
+.lb-scrub-roll--pre::after { right:0; }
+.lb-scrub-roll--post::after{ left:0; }
+
+/* Strip rows — fixed 48 px tall on desktop. The strip's 0 % and
+   100 % map to the time column's left edge and right edge — same
+   as the scrubber bar — so bars and ticks share x with the cursor. */
+.lbtt-strip{
+  position:relative;
+  height:56px;
+  border-radius:8px;
+  background:rgba(255,255,255,.04);
+  display:flex;flex-direction:column;
+  overflow:visible;
+}
+.lbtt-strip[data-on="0"]{ opacity:.30; }
+/* H4 · TOP sub-band — confirmed/alerting tracks, solid color blocks.
+   Height grows with the number of stagger mini-rows (set via the
+   data-rows attribute) so overlapping confirmed tracks stay
+   individually visible. Each mini-row is 14 px tall. */
+.lbtt-strip-top{
+  position:relative;
+  flex:1 1 auto;
+  min-height:32px;
+}
+.lbtt-strip-top[data-rows="2"]{ min-height:38px; }
+.lbtt-strip-top[data-rows="3"]{ min-height:52px; }
+.lbtt-strip-top[data-rows="4"]{ min-height:60px; }
+/* H4 · BOTTOM sub-band — ghost + masked tracks. Smaller, separated
+   from the top band by a faint divider so the eye reads them as
+   second-class context, not active alerting. */
+.lbtt-strip-bot{
+  position:relative;
+  flex:0 0 16px;
+  margin-top:2px;
+  padding-top:3px;
+  border-top:1px solid rgba(255,255,255,.10);
+}
+.lbtt-bar{
+  position:absolute;
+  border:0;padding:0;
+  border-radius:5px;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.lbtt-bar:hover{ filter:brightness(1.15); }
+/* H4 · TOP variant — confirmed bar, stacked at a mini-row index so
+   overlapping tracks remain visible side-by-side instead of merging
+   into one block. 12 px row height, 2 px gap (mini-row * 14). */
+.lbtt-bar--hi{
+  top:calc(4px + var(--mini-row,0) * 14px);
+  height:12px;
+}
+/* H4 · BOTTOM variant — ghost (dotted outline neutral gray) or
+   masked (gray solid). Smaller, vertically centered inside the
+   bottom sub-band's 16 px height. */
+.lbtt-bar--lo{
+  top:1px;bottom:1px;
+  height:auto;
+  border-radius:3px;
+}
+.lbtt-bar--lo[data-status="ghost"]{
+  background:transparent !important;
+  border:1.5px dotted rgba(148,163,184,.85);
+}
+.lbtt-bar--lo[data-status="ghost"]:hover{
+  background:rgba(148,163,184,.10) !important;
+  filter:none;
+}
+.lbtt-bar--lo[data-status="masked"]{
+  background:#94a3b8 !important;
+  opacity:.85;
+}
+/* Schwach / predicted overlay — sits on top of the solid track
+   colour and renders ~6 px 45° dark stripes so the eye reads it as
+   "uncertain confidence" (sub-threshold detect samples OR predicted
+   tail samples). The base bar background still shows through where
+   the gradient is transparent, keeping track identity readable.
+   Same overlay class for both states by design (per the visual
+   spec: hatch = schwach AND predicted). */
+.lbtt-bar-predicted{
+  position:absolute;top:0;bottom:0;
+  pointer-events:none;
+  background-image:repeating-linear-gradient(
+    45deg,
+    rgba(0,0,0,0)    0 4px,
+    rgba(0,0,0,.55)  4px 8px
+  );
+  /* Slightly desaturated overall so the schwach/predicted region
+     also reads quieter from a few feet away. */
+  opacity:.85;
+}
+/* ⊘ Maskiert per-segment overlay — neutral gray covers the masked
+   span of an otherwise-normal track. The hatch overlay is NOT
+   stacked on top of the mask overlay because masking already
+   communicates "filtered out of alerting." */
+.lbtt-bar-maskspan{
+  position:absolute;top:0;bottom:0;
+  pointer-events:none;
+  background:#94a3b8;
+  opacity:.78;
+}
+/* I4 · #N badge — readable contrast at small size via a white pill
+   chip behind the number. Inline color from the renderer goes on
+   the TEXT, the chip background is always white. Works on any
+   saturated track color without per-color luminance gymnastics. */
+.lbtt-bar-num{
+  position:absolute;
+  top:50%;left:3px;
+  transform:translateY(-50%);
+  display:inline-flex;
+  align-items:center;
+  padding:1px 4px;
+  border-radius:3px;
+  background:rgba(255,255,255,.92);
+  color:#0f172a;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:9px;font-weight:700;letter-spacing:.01em;
+  line-height:1;
+  pointer-events:none;
+}
+.lbtt-bar-end{
+  position:absolute;top:50%;transform:translate(0,-50%);
+  font-size:13px;line-height:13px;font-weight:700;
+  color:#ef4444;
+  pointer-events:auto;
+  text-align:left;
+  cursor:help;
+}
+/* ⊘ Maskiert — track sits inside an exclusion mask for the majority
+   of its samples. Bar background is already overridden inline; this
+   adds the corner glyph so the strip visually agrees with the
+   bbox's ⊘ corner badge on the video. */
+.lbtt-bar-masked{
+  position:absolute;top:50%;right:4px;transform:translate(0,-50%);
+  font-size:12px;line-height:12px;font-weight:600;
+  color:#fff;
+  pointer-events:none;
+}
+.lbtt-bar[data-masked="1"]{
+  opacity:.78;
+}
+
+/* Badges in the sidebar — height matches the strip (48 px) and the
+   inner circle is 30 px so the avatar reads at desktop density. */
+.lbtt-badge{
+  flex:0 0 auto;
+  width:96px;
+  height:48px;
+  display:flex;align-items:center;gap:7px;
+  background:transparent;border:0;
+  padding:0;
+  cursor:pointer;color:#e2e8f0;
+  font-size:13px;font-weight:500;letter-spacing:.01em;
+  text-align:left;
+  -webkit-tap-highlight-color:transparent;
+  transition:opacity .15s;
+}
+.lbtt-badge .lbtt-avatar{
+  width:30px;height:30px;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;
+  flex-shrink:0;
+  background:color-mix(in srgb,var(--c,#fff) 28%,#000 0);
+}
+.lbtt-badge .lbtt-avatar svg{ width:18px;height:18px; }
+.lbtt-badge .lbtt-name{
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  min-width:0;
+}
+.lbtt-badge[data-on="0"]{ opacity:.55; }
+.lbtt-badge[data-on="0"] .lbtt-name{ text-decoration:line-through; }
+
+/* Tick row — sits flush below the last strip. 0/33/66/100 % anchors
+   live INSIDE the time column so "0s" aligns with the scrubber's
+   leading edge and the first strip's 0 % bar position. */
+.lbtt-ticks{
+  position:relative;
+  height:12px;
+}
+.lbtt-tick{
+  position:absolute;top:0;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10px;font-weight:500;
+  color:rgba(226,232,240,.45);
+  letter-spacing:.02em;
+  font-variant-numeric:tabular-nums;
+}
+.lbtt-empty{
+  padding:8px 4px 4px;
+  font-size:11.5px;color:rgba(226,232,240,.45);
+  font-style:italic;
+}
+/* K3 · "Indexierung fertig · keine Spuren bestätigt" state for a
+   motion clip whose tracks.json arrived but carried tracks=[].
+   Stacked text — primary line + a muted sub-line carrying the
+   spawn-confidence floor (e.g. "kurze Sichtungen unter 50 % werden
+   gefiltert"). The .lbtt-empty parent already sets italic + muted
+   color; .lbtt-empty-done un-italicises the primary text and the
+   sub-line gets its own slightly smaller / dimmer tone. */
+.lbtt-empty-done{
+  display:flex;flex-direction:column;gap:2px;
+  font-style:normal;
+}
+.lbtt-empty-done .lbtt-empty-text{
+  font-size:11.5px;color:rgba(226,232,240,.65);
+  letter-spacing:.01em;
+}
+.lbtt-empty-done .lbtt-empty-sub{
+  font-size:10.5px;color:rgba(226,232,240,.4);
+  letter-spacing:.01em;font-style:italic;
+}
+/* Timelapse empty-state — places the placeholder text + the inline
+   Nach-Erkennung button on one row so the user sees BOTH the
+   "no tracks yet" status and the affordance to fix it without
+   scrolling. Layout: flex with auto-width text + auto-width button. */
+.lbtt-empty-tl{
+  display:flex;align-items:center;gap:10px;
+  flex-wrap:wrap;
+  font-style:normal;
+}
+.lbtt-empty-tl .lbtt-empty-text{
+  font-size:11.5px;color:rgba(226,232,240,.65);
+  letter-spacing:.01em;
+}
+.lbtt-empty-tl[data-state="running"] .lbtt-empty-text{ color:rgba(165,243,252,.85); }
+.lbtt-empty-tl[data-state="empty"]   .lbtt-empty-text{ color:rgba(226,232,240,.45);font-style:italic; }
+.lbtt-empty-tl[data-state="err"]     .lbtt-empty-text{ color:#fca5a5; }
+.lbtt-empty-rescan{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:6px 11px;
+  border-radius:8px;
+  border:0;
+  background:rgba(56,189,248,.18);
+  color:#bae6fd;
+  font-size:11.5px;
+  font-weight:600;
+  letter-spacing:.01em;
+  cursor:pointer;
+  min-height:32px;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s,color .15s;
+}
+.lbtt-empty-rescan:hover:not(:disabled){
+  background:rgba(56,189,248,.28);
+  color:#e0f2fe;
+}
+.lbtt-empty-rescan:disabled{
+  opacity:.55;cursor:not-allowed;
+}
+.lbtt-empty-tl[data-state="running"] .lbtt-empty-rescan,
+.lbtt-empty-tl[data-state="empty"]   .lbtt-empty-rescan{ display:none; }
+@media (max-width:480px){
+  .lbtt-empty-rescan{ min-height:38px; }
+}
+
+/* ── Play cursor — child of .lb-time-stack (since the playhead refactor) ── */
+/* SINGLE HEAD: the scrubber thumb is the visual head. The play
+   cursor is just a vertical 2 px white line + soft glow that starts
+   directly under the thumb and runs down through every strip to the
+   tick row bottom. Sits at the stack level so the line visually
+   spans BOTH the sidebar (class badges) and the time column
+   (strips) — the prompt's "ONE playhead line cutting every row at
+   the same x." A full row-by-row restructure (icon+label INSIDE each
+   row, no sidebar separation) is a follow-up — leaving the existing
+   layout in place keeps the lightbox stable while still giving the
+   continuous visual playhead today.
+
+   z-index:100 so the line draws above every strip / badge content;
+   defensive z-index on every sibling inside .lb-time-col guards
+   against stacking-context gotchas. */
+.lb-play-cursor{
+  position:absolute;
+  /* top = stack padding-top (8) + scrubber-thumb radius offset (14)
+     so the line picks up exactly where the thumb's bottom edge
+     finishes. The thumb is 12 px tall centred on the 32 px scrubber
+     row mid (16), so its bottom is at 22 px inside the time-col.
+     Stack padding adds another 8 → 30 from the padding-box top. */
+  top:30px;
+  bottom:10px;       /* match stack padding-bottom (10) */
+  /* X = sidebar offset (96 fixed + 8 gap = 104) within the time-col
+     coord system, expanded to the stack's padding-box. Stack has
+     14 px left padding + 96 sidebar + 8 gap before the time-col
+     starts, so left:0 (padding-box) maps to that 0 px offset.
+     The bars region width = padding-box width - 14 (left pad) - 96
+     - 8 (gap) - 14 (right pad) = padding-box width - 132. */
+  left:calc(118px + var(--play-pct,0) * (100% - 132px));
+  width:0;
+  pointer-events:none;
+  z-index:100;
+}
+.lb-play-line{
+  position:absolute;
+  top:0;bottom:0;left:-1px;
+  width:2px;
+  background:#fff;
+  box-shadow:0 0 4px rgba(255,255,255,.55);
+  pointer-events:none;
+  z-index:1;
+}
+/* D4 · live-detect pins the cursor to the right edge and recolors
+   it green (success token) so the operator reads it as "LIVE" — same
+   color as the ● LIVE pill above. Hit area is disabled in live mode
+   (no scrubbing on a live HLS stream) and so is the play/pause
+   button (the HLS player has no concept of pause that the UI here
+   would represent meaningfully). */
+#lightboxModal.lb-live-detect .lb-play-line{
+  background:#22c55e;
+  box-shadow:0 0 6px rgba(34,197,94,.6);
+}
+#lightboxModal.lb-live-detect .lb-play-hit{
+  display:none;
+}
+#lightboxModal.lb-live-detect #lbScrubPlay{
+  display:none;
+}
+.lb-play-hit{
+  position:absolute;
+  top:0;bottom:0;left:-8px;
+  width:16px;
+  pointer-events:auto;
+  cursor:ew-resize;
+  touch-action:none;
+  background:transparent;
+  z-index:1;
+}
+.lb-time-col > .lbtt-strip{ z-index:1; }
+.lb-time-col > .lb-scrub-bar{ z-index:2; }
+.lb-time-col > .lbtt-ticks{ z-index:1; }
+
+/* ── Track-loss × tooltip ──────────────────────────────────────────────── */
+.lbtt-end-tip{
+  position:fixed;z-index:var(--z-toast);
+  padding:8px 12px;
+  background:rgba(15,23,42,.96);
+  color:#e2e8f0;
+  font-size:11px;line-height:1.4;
+  letter-spacing:.01em;
+  border-radius:10px;
+  pointer-events:none;
+  white-space:nowrap;
+  box-shadow:0 4px 14px rgba(0,0,0,.5);
+}
+.lbtt-end-tip[hidden]{ display:none; }
+.lbtt-end-tip-title{
+  font-weight:700;color:#f1f5f9;
+  font-size:11.5px;
+  margin-bottom:4px;
+}
+.lbtt-end-tip-row{
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-variant-numeric:tabular-nums;
+  margin-bottom:2px;
+}
+.lbtt-end-tip-key{
+  color:rgba(226,232,240,.55);
+  display:inline-block;width:54px;
+  font-family:system-ui,-apple-system,sans-serif;
+  font-size:10.5px;font-weight:600;letter-spacing:.01em;
+}
+.lbtt-end-tip-val{ color:#f1f5f9; }
+.lbtt-end-tip-val.is-ok{ color:#4ade80; }
+.lbtt-end-tip-val.is-bad{ color:#f87171; }
+.lbtt-end-tip-summary{
+  margin-top:6px;padding-top:6px;
+  border-top:1px solid rgba(255,255,255,.08);
+  font-size:11px;color:rgba(226,232,240,.78);
+  font-style:italic;
+  white-space:normal;
+  max-width:240px;
+}
+

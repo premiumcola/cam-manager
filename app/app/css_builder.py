@@ -71,7 +71,13 @@ LOAD_ORDER = [
     "27-coral-test-modes.css",
     "28-quests.css",
     "29-birds.css",
-    "30-lightbox-video.css",
+    # P23 · 30-lightbox-video.css (1964 lines, 52× !important) split
+    # into 5 sibling files at the same load position. Each ≤ 600 lines.
+    "30a-lightbox-frame.css",
+    "30b-lightbox-time.css",
+    "30c-lightbox-meters.css",
+    "30d-lightbox-shell.css",
+    "30e-lightbox-live.css",
 ]
 
 _BANNER = (

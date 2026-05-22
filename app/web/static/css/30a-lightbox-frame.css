@@ -1,0 +1,281 @@
+/* ── Lightbox · video full-screen layout (v3 round 2 corrections) ────────
+   Single-column page-level overlay split into four primary sections,
+   all snug against each other (no spacers between them):
+
+       Top bar           — cam name + ts + Confirm / Delete / Close
+       Video region      — flex:1, flush against top bar and bottom stack
+       Bottom stack      — sidebar (play + badges) + time column
+                           (scrubber + strips + ticks + cursor)
+       Settings          — wizard-mirror panel, only when content
+
+   ONE shared time axis: the .lb-time-col holds the scrubber bar,
+   every strip, the tick row, and the play cursor. All four use the
+   --play-pct CSS variable on .lb-time-stack as their x-coordinate so
+   the scrubber thumb, "0s" tick, every bar's 0%-anchor, and the
+   cursor head sit on a single shared X for any time-point. */
+
+#lightboxModal.lb-fs-video{
+  padding:0!important;
+  /* F2 · single-tone solid-black surround. Previous #0a0a0d was a
+     subtly different shade from the wrap's #000, producing the
+     visible two-tone band around the letterboxed video. Pure #000
+     across modal + wrap + media-bg unifies the surround so the
+     only non-black pixels are the actual video content. */
+  background:#000!important;
+  /* Override the .modal base (display:grid; place-items:center) so the
+     inner doesn't get vertically centered inside a grid cell and
+     leave dead space above the top bar. Flex column with start-aligned
+     children means the top bar sits at y=0 of the viewport. */
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:stretch!important;
+  justify-content:flex-start!important;
+  place-items:stretch!important;
+  inset:0!important;
+  z-index:1200;
+  /* fw384 — outer modal never scrolls. The single scroll container
+     is #lightboxInner below; this rule pins the outer at 100dvh so
+     the rubber-band ends there instead of spilling onto the
+     underlying page. */
+  overflow-y:hidden;
+}
+
+/* ── fw384 · Single-scroll modal · sticky video, scrollable column ────────
+   ONE scroll region (#lightboxInner) for the whole modal at every
+   viewport size. The video wrap sticks at the top of the column;
+   everything below it (toggle row + scrubber + Detections panel +
+   trace log + fine-analysis fold) scrolls past it in the same
+   surface. No nested scroll on the trace log — the cv-44 short-
+   landscape outer-scroll carve-out and the orientation:landscape
+   sticky carve-out it used to live in both retire here. The
+   :fullscreen / .is-fs override below lifts the wrap to 100dvh
+   when the user explicitly enters FS to focus on the video. */
+#lightboxModal.lb-fs-video #lightboxInner{
+  width:100vw!important;
+  height:100dvh!important;
+  max-width:none!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:stretch!important;
+  justify-content:flex-start!important;
+  padding:0!important;
+  margin:0!important;
+  /* The single scroll container. overscroll-behavior:contain stops
+     a swipe past the bottom from rubber-banding onto the underlying
+     page (iOS Safari is the most aggressive offender). */
+  overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+}
+#lightboxModal.lb-fs-video #lightboxMediaWrap{
+  /* !important wins over the legacy rule further down in this file
+     (line ~225) that sets position:relative + max-height:calc(100dvh
+     - 320px) under the "WRAPPER never letterboxes" comment. The
+     legacy rule pre-dates the single-scroll pattern and assumed the
+     bottom stack was reserved-but-non-scrolling. fw384's sticky
+     pattern reclaims that real estate. */
+  position:sticky!important;
+  top:0;
+  z-index:4;
+  background:#000;
+  max-height:55dvh!important;
+}
+/* Browser FS — user explicitly entered fullscreen to focus on the
+   video, so the wrap lifts to the full viewport and the sticky
+   pinning drops away. Both selectors so Webkit (Safari) and the
+   modern spec both engage. */
+#lightboxModal.lb-fs-video #lightboxMediaWrap.is-fs,
+#lightboxModal.lb-fs-video #lightboxMediaWrap:fullscreen,
+#lightboxModal.lb-fs-video #lightboxMediaWrap:-webkit-full-screen{
+  max-height:100dvh!important;
+  position:relative!important;
+}
+
+/* ── Top bar ───────────────────────────────────────────────────────────── */
+#lightboxTopBar{
+  flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;
+  /* 8 px gutter on both sides — title hugs the left edge symmetrically
+     to where the X-close hugs the right. No bottom padding so the
+     video sits flush against the top bar. */
+  padding:max(8px,env(safe-area-inset-top,0)) 8px 8px 8px;
+  min-height:52px;
+  background:#000;
+  color:#e2e8f0;
+  /* z-index above the prev/next chevrons (which carry z-index:10 in
+     06a-cam-edit-zones-masks.css) so they can't visually bleed into
+     the top-bar geometry on narrow iPhone screens. */
+  z-index:12;
+  position:relative;
+}
+#lightboxTopBar[hidden]{ display:none; }
+#lightboxTopMeta{
+  display:flex;flex-direction:column;
+  gap:2px;
+  min-width:0;flex:1 1 auto;overflow:hidden;
+  /* Defensive — keep the title left-aligned regardless of any
+     parent direction / text-align inherited from an outer modal
+     skin. Without these, iPhone Safari was clipping FIRST chars
+     instead of last (camera names showing "uirrel Town 'Nut Bar'"
+     instead of "Squirrel Town 'Nu…") because the parent flex axis
+     placed content right-anchored at narrow widths. */
+  text-align:left;
+  direction:ltr;
+}
+#lightboxTopCam{
+  display:block;
+  width:100%;
+  text-align:left;
+  direction:ltr;
+  font-size:14px;font-weight:500;letter-spacing:.01em;
+  color:#f1f5f9;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  line-height:1.25;
+}
+#lightboxTopTime{
+  display:block;
+  width:100%;
+  text-align:left;
+  direction:ltr;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:12px;font-weight:500;
+  color:rgba(226,232,240,.55);
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  line-height:1.25;
+}
+/* 6 px gap between the three translucent buttons; the group itself
+   hugs the right edge via the parent's space-between. */
+#lightboxTopActions{
+  display:flex;align-items:center;gap:6px;flex-shrink:0;
+}
+#lightboxTopActions > button{
+  position:static!important;
+  top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;
+  width:36px;height:36px;
+  min-width:36px;min-height:36px;
+  border-radius:50%;
+  border:none;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:0;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s,transform .12s;
+}
+#lightboxTopActions > button svg{ width:16px;height:16px; }
+#lightboxTopActions #lightboxConfirm{
+  background:rgba(34,197,94,.16);color:#4ade80;
+}
+#lightboxTopActions #lightboxConfirm:hover{ background:rgba(34,197,94,.28); }
+#lightboxTopActions #lightboxConfirm svg{ stroke:#4ade80; }
+#lightboxTopActions #lightboxDelete{
+  background:rgba(239,68,68,.16);color:#f87171;
+}
+#lightboxTopActions #lightboxDelete:hover{ background:rgba(239,68,68,.28); }
+#lightboxTopActions #lightboxDelete svg{ stroke:#f87171; }
+#lightboxTopActions #lightboxClose{
+  background:rgba(255,255,255,.08);color:#f1f5f9;font-size:18px;
+}
+#lightboxTopActions #lightboxClose:hover{ background:rgba(255,255,255,.18); }
+@media (max-width:480px){
+  #lightboxTopActions > button{ width:40px;height:40px;min-width:40px;min-height:40px; }
+  #lightboxTopCam{ font-size:13px; }
+  #lightboxTopTime{ font-size:11px; }
+}
+
+/* ── Video region ──────────────────────────────────────────────────────── */
+/* Sized by aspect-ratio, NOT by flex:1. The previous "flex:1 with
+   align-items:center" pushed the video down vertically inside an
+   over-tall container, which is what produced the persistent black
+   band between the top bar and the video frame. By giving the wrap
+   a 16:9 aspect-ratio (matching every Reolink / IP cam source today)
+   and a max-height cap that leaves room for the chrome below it,
+   the wrap's top edge butts directly against the top bar's bottom
+   edge. Any leftover vertical space sits BELOW the entire stack —
+   under the settings panel — never between top bar and video.
+   When the cap clamps height (short laptops), the wrap may take a
+   wider-than-16:9 shape; the <video> inside falls back to
+   object-fit:contain and letterboxes WITHIN the wrap. That's the
+   "WRAPPER never letterboxes" spec literally satisfied — the
+   black bars live inside the video element, not above it. */
+#lightboxModal.lb-fs-video #lightboxMediaWrap{
+  flex:none!important;
+  width:100%!important;
+  /* Clamp BOTH dimensions so ultrawide (21:9, 32:9) viewports keep
+     the wrap at a true 16:9 rectangle CENTRED horizontally instead
+     of stretching to a flat 3:1-ish letterbox. max-width is derived
+     from the same dvh budget the bottom stack reserves (320 px for
+     the scrubber + 2-3 swimlanes + ticks + tabs strip + tab body +
+     fold header); on standard 16:9 viewports the dvh cap rarely
+     kicks in. On vertical iPad / mobile portrait, the @media
+     override below restores width:100% so the wrap fills the
+     narrower screen. */
+  max-width:calc((100dvh - 320px) * 16 / 9);
+  aspect-ratio:16/9;
+  max-height:calc(100dvh - 320px);
+  height:auto!important;
+  min-height:0!important;
+  background:#000!important;
+  border-radius:0!important;
+  display:block!important;
+  align-items:initial!important;
+  justify-content:initial!important;
+  position:relative;
+  margin:0 auto!important;
+}
+@media (max-width:768px){
+  /* Portrait phones / narrow tablets — the dvh-based max-width
+     can pinch the wrap inside a thin centred column even though
+     the screen is plenty narrow already. Restore width:100% so
+     the video uses the full horizontal real estate, and let the
+     bottom stack scroll if its content overflows (the tab
+     content already scrolls internally per the earlier fix). */
+  #lightboxModal.lb-fs-video #lightboxMediaWrap{
+    max-width:100%!important;
+  }
+}
+#lightboxModal.lb-fs-video #lightboxImg,
+#lightboxModal.lb-fs-video #lightboxVideo{
+  width:100%!important;
+  height:100%!important;
+  max-height:none!important;
+  object-fit:contain;
+  background:#000!important;
+  border-radius:0!important;
+  display:block;
+  margin:0!important;
+}
+#lightboxModal.lb-fs-video #lightboxMeta{ display:none!important; }
+#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxConfirm,
+#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxDelete,
+#lightboxModal.lb-fs-video #lightboxMediaWrap > #lightboxClose{
+  display:none!important;
+}
+#lightboxModal.lb-fs-video #lightboxLabels{ display:none!important; }
+/* I5 · prev/next arrows — solid circular backing so they stay
+   visible on any video frame. Previous translucent rgba(0,0,0,.55)
+   faded into dark scenes; the elevated slate-900 fill + inner-ring
+   glow reads as a deliberate button regardless of what's behind.
+   No thin outline (depth via color, per design rules). 48 px desktop
+   touch target, 44 px on phone. */
+#lightboxModal.lb-fs-video #lightboxPrev,
+#lightboxModal.lb-fs-video #lightboxNext{
+  z-index:7;
+  width:48px;height:48px;
+  background:rgba(15,23,42,.92);
+  color:#f1f5f9;
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.10),
+    0 6px 18px rgba(0,0,0,.55);
+}
+#lightboxModal.lb-fs-video #lightboxPrev:hover,
+#lightboxModal.lb-fs-video #lightboxNext:hover{
+  background:rgba(30,41,59,.96);
+}
+#lightboxModal.lb-fs-video #lightboxPrev{ left:14px; right:auto; }
+#lightboxModal.lb-fs-video #lightboxNext{ right:14px; left:auto; }
+@media (max-width:480px){
+  #lightboxModal.lb-fs-video #lightboxPrev,
+  #lightboxModal.lb-fs-video #lightboxNext{ width:44px;height:44px; }
+}
+

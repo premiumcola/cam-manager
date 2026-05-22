@@ -1,0 +1,307 @@
+/* ── Live-detect overlay-toggle pill row ─────────────────────────────── */
+/* Sits ABOVE the playbar (between #lightboxMediaWrap and
+   #lightboxBottomStack) when live-detect is mounted. Five toggle
+   pills + a hint line. 44 × 44 px touch target on mobile. */
+.mv-live-toggles{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 14px;
+  background:#0a0e1a;
+  border-top:1px solid rgba(255,255,255,.04);
+  flex-wrap:wrap;
+}
+/* C1 · OFF vs ON now reads as outline-vs-fill — the user's iPhone
+   screenshot showed all four pills looking identical because the
+   OFF state was a faint white-tint background (.06 alpha) that on a
+   dark sim modal looked almost the same as the sky-blue ON state
+   (.30 alpha). New design: OFF is a clear outline-only chip with
+   dim text, ON is a filled accent chip with a faint glow ring.
+   Border is now drawn in BOTH states (just at different colours +
+   weights) so the boundary stays crisp on iOS Safari without
+   relying on backdrop-blur. */
+.mv-live-toggle{
+  padding:7px 14px;
+  border:1px solid rgba(255,255,255,.20);
+  outline:0;
+  border-radius:999px;
+  background:transparent;
+  color:rgba(226,232,240,.55);
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:.01em;
+  cursor:pointer;
+  min-height:36px;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s,color .15s,border-color .15s,box-shadow .15s;
+}
+.mv-live-toggle:hover{
+  background:rgba(255,255,255,.06);
+  color:#fff;
+  border-color:rgba(255,255,255,.32);
+}
+.mv-live-toggle[data-on="1"]{
+  background:rgba(56,189,248,.42);
+  border-color:rgba(56,189,248,.7);
+  color:#f0f9ff;
+  font-weight:700;
+  box-shadow:0 0 0 1px rgba(56,189,248,.25), 0 0 12px rgba(56,189,248,.18);
+}
+.mv-live-toggle[data-on="1"]:hover{
+  background:rgba(56,189,248,.52);
+  border-color:rgba(56,189,248,.85);
+}
+.mv-live-toggles-hint{
+  margin-left:auto;
+  font-size:10.5px;
+  color:rgba(226,232,240,.40);
+  letter-spacing:.02em;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+}
+
+/* Status legend — slim band right of the Bboxes/Trails/Zonen/Masken
+   pills. Inline swatches on desktop, single "?" chip on mobile.
+   Lives inside .mv-live-toggles so the flex-row owns the layout.
+   The desktop swatches and the "?" chip both render at all times;
+   the @media (max-width:768px) below swaps which is visible so no
+   re-mount on orientation flips. */
+.lb-legend{
+  margin-left:auto;
+  display:flex;
+  align-items:center;
+}
+.lb-legend-desktop{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.lb-legend-row{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-size:11px;
+  font-weight:500;
+  color:rgba(226,232,240,.72);
+  letter-spacing:.01em;
+  white-space:nowrap;
+}
+.lb-legend-swatch{
+  display:inline-flex;
+  width:28px;
+  height:8px;
+  align-items:center;
+  justify-content:center;
+}
+.lb-legend-swatch svg{ display:block; }
+.lb-legend-label{ line-height:1; }
+.lb-legend-tail{
+  font-size:10.5px;
+  color:rgba(226,232,240,.42);
+  letter-spacing:.02em;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  margin-left:6px;
+}
+/* Mobile chip — hidden on desktop, surfaces the popover on tap. */
+.lb-legend-chip{
+  display:none;
+  width:44px;
+  height:36px;
+  border-radius:18px;
+  border:1px solid rgba(255,255,255,.20);
+  background:transparent;
+  color:rgba(226,232,240,.72);
+  font-size:14px;
+  font-weight:700;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+}
+.lb-legend-chip:hover,
+.lb-legend-chip:focus-visible{
+  background:rgba(255,255,255,.06);
+  color:#fff;
+  border-color:rgba(255,255,255,.32);
+  outline:0;
+}
+/* Popover body shared between desktop hover (not used here — desktop
+   shows the legend inline) and mobile tap. Sets a denser vertical
+   layout so the four rows stack cleanly inside the standard tip
+   surface. */
+.lb-legend-tip-body{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  min-width:140px;
+}
+.lb-legend-tip-body .lb-legend-row{
+  font-size:12px;
+  color:#e2e8f0;
+}
+.lb-legend-tip-tail{
+  font-size:11px;
+  color:rgba(226,232,240,.55);
+  margin-top:4px;
+  padding-top:6px;
+  border-top:1px solid rgba(255,255,255,.08);
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+}
+@media (max-width:768px){
+  .lb-legend-desktop{ display:none; }
+  .lb-legend-chip{ display:inline-flex; }
+}
+
+/* Pill tooltip popover — same dark surface the rest of the
+   lightbox uses. Position via JS in absolute pixels (relative to
+   the viewport) so it can escape clipping inside the toggle bar's
+   own bounds. */
+.mv-live-toggle-tip{
+  position:fixed;
+  z-index:var(--z-toast);
+  max-width:240px;
+  padding:7px 10px;
+  border-radius:8px;
+  background:rgba(8,18,28,.92);
+  color:#e2e8f0;
+  font-size:11.5px;
+  line-height:1.4;
+  letter-spacing:.01em;
+  pointer-events:none;
+  box-shadow:0 4px 14px rgba(0,0,0,.45);
+  -webkit-backdrop-filter:blur(6px);
+  backdrop-filter:blur(6px);
+}
+.mv-live-toggle-tip[hidden]{ display:none; }
+@media (max-width:480px){
+  .mv-live-toggle{min-height:44px;padding:9px 14px}
+  .mv-live-toggles-hint{display:none}
+}
+
+/* H2.a · in-modal sim diagnostic strip. Mounted under the toggle
+   pills while live-detect is open; one row per overlay (bbox /
+   trails / zonemask) plus a sticky position-fail row when any
+   render call ends up with a 0×0 SVG. Compact mono, low-contrast
+   so the strip never competes with the live frame for attention.
+   Horizontally scrollable on mobile when a row overflows. */
+.mv-sim-diag-strip{
+  background:#0a0e1a;
+  padding:6px 14px 8px;
+  border-top:1px solid rgba(255,255,255,.04);
+  display:flex;flex-direction:column;gap:2px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10.5px;
+  color:rgba(226,232,240,.55);
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+}
+.mv-sim-diag-row{
+  white-space:nowrap;
+  letter-spacing:.01em;
+  line-height:1.4;
+}
+.mv-sim-diag-kind{
+  display:inline-block;
+  min-width:80px;
+  color:rgba(165,243,252,.85);
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+.mv-sim-diag-row[data-kind="position-fail"]{color:#fda4af}
+.mv-sim-diag-row[data-kind="position-fail"] .mv-sim-diag-kind{color:#f43f5e}
+.mv-sim-diag-k{color:rgba(226,232,240,.45);font-weight:600}
+.mv-sim-diag-v{color:#e2e8f0;font-weight:600}
+@media (max-width:480px){
+  /* Mobile · same content, smaller text, tighter min-width on the
+     kind tag so the strip doesn't horizontal-scroll until the row
+     actually overflows. */
+  .mv-sim-diag-strip{font-size:10px;padding:5px 12px}
+  .mv-sim-diag-kind{min-width:70px}
+}
+
+/* ── LIVE pill pinned to scrubber right edge ────────────────────────── */
+/* Anchored to #lightboxBottomStack (position:relative is implicit on
+   the bottom stack via the flex layout). Sits at top:8px / right:14px
+   so it lines up visually with the scrubber row. The bottom-stack
+   already has the green scrubber-fill behind it; the LIVE pill is
+   the user-facing "we're at the live edge" marker. */
+.mv-live-scrub-pill{
+  position:absolute;
+  top:14px;right:18px;
+  z-index:7;
+  padding:3px 10px;
+  border-radius:999px;
+  background:rgba(34,197,94,.85);
+  color:#0a0e1a;
+  font-size:10.5px;
+  font-weight:800;
+  letter-spacing:.06em;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  pointer-events:none;
+}
+#lightboxBottomStack{ position:relative; }
+
+/* ── Live detail pill — three gauges with class-coloured fills ─────── */
+.mv-live-detail-pill{
+  position:absolute;
+  left:14px;bottom:14px;
+  z-index:6;
+  min-width:180px;max-width:220px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:rgba(8,18,28,.78);
+  color:#e2e8f0;
+  font-size:11px;
+  letter-spacing:.01em;
+  backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);
+  pointer-events:auto;
+}
+.mv-live-detail-head{
+  font-weight:700;
+  font-size:12.5px;
+  margin-bottom:8px;
+  letter-spacing:.02em;
+}
+.mv-live-detail-empty{
+  font-size:11px;
+  font-style:italic;
+  color:rgba(226,232,240,.55);
+}
+.mv-live-detail-gauge{
+  display:flex;flex-direction:column;
+  gap:4px;
+}
+.mv-live-detail-row{
+  display:flex;justify-content:space-between;
+  font-variant-numeric:tabular-nums;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10.5px;
+  margin-top:6px;
+}
+.mv-live-detail-row:first-child{margin-top:0}
+.mv-live-detail-key{color:rgba(226,232,240,.55)}
+.mv-live-detail-val{color:#e2e8f0}
+.mv-live-detail-bar{
+  position:relative;
+  height:6px;
+  border-radius:3px;
+  background:rgba(255,255,255,.06);
+  overflow:hidden;
+}
+.mv-live-detail-fill{
+  position:absolute;
+  top:0;left:0;bottom:0;
+  border-radius:3px;
+  transition:width .25s,background .15s;
+}
+.mv-live-detail-tick{
+  position:absolute;
+  top:-2px;bottom:-2px;
+  width:2px;
+  background:#fff;
+  border-radius:1px;
+  transform:translateX(-50%);
+}

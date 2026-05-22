@@ -1,0 +1,546 @@
+/* ── MediaView shell — dark panel tabs + fine-analysis fold ──────────────── */
+/* Styles for the new MediaView shell components. The components are
+   wired in mediaview/panel-tabs.js and mediaview/fine-analysis-fold.js
+   but they aren't mounted into the active lightbox yet — that happens
+   when the shell composition lands. Shipping the styles here keeps the
+   visual language ready and lets a future commit drop the DOM in
+   without a CSS round-trip. */
+.mv-tabs-root{
+  background:#0a0e1a;
+  border-radius:10px;
+  overflow:hidden;
+}
+.mv-tabs-strip{
+  display:flex;
+  gap:4px;
+  padding:6px 8px 0 8px;
+  background:#0a0e1a;
+  flex-wrap:wrap;
+}
+.mv-tab{
+  background:transparent;
+  border:0;
+  padding:7px 12px;
+  border-radius:8px 8px 0 0;
+  font-size:12px;
+  font-weight:500;
+  letter-spacing:.01em;
+  color:rgba(255,255,255,.55);
+  cursor:pointer;
+  min-height:36px;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s, color .15s;
+}
+.mv-tab:hover{ color:rgba(255,255,255,.85); }
+.mv-tab[data-active="1"]{
+  background:rgba(255,255,255,.10);
+  color:#fff;
+}
+.mv-tabs-content{
+  background:#0a0e1a;
+  padding:10px 14px 14px 14px;
+  color:#e2e8f0;
+  font-size:12.5px;
+  line-height:1.5;
+  min-height:60px;
+  /* fw384 — no internal max-height + overflow any more. The whole
+     modal scrolls inside #lightboxInner now, so the trace log /
+     Aufnahme-Settings tab body extends at its natural height and
+     scrolls with everything else in the outer column. The previous
+     38 dvh cap + nested overflow-y:auto produced the double-scroll
+     the user reported. */
+}
+@media (max-width:480px){
+  .mv-tab{ min-height:44px;padding:9px 12px; }
+}
+
+/* wv612 — verdict legend under the toggle row. Renders only when a
+   non-pass bbox is visible on the canvas; live-detect.js mounts /
+   removes the element on each tick. Single-line, muted, doesn't
+   compete with the chrome above. */
+.mv-live-verdict-legend{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:4px 14px 8px 14px;
+  background:#0a0e1a;
+  font-size:10px;
+  color:rgba(226,232,240,.45);
+  letter-spacing:.02em;
+}
+.mv-vl-key{display:inline-flex;align-items:center;gap:5px}
+.mv-vl-sw{
+  width:18px;height:0;
+  border-top-width:2px;border-top-style:solid;
+  flex-shrink:0;
+}
+.mv-vl-sw--pass{border-top-color:#86efac}
+.mv-vl-sw--below{border-top-color:rgba(253,224,71,.7)}
+.mv-vl-sw--filtered{border-top-color:#94a3b8;border-top-style:dashed}
+
+/* gp384 — empty-state banner. Sits at the top of the media wrap
+   while live-detect is mounted, the bbox layer is enabled, and the
+   detector has missed for > 3 s. Muted dark-glass surface so it
+   reads as informational, not an alert. pointer-events:none keeps
+   any underlying bbox / image interaction reachable. The wrap is
+   already position:relative — anchoring via top/left is safe. */
+.mv-ld-empty-hint{
+  position:absolute;
+  top:16px;left:50%;
+  transform:translate(-50%, 0);
+  padding:8px 14px;
+  border-radius:12px;
+  background:rgba(8,18,28,.78);
+  color:rgba(226,232,240,.85);
+  font-size:12px;
+  font-weight:500;
+  letter-spacing:.01em;
+  -webkit-backdrop-filter:blur(8px);
+  backdrop-filter:blur(8px);
+  pointer-events:none;
+  z-index:10;
+  max-width:400px;
+  text-align:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.4);
+}
+
+.mv-fafold-root{
+  background:#0a0e1a;
+  border-top:1px solid rgba(255,255,255,.04);
+  border-radius:0 0 10px 10px;
+}
+.mv-fafold-header{
+  display:flex;align-items:center;gap:8px;
+  width:100%;
+  background:transparent;
+  border:0;
+  padding:9px 14px;
+  cursor:pointer;
+  color:rgba(226,232,240,.75);
+  font-size:11px;
+  font-weight:500;
+  letter-spacing:.01em;
+  text-align:left;
+  -webkit-tap-highlight-color:transparent;
+  min-height:36px;
+}
+.mv-fafold-header:hover{ color:rgba(226,232,240,.95); }
+.mv-fafold-chevron{
+  display:inline-flex;align-items:center;justify-content:center;
+  transition:transform .15s;
+  color:rgba(226,232,240,.55);
+}
+.mv-fafold-root[data-open="1"] .mv-fafold-chevron{ transform:rotate(180deg); }
+.mv-fafold-icon{
+  display:inline-flex;align-items:center;justify-content:center;
+  color:rgba(165,243,252,.85);
+}
+.mv-fafold-title{ font-weight:600;color:#e2e8f0; }
+.mv-fafold-sub{
+  font-size:9.5px;
+  color:rgba(226,232,240,.40);
+  margin-left:auto;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  letter-spacing:.02em;
+}
+.mv-fafold-body{
+  background:#050810;
+  padding:10px 14px 12px 14px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10.5px;
+  line-height:1.7;
+  color:rgba(226,232,240,.70);
+  border-radius:0 0 10px 10px;
+  /* Independent scroll region so a long trace log doesn't push the
+     page around when expanded. Same dvh-based budget rule as the
+     tabs content above, just a bit smaller since this is the
+     secondary view (panel content takes precedence). */
+  max-height:30dvh;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(255,255,255,.18) transparent;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
+.mv-fafold-body::-webkit-scrollbar{ width:6px;height:6px; }
+.mv-fafold-body::-webkit-scrollbar-track{ background:transparent; }
+.mv-fafold-body::-webkit-scrollbar-thumb{
+  background:rgba(255,255,255,.18);
+  border-radius:3px;
+}
+.mv-fafold-body::-webkit-scrollbar-thumb:hover{
+  background:rgba(255,255,255,.30);
+}
+@media (max-width:480px){
+  /* On phones the fold competes harder for vertical space — keep
+     the budget aligned with the tabs content above so an open
+     fold + open tab together stay within reach without scrolling
+     the page chrome. */
+  .mv-fafold-body{ max-height:26dvh; }
+}
+.mv-fafold-line[data-kind="pass"]{ color:var(--color-text-success,#4ade80); }
+.mv-fafold-line[data-kind="reject"]{ color:var(--warning,#f59e0b); }
+
+/* C3 · in-modal Diagnose panel. Sits between the Detections tab and
+   the Fein-Analyse fold, native <details> + <summary> markup so the
+   browser handles collapse state. Same flat dark surface palette as
+   .mv-fafold-* so the two folds visually belong together. Compact
+   mono font for numbers. Mobile (≤ 480 px) wraps the gates row to
+   two lines so the four counts don't overflow on a 375 px tile. */
+.mv-ld-diag{
+  background:#0a0e1a;
+  border-top:1px solid rgba(255,255,255,.04);
+}
+.mv-ld-diag-head{
+  list-style:none;
+  display:flex;align-items:center;gap:8px;
+  padding:9px 14px;
+  cursor:pointer;
+  color:rgba(226,232,240,.75);
+  font-size:11px;font-weight:500;letter-spacing:.01em;
+  min-height:36px;
+  -webkit-tap-highlight-color:transparent;
+}
+.mv-ld-diag-head::-webkit-details-marker{ display:none; }
+.mv-ld-diag-head:hover{ color:rgba(226,232,240,.95); }
+.mv-ld-diag-chev{
+  display:inline-flex;align-items:center;justify-content:center;
+  color:rgba(226,232,240,.55);
+  font-size:11px;
+  width:14px;height:14px;
+  transition:transform .15s;
+}
+.mv-ld-diag[open] .mv-ld-diag-chev{ transform:rotate(90deg); }
+.mv-ld-diag-title{ font-weight:600;color:#e2e8f0; }
+.mv-ld-diag-pulse{
+  margin-left:auto;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10px;letter-spacing:.02em;
+  color:rgba(226,232,240,.55);
+  padding:1px 7px;border-radius:999px;
+  background:rgba(255,255,255,.06);
+}
+.mv-ld-diag-pulse[data-alert="1"]{
+  background:rgba(245,158,11,.20);
+  color:#fcd34d;
+}
+.mv-ld-diag-body{
+  background:#050810;
+  padding:10px 14px 12px 14px;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:10.5px;
+  line-height:1.55;
+  color:rgba(226,232,240,.78);
+  display:flex;flex-direction:column;gap:6px;
+}
+.mv-ld-diag-empty{
+  color:rgba(226,232,240,.45);
+  font-style:italic;
+}
+.mv-ld-diag-row{
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+}
+.mv-ld-diag-key{
+  flex:0 0 auto;
+  min-width:78px;
+  color:rgba(226,232,240,.5);
+  font-size:10px;letter-spacing:.04em;text-transform:uppercase;
+}
+.mv-ld-diag-val{
+  flex:1 1 auto;
+  color:rgba(226,232,240,.85);
+  word-break:break-word;
+}
+.mv-ld-diag-gates{
+  gap:6px;
+}
+.mv-ld-diag-gate{
+  display:inline-flex;align-items:center;
+  padding:1px 7px;border-radius:6px;
+  background:rgba(255,255,255,.05);
+  color:rgba(226,232,240,.75);
+  font-size:10px;font-weight:600;
+}
+.mv-ld-diag-gate[data-kind="pass"]{
+  background:rgba(74,222,128,.14);
+  color:#86efac;
+}
+.mv-ld-diag-gate[data-kind="raw"]{
+  background:rgba(56,189,248,.14);
+  color:#bae6fd;
+}
+.mv-ld-diag-gate[data-kind="belowthresh"]{
+  background:rgba(245,158,11,.14);
+  color:#fcd34d;
+}
+.mv-ld-diag-gate[data-kind="filtered"]{
+  background:rgba(192,72,191,.14);
+  color:#f0abfc;
+}
+.mv-ld-diag-top-list{
+  flex:1 1 auto;
+  display:flex;flex-wrap:wrap;gap:6px;
+}
+.mv-ld-diag-top-item{
+  padding:1px 7px;border-radius:6px;
+  background:rgba(255,255,255,.06);
+  color:#e2e8f0;
+  font-size:10px;
+}
+.mv-ld-diag-top-empty{
+  color:rgba(226,232,240,.45);
+  font-style:italic;
+}
+@media (max-width:480px){
+  /* On a 375 px tile the four-pill gates row overflows; let it wrap
+     and tighten the key column so the row leads with KEY then breaks
+     to a second line of pills. */
+  .mv-ld-diag-key{ min-width:64px; }
+  .mv-ld-diag-gates{ flex-wrap:wrap; }
+}
+.mv-fafold-line[data-kind="no-detection"]{ color:var(--danger,#ef4444); }
+.mv-fafold-line[data-kind="info"]{ color:rgba(226,232,240,.70); }
+.mv-fafold-empty{
+  font-style:italic;
+  color:rgba(226,232,240,.45);
+}
+@media (max-width:480px){
+  .mv-fafold-header{ min-height:44px; }
+  .mv-fafold-sub{ display:none; }
+}
+
+/* ── Recorded-mode panels wrapper (the live mediaview shell mount) ────── */
+.mv-recorded-panels{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  border-radius:10px;
+  overflow:hidden;
+}
+.mv-recorded-tabs .mv-tabs-root{
+  border-radius:10px 10px 0 0;
+}
+.mv-recorded-fafold .mv-fafold-root{
+  border-radius:0 0 10px 10px;
+  margin-top:-6px;        /* close the seam with the tabs above */
+}
+
+/* ── "Tracking neu indexieren" button (overlay-toggles row) ───────────── */
+/* Lives inside .mv-live-toggles right after the Masken pill. Uses the
+   sky-blue accent the bbox/trail toggles already establish but is
+   styled as an action chip (filled background, brighter text) rather
+   than an outline-vs-fill toggle so the user reads it as a verb. */
+.lb-reindex-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:7px 12px;
+  border:0;
+  outline:0;
+  border-radius:999px;
+  background:rgba(56,189,248,.22);
+  color:#e0f2fe;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:.01em;
+  cursor:pointer;
+  min-height:36px;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s,color .15s,box-shadow .15s;
+}
+.lb-reindex-btn:hover:not(:disabled){
+  background:rgba(56,189,248,.32);
+  color:#f0f9ff;
+  box-shadow:0 0 0 1px rgba(56,189,248,.35);
+}
+.lb-reindex-btn:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+.lb-reindex-btn svg{ flex-shrink:0; }
+.lb-reindex-label{ line-height:1; }
+@media (max-width:768px){
+  .lb-reindex-btn{
+    min-height:44px;
+    padding:9px 14px;
+  }
+}
+/* iPhone-narrow — collapse to icon-only so the row doesn't push the
+   legend chip off-screen. */
+@media (max-width:480px){
+  .lb-reindex-label{ display:none; }
+}
+
+/* ── Wetter tab body ───────────────────────────────────────────────────── */
+.mv-weather{
+  display:grid;
+  grid-template-columns:auto 1fr;
+  gap:4px 14px;
+  font-size:12px;
+}
+.mv-weather-row{
+  display:contents;
+}
+.mv-weather-key{
+  color:rgba(226,232,240,.55);
+  letter-spacing:.01em;
+}
+.mv-weather-val{
+  color:#e2e8f0;
+  font-variant-numeric:tabular-nums;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:11.5px;
+}
+
+/* ── Live-detect Detections panel ─────────────────────────────────────── */
+/* One row per current detection. Layout is grid so the class colour
+   bar, label, score, and verdict pill align across rows without
+   manual width tweaking. Mounted by mediaview/live-detect.js. */
+.mv-ld-detections{
+  display:flex;flex-direction:column;
+  gap:6px;
+}
+.mv-ld-empty{
+  font-size:11.5px;
+  color:rgba(226,232,240,.45);
+  font-style:italic;
+  padding:4px 0;
+}
+.mv-ld-row{
+  display:grid;
+  grid-template-columns:4px 1fr auto auto;
+  gap:8px;
+  align-items:center;
+  padding:6px 10px 6px 6px;
+  border-radius:8px;
+  background:rgba(255,255,255,.04);
+  font-size:12px;
+  letter-spacing:.01em;
+}
+.mv-ld-row-bar{
+  width:4px;
+  height:18px;
+  border-radius:2px;
+  flex-shrink:0;
+}
+.mv-ld-row-label{
+  color:#e2e8f0;
+  font-weight:600;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.mv-ld-row-score{
+  color:#e2e8f0;
+  font-variant-numeric:tabular-nums;
+  font-family:ui-monospace,Menlo,Consolas,monospace;
+  font-size:11.5px;
+}
+.mv-ld-row-verdict{
+  font-size:10.5px;
+  font-weight:600;
+  padding:2px 8px;
+  border-radius:999px;
+  letter-spacing:.02em;
+}
+.mv-ld-row[data-tone="ok"]   .mv-ld-row-verdict{ background:rgba(34,197,94,.18); color:#86efac; }
+.mv-ld-row[data-tone="warn"] .mv-ld-row-verdict{ background:rgba(245,158,11,.18); color:#fbbf24; }
+.mv-ld-row[data-tone="mute"] .mv-ld-row-verdict{ background:rgba(255,255,255,.06); color:rgba(226,232,240,.55); }
+/* Live-detect modal class — the same lb-fs-video chrome stays in
+   place, with a couple of small overrides: the live "● Live" marker
+   in the title bar reads brighter than a recorded timestamp, and
+   the SVG bbox overlay needs explicit pointer-events:none so a tap
+   on the canvas selects the underlying <img> click rules (no-op). */
+#lightboxModal.lb-live-detect #lightboxTopTime{
+  color:#86efac;
+  font-weight:700;
+  letter-spacing:.04em;
+}
+/* H2.b Fix 1 · the previous ID-rule
+     #lightboxLiveOverlay { pointer-events: none; }
+   competed with the inline `svg.style.pointerEvents = 'auto'` JS
+   sets in _renderBboxOverlay when bbox click-to-detail is enabled.
+   Inline style wins on specificity, but the rule was also fighting
+   the click handler in DevTools (computed style showed `none` on
+   some Safari builds). Drop the static rule entirely — the
+   cssText on creation already starts the SVG at pointer-events:none,
+   and the render path flips it to 'auto' when needed.
+
+   H2.b Fix 3 · make the image's stacking deterministic. With the
+   wrap as a sticky element forming a stacking context, the SVG
+   layers (z-index 14/15/16 below) need a known z below them to
+   sit on top of. Explicit `z-index:1; position:relative` on
+   #lightboxImg ensures it always sits BELOW the SVGs regardless
+   of which ancestor class chain the modal happens to carry. */
+#lightboxImg{
+  position:relative;
+  z-index:1;
+}
+
+/* ── Broken-event state ───────────────────────────────────────────────── */
+/* Replaces the panel-tab strip when the lightbox lands on an event
+   whose video file is missing on disk. The playbar is cleared in JS
+   (lbClearTrackTimeline); this card carries the actionable buttons. */
+.mv-broken-event{
+  padding:20px 16px;
+  background:#0a0e1a;
+  border-radius:10px;
+  display:flex;flex-direction:column;
+  align-items:center;
+  gap:12px;
+}
+.mv-broken-event-title{
+  font-size:14px;font-weight:700;
+  color:#fca5a5;
+  letter-spacing:.01em;
+}
+.mv-broken-event-msg{
+  font-size:12px;
+  color:rgba(226,232,240,.65);
+  text-align:center;
+  line-height:1.5;
+  max-width:360px;
+}
+.mv-broken-event-actions{
+  display:flex;gap:10px;flex-wrap:wrap;
+  justify-content:center;
+}
+.mv-broken-event-next,
+.mv-broken-event-close{
+  padding:9px 16px;
+  border-radius:10px;
+  border:0;
+  font-size:12.5px;
+  font-weight:600;
+  cursor:pointer;
+  min-height:38px;
+  -webkit-tap-highlight-color:transparent;
+  transition:background .15s,color .15s;
+}
+.mv-broken-event-next{
+  background:rgba(56,189,248,.18);
+  color:#bae6fd;
+}
+.mv-broken-event-next:hover{
+  background:rgba(56,189,248,.28);
+  color:#e0f2fe;
+}
+.mv-broken-event-close{
+  background:rgba(255,255,255,.05);
+  color:rgba(226,232,240,.85);
+}
+.mv-broken-event-close:hover{
+  background:rgba(255,255,255,.10);
+  color:#fff;
+}
+.mv-broken-event-final{
+  font-size:11.5px;
+  font-style:italic;
+  color:rgba(226,232,240,.55);
+  text-align:center;
+}
+@media (max-width:480px){
+  .mv-broken-event-next,
+  .mv-broken-event-close{ min-height:44px;padding:11px 18px; }
+}
+
