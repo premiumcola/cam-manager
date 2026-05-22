@@ -1001,6 +1001,11 @@ byId('lightboxDelete').onclick = async () => {
       const nextIdx = Math.min(lbState.index, nav.length - 1);
       if (nextIdx < 0) closeLightbox();
       else openLightbox(nav[nextIdx]);
+      // Pulls /api/media/storage-stats + re-renders the filter pill
+      // bar. Photo delete below already does this; the timelapse
+      // branch used to skip it, so deleting the last timelapse left
+      // the "Timelapse N" pill stuck on its pre-delete count.
+      await refreshTimelineAndStats();
     } catch (e) {
       showToast('Löschen fehlgeschlagen: ' + e.message, 'error');
     }
