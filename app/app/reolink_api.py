@@ -15,10 +15,98 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import time
 
 import requests
 
 log = logging.getLogger(__name__)
+
+
+# ── O20 · Structured exceptions ────────────────────────────────────────────
+# Replaces the "return None on every failure" pattern for new callers.
+# Legacy helpers below keep their None-returning signatures so the
+# existing call sites (sun-tl daynight override, GetDevInfo probe) work
+# unchanged; the standalone image-mode endpoint and any future caller
+# can opt into the typed errors.
+class ReolinkError(Exception):
+    """Base class for every Reolink-API failure mode."""
+
+
+class ReolinkUnreachable(ReolinkError):
+    """TCP-level failure — DNS, connection refused, timeout."""
+
+
+class ReolinkAuthFailed(ReolinkError):
+    """API returned 401/auth-rejected. User probably typed the wrong password."""
+
+
+class ReolinkProtocolError(ReolinkError):
+    """200 OK but the body doesn't match the documented shape — firmware
+    drift, captive-portal interception, etc."""
+
+
+def _post_with_retry(
+    url: str,
+    *,
+    params: dict | None = None,
+    json: list | dict | None = None,
+    timeout: float = 8.0,
+    retries: int = 2,
+) -> dict:
+    """POST with exponential backoff. Raises ReolinkUnreachable on
+    every transport failure after `retries` attempts; raises
+    ReolinkProtocolError when the response decodes but the body is
+    malformed. Use ``login_typed`` / ``get_device_info_typed`` below
+    for the typed entry points.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            r = _session.post(url, params=params, json=json, timeout=timeout)
+            r.raise_for_status()
+            try:
+                return r.json()
+            except ValueError as je:
+                raise ReolinkProtocolError(
+                    f"Response not JSON · status={r.status_code}",
+                ) from je
+        except (requests.Timeout, requests.ConnectionError) as e:
+            last_exc = e
+            if attempt < retries:
+                # 0.5 s, 1 s — capped so a fully-offline cam doesn't
+                # block the caller for >3 s total.
+                time.sleep(0.5 * (2 ** attempt))
+                continue
+        except requests.HTTPError as e:
+            status = getattr(e.response, "status_code", None)
+            if status in (401, 403):
+                raise ReolinkAuthFailed(f"HTTP {status}") from e
+            raise ReolinkProtocolError(f"HTTP {status}") from e
+    raise ReolinkUnreachable(url) from last_exc
+
+
+# ── O20 · In-process TTL cache for idempotent GetDevInfo calls ────────────
+# Same camera asked twice within `seconds` returns the cached payload so
+# the cam-edit save path doesn't re-probe on every keystroke. Module-
+# level dict; small (one entry per cam) so the lack of eviction policy
+# isn't a memory concern.
+_DEVINFO_CACHE: dict[str, tuple[float, dict]] = {}
+_DEVINFO_TTL_S = 60.0
+
+
+def _devinfo_cache_get(key: str) -> dict | None:
+    ent = _DEVINFO_CACHE.get(key)
+    if not ent:
+        return None
+    ts, payload = ent
+    if (time.time() - ts) > _DEVINFO_TTL_S:
+        _DEVINFO_CACHE.pop(key, None)
+        return None
+    return payload
+
+
+def _devinfo_cache_put(key: str, payload: dict) -> None:
+    _DEVINFO_CACHE[key] = (time.time(), payload)
 
 # Module-level session reused across calls in the same worker thread so
 # that overriding many cams in sequence doesn't re-handshake TCP each
