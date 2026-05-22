@@ -896,7 +896,9 @@ byId('lightboxDelete').innerHTML = _LB_TRASH_HTML;
 _initFsBtn('liveViewFsBtn', byId('liveViewWrap'), () => byId('liveViewWrap'));
 
 // Swipe navigation on the lightbox media area (mobile). Horizontal
-// swipe = prev/next, vertical swipe ≥ 80 px down = dismiss.
+// swipe = prev/next; vertical swipes are ignored (the swipe-down-
+// to-dismiss branch was removed — it was firing accidentally on
+// scroll/zoom and the visible X button covers the close case).
 (function initLightboxSwipe() {
   const wrap = byId('lightboxMediaWrap');
   const modal = byId('lightboxModal');
@@ -921,15 +923,11 @@ _initFsBtn('liveViewFsBtn', byId('liveViewWrap'), () => byId('liveViewWrap'));
       _dragging = false;
       const dx = e.changedTouches[0].clientX - _tx;
       const dy = e.changedTouches[0].clientY - _ty;
-      // Vertical wins when its magnitude exceeds horizontal — protects
-      // pinch-zoom-finished and pure scroll gestures from triggering nav.
-      if (Math.abs(dy) > Math.abs(dx)) {
-        if (dy >= 80) closeLightbox();
-        return;
-      }
+      // Vertical-dominant gestures (scroll, pinch-zoom-finish) must
+      // not trigger prev/next — drop them on the floor.
+      if (Math.abs(dy) > Math.abs(dx)) return;
       if (Math.abs(dx) < 40) return;
-      // Live-sim has no neighbour item to navigate to. Swipe-down to
-      // close still works via the vertical branch above.
+      // Live-sim has no neighbour item to navigate to.
       if (modal.classList.contains('lb-live-detect')) return;
       if (dx < 0) byId('lightboxNext')?.click();
       else byId('lightboxPrev')?.click();
