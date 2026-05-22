@@ -25,6 +25,7 @@ relative path the JSON manifest originally lived at, so a restore
 puts the files back under exactly ``storage/motion_detection/<cam>/
 <date>/<event_id>.*`` even when the date subdir wouldn't otherwise
 be reconstructible from the event_id alone."""
+
 from __future__ import annotations
 
 import json
@@ -66,9 +67,13 @@ def move_to_trash(cam_id: str, event_id: str) -> dict:
     cam_root = Path(store.root) / "motion_detection" / cam_id
     matches = list(cam_root.rglob(f"{event_id}.json"))
     if not matches:
-        return {"json_deleted": False, "snap_deleted": False,
-                "vid_deleted": False, "tracks_deleted": False,
-                "trashed": False}
+        return {
+            "json_deleted": False,
+            "snap_deleted": False,
+            "vid_deleted": False,
+            "tracks_deleted": False,
+            "trashed": False,
+        }
     json_path = matches[0]
     try:
         event = json.loads(json_path.read_text(encoding="utf-8"))
@@ -77,9 +82,13 @@ def move_to_trash(cam_id: str, event_id: str) -> dict:
     trash_dir = _trash_root() / cam_id / event_id
     trash_dir.mkdir(parents=True, exist_ok=True)
     store_root = Path(store.root)
-    flags = {"json_deleted": False, "snap_deleted": False,
-             "vid_deleted": False, "tracks_deleted": False,
-             "trashed": True}
+    flags = {
+        "json_deleted": False,
+        "snap_deleted": False,
+        "vid_deleted": False,
+        "tracks_deleted": False,
+        "trashed": True,
+    }
     # Manifest first — capture its relative path so restore knows
     # where to put it back.
     json_rel = str(json_path.relative_to(store_root))
@@ -118,11 +127,11 @@ def move_to_trash(cam_id: str, event_id: str) -> dict:
             except Exception:
                 log.debug("[trash] %s best move failed", bp, exc_info=True)
     meta = {
-        "cam_id":       cam_id,
-        "event_id":     event_id,
-        "trashed_at":   datetime.now().isoformat(timespec="seconds"),
-        "json_rel":     json_rel,
-        "event":        event,
+        "cam_id": cam_id,
+        "event_id": event_id,
+        "trashed_at": datetime.now().isoformat(timespec="seconds"),
+        "json_rel": json_rel,
+        "event": event,
     }
     (trash_dir / "meta.json").write_text(
         json.dumps(meta, indent=2, sort_keys=True),
@@ -157,13 +166,15 @@ def list_trashed() -> list[dict]:
             except Exception:
                 expires_at = None
                 days_left = None
-            out.append({
-                "cam_id":     meta.get("cam_id"),
-                "event_id":   meta.get("event_id"),
-                "trashed_at": trashed_at,
-                "expires_at": expires_at.isoformat(timespec="seconds") if expires_at else None,
-                "days_left":  days_left,
-            })
+            out.append(
+                {
+                    "cam_id": meta.get("cam_id"),
+                    "event_id": meta.get("event_id"),
+                    "trashed_at": trashed_at,
+                    "expires_at": expires_at.isoformat(timespec="seconds") if expires_at else None,
+                    "days_left": days_left,
+                }
+            )
     out.sort(key=lambda e: e.get("trashed_at") or "", reverse=True)
     return out
 
@@ -198,8 +209,7 @@ def restore(cam_id: str, event_id: str) -> bool:
             shutil.move(str(src), str(target))
             moved_back += 1
         except Exception as e:
-            log.warning("[trash] %s restore %s failed: %s",
-                        event_id, src, e)
+            log.warning("[trash] %s restore %s failed: %s", event_id, src, e)
     # JSON manifest goes back to its captured json_rel.
     json_rel = meta.get("json_rel")
     if json_rel:
@@ -211,8 +221,7 @@ def restore(cam_id: str, event_id: str) -> bool:
                 shutil.move(str(src), str(target))
                 moved_back += 1
             except Exception as e:
-                log.warning("[trash] %s restore json failed: %s",
-                            event_id, e)
+                log.warning("[trash] %s restore json failed: %s", event_id, e)
         # Sidecars (tracks.json, best.jpg) live in the manifest's
         # parent dir — move whatever else is left next to it.
         target_dir = (store_root / json_rel).parent
@@ -223,8 +232,7 @@ def restore(cam_id: str, event_id: str) -> bool:
             try:
                 shutil.move(str(src), str(target_dir / src.name))
             except Exception:
-                log.debug("[trash] sidecar move %s failed",
-                          src, exc_info=True)
+                log.debug("[trash] sidecar move %s failed", src, exc_info=True)
     # Drop the now-empty trash entry.
     try:
         meta_path.unlink(missing_ok=True)
@@ -293,8 +301,7 @@ def cleanup_expired() -> int:
                     shutil.rmtree(ev_dir)
                     removed += 1
                 except Exception as e:
-                    log.warning("[trash] expired sweep %s failed: %s",
-                                ev_dir, e)
+                    log.warning("[trash] expired sweep %s failed: %s", ev_dir, e)
         try:
             cam_dir.rmdir()
         except OSError:

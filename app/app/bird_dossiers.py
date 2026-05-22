@@ -22,6 +22,7 @@ License compliance:
     Wikipedia text is CC-BY-SA; the API extract is 2-3 sentences which
     is a fair-use snippet.
 """
+
 from __future__ import annotations
 
 import json as _json_mod
@@ -42,8 +43,7 @@ log = logging.getLogger("app.bird_dossiers")
 # short enough to play inline as MP3 in the modal.
 _XC_API_KEY = os.environ.get("XENO_CANTO_API_KEY", "").strip()
 _XC_QUERY_TEMPLATE = (
-    "https://xeno-canto.org/api/3/recordings"
-    "?query={latin}+q:A+len:5-15&key={key}"
+    "https://xeno-canto.org/api/3/recordings" "?query={latin}+q:A+len:5-15&key={key}"
 )
 
 # The MediaWiki REST summary endpoint. Returns title, extract, thumbnail,
@@ -75,14 +75,14 @@ def _rate_limited_get(url: str) -> dict | None:
     network error, malformed JSON). Never raises. Caller is expected to
     treat None as "fetch failed, try again later"."""
     import urllib.request as _ur
+
     with _rate_lock:
         sleep_for = max(0.0, _next_request_slot[0] - time.time())
         if sleep_for > 0:
             time.sleep(sleep_for)
         _next_request_slot[0] = time.time() + 1.0
     try:
-        req = _ur.Request(url, headers={"User-Agent": _USER_AGENT,
-                                        "Accept": "application/json"})
+        req = _ur.Request(url, headers={"User-Agent": _USER_AGENT, "Accept": "application/json"})
         with _ur.urlopen(req, timeout=_HTTP_TIMEOUT) as r:
             if r.status >= 400:
                 return None
@@ -132,17 +132,17 @@ def _fetch_wikipedia(latin: str) -> dict | None:
 # "alarm call" over "call". Unrecognised types fall back to the raw
 # string capitalised — better than nothing.
 _XC_TYPE_DE: dict[str, str] = {
-    "flight call":   "Flugruf",
-    "alarm call":    "Warnruf",
-    "begging call":  "Bettelruf",
-    "alarm":         "Warnruf",
-    "begging":       "Bettelruf",
-    "subsong":       "Subgesang",
-    "song":          "Gesang",
-    "drumming":      "Trommeln",
-    "duet":          "Duett",
-    "wing":          "Flügelschlag",
-    "call":          "Ruf",
+    "flight call": "Flugruf",
+    "alarm call": "Warnruf",
+    "begging call": "Bettelruf",
+    "alarm": "Warnruf",
+    "begging": "Bettelruf",
+    "subsong": "Subgesang",
+    "song": "Gesang",
+    "drumming": "Trommeln",
+    "duet": "Duett",
+    "wing": "Flügelschlag",
+    "call": "Ruf",
 }
 
 
@@ -212,15 +212,17 @@ def _fetch_xeno_canto(latin: str, max_recordings: int = 3) -> list[dict]:
                 file_url = "https:" + file_url
             if not file_url:
                 continue
-            out.append({
-                "id": str(rec.get("id") or "").strip() or None,
-                "file_url": file_url,
-                "type_en": rec.get("type") or "",
-                "type_de": _de_type(rec.get("type")),
-                "recordist": rec.get("rec") or None,
-                "license_url": rec.get("lic") or None,
-                "length": rec.get("length") or None,
-            })
+            out.append(
+                {
+                    "id": str(rec.get("id") or "").strip() or None,
+                    "file_url": file_url,
+                    "type_en": rec.get("type") or "",
+                    "type_de": _de_type(rec.get("type")),
+                    "recordist": rec.get("rec") or None,
+                    "license_url": rec.get("lic") or None,
+                    "length": rec.get("length") or None,
+                }
+            )
         if out:
             return out
     return []
@@ -269,8 +271,9 @@ class BirdDossierService:
             log.warning("[dossiers] save failed: %s", e)
 
     # ── Public API ─────────────────────────────────────────────────────
-    def on_new_species(self, latin: str, common_de: str | None,
-                       event_id: str, camera_id: str) -> bool:
+    def on_new_species(
+        self, latin: str, common_de: str | None, event_id: str, camera_id: str
+    ) -> bool:
         """Hook called by the bird classifier on every successful ID.
 
         Returns True if a new dossier was created (first sighting),
@@ -313,8 +316,7 @@ class BirdDossierService:
                 "wiki_distribution_thumb": None,
             }
             self._save_locked()
-        log.info("[dossiers] new species: %s (%s) — fetching",
-                 latin, common_de or "?")
+        log.info("[dossiers] new species: %s (%s) — fetching", latin, common_de or "?")
         self._spawn_fetch(latin)
         return True
 
@@ -359,8 +361,7 @@ class BirdDossierService:
             if latin in self._inflight:
                 return
             self._inflight.add(latin)
-        threading.Thread(target=self._fetch_worker, args=(latin,),
-                         daemon=True).start()
+        threading.Thread(target=self._fetch_worker, args=(latin,), daemon=True).start()
 
     def _fetch_worker(self, latin: str) -> None:
         try:
@@ -377,9 +378,7 @@ class BirdDossierService:
         # species we keep the cached clips instead of re-pulling.
         with self._lock:
             d_existing = self.data["dossiers"].get(latin)
-            already_have_audio = bool(
-                d_existing and d_existing.get("recordings")
-            )
+            already_have_audio = bool(d_existing and d_existing.get("recordings"))
         recordings = [] if already_have_audio else _fetch_xeno_canto(latin)
         now_iso = datetime.now().isoformat(timespec="seconds")
         with self._lock:
@@ -390,10 +389,14 @@ class BirdDossierService:
             if not already_have_audio:
                 self._apply_xeno_canto(d, recordings, now_iso)
             self._save_locked()
-        log.info("[dossiers] fetched %s — wiki=%s xc=%s",
-                 latin, "ok" if wiki else "miss",
-                 f"{len(recordings)} clips" if recordings
-                 else ("cached" if already_have_audio else "miss"))
+        log.info(
+            "[dossiers] fetched %s — wiki=%s xc=%s",
+            latin,
+            "ok" if wiki else "miss",
+            f"{len(recordings)} clips"
+            if recordings
+            else ("cached" if already_have_audio else "miss"),
+        )
 
     @staticmethod
     def _apply_wikipedia(dossier: dict, wiki: dict | None, now_iso: str) -> None:

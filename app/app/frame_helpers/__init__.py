@@ -14,6 +14,7 @@ This package is the post-refactor home of the original monolithic
 ``frame_helpers.py``. Every public name remains importable from
 ``app.frame_helpers`` exactly as before — the split is purely
 mechanical, no behavior change."""
+
 from __future__ import annotations
 
 from ._anomaly_bands import (

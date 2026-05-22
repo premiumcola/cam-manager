@@ -20,6 +20,7 @@ Tag conventions (placed in the message body, not the logger name):
     [mqtt]         MQTTService
     [heartbeat]    periodic summaries
 """
+
 from __future__ import annotations
 
 import logging
@@ -44,18 +45,19 @@ class _LogBuffer(logging.Handler):
 
     def emit(self, record: logging.LogRecord):
         try:
-            self._records.append({
-                "ts": datetime.fromtimestamp(record.created).strftime("%H:%M:%S"),
-                "level": record.levelname,
-                "logger": record.name,
-                "msg": self.format(record),
-            })
+            self._records.append(
+                {
+                    "ts": datetime.fromtimestamp(record.created).strftime("%H:%M:%S"),
+                    "level": record.levelname,
+                    "logger": record.name,
+                    "msg": self.format(record),
+                }
+            )
         except Exception:
             pass
 
     def get(self, min_level: int = logging.DEBUG) -> list:
-        return [r for r in self._records
-                if logging.getLevelName(r["level"]) >= min_level]
+        return [r for r in self._records if logging.getLevelName(r["level"]) >= min_level]
 
 
 log_buffer = _LogBuffer()
@@ -97,7 +99,8 @@ class BurstRateLimitFilter(logging.Filter):
         if not self._sweeper_started:
             self._sweeper_started = True
             threading.Thread(
-                target=self._sweep_loop, daemon=True,
+                target=self._sweep_loop,
+                daemon=True,
                 name="logfilter-sweep",
             ).start()
 
@@ -143,8 +146,13 @@ class BurstRateLimitFilter(logging.Filter):
         logger_name, original_msg = key
         msg = f"[…repeated {suppressed}× in last {int(self._window)}s] {original_msg}"
         rec = logging.LogRecord(
-            name=logger_name, level=ent[3], pathname="", lineno=0,
-            msg=msg, args=None, exc_info=None,
+            name=logger_name,
+            level=ent[3],
+            pathname="",
+            lineno=0,
+            msg=msg,
+            args=None,
+            exc_info=None,
         )
         for h in self._summary_targets:
             try:
@@ -323,15 +331,15 @@ def setup_logging():
     # because its job-fired/job-completed pair every 60 s is far below
     # the noise floor we care about.
     for noisy, lvl in [
-        ("urllib3",      logging.WARNING),
-        ("werkzeug",     logging.WARNING),
-        ("httpx",        logging.WARNING),
-        ("httpcore",     logging.WARNING),
-        ("telegram",     logging.WARNING),
-        ("apscheduler",  logging.WARNING),
-        ("PIL",          logging.WARNING),
-        ("matplotlib",   logging.WARNING),
-        ("asyncio",      logging.WARNING),
+        ("urllib3", logging.WARNING),
+        ("werkzeug", logging.WARNING),
+        ("httpx", logging.WARNING),
+        ("httpcore", logging.WARNING),
+        ("telegram", logging.WARNING),
+        ("apscheduler", logging.WARNING),
+        ("PIL", logging.WARNING),
+        ("matplotlib", logging.WARNING),
+        ("asyncio", logging.WARNING),
     ]:
         logging.getLogger(noisy).setLevel(lvl)
     # PTB's polling loop logs every getUpdates failure at ERROR with a

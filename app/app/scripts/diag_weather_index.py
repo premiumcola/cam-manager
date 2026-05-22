@@ -22,6 +22,7 @@ Usage::
     docker exec tam-spy python -m app.scripts.diag_weather_index
     docker exec tam-spy python -m app.scripts.diag_weather_index --json
 """
+
 from __future__ import annotations
 
 import argparse
@@ -77,17 +78,31 @@ def scan(weather_root: Path) -> dict:
     out: dict[str, dict] = {}
     malformed_names: list[str] = []
     if not weather_root.exists():
-        return {"by_cam": {}, "summary": {
-            "mp4_on_disk": 0, "index_rows": 0, "matched": 0,
-            "needs_tolerant": 0, "orphan_mp4": 0,
-            "malformed": 0, "drift_pct": 0.0,
-        }, "malformed_names": []}
+        return {
+            "by_cam": {},
+            "summary": {
+                "mp4_on_disk": 0,
+                "index_rows": 0,
+                "matched": 0,
+                "needs_tolerant": 0,
+                "orphan_mp4": 0,
+                "malformed": 0,
+                "drift_pct": 0.0,
+            },
+            "malformed_names": [],
+        }
     for cam_dir in sorted(p for p in weather_root.iterdir() if p.is_dir()):
         if cam_dir.name.startswith(".") or cam_dir.name == "recaps":
             continue
         cam_id = cam_dir.name
-        counts = {"mp4_on_disk": 0, "index_rows": 0, "matched": 0,
-                  "needs_tolerant": 0, "orphan_mp4": 0, "malformed": 0}
+        counts = {
+            "mp4_on_disk": 0,
+            "index_rows": 0,
+            "matched": 0,
+            "needs_tolerant": 0,
+            "orphan_mp4": 0,
+            "malformed": 0,
+        }
         for phase in _PHASE_DIRS:
             phase_dir = cam_dir / phase
             if not phase_dir.is_dir():
@@ -130,14 +145,19 @@ def scan(weather_root: Path) -> dict:
                     counts["orphan_mp4"] += 1
         out[cam_id] = counts
     # Aggregate.
-    agg = {"mp4_on_disk": 0, "index_rows": 0, "matched": 0,
-           "needs_tolerant": 0, "orphan_mp4": 0, "malformed": 0}
+    agg = {
+        "mp4_on_disk": 0,
+        "index_rows": 0,
+        "matched": 0,
+        "needs_tolerant": 0,
+        "orphan_mp4": 0,
+        "malformed": 0,
+    }
     for counts in out.values():
         for k in agg:
             agg[k] += counts[k]
     agg["drift_pct"] = (
-        100.0 * agg["needs_tolerant"] / agg["index_rows"]
-        if agg["index_rows"] else 0.0
+        100.0 * agg["needs_tolerant"] / agg["index_rows"] if agg["index_rows"] else 0.0
     )
     return {"by_cam": out, "summary": agg, "malformed_names": malformed_names}
 
@@ -154,19 +174,30 @@ def _print_human(report: dict) -> None:
             "  %-50s mp4=%3d  index=%3d  matched=%3d  needs_tolerant=%3d  "
             "orphan_mp4=%3d  malformed=%3d",
             cam_id,
-            c["mp4_on_disk"], c["index_rows"], c["matched"],
-            c["needs_tolerant"], c["orphan_mp4"], c["malformed"],
+            c["mp4_on_disk"],
+            c["index_rows"],
+            c["matched"],
+            c["needs_tolerant"],
+            c["orphan_mp4"],
+            c["malformed"],
         )
     log.info(
         "[diag] aggregate: mp4=%d  index=%d  matched=%d  "
         "needs_tolerant=%d  orphan_mp4=%d  malformed=%d  drift_pct=%.1f%%",
-        agg["mp4_on_disk"], agg["index_rows"], agg["matched"],
-        agg["needs_tolerant"], agg["orphan_mp4"], agg["malformed"],
+        agg["mp4_on_disk"],
+        agg["index_rows"],
+        agg["matched"],
+        agg["needs_tolerant"],
+        agg["orphan_mp4"],
+        agg["malformed"],
         agg["drift_pct"],
     )
     if agg["drift_pct"] > 30.0:
-        log.info("[DRIFT] %.1f%% of index rows need tolerant-resolve "
-                 "fallback — auto-rescan should fire", agg["drift_pct"])
+        log.info(
+            "[DRIFT] %.1f%% of index rows need tolerant-resolve "
+            "fallback — auto-rescan should fire",
+            agg["drift_pct"],
+        )
     if report.get("malformed_names"):
         log.info("[diag] malformed filenames (trailing _ or __):")
         for name in report["malformed_names"][:40]:
@@ -177,10 +208,15 @@ def _print_human(report: dict) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n", 1)[0])
-    parser.add_argument("--json", action="store_true",
-                        help="emit machine-readable JSON instead of human log lines")
-    parser.add_argument("--storage", type=Path, default=Path("/app/storage"),
-                        help="storage root (default /app/storage)")
+    parser.add_argument(
+        "--json", action="store_true", help="emit machine-readable JSON instead of human log lines"
+    )
+    parser.add_argument(
+        "--storage",
+        type=Path,
+        default=Path("/app/storage"),
+        help="storage root (default /app/storage)",
+    )
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     report = scan(args.storage / "weather")

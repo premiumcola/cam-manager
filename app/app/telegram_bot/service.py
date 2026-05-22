@@ -2,6 +2,7 @@
 
 `from .telegram_bot import TelegramService` keeps working byte-for-byte.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -12,6 +13,11 @@ from telegram import Bot
 # Re-export module-level constants + helpers so external callers can
 # still write `from app.telegram_bot import PERSISTENT_KEYBOARD` etc.
 from ._consts import (  # noqa: F401
+    _MUTE_DEFAULT_S,
+    _MUTE_EXTEND_S,
+    _NOTIFY_COOLDOWN_DEFAULTS,
+    _PHOTO_LIMIT_BYTES,
+    _VIDEO_LIMIT_BYTES,
     ACTION_CAMS,
     ACTION_CLIP,
     ACTION_LIVE,
@@ -22,11 +28,6 @@ from ._consts import (  # noqa: F401
     BOT_COMMANDS,
     PERSISTENT_KB_KEY,
     PERSISTENT_KEYBOARD,
-    _MUTE_DEFAULT_S,
-    _MUTE_EXTEND_S,
-    _NOTIFY_COOLDOWN_DEFAULTS,
-    _PHOTO_LIMIT_BYTES,
-    _VIDEO_LIMIT_BYTES,
     _parse_hhmm,
     log,
 )
@@ -48,22 +49,38 @@ class TelegramService(
     listed in the bases. __init__ stays here so all instance state
     assignments live in a single visible block."""
 
-    def __init__(self, cfg: dict, store=None, runtimes=None, global_cfg=None,
-                 timelapse_builder=None, settings_store=None):
+    def __init__(
+        self,
+        cfg: dict,
+        store=None,
+        runtimes=None,
+        global_cfg=None,
+        timelapse_builder=None,
+        settings_store=None,
+    ):
         self.cfg = cfg or {}
         self.push_cfg: dict = self.cfg.get("push") or {}
-        self.enabled = bool(self.cfg.get("enabled") and self.cfg.get("token") and self.cfg.get("chat_id"))
+        self.enabled = bool(
+            self.cfg.get("enabled") and self.cfg.get("token") and self.cfg.get("chat_id")
+        )
         self.chat_id = str(self.cfg.get("chat_id", ""))
         self.token = self.cfg.get("token", "")
         self.bot = Bot(self.token) if self.enabled else None
         if not self.enabled:
             reasons = []
-            if not self.cfg.get("enabled"): reasons.append("enabled=false")
-            if not self.cfg.get("token"): reasons.append("token leer")
-            if not self.cfg.get("chat_id"): reasons.append("chat_id leer")
+            if not self.cfg.get("enabled"):
+                reasons.append("enabled=false")
+            if not self.cfg.get("token"):
+                reasons.append("token leer")
+            if not self.cfg.get("chat_id"):
+                reasons.append("chat_id leer")
             log.info("[tg] Deaktiviert: %s", ", ".join(reasons) if reasons else "unbekannt")
         else:
-            log.info("[tg] Aktiv: chat_id=%s token=%s…", self.chat_id, self.token[:8] if self.token else "")
+            log.info(
+                "[tg] Aktiv: chat_id=%s token=%s…",
+                self.chat_id,
+                self.token[:8] if self.token else "",
+            )
         self.store = store
         # Preserve identity of the caller's runtimes dict — `runtimes or {}`
         # would replace an empty-but-non-None dict (which is falsy) with a

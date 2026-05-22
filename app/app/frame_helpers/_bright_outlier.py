@@ -21,6 +21,7 @@ real point of light (a security lamp, a star, the moon). A jump from
 baseline-50 to 255 with the overall frame still mean-50 is a corrupt
 patch — no real night scene produces it.
 """
+
 from __future__ import annotations
 
 import cv2
@@ -98,8 +99,10 @@ def is_bright_outlier_dark_scene(img, profile) -> tuple[bool, str]:
     dev_floor = float(getattr(profile, "bright_outlier_dev_floor", 100.0))
     if dev <= dev_floor:
         return False, ""
-    return True, (f"bright_outlier_dark_scene("
-                  f"max={int(round(max_tile))},"
-                  f"base={int(round(baseline))},"
-                  f"dev={int(round(dev))},"
-                  f"n_sat={n_saturated})")
+    return True, (
+        f"bright_outlier_dark_scene("
+        f"max={int(round(max_tile))},"
+        f"base={int(round(baseline))},"
+        f"dev={int(round(dev))},"
+        f"n_sat={n_saturated})"
+    )

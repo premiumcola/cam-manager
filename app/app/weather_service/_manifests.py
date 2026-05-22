@@ -20,8 +20,8 @@ import requests
 from ._consts import (
     EVENT_ICON_HEX,
     EVENT_LABEL_DE,
-    HISTORY_FIELDS,
     HISTORY_FIELD_TO_EVENT,
+    HISTORY_FIELDS,
     HISTORY_LABELS_DE,
     HISTORY_MAXLEN,
     HISTORY_UNITS,
@@ -46,21 +46,29 @@ class ManifestsMixin:
         # we read it the same way camera_runtime does — through the global
         # cfg block exposed by export_effective_config. Falls back to /app.
         try:
-            return Path(self.settings_store.base_config.get("storage", {}).get("root", "/app/storage")) / "weather"
+            return (
+                Path(self.settings_store.base_config.get("storage", {}).get("root", "/app/storage"))
+                / "weather"
+            )
         except Exception:
             return Path("/app/storage/weather")
 
-    def list_sightings(self, cam_id: str | None = None, event_type: str | None = None,
-                       since_iso: str | None = None, until_iso: str | None = None,
-                       page: int = 0, page_size: int = 50) -> dict:
+    def list_sightings(
+        self,
+        cam_id: str | None = None,
+        event_type: str | None = None,
+        since_iso: str | None = None,
+        until_iso: str | None = None,
+        page: int = 0,
+        page_size: int = 50,
+    ) -> dict:
         """Walk the sightings directory tree and return a paginated list +
         a counts-per-event-type aggregate for filter pills."""
         root = self._sightings_dir()
         items: list[dict] = []
         counts: dict[str, int] = {k: 0 for k in EVENT_LABEL_DE}
         if not root.exists():
-            return {"items": [], "counts": counts, "total": 0,
-                    "page": page, "page_size": page_size}
+            return {"items": [], "counts": counts, "total": 0, "page": page, "page_size": page_size}
         since_dt = _safe_dt(since_iso) if since_iso else None
         until_dt = _safe_dt(until_iso) if until_iso else None
         for cam_dir in root.iterdir():
@@ -79,9 +87,23 @@ class ManifestsMixin:
                 # dir ("sun_timelapse") and event_timelapse triggers share
                 # the "event_timelapse" dir, so we always recurse those and
                 # filter post-translation.
-                _is_sun_request = event_type in ("sun_timelapse_rise", "sun_timelapse_set", "sun_timelapse")
-                _is_evt_tl_request = event_type in ("thunder_rising", "front_passing", "storm_front", "event_timelapse")
-                if event_type and not _is_sun_request and not _is_evt_tl_request and evt_dir.name != event_type:
+                _is_sun_request = event_type in (
+                    "sun_timelapse_rise",
+                    "sun_timelapse_set",
+                    "sun_timelapse",
+                )
+                _is_evt_tl_request = event_type in (
+                    "thunder_rising",
+                    "front_passing",
+                    "storm_front",
+                    "event_timelapse",
+                )
+                if (
+                    event_type
+                    and not _is_sun_request
+                    and not _is_evt_tl_request
+                    and evt_dir.name != event_type
+                ):
                     continue
                 for jf in evt_dir.glob("*.json"):
                     try:
@@ -114,10 +136,14 @@ class ManifestsMixin:
                         if trig in ("thunder_rising", "front_passing", "storm_front"):
                             et = trig
                         m["event_type"] = et
-                    if event_type and et != event_type and not (
-                        event_type == "sun_timelapse" and et.startswith("sun_timelapse")
-                    ) and not (
-                        event_type == "event_timelapse" and et in ("thunder_rising", "front_passing", "storm_front")
+                    if (
+                        event_type
+                        and et != event_type
+                        and not (event_type == "sun_timelapse" and et.startswith("sun_timelapse"))
+                        and not (
+                            event_type == "event_timelapse"
+                            and et in ("thunder_rising", "front_passing", "storm_front")
+                        )
                     ):
                         continue
                     counts[et] = counts.get(et, 0) + 1
@@ -126,8 +152,13 @@ class ManifestsMixin:
         total = len(items)
         start = max(0, page) * page_size
         end = start + page_size
-        return {"items": items[start:end], "counts": counts, "total": total,
-                "page": page, "page_size": page_size}
+        return {
+            "items": items[start:end],
+            "counts": counts,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
 
     def get_sighting(self, sighting_id: str) -> dict | None:
         path = self._manifest_path_for(sighting_id)
@@ -178,8 +209,11 @@ class ManifestsMixin:
         sidecar_exts = (".json", ".mp4", ".jpg", ".jpeg", ".webp", ".tracks.json")
         any_removed = False
         for ext in sidecar_exts:
-            p = stem.with_suffix(ext) if ext.startswith(".") and ext.count(".") == 1 \
+            p = (
+                stem.with_suffix(ext)
+                if ext.startswith(".") and ext.count(".") == 1
                 else stem.with_name(stem.name + ext)
+            )
             try:
                 if p.exists():
                     p.unlink()
@@ -199,13 +233,13 @@ class ManifestsMixin:
             scratch = stem.parent / f".scratch_{stem.name}"
             if scratch.exists() and scratch.is_dir():
                 import shutil as _sh
+
                 _sh.rmtree(scratch, ignore_errors=True)
                 any_removed = True
         except Exception as e:
             log.debug("[weather] delete scratch %s: %s", sighting_id, e)
         if not any_removed:
-            log.info("[weather] delete %s: nothing on disk — treated as already-gone",
-                     sighting_id)
+            log.info("[weather] delete %s: nothing on disk — treated as already-gone", sighting_id)
         return True
 
     def _manifest_path_for(self, sighting_id: str) -> Path | None:
@@ -219,15 +253,14 @@ class ManifestsMixin:
         # is still accepted as a fallback so manifests written before the
         # boot migration ran (or recovered from backup) keep resolving.
         sun_rise_aliases = ("sun_timelapse_rise", "sun_timelapse_sunrise")
-        sun_set_aliases  = ("sun_timelapse_set", "sun_timelapse_sunset")
+        sun_set_aliases = ("sun_timelapse_set", "sun_timelapse_sunset")
         sun_dir_lookup = None
         if evt in sun_rise_aliases:
             sun_dir_lookup = ("sunrise_timelapse", "sun_timelapse")
         elif evt in sun_set_aliases:
             sun_dir_lookup = ("sunset_timelapse", "sun_timelapse")
         elif evt == "sun_timelapse":
-            sun_dir_lookup = ("sunrise_timelapse", "sunset_timelapse",
-                              "sun_timelapse")
+            sun_dir_lookup = ("sunrise_timelapse", "sunset_timelapse", "sun_timelapse")
         if sun_dir_lookup:
             cam_root = self._sightings_dir() / cam_id
             for d in sun_dir_lookup:
@@ -271,4 +304,3 @@ class ManifestsMixin:
             return None
 
     # ── Sonnen-Timelapse (Phase: Sun-TL) ────────────────────────────────────
-

@@ -4,6 +4,7 @@ Migrated from server.py during R01.4. Both routes are pure storage
 reads — nothing else in the codebase depends on the helpers here, so
 they live inline.
 """
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -65,18 +66,20 @@ def api_timeline():
             if snap_rel and not (storage_root / snap_rel).exists():
                 snap_url = None
             elif (not snap_rel) and snap_url and snap_url.startswith("/media/"):
-                derived = storage_root / snap_url[len("/media/"):]
+                derived = storage_root / snap_url[len("/media/") :]
                 if not derived.exists():
                     snap_url = None
-            pts.append({
-                "event_id": e["event_id"],
-                "time": e["time"],
-                "labels": e.get("labels", []),
-                "top_label": e.get("top_label"),
-                "alarm_level": e.get("alarm_level", "info"),
-                "snapshot_url": snap_url,
-                "y": idx,
-            })
+            pts.append(
+                {
+                    "event_id": e["event_id"],
+                    "time": e["time"],
+                    "labels": e.get("labels", []),
+                    "top_label": e.get("top_label"),
+                    "alarm_level": e.get("alarm_level", "info"),
+                    "snapshot_url": snap_url,
+                    "y": idx,
+                }
+            )
             merged.append({"camera_id": cid, **pts[-1]})
         tracks.append({"camera_id": cid, "points": pts})
     merged.sort(key=lambda x: x["time"])

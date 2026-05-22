@@ -3,6 +3,7 @@
 Lives in its own file so mixin modules can import these without creating a
 circular dependency with service.py (which imports the mixins).
 """
+
 from __future__ import annotations
 
 import json
@@ -13,7 +14,6 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-
 
 # Pinned logger name so log filters and grep keep matching the legacy module
 # path after the package split.
@@ -27,10 +27,10 @@ log = logging.getLogger("app.weather_service")
 # in sync with WEATHER_TYPES.de in app/web/static/js/core/weather-types.js
 # — the JS pill renderer also uses these as the visible chip text.
 EVENT_LABEL_DE: dict[str, str] = {
-    "thunder":    "Gewitter",
+    "thunder": "Gewitter",
     "heavy_rain": "Starkregen",
-    "snow":       "Schnee",
-    "fog":        "Nebel",
+    "snow": "Schnee",
+    "fog": "Nebel",
     # `sunset` removed — sunrise/sunset content lives only in the
     # sun_timelapse pipeline (sun_timelapse_rise / sun_timelapse_set).
     # The previous score-based raw "sunset event" produced a duplicate
@@ -38,10 +38,10 @@ EVENT_LABEL_DE: dict[str, str] = {
 }
 
 EVENT_ICON_HEX: dict[str, str] = {
-    "thunder":    "#facc15",  # yellow
+    "thunder": "#facc15",  # yellow
     "heavy_rain": "#38bdf8",  # sky-blue
-    "snow":       "#e2e8f0",  # near-white
-    "fog":        "#94a3b8",  # slate
+    "snow": "#e2e8f0",  # near-white
+    "fog": "#94a3b8",  # slate
     # `sunset` color removed in lockstep with EVENT_LABEL_DE.
 }
 
@@ -61,39 +61,40 @@ HISTORY_FIELDS: tuple[str, ...] = (
 )
 
 HISTORY_LABELS_DE: dict[str, str] = {
-    "precipitation":       "Niederschlag",
-    "snowfall":            "Schneefall",
+    "precipitation": "Niederschlag",
+    "snowfall": "Schneefall",
     "lightning_potential": "Blitz-Potential",
-    "visibility":          "Sicht",
-    "wind_gusts_10m":      "Wind-Böen",
-    "cloud_cover":         "Bewölkung",
-    "sun_altitude":        "Sonnenhöhe",
+    "visibility": "Sicht",
+    "wind_gusts_10m": "Wind-Böen",
+    "cloud_cover": "Bewölkung",
+    "sun_altitude": "Sonnenhöhe",
 }
 
 HISTORY_UNITS: dict[str, str] = {
-    "precipitation":       "mm/h",
-    "snowfall":            "cm/h",
+    "precipitation": "mm/h",
+    "snowfall": "cm/h",
     "lightning_potential": "J/kg",
-    "visibility":          "m",
-    "wind_gusts_10m":      "km/h",
-    "cloud_cover":         "%",
-    "sun_altitude":        "°",
+    "visibility": "m",
+    "wind_gusts_10m": "km/h",
+    "cloud_cover": "%",
+    "sun_altitude": "°",
 }
 
 # Maps a HISTORY_FIELDS key to the event-type whose configured threshold is
 # the natural "alarm" line for that parameter. Values whose key is missing
 # are diagnostic-only and have no threshold.
 HISTORY_FIELD_TO_EVENT: dict[str, str] = {
-    "precipitation":       "heavy_rain",
-    "snowfall":            "snow",
+    "precipitation": "heavy_rain",
+    "snowfall": "snow",
     "lightning_potential": "thunder",
-    "visibility":          "fog",
+    "visibility": "fog",
 }
 
 HISTORY_MAXLEN = 8640  # 30 d @ 5 min — deque truncates oldest, ~1.5 MB on disk
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
+
 
 def _safe_dt(s: str) -> datetime | None:
     try:
@@ -149,13 +150,11 @@ def migrate_sun_timelapse_layout(storage_root: Path) -> dict:
                     phase = "sunset"
                 else:
                     log.warning(
-                        "[migration] sun_timelapse: unknown phase for %s — skipping",
-                        jf.name)
+                        "[migration] sun_timelapse: unknown phase for %s — skipping", jf.name
+                    )
                     summary["errors"] += 1
                     continue
-            target_dir_name = (
-                "sunrise_timelapse" if phase == "sunrise" else "sunset_timelapse"
-            )
+            target_dir_name = "sunrise_timelapse" if phase == "sunrise" else "sunset_timelapse"
             target_dir = cam_dir / target_dir_name
             target_json = target_dir / jf.name
             if target_json.exists():
@@ -169,11 +168,12 @@ def migrate_sun_timelapse_layout(storage_root: Path) -> dict:
                             src.unlink()
                             log.debug(
                                 "[migration] sun_timelapse: dropped duplicate %s",
-                                src.relative_to(storage_root))
+                                src.relative_to(storage_root),
+                            )
                         except Exception as e:
                             log.warning(
-                                "[migration] sun_timelapse: dup-delete failed %s: %s",
-                                src, e)
+                                "[migration] sun_timelapse: dup-delete failed %s: %s", src, e
+                            )
                 summary["skipped"] += 1
                 continue
             try:
@@ -182,12 +182,8 @@ def migrate_sun_timelapse_layout(storage_root: Path) -> dict:
                 backup = jf.with_name(f"{jf.name}.bak.{ts_label}")
                 shutil.copy2(str(jf), str(backup))
                 cam_id = cam_dir.name
-                manifest["clip_path"] = (
-                    f"weather/{cam_id}/{target_dir_name}/{stem}.mp4"
-                )
-                manifest["thumb_path"] = (
-                    f"weather/{cam_id}/{target_dir_name}/{stem}.jpg"
-                )
+                manifest["clip_path"] = f"weather/{cam_id}/{target_dir_name}/{stem}.mp4"
+                manifest["thumb_path"] = f"weather/{cam_id}/{target_dir_name}/{stem}.jpg"
                 _atomic_write_json(target_json, manifest)
                 # Move binaries — os.replace is atomic on POSIX. Skip
                 # silently if a file is already at the destination
@@ -207,27 +203,27 @@ def migrate_sun_timelapse_layout(storage_root: Path) -> dict:
                         os.replace(str(src), str(dst))
                     except Exception as e:
                         log.warning(
-                            "[migration] sun_timelapse: move %s → %s failed: %s",
-                            src.name, dst, e)
+                            "[migration] sun_timelapse: move %s → %s failed: %s", src.name, dst, e
+                        )
                 # Source manifest no longer needed — destination is
                 # authoritative now.
                 try:
                     jf.unlink()
                 except Exception:
                     pass
-                log.info(
-                    "[migration] sun_timelapse: %s → %s/",
-                    jf.name, target_dir_name)
+                log.info("[migration] sun_timelapse: %s → %s/", jf.name, target_dir_name)
                 summary["moved"] += 1
             except Exception as e:
-                log.error(
-                    "[migration] sun_timelapse: %s migration failed: %s",
-                    jf.name, e)
+                log.error("[migration] sun_timelapse: %s migration failed: %s", jf.name, e)
                 summary["errors"] += 1
     if summary["moved"] or summary["skipped"] or summary["errors"]:
         log.info(
             "[migration] sun_timelapse split done — %d moved, %d skipped, %d errors across %d cam(s)",
-            summary["moved"], summary["skipped"], summary["errors"], summary["cams"])
+            summary["moved"],
+            summary["skipped"],
+            summary["errors"],
+            summary["cams"],
+        )
     return summary
 
 
@@ -274,12 +270,14 @@ def _is_quiet_now(quiet_hours: dict) -> bool:
     free of a cross-import. Empty config → never quiet."""
     if not quiet_hours:
         return False
+
     def _p(s):
         try:
             h, m = (s or "").split(":", 1)
             return int(h) * 60 + int(m)
         except Exception:
             return 0
+
     s_min = _p(quiet_hours.get("start"))
     e_min = _p(quiet_hours.get("end"))
     if s_min == e_min:

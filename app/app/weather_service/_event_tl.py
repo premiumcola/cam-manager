@@ -20,8 +20,8 @@ import requests
 from ._consts import (
     EVENT_ICON_HEX,
     EVENT_LABEL_DE,
-    HISTORY_FIELDS,
     HISTORY_FIELD_TO_EVENT,
+    HISTORY_FIELDS,
     HISTORY_LABELS_DE,
     HISTORY_MAXLEN,
     HISTORY_UNITS,
@@ -52,10 +52,11 @@ class EventTimelapseMixin:
             api = self.cfg.get("api") or {}
             url = api.get("base_url") or "https://api.open-meteo.com/v1/forecast"
             params = {
-                "latitude":  lat, "longitude": lon,
+                "latitude": lat,
+                "longitude": lon,
                 "minutely_15": "precipitation,snowfall,weather_code,lightning_potential,visibility,wind_gusts_10m,cloud_cover",
                 "timezone": api.get("timezone") or "Europe/Berlin",
-                "models":   api.get("model") or "icon_d2",
+                "models": api.get("model") or "icon_d2",
             }
             r = requests.get(url, params=params, timeout=8)
             if r.status_code != 200:
@@ -76,8 +77,8 @@ class EventTimelapseMixin:
         # Lazy attr — keeps __init__ unchanged.
         if not hasattr(self, "_event_tl_state_dict"):
             self._event_tl_state_dict = {
-                "last_trigger_ts": {},   # cam_id -> unix ts (any-trigger 4h cooldown)
-                "daily_count":     {},   # (cam_id, "YYYY-MM-DD") -> int
+                "last_trigger_ts": {},  # cam_id -> unix ts (any-trigger 4h cooldown)
+                "daily_count": {},  # (cam_id, "YYYY-MM-DD") -> int
             }
         return self._event_tl_state_dict
 
@@ -147,14 +148,23 @@ class EventTimelapseMixin:
                 # detectors first, then emitting one cooldown line if any.
                 fired = self._evaluate_event_tl_detectors(slices, evt_cfg)
                 if fired:
-                    log.info("[weather] Cooldown active (%dh %02dmin remaining) — %s skipped on %s",
-                             mins // 60, mins % 60, fired[0], self._cam_name(cam_id))
+                    log.info(
+                        "[weather] Cooldown active (%dh %02dmin remaining) — %s skipped on %s",
+                        mins // 60,
+                        mins % 60,
+                        fired[0],
+                        self._cam_name(cam_id),
+                    )
                 continue
             if self._event_tl_daily_cap_hit(cam_id):
                 fired = self._evaluate_event_tl_detectors(slices, evt_cfg)
                 if fired:
-                    log.info("[weather] Daily limit reached (%d/day), skipping %s on %s",
-                             self._EVENT_TL_DAILY_CAP, fired[0], self._cam_name(cam_id))
+                    log.info(
+                        "[weather] Daily limit reached (%d/day), skipping %s on %s",
+                        self._EVENT_TL_DAILY_CAP,
+                        fired[0],
+                        self._cam_name(cam_id),
+                    )
                 continue
             triggers = self._evaluate_event_tl_detectors(slices, evt_cfg)
             if not triggers:
@@ -164,18 +174,35 @@ class EventTimelapseMixin:
             self._event_tl_record_trigger(cam_id)
             window_min = int(evt_cfg.get("window_min", 60) or 60)
             interval_s = max(1, int(evt_cfg.get("interval_s", 6) or 6))
-            fps        = max(1, int(evt_cfg.get("fps", 24) or 24))
-            log.info("[weather] %s on %s · score=%.2f · capture starting (%d min, %ds-Intervall, %d fps)",
-                     trig_kind, self._cam_name(cam_id), score, window_min, interval_s, fps)
+            fps = max(1, int(evt_cfg.get("fps", 24) or 24))
+            log.info(
+                "[weather] %s on %s · score=%.2f · capture starting (%d min, %ds-Intervall, %d fps)",
+                trig_kind,
+                self._cam_name(cam_id),
+                score,
+                window_min,
+                interval_s,
+                fps,
+            )
             threading.Thread(
                 target=self._run_event_tl_capture,
-                args=(cam_id, trig_kind, score, slices[0] if slices else {}, fc_snapshot,
-                      window_min, interval_s, fps),
+                args=(
+                    cam_id,
+                    trig_kind,
+                    score,
+                    slices[0] if slices else {},
+                    fc_snapshot,
+                    window_min,
+                    interval_s,
+                    fps,
+                ),
                 daemon=True,
                 name=f"weather-evt-tl-{cam_id}-{trig_kind}",
             ).start()
 
-    def _evaluate_event_tl_detectors(self, slices: list[dict], evt_cfg: dict) -> list[tuple[str, float, dict]]:
+    def _evaluate_event_tl_detectors(
+        self, slices: list[dict], evt_cfg: dict
+    ) -> list[tuple[str, float, dict]]:
         """Run all 3 detectors that are enabled for this camera. Returns a
         list of (trigger_kind, score, forecast_snapshot) tuples for any
         that fired. Caller picks one — typically the first."""
@@ -222,15 +249,22 @@ class EventTimelapseMixin:
             if v is None:
                 continue
             if float(v) > peak:
-                peak = float(v); peak_slot = s
+                peak = float(v)
+                peak_slot = s
         if peak_slot is None:
             return None
         if (lp_now is None or float(lp_now) < 500.0) and peak >= 1500.0:
             score = min(1.0, peak / 3000.0)
-            return score, _safe_subset(peak_slot, [
-                "time", "lightning_potential", "cloud_cover", "wind_gusts_10m",
-                "precipitation",
-            ])
+            return score, _safe_subset(
+                peak_slot,
+                [
+                    "time",
+                    "lightning_potential",
+                    "cloud_cover",
+                    "wind_gusts_10m",
+                    "precipitation",
+                ],
+            )
         return None
 
     def _detect_front_passing(self, slices: list[dict]) -> tuple[float, dict] | None:
@@ -245,7 +279,8 @@ class EventTimelapseMixin:
             delta = (dt - datetime.now()).total_seconds() / 60.0
             if delta < -30 or delta > 120:
                 continue
-            cc = s.get("cloud_cover"); g = s.get("wind_gusts_10m")
+            cc = s.get("cloud_cover")
+            g = s.get("wind_gusts_10m")
             if cc is None or g is None:
                 continue
             seq.append((dt, float(cc), float(g)))
@@ -260,16 +295,17 @@ class EventTimelapseMixin:
                     score = min(1.0, abs(ccj - cc0) / 100.0 + (gj - g0) / 100.0)
                     return score, {
                         "time_start": t0.isoformat(timespec="minutes"),
-                        "time_end":   tj.isoformat(timespec="minutes"),
+                        "time_end": tj.isoformat(timespec="minutes"),
                         "cloud_cover_delta": ccj - cc0,
-                        "wind_gust_delta":   gj - g0,
+                        "wind_gust_delta": gj - g0,
                     }
         return None
 
     def _detect_storm_front(self, slices: list[dict]) -> tuple[float, dict] | None:
         """Forecast peak wind gusts > 60 km/h in next 60 min AND
         cloud_cover > 70 in the same window."""
-        peak_g = 0.0; peak_slot: dict | None = None
+        peak_g = 0.0
+        peak_slot: dict | None = None
         for s in slices:
             dt = s.get("_dt")
             if not dt:
@@ -277,23 +313,40 @@ class EventTimelapseMixin:
             delta = (dt - datetime.now()).total_seconds() / 60.0
             if delta < 0 or delta > 60:
                 continue
-            g = s.get("wind_gusts_10m"); cc = s.get("cloud_cover")
+            g = s.get("wind_gusts_10m")
+            cc = s.get("cloud_cover")
             if g is None or cc is None:
                 continue
             if float(g) > peak_g and float(cc) > 70.0:
-                peak_g = float(g); peak_slot = s
+                peak_g = float(g)
+                peak_slot = s
         if peak_slot is None or peak_g < 60.0:
             return None
         score = min(1.0, peak_g / 120.0)
-        return score, _safe_subset(peak_slot, [
-            "time", "wind_gusts_10m", "cloud_cover", "precipitation",
-            "lightning_potential",
-        ])
+        return score, _safe_subset(
+            peak_slot,
+            [
+                "time",
+                "wind_gusts_10m",
+                "cloud_cover",
+                "precipitation",
+                "lightning_potential",
+            ],
+        )
 
-    def _run_event_tl_capture(self, cam_id: str, trigger: str, score: float,
-                              api_now: dict, fc_snapshot: dict,
-                              window_min: int, interval_s: int, fps: int):
+    def _run_event_tl_capture(
+        self,
+        cam_id: str,
+        trigger: str,
+        score: float,
+        api_now: dict,
+        fc_snapshot: dict,
+        window_min: int,
+        interval_s: int,
+        fps: int,
+    ):
         from ..frame_helpers import CaptureStats, grab_valid_frame, pick_profile_from_baseline
+
         rt = self.runtimes.get(cam_id)
         if rt is None or not hasattr(rt, "snapshot_jpeg_hires"):
             log.warning("[weather] cam %s nicht verfügbar — capture abgebrochen", cam_id)
@@ -305,6 +358,7 @@ class EventTimelapseMixin:
         # Camera slug appended so cross-camera downloads stay unique;
         # see camera_id.camera_slug for the derivation order.
         from ..camera_id import camera_slug
+
         cam_slug = camera_slug(self.settings_store, cam_id)
         stem = f"{ts_label}_{trigger}_{cam_slug}"
         mp4_path = out_dir / f"{stem}.mp4"
@@ -331,8 +385,12 @@ class EventTimelapseMixin:
             if _bi < 2:
                 time.sleep(0.5)
         active_profile = pick_profile_from_baseline(baseline_samples)
-        log.info("[weather] event-tl profile=%s cam=%s trigger=%s",
-                 active_profile.name.upper(), cam_name, trigger)
+        log.info(
+            "[weather] event-tl profile=%s cam=%s trigger=%s",
+            active_profile.name.upper(),
+            cam_name,
+            trigger,
+        )
         # 2 min cadence (was 5) so a scene transition is detected
         # before the loop burns through dozens of false-positive
         # rejects. ``last_repick_at`` rate-limits the dead_area-
@@ -347,8 +405,11 @@ class EventTimelapseMixin:
                     if samp:
                         new_prof = pick_profile_from_baseline([samp])
                         if new_prof is not active_profile:
-                            log.info("[weather] event-tl profile-switch %s → %s mid-run",
-                                     active_profile.name.upper(), new_prof.name.upper())
+                            log.info(
+                                "[weather] event-tl profile-switch %s → %s mid-run",
+                                active_profile.name.upper(),
+                                new_prof.name.upper(),
+                            )
                             active_profile = new_prof
                 except Exception:
                     pass
@@ -370,11 +431,14 @@ class EventTimelapseMixin:
                 # Force a profile re-pick on a dead_area reject (rate-
                 # limited to once per 30 s) — same logic as sun-tl.
                 if last_reason and "dead_area" in last_reason:
-                    if (last_repick_at is None
-                            or (now_dt - last_repick_at).total_seconds() >= 30):
+                    if last_repick_at is None or (now_dt - last_repick_at).total_seconds() >= 30:
                         next_repick_at = now_dt
-                log.info("[weather] %s slot %05d: invalid grabs, leaving slot empty (%s)",
-                         cam_name, i, last_reason)
+                log.info(
+                    "[weather] %s slot %05d: invalid grabs, leaving slot empty (%s)",
+                    cam_name,
+                    i,
+                    last_reason,
+                )
             stats.flush()
             i += 1
             slept = 0.0
@@ -388,17 +452,17 @@ class EventTimelapseMixin:
             return
         try:
             from ..timelapse import TimelapseBuilder
+
             tb = TimelapseBuilder(self._sightings_dir().parent.parent)
             images = sorted(frames_dir.glob("*.jpg"))
             target_seconds = max(15, min(45, n_written // fps))
             qa_ctx = {
-                "camera_id":               cam_id,
-                "profile_name":            trigger,
-                "frames_dir":              frames_dir,
-                "settings_store":          self.settings_store,
+                "camera_id": cam_id,
+                "profile_name": trigger,
+                "frames_dir": frames_dir,
+                "settings_store": self.settings_store,
             }
-            written = tb._write_video(images, mp4_path, target_seconds, fps,
-                                      qa_ctx=qa_ctx)
+            written = tb._write_video(images, mp4_path, target_seconds, fps, qa_ctx=qa_ctx)
             if not written or not mp4_path.exists():
                 log.warning("[weather] Encode failed: %s %s", cam_name, trigger)
                 self._cleanup_sun_scratch(frames_dir)
@@ -413,32 +477,43 @@ class EventTimelapseMixin:
         except Exception:
             pass
         manifest = {
-            "id":            f"{cam_id}__{trigger}__{stem}",
-            "cam_id":        cam_id,
-            "cam_name":      cam_name,
-            "event_type":    "event_timelapse",
-            "trigger":       trigger,
-            "started_at":    datetime.now().isoformat(timespec="seconds"),
-            "score":         round(float(score), 3),
-            "severity":      round(float(score), 3),
-            "window_min":    window_min,
-            "interval_s":    interval_s,
-            "fps":           fps,
-            "api_snapshot":  _safe_subset(api_now, [
-                "time", "precipitation", "snowfall", "lightning_potential",
-                "visibility", "wind_gusts_10m", "cloud_cover", "weather_code",
-            ]),
-            "api_forecast":  fc_snapshot,
-            "clip_path":     f"weather/{cam_id}/event_timelapse/{mp4_path.name}",
-            "thumb_path":    f"weather/{cam_id}/event_timelapse/{thumb_path.name}",
-            "duration_s":    max(1, len(images) // fps),
-            "width": 0, "height": 0,
+            "id": f"{cam_id}__{trigger}__{stem}",
+            "cam_id": cam_id,
+            "cam_name": cam_name,
+            "event_type": "event_timelapse",
+            "trigger": trigger,
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "score": round(float(score), 3),
+            "severity": round(float(score), 3),
+            "window_min": window_min,
+            "interval_s": interval_s,
+            "fps": fps,
+            "api_snapshot": _safe_subset(
+                api_now,
+                [
+                    "time",
+                    "precipitation",
+                    "snowfall",
+                    "lightning_potential",
+                    "visibility",
+                    "wind_gusts_10m",
+                    "cloud_cover",
+                    "weather_code",
+                ],
+            ),
+            "api_forecast": fc_snapshot,
+            "clip_path": f"weather/{cam_id}/event_timelapse/{mp4_path.name}",
+            "thumb_path": f"weather/{cam_id}/event_timelapse/{thumb_path.name}",
+            "duration_s": max(1, len(images) // fps),
+            "width": 0,
+            "height": 0,
         }
         try:
             import cv2
+
             cap = cv2.VideoCapture(str(mp4_path))
             try:
-                manifest["width"]  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                manifest["width"] = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 manifest["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             finally:
                 cap.release()
@@ -451,6 +526,6 @@ class EventTimelapseMixin:
         # event_type for push gating is the trigger name (matches the
         # WEATHER_TYPES map key on the frontend AND the per-event toggle in
         # the push.weather.events block once users add it).
-        push_manifest = dict(manifest); push_manifest["event_type"] = trigger
+        push_manifest = dict(manifest)
+        push_manifest["event_type"] = trigger
         self._maybe_push_telegram(push_manifest, mp4_path)
-

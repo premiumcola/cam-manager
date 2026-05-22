@@ -20,8 +20,8 @@ import requests
 from ._consts import (
     EVENT_ICON_HEX,
     EVENT_LABEL_DE,
-    HISTORY_FIELDS,
     HISTORY_FIELD_TO_EVENT,
+    HISTORY_FIELDS,
     HISTORY_LABELS_DE,
     HISTORY_MAXLEN,
     HISTORY_UNITS,
@@ -47,10 +47,13 @@ class LifecycleMixin:
             return
         loc = self.server_cfg.get("location") or {}
         if loc.get("lat") is None or loc.get("lon") is None:
-            log.warning("[weather] No server.location set — service cannot poll. Refusing to start.")
+            log.warning(
+                "[weather] No server.location set — service cannot poll. Refusing to start."
+            )
             return
         try:
             from apscheduler.schedulers.background import BackgroundScheduler
+
             self._scheduler = BackgroundScheduler(daemon=True)
             self._scheduler.start()
         except Exception as e:
@@ -61,11 +64,15 @@ class LifecycleMixin:
         self._attach_prebuffers()
         # Register the recurring poll job.
         from apscheduler.triggers.interval import IntervalTrigger
+
         interval = int(self.cfg.get("poll_interval", 300) or 300)
         self._scheduler.add_job(
-            self._safe_poll, IntervalTrigger(seconds=interval),
-            id="weather_poll", replace_existing=True,
-            max_instances=1, coalesce=True,
+            self._safe_poll,
+            IntervalTrigger(seconds=interval),
+            id="weather_poll",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
         )
         # Fire once a few seconds after start so the dashboard isn't blank
         # for `interval` seconds — and so camera runtimes (which are started
@@ -73,6 +80,7 @@ class LifecycleMixin:
         # inserted into the shared runtimes dict before _sync_prebuffers runs.
         try:
             from apscheduler.triggers.date import DateTrigger
+
             self._scheduler.add_job(
                 self._safe_poll,
                 DateTrigger(run_date=datetime.now() + timedelta(seconds=8)),
@@ -89,10 +97,14 @@ class LifecycleMixin:
         self._register_sun_jobs()
         try:
             from apscheduler.triggers.cron import CronTrigger
+
             self._scheduler.add_job(
-                self._register_sun_jobs, CronTrigger(hour=0, minute=5),
-                id="sun_tl_recompute", replace_existing=True,
-                max_instances=1, coalesce=True,
+                self._register_sun_jobs,
+                CronTrigger(hour=0, minute=5),
+                id="sun_tl_recompute",
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
             )
         except Exception as e:
             log.warning("[weather] daily recompute job failed: %s", e)
@@ -118,6 +130,7 @@ class LifecycleMixin:
         can't trigger repeated rescans."""
         from .. import app_state
         from ..scripts.diag_weather_index import scan as _scan_drift
+
         storage_root = app_state.storage_root
         if storage_root is None:
             return
@@ -128,8 +141,10 @@ class LifecycleMixin:
                 last = json.loads(marker.read_text(encoding="utf-8"))
                 last_dt = datetime.fromisoformat(last.get("ts") or "")
                 if (datetime.now() - last_dt) < timedelta(hours=24):
-                    log.debug("[weather] drift check: last rescan %s — throttled",
-                              last_dt.isoformat(timespec="seconds"))
+                    log.debug(
+                        "[weather] drift check: last rescan %s — throttled",
+                        last_dt.isoformat(timespec="seconds"),
+                    )
                     return
             except Exception:
                 # Unparseable marker — fall through, the scan/rescan
@@ -143,24 +158,28 @@ class LifecycleMixin:
             log.debug(
                 "[weather] index drift %.1f%% (matched=%d, needs_tolerant=%d) "
                 "— under threshold, no rescan",
-                drift_pct, agg.get("matched") or 0,
+                drift_pct,
+                agg.get("matched") or 0,
                 agg.get("needs_tolerant") or 0,
             )
             return
         log.warning(
             "[weather] index drift %.1f%% (matched=%d, needs_tolerant=%d) "
             "— triggering auto-rescan",
-            drift_pct, agg.get("matched") or 0,
+            drift_pct,
+            agg.get("matched") or 0,
             agg.get("needs_tolerant") or 0,
         )
 
         def _bg_rescan():
             try:
                 # Late import avoids the request-context coupling at module load.
-                from ..routes.weather import api_weather_rescan
                 # api_weather_rescan is a Flask view function; call its
                 # body via the test client to satisfy the request scope.
                 from flask import current_app
+
+                from ..routes.weather import api_weather_rescan
+
                 with current_app.test_client() as c:
                     r = c.post("/api/weather/rescan")
                     body = r.get_json() or {}
@@ -168,15 +187,17 @@ class LifecycleMixin:
             except Exception as e:
                 log.warning("[weather] auto-rescan failed: %s", e)
             try:
-                _atomic_write_json(marker, {
-                    "ts": datetime.now().isoformat(timespec="seconds"),
-                    "drift_pct_at_trigger": drift_pct,
-                })
+                _atomic_write_json(
+                    marker,
+                    {
+                        "ts": datetime.now().isoformat(timespec="seconds"),
+                        "drift_pct_at_trigger": drift_pct,
+                    },
+                )
             except Exception as e:
                 log.debug("[weather] marker write failed: %s", e)
 
-        t = threading.Thread(target=_bg_rescan, daemon=True,
-                             name="weather-auto-rescan")
+        t = threading.Thread(target=_bg_rescan, daemon=True, name="weather-auto-rescan")
         t.start()
 
     def shutdown(self):
@@ -241,17 +262,22 @@ class LifecycleMixin:
 
     def _attach_prebuffers(self):
         from ..camera_runtime import WeatherPrebuffer
+
         clip = self.cfg.get("clip") or {}
         pre_s = int(clip.get("pre_roll_s", 5) or 5)
-        fps   = int(clip.get("fps",        15) or 15)
+        fps = int(clip.get("fps", 15) or 15)
         for cam_id in self._enabled_cam_ids():
             rt = self.runtimes.get(cam_id)
             if rt is None:
                 continue
             if rt.weather_prebuffer is None:
                 rt.weather_prebuffer = WeatherPrebuffer(pre_roll_s=pre_s, fps=fps)
-                log.info("[weather] Prebuffer attached to %s (pre=%ss fps=%s)",
-                         self._cam_name(cam_id), pre_s, fps)
+                log.info(
+                    "[weather] Prebuffer attached to %s (pre=%ss fps=%s)",
+                    self._cam_name(cam_id),
+                    pre_s,
+                    fps,
+                )
 
     def _detach_prebuffers(self):
         for rt in (self.runtimes or {}).values():
@@ -280,21 +306,28 @@ class LifecycleMixin:
 
     def _sync_prebuffers(self):
         from ..camera_runtime import WeatherPrebuffer
+
         clip = self.cfg.get("clip") or {}
         pre_s = int(clip.get("pre_roll_s", 5) or 5)
-        fps   = int(clip.get("fps",        15) or 15)
+        fps = int(clip.get("fps", 15) or 15)
         enabled_ids = set(self._enabled_cam_ids())
         for cam_id, rt in (self.runtimes or {}).items():
             if cam_id in enabled_ids:
                 if rt.weather_prebuffer is None:
                     rt.weather_prebuffer = WeatherPrebuffer(pre_roll_s=pre_s, fps=fps)
-                    log.info("[weather] Prebuffer attached to %s (pre=%ss fps=%s)",
-                             self._cam_name(cam_id), pre_s, fps)
+                    log.info(
+                        "[weather] Prebuffer attached to %s (pre=%ss fps=%s)",
+                        self._cam_name(cam_id),
+                        pre_s,
+                        fps,
+                    )
             else:
                 if rt.weather_prebuffer is not None:
                     rt.weather_prebuffer = None
-                    log.info("[weather] Prebuffer detached from %s (weather disabled)",
-                             self._cam_name(cam_id))
+                    log.info(
+                        "[weather] Prebuffer detached from %s (weather disabled)",
+                        self._cam_name(cam_id),
+                    )
 
     def _poll_once(self):
         loc = self.server_cfg.get("location") or {}
@@ -306,15 +339,21 @@ class LifecycleMixin:
         api = self.cfg.get("api") or {}
         url = api.get("base_url") or "https://api.open-meteo.com/v1/forecast"
         params = {
-            "latitude":  lat,
+            "latitude": lat,
             "longitude": lon,
-            "minutely_15": ",".join([
-                "precipitation", "snowfall", "weather_code",
-                "lightning_potential", "visibility",
-                "wind_gusts_10m", "cloud_cover",
-            ]),
+            "minutely_15": ",".join(
+                [
+                    "precipitation",
+                    "snowfall",
+                    "weather_code",
+                    "lightning_potential",
+                    "visibility",
+                    "wind_gusts_10m",
+                    "cloud_cover",
+                ]
+            ),
             "timezone": api.get("timezone") or "Europe/Berlin",
-            "models":   api.get("model") or "icon_d2",
+            "models": api.get("model") or "icon_d2",
         }
         r = requests.get(url, params=params, timeout=10)
         if r.status_code >= 500:
@@ -328,7 +367,7 @@ class LifecycleMixin:
         # Build the "current state" dict that the status endpoint exposes
         # AND that Phase-2 UI panels will display in near-real-time.
         cur_state: dict[str, bool] = {}
-        events_cfg = (self.cfg.get("events") or {})
+        events_cfg = self.cfg.get("events") or {}
         for evt_type in EVENT_LABEL_DE:
             cfg = events_cfg.get(evt_type) or {}
             if not cfg.get("enabled", False):
@@ -341,8 +380,12 @@ class LifecycleMixin:
             for cam_id in self._enabled_cam_ids():
                 in_cd, mins = self._cooldown.check(cam_id, evt_type)
                 if in_cd:
-                    log.info("[weather] Skip %s on %s: in cooldown (%d min remaining)",
-                             evt_type, self._cam_name(cam_id), mins)
+                    log.info(
+                        "[weather] Skip %s on %s: in cooldown (%d min remaining)",
+                        evt_type,
+                        self._cam_name(cam_id),
+                        mins,
+                    )
                     continue
                 cooldown_min = int(cfg.get("cooldown_min", 30) or 30)
                 self._cooldown.arm(cam_id, evt_type, cooldown_min)
@@ -353,8 +396,12 @@ class LifecycleMixin:
                     daemon=True,
                     name=f"weather-clip-{cam_id}-{evt_type}",
                 ).start()
-                log.info("[weather] %s on %s · severity=%.2f · clip building",
-                         EVENT_LABEL_DE.get(evt_type, evt_type), self._cam_name(cam_id), severity)
+                log.info(
+                    "[weather] %s on %s · severity=%.2f · clip building",
+                    EVENT_LABEL_DE.get(evt_type, evt_type),
+                    self._cam_name(cam_id),
+                    severity,
+                )
 
         # Wetter-Ereignis-Timelapse — separate trigger pipeline that walks
         # the full minutely_15 forecast (not just the latest slot) and uses
@@ -382,4 +429,3 @@ class LifecycleMixin:
                 self.settings_store.runtime_set("weather_last_poll_ts", time.time())
         except Exception:
             pass
-

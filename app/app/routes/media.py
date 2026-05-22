@@ -5,6 +5,7 @@ task keeps its module-level state (`_thumb_task`, `_fix_thumbs_lock`)
 inside this blueprint — it's bp-private and replacing the singleton
 during a config reload would lose progress on an in-flight job.
 """
+
 from __future__ import annotations
 
 import json as _json
@@ -61,10 +62,7 @@ def api_media_storage_stats():
             # event_count - objTotal) by ~one per indexed clip,
             # producing the "Garten 7 files but 11 motion" badge
             # mismatch the user reported.
-            json_files = [
-                p for p in cam_dir.rglob("*.json")
-                if not p.name.endswith(".tracks.json")
-            ]
+            json_files = [p for p in cam_dir.rglob("*.json") if not p.name.endswith(".tracks.json")]
             json_count = len(json_files)
             # Sorted reverse → newest first; break out of the snap searches once both are populated.
             for jf in sorted(json_files, reverse=True):
@@ -76,7 +74,9 @@ def api_media_storage_stats():
                     vid_rel = ev.get("video_relpath")
                     labels = ev.get("labels") or []
                     snap_exists = bool(rel and (storage_root / rel).exists())
-                    media_exists = snap_exists or bool(vid_rel and (storage_root / vid_rel).exists())
+                    media_exists = snap_exists or bool(
+                        vid_rel and (storage_root / vid_rel).exists()
+                    )
                     if snap_exists:
                         if not latest_snap_url:
                             latest_snap_url = f"/media/{rel}"
@@ -153,6 +153,7 @@ def api_media_rescan():
         return jsonify({"ok": True, "registered": count})
     except Exception:
         import traceback
+
         return jsonify({"ok": False, "error": traceback.format_exc()}), 500
 
 
@@ -189,7 +190,9 @@ def api_media_fix_thumbnails():
         _thumb_task["recent"] = []
         _thumb_task["running"] = True
 
-    public_base = (app_state.get_effective_config().get("server", {}).get("public_base_url") or "").rstrip("/")
+    public_base = (
+        app_state.get_effective_config().get("server", {}).get("public_base_url") or ""
+    ).rstrip("/")
 
     def _worker():
         for jf, ev in todo:
@@ -218,18 +221,18 @@ def api_media_fix_thumbnails():
                     scale = 640 / tw
                     frame = cv2.resize(frame, (640, int(frame.shape[0] * scale)))
                 snap_path = vid_path.with_suffix(".jpg")
-                if not cv2.imwrite(str(snap_path), frame,
-                                   [int(cv2.IMWRITE_JPEG_QUALITY), 82]):
+                if not cv2.imwrite(str(snap_path), frame, [int(cv2.IMWRITE_JPEG_QUALITY), 82]):
                     log_t.warning("[fix-thumbs] imwrite failed for %s", snap_path.name)
                     err = True
                     continue
                 snap_rel = snap_path.relative_to(storage_root).as_posix()
-                snap_url = f"{public_base}/media/{snap_rel}" if public_base else f"/media/{snap_rel}"
+                snap_url = (
+                    f"{public_base}/media/{snap_rel}" if public_base else f"/media/{snap_rel}"
+                )
                 ev["snapshot_relpath"] = snap_rel
                 ev["snapshot_url"] = snap_url
                 ev["thumb_url"] = snap_url
-                jf.write_text(_json.dumps(ev, ensure_ascii=False, indent=2),
-                              encoding="utf-8")
+                jf.write_text(_json.dumps(ev, ensure_ascii=False, indent=2), encoding="utf-8")
                 log_t.info("[fix-thumbs] %s -> %s", vid_path.name, snap_path.name)
                 with _fix_thumbs_lock:
                     _thumb_task["recent"].append(vid_path.name)
@@ -271,7 +274,11 @@ def api_media_cleanup():
     base_cfg = app_state.base_cfg
     payload = request.get_json(force=True) or {}
     storage_sec = settings.data.get("storage", {})
-    retention = int(payload.get("retention_days") or storage_sec.get("retention_days") or base_cfg.get("storage", {}).get("retention_days", 14))
+    retention = int(
+        payload.get("retention_days")
+        or storage_sec.get("retention_days")
+        or base_cfg.get("storage", {}).get("retention_days", 14)
+    )
     try:
         removed = app_state.store.cleanup_old(retention)
         return jsonify({"ok": True, "removed": removed})
@@ -293,8 +300,19 @@ def api_camera_media(cam_id):
     cfg_default = app_state.get_effective_config().get("storage", {}).get("media_limit_default", 24)
     limit = request.args.get('limit', type=int) or cfg_default
     offset = request.args.get('offset', type=int) or 0
-    items = store.list_events(cam_id, label=label, labels=labels, start=start, end=end, limit=limit, offset=offset, media_only=True)
-    total_count = store.count_events(cam_id, label=label, labels=labels, start=start, end=end, media_only=True)
+    items = store.list_events(
+        cam_id,
+        label=label,
+        labels=labels,
+        start=start,
+        end=end,
+        limit=limit,
+        offset=offset,
+        media_only=True,
+    )
+    total_count = store.count_events(
+        cam_id, label=label, labels=labels, start=start, end=end, media_only=True
+    )
     for item in items:
         review = settings.get_review(f"{cam_id}:{item['event_id']}")
         if review:
@@ -311,11 +329,13 @@ def api_event_get(event_id: str):
     payload = store.find_event_anywhere(event_id) if store else None
     if not payload:
         return jsonify({"error": "not found"}), 404
-    return jsonify({
-        "event_id":         payload.get("event_id"),
-        "camera_id":        payload.get("camera_id"),
-        "top_label":        payload.get("top_label") or payload.get("primary_label"),
-        "time":             payload.get("time"),
-        "video_relpath":    payload.get("video_relpath"),
-        "snapshot_relpath": payload.get("snapshot_relpath"),
-    })
+    return jsonify(
+        {
+            "event_id": payload.get("event_id"),
+            "camera_id": payload.get("camera_id"),
+            "top_label": payload.get("top_label") or payload.get("primary_label"),
+            "time": payload.get("time"),
+            "video_relpath": payload.get("video_relpath"),
+            "snapshot_relpath": payload.get("snapshot_relpath"),
+        }
+    )

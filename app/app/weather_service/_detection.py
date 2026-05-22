@@ -20,8 +20,8 @@ import requests
 from ._consts import (
     EVENT_ICON_HEX,
     EVENT_LABEL_DE,
-    HISTORY_FIELDS,
     HISTORY_FIELD_TO_EVENT,
+    HISTORY_FIELDS,
     HISTORY_LABELS_DE,
     HISTORY_MAXLEN,
     HISTORY_UNITS,
@@ -78,8 +78,12 @@ class DetectionMixin:
         try:
             from astral import Observer
             from astral.sun import azimuth, elevation
-            obs = Observer(latitude=float(lat), longitude=float(lon),
-                           elevation=float(loc.get("elevation") or 0.0))
+
+            obs = Observer(
+                latitude=float(lat),
+                longitude=float(lon),
+                elevation=float(loc.get("elevation") or 0.0),
+            )
             # astral wants a tz-aware UTC datetime; passing naive
             # datetime.now() makes it interpret local-clock-as-UTC and
             # the resulting altitude/azimuth are off by the local UTC
@@ -87,7 +91,7 @@ class DetectionMixin:
             now_dt = datetime.now(tz=UTC)
             data = {
                 "altitude": float(elevation(obs, now_dt)),
-                "azimuth":  float(azimuth(obs, now_dt)),
+                "azimuth": float(azimuth(obs, now_dt)),
             }
         except Exception as e:
             log.debug("[weather] sun position failed: %s", e)
@@ -127,8 +131,9 @@ class DetectionMixin:
             return True, min(1.0, float(lp) / 3000.0)
         return False, 0.0
 
-    def _detect_rain_or_snow(self, cfg: dict, d: dict, evt: str, field: str,
-                             scale: float) -> tuple[bool, float]:
+    def _detect_rain_or_snow(
+        self, cfg: dict, d: dict, evt: str, field: str, scale: float
+    ) -> tuple[bool, float]:
         """Hysteresis: trigger only on off→on transition. Stays "on" until
         the value drops below `hysteresis` (or 0 if unset)."""
         val = d.get(field)
@@ -173,7 +178,7 @@ class DetectionMixin:
         if alt is None:
             return False, 0.0
         alt_min = float(cfg.get("alt_min", -2))
-        alt_max = float(cfg.get("alt_max",  5))
+        alt_max = float(cfg.get("alt_max", 5))
         in_window = alt_min <= float(alt) <= alt_max
         # Once-per-day enforcement: once we've fired today, sit out until
         # midnight even if altitude is still in range.
@@ -201,6 +206,7 @@ class DetectionMixin:
         """Mean per-cam contrast of the latest preview frame, normalised 0..1.
         Used as a sanity check for the fog detector."""
         import cv2
+
         vals = []
         for cam_id in self._enabled_cam_ids():
             rt = self.runtimes.get(cam_id)
@@ -220,4 +226,3 @@ class DetectionMixin:
         return sum(vals) / len(vals)
 
     # ── Trigger + clip writer ───────────────────────────────────────────────
-

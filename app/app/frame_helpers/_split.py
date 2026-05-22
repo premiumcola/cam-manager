@@ -1,6 +1,7 @@
 """Half-corrupt / split-frame heuristic. Carved out of the original
 ``frame_helpers.py`` during the modular refactor; behaviour
 unchanged."""
+
 from __future__ import annotations
 
 import numpy as np
@@ -39,10 +40,10 @@ def is_split_frame(img) -> tuple[bool, str]:
         return float(np.abs(b - g).mean() + np.abs(b - r).mean())
 
     halves = {
-        "left":   img[:, :w // 2],
-        "right":  img[:, w // 2:],
-        "top":    img[:h // 2, :],
-        "bottom": img[h // 2:, :],
+        "left": img[:, : w // 2],
+        "right": img[:, w // 2 :],
+        "top": img[: h // 2, :],
+        "bottom": img[h // 2 :, :],
     }
     scores = {k: _chroma_score(v) for k, v in halves.items()}
     # Split is declared when one side falls below the dead threshold

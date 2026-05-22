@@ -10,6 +10,7 @@ Migrated from server.py during R01.2; the route bodies are byte-for-
 byte the originals, with state references rewritten to go through
 `app_state` instead of server-local globals.
 """
+
 from __future__ import annotations
 
 import json
@@ -54,8 +55,9 @@ def api_tracking_reindex(event_id):
     worker = singleton()
     if worker is None:
         return jsonify({"ok": False, "error": "Tracking-Worker nicht aktiv"}), 503
-    worker.enqueue(TrackingJob(event_id=event_id, video_path=vid,
-                               snapshot_path=None, camera_id=cam_id))
+    worker.enqueue(
+        TrackingJob(event_id=event_id, video_path=vid, snapshot_path=None, camera_id=cam_id)
+    )
     return jsonify({"ok": True, "queued": 1, "camera_id": cam_id})
 
 
@@ -108,17 +110,30 @@ def api_tracking_reindex_all():
                         continue
                 except Exception:
                     pass  # corrupt sidecar → re-queue below
-            worker.enqueue(TrackingJob(event_id=ev.get("event_id", jf.stem),
-                                       video_path=vid, snapshot_path=None,
-                                       camera_id=cam_id))
+            worker.enqueue(
+                TrackingJob(
+                    event_id=ev.get("event_id", jf.stem),
+                    video_path=vid,
+                    snapshot_path=None,
+                    camera_id=cam_id,
+                )
+            )
             queued += 1
     logging.getLogger(__name__).info(
         "[tracking] reindex-all cam=%s queued=%d up_to_date=%d missing=%d",
-        cam_filter or "*", queued, skipped_uptodate, skipped_missing,
+        cam_filter or "*",
+        queued,
+        skipped_uptodate,
+        skipped_missing,
     )
-    return jsonify({"ok": True, "queued": queued,
-                    "skipped_up_to_date": skipped_uptodate,
-                    "skipped_missing_video": skipped_missing})
+    return jsonify(
+        {
+            "ok": True,
+            "queued": queued,
+            "skipped_up_to_date": skipped_uptodate,
+            "skipped_missing_video": skipped_missing,
+        }
+    )
 
 
 @bp.delete('/api/tracking/<event_id>')

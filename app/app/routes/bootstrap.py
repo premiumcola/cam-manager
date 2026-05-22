@@ -6,6 +6,7 @@ calls `_auto_detect_device_info` from `_camera_helpers` because both
 this blueprint and the cameras blueprint touch the same auto-detect
 flow.
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,6 +27,7 @@ def _auto_detect_subnet() -> str:
     inside a network-isolated container)."""
     import ipaddress
     import socket
+
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("8.8.8.8", 80))
@@ -53,8 +55,10 @@ def service_worker():
     itself — otherwise updates land 24h late."""
     web_static = Path(__file__).resolve().parents[2] / "web" / "static"
     return send_from_directory(
-        str(web_static), "sw.js",
-        mimetype="application/javascript", max_age=0,
+        str(web_static),
+        "sw.js",
+        mimetype="application/javascript",
+        max_age=0,
     )
 
 
@@ -71,6 +75,7 @@ def app_version():
     # current Flask app so this stays in lock-step with the
     # ?v= cache-bust query the templates already use.
     from flask import current_app
+
     hasher = current_app.jinja_env.globals.get("static_v")
     shell_hash = hasher("app.css") if callable(hasher) else "v1"
     return jsonify({"shell_hash": shell_hash})
@@ -101,12 +106,13 @@ def api_config():
     # hasn't pinned a model_path yet.
     wl_cfg = proc.get("wildlife", {}) or {}
     wl_model_path = wl_cfg.get("model_path")
-    wl_cpu_path   = wl_cfg.get("cpu_model_path")
+    wl_cpu_path = wl_cfg.get("cpu_model_path")
     wl_labels_path = wl_cfg.get("labels_path")
     wl_model_available = any(p and Path(p).exists() for p in (wl_model_path, wl_cpu_path))
     wl_labels_available = bool(wl_labels_path and Path(wl_labels_path).exists())
     if not wl_model_available:
         from ..detectors import discover_wildlife_paths
+
         disc = discover_wildlife_paths()
         if disc:
             wl_model_path = disc.get("model_path") or wl_model_path
@@ -115,50 +121,71 @@ def api_config():
                 wl_labels_path = disc["labels_path"]
                 wl_labels_available = True
     srv = c.get("server", {}) or {}
-    return jsonify({
-        "app": c.get("app", {}),
-        "server": {
-            "public_base_url": srv.get("public_base_url", ""),
-            # Standortdaten — von der Wetter-UI gelesen, vom Wetter-Service
-            # für Sonnenstand-Berechnung genutzt.
-            "location": srv.get("location") or {"lat": None, "lon": None, "elevation": None},
-        },
-        "default_discovery_subnet": srv.get("default_discovery_subnet", "192.168.1.0/24"),
-        "cameras": c.get("cameras", []),
-        "weather": c.get("weather") or {},
-        "coral": {
-            "mode": proc.get("detection", {}).get("mode", "none"),
-            "bird_species_enabled": bool(bird_cfg.get("enabled")),
-        },
-        "processing": {
-            "detection": proc.get("detection", {}),
-            "bird_species_enabled": bool(bird_cfg.get("enabled")),
-            "bird_model_available": bird_model_available,
-            "bird_labels_available": bool(bird_labels_path and Path(bird_labels_path).exists()),
-            "bird_model_path": bird_model_path,
-            "wildlife_enabled": bool(wl_cfg.get("enabled", False)),
-            "wildlife_model_available": wl_model_available,
-            "wildlife_labels_available": wl_labels_available,
-            "wildlife_model_path": wl_model_path,
-        },
-        "telegram": {"enabled": bool(c.get("telegram", {}).get("enabled")), "chat_id": c.get("telegram", {}).get("chat_id", ""), "token": c.get("telegram", {}).get("token", "")},
-        "mqtt": {"enabled": bool(c.get("mqtt", {}).get("enabled")), "base_topic": c.get("mqtt", {}).get("base_topic", "tam-spy"), "host": c.get("mqtt", {}).get("host", ""), "port": c.get("mqtt", {}).get("port", 1883), "username": c.get("mqtt", {}).get("username", ""), "password": c.get("mqtt", {}).get("password", "")},
-        "storage": {
-            "root": str(base_cfg.get("storage", {}).get("root", "/app/storage")),
-            "retention_days": settings.data.get("storage", {}).get("retention_days") or base_cfg.get("storage", {}).get("retention_days", 14),
-            "media_limit_default": settings.data.get("storage", {}).get("media_limit_default") or base_cfg.get("storage", {}).get("media_limit_default", 24),
-            "auto_cleanup_enabled": bool(settings.data.get("storage", {}).get("auto_cleanup_enabled", False)),
-        },
-    })
+    return jsonify(
+        {
+            "app": c.get("app", {}),
+            "server": {
+                "public_base_url": srv.get("public_base_url", ""),
+                # Standortdaten — von der Wetter-UI gelesen, vom Wetter-Service
+                # für Sonnenstand-Berechnung genutzt.
+                "location": srv.get("location") or {"lat": None, "lon": None, "elevation": None},
+            },
+            "default_discovery_subnet": srv.get("default_discovery_subnet", "192.168.1.0/24"),
+            "cameras": c.get("cameras", []),
+            "weather": c.get("weather") or {},
+            "coral": {
+                "mode": proc.get("detection", {}).get("mode", "none"),
+                "bird_species_enabled": bool(bird_cfg.get("enabled")),
+            },
+            "processing": {
+                "detection": proc.get("detection", {}),
+                "bird_species_enabled": bool(bird_cfg.get("enabled")),
+                "bird_model_available": bird_model_available,
+                "bird_labels_available": bool(bird_labels_path and Path(bird_labels_path).exists()),
+                "bird_model_path": bird_model_path,
+                "wildlife_enabled": bool(wl_cfg.get("enabled", False)),
+                "wildlife_model_available": wl_model_available,
+                "wildlife_labels_available": wl_labels_available,
+                "wildlife_model_path": wl_model_path,
+            },
+            "telegram": {
+                "enabled": bool(c.get("telegram", {}).get("enabled")),
+                "chat_id": c.get("telegram", {}).get("chat_id", ""),
+                "token": c.get("telegram", {}).get("token", ""),
+            },
+            "mqtt": {
+                "enabled": bool(c.get("mqtt", {}).get("enabled")),
+                "base_topic": c.get("mqtt", {}).get("base_topic", "tam-spy"),
+                "host": c.get("mqtt", {}).get("host", ""),
+                "port": c.get("mqtt", {}).get("port", 1883),
+                "username": c.get("mqtt", {}).get("username", ""),
+                "password": c.get("mqtt", {}).get("password", ""),
+            },
+            "storage": {
+                "root": str(base_cfg.get("storage", {}).get("root", "/app/storage")),
+                "retention_days": settings.data.get("storage", {}).get("retention_days")
+                or base_cfg.get("storage", {}).get("retention_days", 14),
+                "media_limit_default": settings.data.get("storage", {}).get("media_limit_default")
+                or base_cfg.get("storage", {}).get("media_limit_default", 24),
+                "auto_cleanup_enabled": bool(
+                    settings.data.get("storage", {}).get("auto_cleanup_enabled", False)
+                ),
+            },
+        }
+    )
 
 
 @bp.get('/api/discover')
 def api_discover():
-    configured = app_state.get_effective_config().get("server", {}).get("default_discovery_subnet", "")
+    configured = (
+        app_state.get_effective_config().get("server", {}).get("default_discovery_subnet", "")
+    )
     subnet = request.args.get('subnet') or configured or _auto_detect_subnet()
     logging.info(f"[discovery] starting scan on subnet={subnet}")
     cameras, total_scanned = discover_hosts(subnet)
-    logging.info(f"[discovery] scan done — {len(cameras)} cameras found out of {total_scanned} hosts")
+    logging.info(
+        f"[discovery] scan done — {len(cameras)} cameras found out of {total_scanned} hosts"
+    )
     return jsonify({"subnet": subnet, "results": cameras, "total_scanned": total_scanned})
 
 
@@ -178,7 +205,10 @@ def api_discover_stream():
       • error        — {message}
     """
     import json as _json
-    configured = app_state.get_effective_config().get("server", {}).get("default_discovery_subnet", "")
+
+    configured = (
+        app_state.get_effective_config().get("server", {}).get("default_discovery_subnet", "")
+    )
     subnet = request.args.get('subnet') or configured or _auto_detect_subnet()
     logging.info(f"[discovery] starting SSE scan on subnet={subnet}")
 
@@ -193,7 +223,8 @@ def api_discover_stream():
                     res = payload.get("results", [])
                     logging.info(
                         "[discovery] SSE scan done — %d cameras found out of %d hosts",
-                        len(res), payload.get("total_scanned", 0),
+                        len(res),
+                        payload.get("total_scanned", 0),
                     )
         except GeneratorExit:
             # Client disconnected mid-scan — silent.
@@ -202,11 +233,15 @@ def api_discover_stream():
             logging.exception("[discovery] SSE scan failed")
             yield f"event: error\ndata: {_json.dumps({'message': str(exc)})}\n\n"
 
-    return Response(_gen(), mimetype="text/event-stream", headers={
-        "Cache-Control": "no-cache, no-transform",
-        "X-Accel-Buffering": "no",  # disable nginx/proxy buffering if any
-        "Connection": "keep-alive",
-    })
+    return Response(
+        _gen(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",  # disable nginx/proxy buffering if any
+            "Connection": "keep-alive",
+        },
+    )
 
 
 def _mask_pw(pw: str) -> str:
@@ -229,11 +264,14 @@ def _probe_reolink_login(host: str, user: str, password: str, timeout: float = 4
     *why* the login didn't work, so we issue the request directly.
     """
     import requests
-    body = [{
-        "cmd":    "Login",
-        "action": 0,
-        "param":  {"User": {"userName": user, "password": password or ""}},
-    }]
+
+    body = [
+        {
+            "cmd": "Login",
+            "action": 0,
+            "param": {"User": {"userName": user, "password": password or ""}},
+        }
+    ]
     try:
         r = requests.post(
             f"http://{host}/api.cgi",
@@ -242,12 +280,22 @@ def _probe_reolink_login(host: str, user: str, password: str, timeout: float = 4
             timeout=timeout,
         )
     except Exception as exc:
-        logging.info("[discovery] reolink login net-error host=%s user=%s pw=%s: %s",
-                     host, user, _mask_pw(password), exc)
+        logging.info(
+            "[discovery] reolink login net-error host=%s user=%s pw=%s: %s",
+            host,
+            user,
+            _mask_pw(password),
+            exc,
+        )
         return {"vendor": "reolink", "auth": "net"}
     if r.status_code != 200:
-        logging.info("[discovery] reolink login HTTP %s host=%s user=%s pw=%s",
-                     r.status_code, host, user, _mask_pw(password))
+        logging.info(
+            "[discovery] reolink login HTTP %s host=%s user=%s pw=%s",
+            r.status_code,
+            host,
+            user,
+            _mask_pw(password),
+        )
         return {"vendor": "reolink", "auth": "net"}
     try:
         payload = r.json()
@@ -261,6 +309,7 @@ def _probe_reolink_login(host: str, user: str, password: str, timeout: float = 4
         # Best-effort logout — never let it raise.
         try:
             from ..reolink_api import logout as _rl_logout
+
             _rl_logout(host, token, timeout=2.0)
         except Exception:
             pass
@@ -279,8 +328,9 @@ def _probe_reolink_login(host: str, user: str, password: str, timeout: float = 4
     return {"vendor": "reolink", "auth": "net"}
 
 
-def _probe_rtsp(ip: str, port: int, user: str, password: str, path: str,
-                timeout_ms: int = 4000) -> dict:
+def _probe_rtsp(
+    ip: str, port: int, user: str, password: str, path: str, timeout_ms: int = 4000
+) -> dict:
     """Vendor-agnostic RTSP probe via OpenCV+FFmpeg. Returns:
       {"vendor": "rtsp", "auth": "ok"}            — frame readable
       {"vendor": "rtsp", "auth": "bad"}           — 401 / Unauthorized
@@ -294,7 +344,9 @@ def _probe_rtsp(ip: str, port: int, user: str, password: str, path: str,
     """
     import os
     import urllib.parse
+
     import cv2  # noqa: PLC0415 — keep import local to keep boot fast
+
     enc_pw = urllib.parse.quote(password or "", safe="")
     enc_user = urllib.parse.quote(user or "", safe="")
     safe_path = path or ""
@@ -308,9 +360,7 @@ def _probe_rtsp(ip: str, port: int, user: str, password: str, path: str,
     # the per-handle CAP_PROP_OPEN_TIMEOUT_MSEC is reinforced (some
     # FFmpeg versions ignore the property and only honour stimeout).
     prev_env = os.environ.get("OPENCV_FFMPEG_CAPTURE_OPTIONS")
-    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = (
-        f"rtsp_transport;tcp|stimeout;{timeout_ms * 1000}"
-    )
+    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = f"rtsp_transport;tcp|stimeout;{timeout_ms * 1000}"
     cap = None
     try:
         cap = cv2.VideoCapture(rtsp_url, cv2.CAP_FFMPEG)
@@ -352,6 +402,7 @@ def _classify_rtsp_open_fail(ip: str, port: int, timeout: float = 1.5) -> str:
     path. A refused/timed-out connect means the camera is unreachable.
     """
     import socket
+
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.settimeout(timeout)
     try:
@@ -370,12 +421,12 @@ def _classify_rtsp_open_fail(ip: str, port: int, timeout: float = 1.5) -> str:
 
 # German user-facing strings for each (vendor, reason) pair.
 _DETAIL_DE: dict[str, str] = {
-    "auth_ok":      "Zugangsdaten korrekt.",
-    "auth_failed":  "Passwort oder Benutzername ist falsch.",
+    "auth_ok": "Zugangsdaten korrekt.",
+    "auth_failed": "Passwort oder Benutzername ist falsch.",
     "unreachable": "Kamera ist nicht erreichbar (Port geschlossen oder Gerät offline).",
-    "timeout":     "Zeitüberschreitung — Kamera antwortet nicht rechtzeitig.",
+    "timeout": "Zeitüberschreitung — Kamera antwortet nicht rechtzeitig.",
     "auth_unknown": "Antwort konnte nicht eindeutig ausgewertet werden.",
-    "error":       "Unerwarteter Fehler beim Prüfen der Zugangsdaten.",
+    "error": "Unerwarteter Fehler beim Prüfen der Zugangsdaten.",
 }
 
 
@@ -391,84 +442,133 @@ def api_discover_test_credentials():
     quickly enough that the combined budget fits.
     """
     payload = request.get_json(silent=True) or {}
-    ip       = (payload.get("ip") or "").strip()
-    user     = (payload.get("user") or "").strip()
+    ip = (payload.get("ip") or "").strip()
+    user = (payload.get("user") or "").strip()
     password = payload.get("password") or ""
-    path     = (payload.get("path") or "").strip()
+    path = (payload.get("path") or "").strip()
     try:
         port = int(payload.get("port") or 554)
     except (TypeError, ValueError):
         port = 554
     if not ip:
-        return jsonify({
-            "ok": False, "vendor": "unknown", "reason": "error",
-            "detail": "Keine IP-Adresse angegeben.",
-        })
+        return jsonify(
+            {
+                "ok": False,
+                "vendor": "unknown",
+                "reason": "error",
+                "detail": "Keine IP-Adresse angegeben.",
+            }
+        )
     if not user:
         # Empty user is sometimes valid for ONVIF anon, but the cam-add
         # form always pre-fills "admin" so an empty user here is a UI
         # bug — surface it instead of probing blindly.
-        return jsonify({
-            "ok": False, "vendor": "unknown", "reason": "auth_failed",
-            "detail": "Benutzername fehlt.",
-        })
+        return jsonify(
+            {
+                "ok": False,
+                "vendor": "unknown",
+                "reason": "auth_failed",
+                "detail": "Benutzername fehlt.",
+            }
+        )
 
-    logging.info("[discovery] credential test %s:%d user=%s pw=%s path=%s",
-                 ip, port, user, _mask_pw(password), path or "—")
+    logging.info(
+        "[discovery] credential test %s:%d user=%s pw=%s path=%s",
+        ip,
+        port,
+        user,
+        _mask_pw(password),
+        path or "—",
+    )
 
     # ── Reolink HTTP login first ────────────────────────────────────────
     rl = _probe_reolink_login(ip, user, password, timeout=4.0)
     if rl["auth"] == "ok":
-        return jsonify({
-            "ok": True, "vendor": "reolink", "reason": "auth_ok",
-            "detail": _DETAIL_DE["auth_ok"],
-        })
+        return jsonify(
+            {
+                "ok": True,
+                "vendor": "reolink",
+                "reason": "auth_ok",
+                "detail": _DETAIL_DE["auth_ok"],
+            }
+        )
     if rl["auth"] == "bad":
-        return jsonify({
-            "ok": False, "vendor": "reolink", "reason": "auth_failed",
-            "detail": _DETAIL_DE["auth_failed"],
-        })
+        return jsonify(
+            {
+                "ok": False,
+                "vendor": "reolink",
+                "reason": "auth_failed",
+                "detail": _DETAIL_DE["auth_failed"],
+            }
+        )
     # ``net`` → fall through to the RTSP fallback. Anything non-Reolink
     # always lands here.
 
     rt = _probe_rtsp(ip, port, user, password, path, timeout_ms=4000)
     if rt["auth"] == "ok":
-        return jsonify({
-            "ok": True, "vendor": "rtsp", "reason": "auth_ok",
-            "detail": _DETAIL_DE["auth_ok"],
-        })
+        return jsonify(
+            {
+                "ok": True,
+                "vendor": "rtsp",
+                "reason": "auth_ok",
+                "detail": _DETAIL_DE["auth_ok"],
+            }
+        )
     if rt["auth"] == "bad":
-        return jsonify({
-            "ok": False, "vendor": "rtsp", "reason": "auth_failed",
-            "detail": _DETAIL_DE["auth_failed"],
-        })
+        return jsonify(
+            {
+                "ok": False,
+                "vendor": "rtsp",
+                "reason": "auth_failed",
+                "detail": _DETAIL_DE["auth_failed"],
+            }
+        )
     if rt["auth"] == "timeout":
-        return jsonify({
-            "ok": False, "vendor": "rtsp", "reason": "timeout",
-            "detail": _DETAIL_DE["timeout"],
-        })
+        return jsonify(
+            {
+                "ok": False,
+                "vendor": "rtsp",
+                "reason": "timeout",
+                "detail": _DETAIL_DE["timeout"],
+            }
+        )
     if rt["auth"] == "unreachable":
-        return jsonify({
-            "ok": False, "vendor": "rtsp", "reason": "unreachable",
-            "detail": _DETAIL_DE["unreachable"],
-        })
+        return jsonify(
+            {
+                "ok": False,
+                "vendor": "rtsp",
+                "reason": "unreachable",
+                "detail": _DETAIL_DE["unreachable"],
+            }
+        )
     # ``unknown`` — opened, but no frame. Lets the user save anyway.
-    return jsonify({
-        "ok": False, "vendor": "rtsp", "reason": "auth_unknown",
-        "detail": _DETAIL_DE["auth_unknown"],
-    })
+    return jsonify(
+        {
+            "ok": False,
+            "vendor": "rtsp",
+            "reason": "auth_unknown",
+            "detail": _DETAIL_DE["auth_unknown"],
+        }
+    )
 
 
 @bp.get('/api/status')
 def api_status():
     settings = app_state.settings
     runtimes = app_state.runtimes
-    return jsonify({
-        "cameras": [runtimes[c["id"]].status() if c["id"] in runtimes else {"id": c["id"], "status": "disabled", "name": c.get("name", c["id"])} for c in app_state.get_effective_config().get("cameras", [])],
-        "cat_profiles": app_state.cat_registry.list_profiles(),
-        "person_profiles": app_state.person_registry.list_profiles(),
-        "telegram_actions": settings.data.get("telegram_actions", [])[:12],
-    })
+    return jsonify(
+        {
+            "cameras": [
+                runtimes[c["id"]].status()
+                if c["id"] in runtimes
+                else {"id": c["id"], "status": "disabled", "name": c.get("name", c["id"])}
+                for c in app_state.get_effective_config().get("cameras", [])
+            ],
+            "cat_profiles": app_state.cat_registry.list_profiles(),
+            "person_profiles": app_state.person_registry.list_profiles(),
+            "telegram_actions": settings.data.get("telegram_actions", [])[:12],
+        }
+    )
 
 
 @bp.get('/api/system')
@@ -477,6 +577,7 @@ def api_system():
     # finishes the cleanup pass. Imported per request so any future
     # rebind on server.py side is observable here.
     from ..server import _BUILD_INFO, _PROCESS_START_ISO
+
     mem_total = mem_used = proc_mem_mb = uptime_s = 0.0
     try:
         mem: dict = {}
@@ -497,6 +598,7 @@ def api_system():
         pass
     try:
         import resource as _resource
+
         ru = _resource.getrusage(_resource.RUSAGE_SELF)
         proc_mem_mb = round(ru.ru_maxrss / 1024, 1)  # KB → MB on Linux
     except Exception:
@@ -504,6 +606,7 @@ def api_system():
     coral_device = None
     try:
         import subprocess as _sp
+
         lsusb = _sp.check_output(['lsusb'], text=True, timeout=3, stderr=_sp.DEVNULL)
         for line in lsusb.splitlines():
             if 'Google' in line or 'Coral' in line or '18d1' in line.lower():
@@ -511,22 +614,25 @@ def api_system():
                 break
     except Exception:
         pass
-    return jsonify({
-        "build": _BUILD_INFO,
-        "process_start": _PROCESS_START_ISO,
-        "mem_total_mb": round(mem_total / 1048576, 1),
-        "mem_used_mb": round(mem_used / 1048576, 1),
-        "proc_mem_mb": proc_mem_mb,
-        "uptime_s": uptime_s,
-        "storage_root": str(app_state.storage_root),
-        "camera_count": len(app_state.runtimes),
-        "coral_device": coral_device,
-    })
+    return jsonify(
+        {
+            "build": _BUILD_INFO,
+            "process_start": _PROCESS_START_ISO,
+            "mem_total_mb": round(mem_total / 1048576, 1),
+            "mem_used_mb": round(mem_used / 1048576, 1),
+            "proc_mem_mb": proc_mem_mb,
+            "uptime_s": uptime_s,
+            "storage_root": str(app_state.storage_root),
+            "camera_count": len(app_state.runtimes),
+            "coral_device": coral_device,
+        }
+    )
 
 
 @bp.post('/api/wizard/complete')
 def api_wizard_complete():
     from ..server import rebuild_runtimes
+
     settings = app_state.settings
     payload = request.get_json(force=True) or {}
     try:
@@ -558,12 +664,17 @@ def api_settings_export():
     fmt = request.args.get('format', 'json')
     text = app_state.settings.export_text(fmt)
     mimetype = 'application/x-yaml' if fmt == 'yaml' else 'application/json'
-    return Response(text, mimetype=mimetype, headers={"Content-Disposition": f"attachment; filename=tam-spy-settings.{fmt}"})
+    return Response(
+        text,
+        mimetype=mimetype,
+        headers={"Content-Disposition": f"attachment; filename=tam-spy-settings.{fmt}"},
+    )
 
 
 @bp.post('/api/settings/import')
 def api_settings_import():
     from ..server import rebuild_runtimes
+
     settings = app_state.settings
     payload = request.get_json(force=True) or {}
     fmt = payload.get('format', 'json')

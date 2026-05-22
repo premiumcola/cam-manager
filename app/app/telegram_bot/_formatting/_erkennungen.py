@@ -42,6 +42,11 @@ from ...telegram_helpers import (
     truncate_caption,
 )
 from .._consts import (
+    _MUTE_DEFAULT_S,
+    _MUTE_EXTEND_S,
+    _NOTIFY_COOLDOWN_DEFAULTS,
+    _PHOTO_LIMIT_BYTES,
+    _VIDEO_LIMIT_BYTES,
     ACTION_CAMS,
     ACTION_CLIP,
     ACTION_LIVE,
@@ -52,15 +57,9 @@ from .._consts import (
     BOT_COMMANDS,
     PERSISTENT_KB_KEY,
     PERSISTENT_KEYBOARD,
-    _MUTE_DEFAULT_S,
-    _MUTE_EXTEND_S,
-    _NOTIFY_COOLDOWN_DEFAULTS,
-    _PHOTO_LIMIT_BYTES,
-    _VIDEO_LIMIT_BYTES,
     _parse_hhmm,
     log,
 )
-
 
 # _erkennungen_view replaced the old "Letzte Erkennungen" feedback list
 # (24-h window with ev:<eid>:ok / no buttons). The new tile spec asks
@@ -80,31 +79,31 @@ class _ErkennungenMixin:
     # through to "❓" via `_label_icon` — never crash the renderer on a
     # new label name.
     _LABEL_ICONS: dict[str, str] = {
-        "person":    "👤",
-        "cat":       "🐱",
-        "bird":      "🐦",
-        "dog":       "🐕",
-        "fox":       "🦊",
-        "hedgehog":  "🦔",
-        "squirrel":  "🐿️",
-        "horse":     "🐴",
-        "deer":      "🦌",
-        "car":       "🚗",
-        "motion":    "👁",
+        "person": "👤",
+        "cat": "🐱",
+        "bird": "🐦",
+        "dog": "🐕",
+        "fox": "🦊",
+        "hedgehog": "🦔",
+        "squirrel": "🐿️",
+        "horse": "🐴",
+        "deer": "🦌",
+        "car": "🚗",
+        "motion": "👁",
     }
     # Kind classifier for the Erkennungen filter. The user's filter has
     # only 4 buckets (Vögel / Katzen / Personen / Wildtiere) plus "alle";
     # this dict maps the granular label to the bucket.
     _LABEL_KIND: dict[str, str] = {
-        "bird":     "vogel",
-        "cat":      "katze",
-        "person":   "person",
-        "dog":      "wildtier",
-        "fox":      "wildtier",
+        "bird": "vogel",
+        "cat": "katze",
+        "person": "person",
+        "dog": "wildtier",
+        "fox": "wildtier",
         "hedgehog": "wildtier",
         "squirrel": "wildtier",
-        "deer":     "wildtier",
-        "horse":    "wildtier",
+        "deer": "wildtier",
+        "horse": "wildtier",
     }
 
     def _label_icon(self, label: str) -> str:
@@ -162,9 +161,9 @@ class _ErkennungenMixin:
             return {}
         return self._tile_state.setdefault(int(chat_id), {})
 
-    def _erkennungen_view(self, *, filter_cam: str | None = None,
-                          filter_kind: str | None = None,
-                          page: int = 0) -> tuple[str, InlineKeyboardMarkup]:
+    def _erkennungen_view(
+        self, *, filter_cam: str | None = None, filter_kind: str | None = None, page: int = 0
+    ) -> tuple[str, InlineKeyboardMarkup]:
         """📋 Erkennungen — today's detection log, newest first.
 
         Filter labels:
@@ -174,10 +173,11 @@ class _ErkennungenMixin:
         10 entries per page; pagination via det:page:N callback. The
         filter sub-view sits behind det:filter."""
         from html import escape as _esc
+
         today_iso = datetime.now().strftime("%Y-%m-%d")
         cam_cfgs = {c.get("id"): c for c in (self._cfg().get("cameras", []) or [])}
         all_events: list[dict] = []
-        cam_iter = ([filter_cam] if filter_cam else list(cam_cfgs.keys()))
+        cam_iter = [filter_cam] if filter_cam else list(cam_cfgs.keys())
         for cam_id in cam_iter:
             if not cam_id or not self.store:
                 continue
@@ -200,15 +200,25 @@ class _ErkennungenMixin:
         n_pages = max(1, (n_total + page_size - 1) // page_size)
         if page >= n_pages:
             page = n_pages - 1
-        slice_ = all_events[page * page_size:(page + 1) * page_size]
+        slice_ = all_events[page * page_size : (page + 1) * page_size]
 
-        cam_label = (cam_cfgs.get(filter_cam) or {}).get("name", filter_cam) if filter_cam else "alle Kameras"
-        kind_label = {"vogel": "🐦 Vögel", "katze": "🐱 Katzen",
-                      "person": "👤 Personen", "wildtier": "🦌 Wildtiere"}.get(
-                      filter_kind, "alle Typen")
-        head = ["📋 <b>Erkennungen heute</b>",
-                f"Filter: {_esc(str(cam_label))} · {_esc(kind_label)}",
-                "─────────────", ""]
+        cam_label = (
+            (cam_cfgs.get(filter_cam) or {}).get("name", filter_cam)
+            if filter_cam
+            else "alle Kameras"
+        )
+        kind_label = {
+            "vogel": "🐦 Vögel",
+            "katze": "🐱 Katzen",
+            "person": "👤 Personen",
+            "wildtier": "🦌 Wildtiere",
+        }.get(filter_kind, "alle Typen")
+        head = [
+            "📋 <b>Erkennungen heute</b>",
+            f"Filter: {_esc(str(cam_label))} · {_esc(kind_label)}",
+            "─────────────",
+            "",
+        ]
 
         if not slice_:
             head.append("Heute noch keine Erkennungen.")
@@ -230,11 +240,11 @@ class _ErkennungenMixin:
         # Pagination row: « N (prev) and (next) ».
         nav_row = []
         if page > 0:
-            nav_row.append(InlineKeyboardButton(f"« {page}",
-                                                 callback_data=f"det:page:{page - 1}"))
+            nav_row.append(InlineKeyboardButton(f"« {page}", callback_data=f"det:page:{page - 1}"))
         if page < n_pages - 1:
-            nav_row.append(InlineKeyboardButton(f"{page + 2} »",
-                                                 callback_data=f"det:page:{page + 1}"))
+            nav_row.append(
+                InlineKeyboardButton(f"{page + 2} »", callback_data=f"det:page:{page + 1}")
+            )
         rows: list[list[InlineKeyboardButton]] = []
         if nav_row:
             rows.append(nav_row)
@@ -249,45 +259,57 @@ class _ErkennungenMixin:
         st = self._tile_state_for(chat_id)
         cur_cam = st.get("det_cam")
         cur_kind = st.get("det_kind")
-        cam_cfgs = (self._cfg().get("cameras", []) or [])
+        cam_cfgs = self._cfg().get("cameras", []) or []
         cam_row = []
         for c in cam_cfgs:
-            cid = c.get("id"); name = c.get("name") or cid
+            cid = c.get("id")
+            name = c.get("name") or cid
             if not cid:
                 continue
             label = ("● " if cur_cam == cid else "") + (name[:14])
-            cam_row.append(InlineKeyboardButton(label,
-                                                 callback_data=f"det:setcam:{cid}"[:64]))
-        cam_row.append(InlineKeyboardButton(("● " if cur_cam is None else "") + "alle",
-                                             callback_data="det:setcam:_all"))
+            cam_row.append(InlineKeyboardButton(label, callback_data=f"det:setcam:{cid}"[:64]))
+        cam_row.append(
+            InlineKeyboardButton(
+                ("● " if cur_cam is None else "") + "alle", callback_data="det:setcam:_all"
+            )
+        )
         kind_opts = [
-            ("🐦 Vögel",      "vogel"),
-            ("🐱 Katzen",     "katze"),
-            ("👤 Personen",   "person"),
-            ("🦌 Wildtiere",  "wildtier"),
-            ("alle",          "_all"),
+            ("🐦 Vögel", "vogel"),
+            ("🐱 Katzen", "katze"),
+            ("👤 Personen", "person"),
+            ("🦌 Wildtiere", "wildtier"),
+            ("alle", "_all"),
         ]
         kind_row = []
         for lbl, val in kind_opts:
             sel = (cur_kind == val) or (val == "_all" and cur_kind is None)
-            kind_row.append(InlineKeyboardButton(("● " if sel else "") + lbl,
-                                                  callback_data=f"det:setkind:{val}"[:64]))
+            kind_row.append(
+                InlineKeyboardButton(
+                    ("● " if sel else "") + lbl, callback_data=f"det:setkind:{val}"[:64]
+                )
+            )
+
         # Buttons-per-row clamp so iPhone-narrow rows wrap.
         def _chunk(row, n=3):
-            return [row[i:i + n] for i in range(0, len(row), n)]
+            return [row[i : i + n] for i in range(0, len(row), n)]
+
         rows = []
         for r in _chunk(cam_row, 3):
             rows.append(r)
         for r in _chunk(kind_row, 3):
             rows.append(r)
-        rows.append([InlineKeyboardButton("✓ Anwenden", callback_data="det:apply"),
-                     InlineKeyboardButton("« Zurück",   callback_data="det:apply")])
-        return ("📋 <b>Filter</b>\n\nKamera und Erkennungstyp wählen.",
-                InlineKeyboardMarkup(rows))
+        rows.append(
+            [
+                InlineKeyboardButton("✓ Anwenden", callback_data="det:apply"),
+                InlineKeyboardButton("« Zurück", callback_data="det:apply"),
+            ]
+        )
+        return ("📋 <b>Filter</b>\n\nKamera und Erkennungstyp wählen.", InlineKeyboardMarkup(rows))
 
     def _tier_log_view(self) -> tuple[str, InlineKeyboardMarkup]:
         """🐦 Tier-Log — top species (7 d) + cat registry sightings (today)."""
         from html import escape as _esc
+
         lines = ["🐦 <b>Tier-Log</b> · letzte 7 Tage", "─────────────"]
         # Section A — top bird species + top cat names.
         try:
@@ -312,7 +334,11 @@ class _ErkennungenMixin:
         today_iso = datetime.now().strftime("%Y-%m-%d")
         cat_rows = []
         try:
-            profiles = self.cat_registry.list_profiles() if hasattr(self, "cat_registry") and self.cat_registry else []
+            profiles = (
+                self.cat_registry.list_profiles()
+                if hasattr(self, "cat_registry") and self.cat_registry
+                else []
+            )
         except Exception:
             profiles = []
         # Re-id registry isn't passed into TelegramService directly, so
@@ -320,7 +346,7 @@ class _ErkennungenMixin:
         # poor-man's roster when no explicit registry is available.
         seen_today: dict[str, dict] = {}
         if self.store:
-            for cam in (self._cfg().get("cameras", []) or []):
+            for cam in self._cfg().get("cameras", []) or []:
                 cid = cam.get("id")
                 if not cid:
                     continue
@@ -349,7 +375,9 @@ class _ErkennungenMixin:
                 last_str = "—"
                 if rec["last_ts"]:
                     try:
-                        delta_min = int((now - datetime.fromisoformat(rec["last_ts"])).total_seconds() / 60)
+                        delta_min = int(
+                            (now - datetime.fromisoformat(rec["last_ts"])).total_seconds() / 60
+                        )
                         if delta_min < 60:
                             last_str = f"vor {delta_min} min"
                         elif delta_min < 1440:
@@ -368,7 +396,9 @@ class _ErkennungenMixin:
             lines.append("Noch keine Tier-Aktivität in den letzten 7 Tagen.")
 
         rows = [
-            [InlineKeyboardButton("📋 Alle Erkennungen", callback_data="menu:erkennungen"),
-             InlineKeyboardButton("🏠 Hauptmenü",       callback_data="menu:root")],
+            [
+                InlineKeyboardButton("📋 Alle Erkennungen", callback_data="menu:erkennungen"),
+                InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root"),
+            ],
         ]
         return "\n".join(lines), InlineKeyboardMarkup(rows)

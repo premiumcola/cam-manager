@@ -4,6 +4,7 @@ Carved out of the original ``frame_helpers.py`` during the modular
 refactor. Every individual heuristic accepts either a raw JPEG byte
 blob or an already-decoded BGR ndarray; this helper hides the
 distinction so the call sites stay focused on the heuristic logic."""
+
 from __future__ import annotations
 
 import cv2

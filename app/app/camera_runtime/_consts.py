@@ -3,10 +3,12 @@
 Lives in its own file so the mixin modules can import from it without
 creating a circular dependency with runtime.py (which imports the mixins).
 """
+
 from __future__ import annotations
 
 import logging
 import shutil as _shutil
+
 # Does this container have an ffmpeg binary? If so, motion recording uses the
 # fast stream-copy path (direct RTSP → mp4, no CPU re-encode). Otherwise we
 # fall back to the OpenCV frame-buffer approach, which loses timestamps.
@@ -58,8 +60,8 @@ _SPECIES_TO_ACH_ID = {
 # external grepping still match (the package split moved this code into
 # camera_runtime/_consts but the logging surface stays "app.camera_runtime").
 log = logging.getLogger("app.camera_runtime")
-log_tl = logging.getLogger("app.camera_runtime.timelapse")   # timelapse-specific logs
-log_cam = logging.getLogger("app.camera_runtime.camera")     # connection/stream logs
+log_tl = logging.getLogger("app.camera_runtime.timelapse")  # timelapse-specific logs
+log_cam = logging.getLogger("app.camera_runtime.camera")  # connection/stream logs
 
 _PROFILES = ("daily", "weekly", "monthly", "custom")
 _PROFILE_PERIOD_DEFAULTS = {"daily": 86400, "weekly": 604800, "monthly": 2592000, "custom": 600}
@@ -73,6 +75,7 @@ _WILDLIFE_BBOX_DONORS = ("cat", "dog", "bear", "sheep", "cow", "teddy bear")
 
 
 from ..bbox_utils import iou
+
 # Backwards-compat alias — many camera_runtime siblings still import
 # `_bbox_iou` directly from this module. Keep the name available so
 # the dedup is a no-op at every consumer.
@@ -112,4 +115,3 @@ def _suppress_overlap(dets, ref_bbox, drop_labels, iou_min: float = 0.3):
             continue
         out.append(d)
     return out
-

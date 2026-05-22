@@ -31,6 +31,7 @@ Threading model:
 - Request threads call ``note_fetch()`` on every playlist / segment
   hit to keep the streamer alive.
 """
+
 from __future__ import annotations
 
 import logging
@@ -81,18 +82,30 @@ class HLSStreamer:
                 return
             self.dir.mkdir(parents=True, exist_ok=True)
             cmd = [
-                "ffmpeg", "-nostdin", "-fflags", "+genpts",
-                "-rtsp_transport", "tcp",
-                "-i", self.rtsp_url,
-                "-c:v", "copy", "-an",
-                "-hls_time", "1", "-hls_list_size", "4",
+                "ffmpeg",
+                "-nostdin",
+                "-fflags",
+                "+genpts",
+                "-rtsp_transport",
+                "tcp",
+                "-i",
+                self.rtsp_url,
+                "-c:v",
+                "copy",
+                "-an",
+                "-hls_time",
+                "1",
+                "-hls_list_size",
+                "4",
                 "-hls_flags",
                 "delete_segments+omit_endlist+independent_segments",
-                "-hls_segment_type", "mpegts",
-                "-f", "hls", str(self.playlist_path),
+                "-hls_segment_type",
+                "mpegts",
+                "-f",
+                "hls",
+                str(self.playlist_path),
             ]
-            log.info("[hls_streamer] %s spawning ffmpeg → %s",
-                     self.cam_id, self.playlist_path)
+            log.info("[hls_streamer] %s spawning ffmpeg → %s", self.cam_id, self.playlist_path)
             try:
                 self.proc = subprocess.Popen(
                     cmd,
@@ -100,8 +113,7 @@ class HLSStreamer:
                     stderr=subprocess.DEVNULL,
                 )
             except Exception as e:
-                log.warning("[hls_streamer] %s spawn failed: %s",
-                            self.cam_id, e)
+                log.warning("[hls_streamer] %s spawn failed: %s", self.cam_id, e)
                 self.proc = None
 
     def note_fetch(self) -> None:
@@ -129,15 +141,13 @@ class HLSStreamer:
                         except Exception:
                             pass
                 except Exception as e:
-                    log.warning("[hls_streamer] %s stop failed: %s",
-                                self.cam_id, e)
+                    log.warning("[hls_streamer] %s stop failed: %s", self.cam_id, e)
                 self.proc = None
             try:
                 if self.dir.exists():
                     shutil.rmtree(self.dir, ignore_errors=True)
             except Exception as e:
-                log.debug("[hls_streamer] %s cleanup failed: %s",
-                          self.cam_id, e)
+                log.debug("[hls_streamer] %s cleanup failed: %s", self.cam_id, e)
 
 
 # Registry — module-level dict of HLSStreamer keyed by cam_id.
@@ -187,8 +197,7 @@ def _ensure_sweeper() -> None:
     if _sweeper_started:
         return
     _sweeper_started = True
-    t = threading.Thread(target=_sweeper_loop, name="hls-sweeper",
-                         daemon=True)
+    t = threading.Thread(target=_sweeper_loop, name="hls-sweeper", daemon=True)
     t.start()
 
 
@@ -204,7 +213,8 @@ def _sweeper_loop() -> None:
                 if s is not None:
                     log.info(
                         "[hls_streamer] %s idle %.0fs — tearing down",
-                        cid, time.monotonic() - s.last_fetch,
+                        cid,
+                        time.monotonic() - s.last_fetch,
                     )
                     s.stop()
         except Exception as e:
@@ -220,11 +230,13 @@ def rewrite_playlist(content: bytes) -> bytes:
     out: list[bytes] = []
     for line in content.split(b'\n'):
         stripped = line.strip()
-        if (stripped
-                and not stripped.startswith(b'#')
-                and not stripped.startswith(b'http')
-                and not stripped.startswith(b'/')
-                and not stripped.startswith(b'hls/')):
+        if (
+            stripped
+            and not stripped.startswith(b'#')
+            and not stripped.startswith(b'http')
+            and not stripped.startswith(b'/')
+            and not stripped.startswith(b'hls/')
+        ):
             line = b'hls/' + stripped
         out.append(line)
     return b'\n'.join(out)

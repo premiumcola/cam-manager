@@ -3,6 +3,7 @@ file under /app/models without forcing the user to edit config.yaml.
 
 Carved out of `_legacy_classes.py` during R02.3.
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,30 +33,36 @@ def discover_wildlife_paths(models_dir: str | Path = "/app/models") -> dict:
     if not p.exists():
         log.debug("[wildlife-discover] models dir does not exist: %s", p)
         return {}
+
     def _matches(fname: str) -> bool:
         low = fname.lower()
         if "ssd" in low or "bird" in low:
             return False
-        if "mobilenet" in low:           # mobilenet, mobilenet_v2, MobileNet-V2
+        if "mobilenet" in low:  # mobilenet, mobilenet_v2, MobileNet-V2
             return True
         if "imagenet" in low:
             return True
         if "wildlife" in low:
             return True
         return False
+
     cands = [f for f in p.glob("*.tflite") if _matches(f.name)]
     if not cands:
         log.debug("[wildlife-discover] no candidate .tflite found in %s", p)
         return {}
     edge = next((f for f in cands if "edgetpu" in f.name.lower()), None)
-    cpu  = next((f for f in cands if "edgetpu" not in f.name.lower()), None)
+    cpu = next((f for f in cands if "edgetpu" not in f.name.lower()), None)
     out = {
-        "model_path":     str(edge or cpu or cands[0]),
+        "model_path": str(edge or cpu or cands[0]),
         "cpu_model_path": str(cpu or edge or cands[0]),
     }
     lbl = p / "imagenet_labels.txt"
     if lbl.exists():
         out["labels_path"] = str(lbl)
-    log.debug("[wildlife-discover] picked model_path=%s cpu_model_path=%s labels=%s",
-              out.get("model_path"), out.get("cpu_model_path"), out.get("labels_path"))
+    log.debug(
+        "[wildlife-discover] picked model_path=%s cpu_model_path=%s labels=%s",
+        out.get("model_path"),
+        out.get("cpu_model_path"),
+        out.get("labels_path"),
+    )
     return out

@@ -42,6 +42,11 @@ from ..telegram_helpers import (
     truncate_caption,
 )
 from ._consts import (
+    _MUTE_DEFAULT_S,
+    _MUTE_EXTEND_S,
+    _NOTIFY_COOLDOWN_DEFAULTS,
+    _PHOTO_LIMIT_BYTES,
+    _VIDEO_LIMIT_BYTES,
     ACTION_CAMS,
     ACTION_CLIP,
     ACTION_LIVE,
@@ -52,11 +57,6 @@ from ._consts import (
     BOT_COMMANDS,
     PERSISTENT_KB_KEY,
     PERSISTENT_KEYBOARD,
-    _MUTE_DEFAULT_S,
-    _MUTE_EXTEND_S,
-    _NOTIFY_COOLDOWN_DEFAULTS,
-    _PHOTO_LIMIT_BYTES,
-    _VIDEO_LIMIT_BYTES,
     _parse_hhmm,
     log,
 )
@@ -98,7 +98,9 @@ class OutboundMixin:
                 if not entry or len(entry) < 2:
                     continue
                 label, payload = entry[0], entry[1]
-                if isinstance(payload, str) and (payload.startswith("http://") or payload.startswith("https://")):
+                if isinstance(payload, str) and (
+                    payload.startswith("http://") or payload.startswith("https://")
+                ):
                     built_row.append(InlineKeyboardButton(label, url=payload))
                 else:
                     # Telegram callback_data hard limit: 64 bytes.
@@ -113,7 +115,8 @@ class OutboundMixin:
         """Accept bytes OR a filesystem path; return something send_photo
         / send_video / send_document can swallow."""
         if isinstance(src, (bytes, bytearray)):
-            bio = BytesIO(bytes(src)); bio.name = default_name
+            bio = BytesIO(bytes(src))
+            bio.name = default_name
             return bio
         if isinstance(src, (str, Path)):
             return open(str(src), "rb")
@@ -130,14 +133,24 @@ class OutboundMixin:
                 return 0
         return 0
 
-    async def send_alert(self, text: str = "", *, photo=None, video=None,
-                         buttons=None, parse_mode: str = "HTML",
-                         silent: bool = False, dark: bool = False,
-                         reply_to: int | None = None):
+    async def send_alert(
+        self,
+        text: str = "",
+        *,
+        photo=None,
+        video=None,
+        buttons=None,
+        parse_mode: str = "HTML",
+        silent: bool = False,
+        dark: bool = False,
+        reply_to: int | None = None,
+    ):
         """Unified send. `photo`/`video` accept bytes or a filesystem path.
         Auto-falls-back to sendDocument when limits are exceeded."""
         if not self.enabled or not self.bot:
-            log.info("[tg] send_alert skipped (enabled=%s, bot=%s)", self.enabled, self.bot is not None)
+            log.info(
+                "[tg] send_alert skipped (enabled=%s, bot=%s)", self.enabled, self.bot is not None
+            )
             return
         if dark:
             log.info("[tg] dark/night alert")
@@ -190,18 +203,24 @@ class OutboundMixin:
     # bubbles. Callback strings now match the cam:<id>:* dispatcher so the
     # buttons actually route — the old "snapshot:<id>" / "clip:<id>" prefixes
     # were never registered and silently no-op'd on click.
-    def send_alert_sync(self, caption: str, jpeg_bytes: bytes | None = None,
-                        snapshot_url: str | None = None,
-                        dashboard_url: str | None = None,
-                        camera_id: str | None = None):
+    def send_alert_sync(
+        self,
+        caption: str,
+        jpeg_bytes: bytes | None = None,
+        snapshot_url: str | None = None,
+        dashboard_url: str | None = None,
+        camera_id: str | None = None,
+    ):
         if not self.enabled:
             return
         buttons = []
         if camera_id:
-            buttons.append([
-                ("📷 Livebild", f"cam:{camera_id}:livebild"[:64]),
-                ("🎬 5 s Clip", f"cam:{camera_id}:clip:5"[:64]),
-            ])
+            buttons.append(
+                [
+                    ("📷 Livebild", f"cam:{camera_id}:livebild"[:64]),
+                    ("🎬 5 s Clip", f"cam:{camera_id}:clip:5"[:64]),
+                ]
+            )
         if dashboard_url:
             buttons.append([("🖥 Dashboard", dashboard_url)])
         self.send(caption, photo=jpeg_bytes, buttons=buttons, parse_mode=None)
@@ -265,6 +284,7 @@ class OutboundMixin:
             if not video_path.exists():
                 return None
             from ..tracking_worker import tracks_path_for
+
             tracks_path = tracks_path_for(video_path)
             # Up to 2 s wait — most clips finish tracking in well under
             # that on this hardware. The poll interval is 100 ms so the
@@ -273,20 +293,18 @@ class OutboundMixin:
             while not tracks_path.exists() and time.time() < deadline:
                 time.sleep(0.1)
             if not tracks_path.exists():
-                log.info("[tg] best-frame: tracks.json not ready for %s, fallback",
-                         event_id)
+                log.info("[tg] best-frame: tracks.json not ready for %s, fallback", event_id)
                 return None
             import json as _json
+
             try:
                 tracks = _json.loads(tracks_path.read_text(encoding="utf-8"))
             except Exception as e:
-                log.warning("[tg] best-frame: tracks.json parse fail %s: %s",
-                            tracks_path.name, e)
+                log.warning("[tg] best-frame: tracks.json parse fail %s: %s", tracks_path.name, e)
                 return None
             best = tracks.get("best_frame")
             if not best or not isinstance(best, dict):
-                log.info("[tg] best-frame: no best_frame in tracks.json for %s, fallback",
-                         event_id)
+                log.info("[tg] best-frame: no best_frame in tracks.json for %s, fallback", event_id)
                 return None
             # Cache check — skip ffmpeg + draw_detections when the
             # rendered JPEG is newer than the tracks.json that drove it.
@@ -303,26 +321,46 @@ class OutboundMixin:
             # a continuous run with a keyframe nearby. -frames:v 1 +
             # mjpeg gives a single-image stream piped to stdout.
             import shutil as _shutil
+
             ffmpeg_bin = _shutil.which("ffmpeg")
             if not ffmpeg_bin:
                 log.info("[tg] best-frame: ffmpeg missing, fallback")
                 return None
             t_seek = float(best.get("t") or 0.0)
             import subprocess as _sp
+
             try:
                 proc = _sp.run(
-                    [ffmpeg_bin, "-hide_banner", "-loglevel", "error",
-                     "-ss", f"{t_seek:.3f}", "-i", str(video_path),
-                     "-frames:v", "1", "-q:v", "2", "-f", "mjpeg", "-"],
-                    capture_output=True, timeout=1.0,
+                    [
+                        ffmpeg_bin,
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
+                        "-ss",
+                        f"{t_seek:.3f}",
+                        "-i",
+                        str(video_path),
+                        "-frames:v",
+                        "1",
+                        "-q:v",
+                        "2",
+                        "-f",
+                        "mjpeg",
+                        "-",
+                    ],
+                    capture_output=True,
+                    timeout=1.0,
                 )
             except _sp.TimeoutExpired:
-                log.warning("[tg] best-frame: ffmpeg timeout for %s, fallback",
-                            event_id)
+                log.warning("[tg] best-frame: ffmpeg timeout for %s, fallback", event_id)
                 return None
             if proc.returncode != 0 or not proc.stdout:
-                log.warning("[tg] best-frame: ffmpeg rc=%s len=%d for %s, fallback",
-                            proc.returncode, len(proc.stdout or b""), event_id)
+                log.warning(
+                    "[tg] best-frame: ffmpeg rc=%s len=%d for %s, fallback",
+                    proc.returncode,
+                    len(proc.stdout or b""),
+                    event_id,
+                )
                 return None
             jpeg_bytes = proc.stdout
             # Decode JPEG → numpy frame, build synthetic Detection list
@@ -333,12 +371,14 @@ class OutboundMixin:
             try:
                 import cv2 as _cv2
                 import numpy as _np
+
                 arr = _np.frombuffer(jpeg_bytes, dtype=_np.uint8)
                 frame = _cv2.imdecode(arr, _cv2.IMREAD_COLOR)
                 if frame is None:
                     log.warning("[tg] best-frame: imdecode failed for %s", event_id)
                     return None
                 from ..detectors import Detection, draw_detections
+
                 best_f = int(best.get("f") or 0)
                 synth_dets = []
                 for tr in tracks.get("tracks", []) or []:
@@ -348,21 +388,23 @@ class OutboundMixin:
                             continue
                         bb = s.get("bbox") or {}
                         try:
-                            box = (int(bb["x1"]), int(bb["y1"]),
-                                   int(bb["x2"]), int(bb["y2"]))
+                            box = (int(bb["x1"]), int(bb["y1"]), int(bb["x2"]), int(bb["y2"]))
                         except Exception:
                             continue
                         score = s.get("score")
                         if score is None:
                             score = tr.get("best_score") or 0.0
-                        synth_dets.append(Detection(
-                            label=label, score=float(score), bbox=box,
-                        ))
+                        synth_dets.append(
+                            Detection(
+                                label=label,
+                                score=float(score),
+                                bbox=box,
+                            )
+                        )
                         break  # one sample per track at this frame
                 if synth_dets:
                     frame = draw_detections(frame, synth_dets)
-                ok, buf = _cv2.imencode(".jpg", frame,
-                                        [int(_cv2.IMWRITE_JPEG_QUALITY), 85])
+                ok, buf = _cv2.imencode(".jpg", frame, [int(_cv2.IMWRITE_JPEG_QUALITY), 85])
                 if not ok:
                     return None
                 out_bytes = buf.tobytes()
@@ -370,15 +412,18 @@ class OutboundMixin:
                     cache_path.write_bytes(out_bytes)
                 except Exception:
                     pass  # non-fatal — return the rendered bytes anyway
-                log.info("[tg] best-frame: event=%s f=%d t=%.2f score=%.2f "
-                         "boxes=%d size=%dKB",
-                         event_id, best_f, t_seek,
-                         float(best.get("score") or 0.0),
-                         len(synth_dets), len(out_bytes) // 1024)
+                log.info(
+                    "[tg] best-frame: event=%s f=%d t=%.2f score=%.2f " "boxes=%d size=%dKB",
+                    event_id,
+                    best_f,
+                    t_seek,
+                    float(best.get("score") or 0.0),
+                    len(synth_dets),
+                    len(out_bytes) // 1024,
+                )
                 return out_bytes
             except Exception as e:
-                log.warning("[tg] best-frame: render failed for %s: %s",
-                            event_id, e)
+                log.warning("[tg] best-frame: render failed for %s: %s", event_id, e)
                 return None
         except Exception as e:
             log.debug("[tg] best-frame: %s", e)
@@ -405,10 +450,12 @@ class OutboundMixin:
         #   • present + no skip and no "[tg] event alert:" → bot init
         #     or transport issue; check Polling/HTTP errors above
         _labels_preview = meta.get("labels") or []
-        log.info("[tg] notify-attempt cam=%s label=%s sev=%s",
-                 camera_id,
-                 most_specific_label(_labels_preview) if _labels_preview else "—",
-                 (meta.get("severity") or "—"))
+        log.info(
+            "[tg] notify-attempt cam=%s label=%s sev=%s",
+            camera_id,
+            most_specific_label(_labels_preview) if _labels_preview else "—",
+            (meta.get("severity") or "—"),
+        )
         # Global + per-camera mute. Both gates honour the same "_until"
         # epoch contract: 0 / past = no mute, future = active. Daily
         # reports / highlights / watchdog go through their own jobs and
@@ -422,13 +469,13 @@ class OutboundMixin:
                 log.info("[tg] skip: global mute active until epoch=%d", int(global_mute))
                 return
             try:
-                cam_mute = float(self.settings_store.runtime_get_subkey(
-                    "cam_mute_until", camera_id, 0) or 0)
+                cam_mute = float(
+                    self.settings_store.runtime_get_subkey("cam_mute_until", camera_id, 0) or 0
+                )
             except Exception:
                 cam_mute = 0
             if cam_mute and time.time() < cam_mute:
-                log.info("[tg] skip: cam %s muted until epoch=%d",
-                         camera_id, int(cam_mute))
+                log.info("[tg] skip: cam %s muted until epoch=%d", camera_id, int(cam_mute))
                 return
         labels = meta.get("labels") or []
         primary = most_specific_label(labels)
@@ -447,8 +494,13 @@ class OutboundMixin:
             top_score = max((float(d.get("score", 0.0)) for d in detections), default=0.0)
         threshold = float(label_cfg.get("threshold", 0.0) or 0.0)
         if top_score < threshold:
-            log.warning("[tg] skip: %s score=%.2f < threshold=%.2f (cam=%s)",
-                        primary, top_score, threshold, camera_id)
+            log.warning(
+                "[tg] skip: %s score=%.2f < threshold=%.2f (cam=%s)",
+                primary,
+                top_score,
+                threshold,
+                camera_id,
+            )
             return
         if self._is_suppressed(camera_id, primary):
             log.warning("[tg] skip: suppressed %s/%s", camera_id, primary)
@@ -475,7 +527,9 @@ class OutboundMixin:
             if last and elapsed < cd_seconds:
                 log.info(
                     "[tg] skip: cooldown active for %s on %s (%ds remaining)",
-                    primary, camera_id, int(cd_seconds - elapsed),
+                    primary,
+                    camera_id,
+                    int(cd_seconds - elapsed),
                 )
                 return
             self._last_notify[key] = now_mono
@@ -488,6 +542,7 @@ class OutboundMixin:
         # _migrate_alerting_schedules in settings_store catches them on
         # next start).
         from ..event_logic import is_schedule_window_active, schedule_action_active as _sched_act
+
         sch_notify = cam_cfg.get("schedule_notify")
         if isinstance(sch_notify, dict) and sch_notify:
             if not is_schedule_window_active(sch_notify):
@@ -546,8 +601,7 @@ class OutboundMixin:
             caption = f"<b>{LABEL_DE.get(primary, primary)}</b> · {score_pct}% · {cam_name}"
 
         buttons = [
-            [("✅ Gültig", f"ev:{eid}:ok"),
-             ("❌ Falsch", f"ev:{eid}:no")],
+            [("✅ Gültig", f"ev:{eid}:ok"), ("❌ Falsch", f"ev:{eid}:no")],
             [("🔇 1 h still", f"ev:{eid}:m1h")],
         ]
         if night_wakeup and is_armed:
@@ -555,10 +609,12 @@ class OutboundMixin:
         # Live-action row: snapshot now / 5 s clip now. Re-uses the same
         # cam:<id>:livebild and cam:<id>:clip:5 callbacks the /menu picker
         # already routes — single source of truth, no parallel dispatcher.
-        buttons.append([
-            ("📷 Livebild", f"cam:{camera_id}:livebild"[:64]),
-            ("🎬 5 s Clip", f"cam:{camera_id}:clip:5"[:64]),
-        ])
+        buttons.append(
+            [
+                ("📷 Livebild", f"cam:{camera_id}:livebild"[:64]),
+                ("🎬 5 s Clip", f"cam:{camera_id}:clip:5"[:64]),
+            ]
+        )
         # Deep-link to the lightbox in the web UI — only when public_base_url
         # is configured AND the event has a stored event_id. Lets the user
         # jump straight to the persisted event without hunting through the
@@ -569,11 +625,14 @@ class OutboundMixin:
             buttons.append([("🌐 In App öffnen", deep_link)])
 
         if self.settings_store:
-            self.settings_store.runtime_alert_index_set(eid, {
-                "cam":   camera_id,
-                "label": primary,
-                "ts":    time.time(),
-            })
+            self.settings_store.runtime_alert_index_set(
+                eid,
+                {
+                    "cam": camera_id,
+                    "label": primary,
+                    "ts": time.time(),
+                },
+            )
 
         # Push payload: prefer the highest-scoring frame from the
         # tracking sidecar (Phase 1 worker → tracks.json) with the
@@ -589,8 +648,15 @@ class OutboundMixin:
             photo = str(snapshot_path)
         self.send(caption, photo=photo, buttons=buttons, silent=silent, dark=is_night_now)
         self._record_rate_limit(camera_id)
-        log.info("[tg] event alert: cam=%s label=%s score=%.2f severity=%s silent=%s dark=%s",
-                 camera_id, primary, top_score, severity or "—", silent, is_night_now)
+        log.info(
+            "[tg] event alert: cam=%s label=%s score=%.2f severity=%s silent=%s dark=%s",
+            camera_id,
+            primary,
+            top_score,
+            severity or "—",
+            silent,
+            is_night_now,
+        )
 
     def send_quest_completed(self, quest: dict):
         """Push a one-shot Glückwunsch when an F09 quest hits its target.
@@ -613,15 +679,15 @@ class OutboundMixin:
         except Exception as e:
             log.warning("[tg] quest push failed for %s: %s", quest.get("id"), e)
 
-    def send_timelapse_alert(self, video_path: str | Path, cam_name: str,
-                             profile_de: str, duration_s: int, rel_path: str):
+    def send_timelapse_alert(
+        self, video_path: str | Path, cam_name: str, profile_de: str, duration_s: int, rel_path: str
+    ):
         """Fired by camera_runtime after a successful timelapse encode."""
         if not self.enabled:
             return
         if not (self.push_cfg.get("timelapse") or {}).get("enabled", True):
             return
-        caption = (f"<b>Zeitraffer fertig</b>\n"
-                   f"{cam_name} · {profile_de} · {duration_s}s")
+        caption = f"<b>Zeitraffer fertig</b>\n" f"{cam_name} · {profile_de} · {duration_s}s"
         buttons = [[("💾 Speichern", f"tl:save:{rel_path}"[:64])]]
         self.send(caption, video=str(video_path), buttons=buttons, silent=True)
 
@@ -629,7 +695,9 @@ class OutboundMixin:
     def _job_daily_report(self):
         try:
             pcfg = self.push_cfg or {}
-            if not pcfg.get("enabled", True) or not (pcfg.get("daily_report") or {}).get("enabled", True):
+            if not pcfg.get("enabled", True) or not (pcfg.get("daily_report") or {}).get(
+                "enabled", True
+            ):
                 return
             cfg = self._cfg()
             cameras = cfg.get("cameras", []) or []
@@ -683,7 +751,9 @@ class OutboundMixin:
     def _job_highlight(self):
         try:
             pcfg = self.push_cfg or {}
-            if not pcfg.get("enabled", True) or not (pcfg.get("highlight") or {}).get("enabled", True):
+            if not pcfg.get("enabled", True) or not (pcfg.get("highlight") or {}).get(
+                "enabled", True
+            ):
                 return
             cfg = self._cfg()
             cameras = cfg.get("cameras", []) or []
@@ -712,28 +782,36 @@ class OutboundMixin:
                             continue
                     detections = ev.get("detections") or []
                     top = max(
-                        (float(d.get("score", 0.0)) for d in detections if d.get("label") == primary),
+                        (
+                            float(d.get("score", 0.0))
+                            for d in detections
+                            if d.get("label") == primary
+                        ),
                         default=0.0,
                     )
                     if top < 0.70:
                         continue
                     daylight = 0.5 if ev.get("after_hours") else 1.0
                     score = top * LABEL_WEIGHT.get(primary, 1.0) * daylight
-                    cands.append({
-                        "score":    score,
-                        "eid":      ev.get("event_id"),
-                        "cam_id":   cam_id,
-                        "cam_name": cam.get("name") or cam_id,
-                        "label":    primary,
-                        "time_hm":  ev_dt.strftime("%H:%M"),
-                        "snap_rel": ev.get("snapshot_relpath"),
-                    })
+                    cands.append(
+                        {
+                            "score": score,
+                            "eid": ev.get("event_id"),
+                            "cam_id": cam_id,
+                            "cam_name": cam.get("name") or cam_id,
+                            "label": primary,
+                            "time_hm": ev_dt.strftime("%H:%M"),
+                            "snap_rel": ev.get("snapshot_relpath"),
+                        }
+                    )
             if not cands:
                 log.info("[tg] highlight: no candidates")
                 return
             pick = max(cands, key=lambda c: c["score"])
-            caption = (f"<b>✨ Highlight des Tages</b>\n"
-                       f"{LABEL_DE.get(pick['label'], pick['label'])} · {pick['cam_name']} · {pick['time_hm']}")
+            caption = (
+                f"<b>✨ Highlight des Tages</b>\n"
+                f"{LABEL_DE.get(pick['label'], pick['label'])} · {pick['cam_name']} · {pick['time_hm']}"
+            )
             photo = None
             if pick["snap_rel"]:
                 full = self._storage_root() / pick["snap_rel"]
@@ -741,17 +819,21 @@ class OutboundMixin:
                     photo = str(full)
             buttons = [
                 [("🖼 Hochauflösend", f"hi:{pick['eid']}"[:64])],
-                [("📤 Teilen",          f"share:{pick['eid']}"[:64])],
+                [("📤 Teilen", f"share:{pick['eid']}"[:64])],
             ]
             if self.settings_store and pick["eid"]:
-                self.settings_store.runtime_alert_index_set(pick["eid"], {
-                    "cam":   pick["cam_id"],
-                    "label": pick["label"],
-                    "ts":    time.time(),
-                })
+                self.settings_store.runtime_alert_index_set(
+                    pick["eid"],
+                    {
+                        "cam": pick["cam_id"],
+                        "label": pick["label"],
+                        "ts": time.time(),
+                    },
+                )
             self.send(caption, photo=photo, buttons=buttons, silent=True)
-            log.info("[tg] highlight sent: %s/%s score=%.2f",
-                     pick["cam_id"], pick["eid"], pick["score"])
+            log.info(
+                "[tg] highlight sent: %s/%s score=%.2f", pick["cam_id"], pick["eid"], pick["score"]
+            )
         except Exception as e:
             log.error("[tg] highlight job failed: %s", e)
 
@@ -773,7 +855,9 @@ class OutboundMixin:
                 cam_name = status.get("name") or cam_id
                 # Treat 'error' or stale frames as offline; 'active' / 'starting' as online.
                 online = status.get("status") in ("active", "starting")
-                cam_state = state.setdefault(cam_id, {"online": True, "since": now, "alert_sent": False})
+                cam_state = state.setdefault(
+                    cam_id, {"online": True, "since": now, "alert_sent": False}
+                )
                 # Transition: online → offline
                 if not online and cam_state.get("online", True):
                     cam_state["online"] = False
@@ -785,8 +869,10 @@ class OutboundMixin:
                     if offline_for >= 300:
                         self.send(
                             f"<b>{cam_name} offline</b> seit {int(offline_for/60)} Min · keine RTSP-Antwort",
-                            buttons=[[("🔄 Neu verbinden", f"cam:{cam_id}:reconnect"[:64])],
-                                     [("📋 Logs", "menu:logs")]],
+                            buttons=[
+                                [("🔄 Neu verbinden", f"cam:{cam_id}:reconnect"[:64])],
+                                [("📋 Logs", "menu:logs")],
+                            ],
                         )
                         cam_state["alert_sent"] = True
                 # Recovery: offline → online
@@ -804,8 +890,9 @@ class OutboundMixin:
             # Storage check — once per 24 h while < 2 GB free.
             try:
                 import shutil as _sh
+
                 root = str(self._storage_root())
-                free_gb = _sh.disk_usage(root).free / (1024 ** 3)
+                free_gb = _sh.disk_usage(root).free / (1024**3)
                 last_warn = float(ss.runtime_get("last_storage_warn_ts") or 0)
                 if free_gb < 2.0 and (now - last_warn) > 86400:
                     self.send(f"<b>⚠ Speicher knapp</b>: nur noch {free_gb:.1f} GB frei")
@@ -833,6 +920,6 @@ class OutboundMixin:
                         total += st.st_size
                 except Exception:
                     continue
-        return total / (1024 ** 3)
+        return total / (1024**3)
 
     # ── Menu helpers — view builders ──────────────────────────────────────

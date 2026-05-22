@@ -21,8 +21,8 @@ from ..io_utils import atomic_write_json
 from ._consts import (
     EVENT_ICON_HEX,
     EVENT_LABEL_DE,
-    HISTORY_FIELDS,
     HISTORY_FIELD_TO_EVENT,
+    HISTORY_FIELDS,
     HISTORY_LABELS_DE,
     HISTORY_MAXLEN,
     HISTORY_UNITS,
@@ -150,7 +150,7 @@ class HistoryMixin:
         # disabled-event ticks instead of hiding them. Fields without an
         # associated event (cloud_cover, wind_gusts_10m, sun_altitude)
         # still emit thresholds[k]=None / events_enabled[k]=None.
-        events_cfg = (self.cfg.get("events") or {})
+        events_cfg = self.cfg.get("events") or {}
         thresholds: dict[str, float | None] = {k: None for k in HISTORY_FIELDS}
         events_enabled: dict[str, bool | None] = {k: None for k in HISTORY_FIELDS}
         for key in HISTORY_FIELDS:
@@ -166,15 +166,14 @@ class HistoryMixin:
                 thresholds[key] = None
         poll_interval_s = int(self.cfg.get("poll_interval", 300) or 300)
         return {
-            "hours":           hours,
-            "samples":         out,
-            "thresholds":      thresholds,
-            "events_enabled":  events_enabled,
-            "units":           dict(HISTORY_UNITS),
-            "labels_de":       dict(HISTORY_LABELS_DE),
-            "fields":          list(HISTORY_FIELDS),
+            "hours": hours,
+            "samples": out,
+            "thresholds": thresholds,
+            "events_enabled": events_enabled,
+            "units": dict(HISTORY_UNITS),
+            "labels_de": dict(HISTORY_LABELS_DE),
+            "fields": list(HISTORY_FIELDS),
             "poll_interval_s": poll_interval_s,
         }
 
     # ── Telegram push (Phase 3) ─────────────────────────────────────────────
-

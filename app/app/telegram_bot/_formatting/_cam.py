@@ -42,6 +42,11 @@ from ...telegram_helpers import (
     truncate_caption,
 )
 from .._consts import (
+    _MUTE_DEFAULT_S,
+    _MUTE_EXTEND_S,
+    _NOTIFY_COOLDOWN_DEFAULTS,
+    _PHOTO_LIMIT_BYTES,
+    _VIDEO_LIMIT_BYTES,
     ACTION_CAMS,
     ACTION_CLIP,
     ACTION_LIVE,
@@ -52,11 +57,6 @@ from .._consts import (
     BOT_COMMANDS,
     PERSISTENT_KB_KEY,
     PERSISTENT_KEYBOARD,
-    _MUTE_DEFAULT_S,
-    _MUTE_EXTEND_S,
-    _NOTIFY_COOLDOWN_DEFAULTS,
-    _PHOTO_LIMIT_BYTES,
-    _VIDEO_LIMIT_BYTES,
     _parse_hhmm,
     log,
 )
@@ -85,23 +85,42 @@ class _CamMixin:
         attempt a runtime restart (existing _try_restart_runtime path)."""
         info = next((c for c in self._active_cams() if c["cam_id"] == cam_id), None)
         if info is None:
-            return ("Kamera nicht gefunden.",
-                    InlineKeyboardMarkup([[InlineKeyboardButton("« Andere Kamera",
-                                                                 callback_data="menu:cams"),
-                                            InlineKeyboardButton("🏠 Hauptmenü",
-                                                                 callback_data="menu:root")]]))
-        body = "\n".join(["📹 " + line if i == 0 else line
-                          for i, line in enumerate(self._render_camera_block(info))])
+            return (
+                "Kamera nicht gefunden.",
+                InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton("« Andere Kamera", callback_data="menu:cams"),
+                            InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root"),
+                        ]
+                    ]
+                ),
+            )
+        body = "\n".join(
+            [
+                "📹 " + line if i == 0 else line
+                for i, line in enumerate(self._render_camera_block(info))
+            ]
+        )
         rows = [
-            [InlineKeyboardButton("🔄 Neues Live-Bild",
-                                  callback_data=f"cam:{cam_id}:livebild"[:64])],
-            [InlineKeyboardButton("🎬 5 s",  callback_data=f"cam:{cam_id}:clip:5"[:64]),
-             InlineKeyboardButton("🎬 15 s", callback_data=f"cam:{cam_id}:clip:15"[:64]),
-             InlineKeyboardButton("🎬 30 s", callback_data=f"cam:{cam_id}:clip:30"[:64])],
-            [InlineKeyboardButton("🔇 Pause 1 h",  callback_data=f"cam:{cam_id}:mute1h"[:64]),
-             InlineKeyboardButton("📊 Mehr Status", callback_data=f"cam:{cam_id}:status"[:64])],
-            [InlineKeyboardButton("« Andere Kamera", callback_data="menu:cams"),
-             InlineKeyboardButton("🏠 Hauptmenü",     callback_data="menu:root")],
+            [
+                InlineKeyboardButton(
+                    "🔄 Neues Live-Bild", callback_data=f"cam:{cam_id}:livebild"[:64]
+                )
+            ],
+            [
+                InlineKeyboardButton("🎬 5 s", callback_data=f"cam:{cam_id}:clip:5"[:64]),
+                InlineKeyboardButton("🎬 15 s", callback_data=f"cam:{cam_id}:clip:15"[:64]),
+                InlineKeyboardButton("🎬 30 s", callback_data=f"cam:{cam_id}:clip:30"[:64]),
+            ],
+            [
+                InlineKeyboardButton("🔇 Pause 1 h", callback_data=f"cam:{cam_id}:mute1h"[:64]),
+                InlineKeyboardButton("📊 Mehr Status", callback_data=f"cam:{cam_id}:status"[:64]),
+            ],
+            [
+                InlineKeyboardButton("« Andere Kamera", callback_data="menu:cams"),
+                InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root"),
+            ],
         ]
         return body, InlineKeyboardMarkup(rows)
 
@@ -110,13 +129,20 @@ class _CamMixin:
         detections (filtered to this cam) + cam-only storage breakdown +
         applicable health rows."""
         from html import escape as _esc
+
         info = next((c for c in self._active_cams() if c["cam_id"] == cam_id), None)
         if info is None:
-            return ("Kamera nicht gefunden.",
-                    InlineKeyboardMarkup([[
-                        InlineKeyboardButton("« Zurück", callback_data="menu:cams"),
-                        InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root"),
-                    ]]))
+            return (
+                "Kamera nicht gefunden.",
+                InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton("« Zurück", callback_data="menu:cams"),
+                            InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root"),
+                        ]
+                    ]
+                ),
+            )
         # Header (reuse the cam block formatter from phase-1).
         lines = list(self._render_camera_block(info))
         lines.insert(0, "📊 <b>Status</b>")
@@ -132,7 +158,9 @@ class _CamMixin:
             lines.append("Letzte Erkennungen heute:")
             for ev in evs[:6]:
                 hm = (ev.get("time") or "")[11:16]
-                lines.append(f"  <code>{hm}</code> {self._event_icon(ev)} {_esc(self._event_primary_label(ev) or '?')}")
+                lines.append(
+                    f"  <code>{hm}</code> {self._event_icon(ev)} {_esc(self._event_primary_label(ev) or '?')}"
+                )
             if len(evs) > 6:
                 lines.append(f"  … +{len(evs) - 6} weitere heute")
         else:
@@ -142,9 +170,11 @@ class _CamMixin:
         root = self._storage_root()
         parts = []
         row_total = 0
-        for sub_label, sub in [("Events", "motion_detection"),
-                                ("TL", "timelapse"),
-                                ("Frames", "timelapse_frames")]:
+        for sub_label, sub in [
+            ("Events", "motion_detection"),
+            ("TL", "timelapse"),
+            ("Frames", "timelapse_frames"),
+        ]:
             p = root / sub / cam_id
             bs = 0
             if p.exists():
@@ -174,11 +204,13 @@ class _CamMixin:
             lines.append(f"✅ Coral · {infer:.0f} ms ø")
 
         rows = [
-            [InlineKeyboardButton("🔄 Aktualisieren",
-                                   callback_data=f"cam:{cam_id}:status"[:64])],
-            [InlineKeyboardButton("« Zurück zur Kamera",
-                                   callback_data=f"cam:{cam_id}:drilldown"[:64]),
-             InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root")],
+            [InlineKeyboardButton("🔄 Aktualisieren", callback_data=f"cam:{cam_id}:status"[:64])],
+            [
+                InlineKeyboardButton(
+                    "« Zurück zur Kamera", callback_data=f"cam:{cam_id}:drilldown"[:64]
+                ),
+                InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root"),
+            ],
         ]
         return "\n".join(lines), InlineKeyboardMarkup(rows)
 
@@ -189,6 +221,7 @@ class _CamMixin:
         live afterwards."""
         try:
             from .. import server as _srv
+
             _srv.restart_single_camera(cam_id)
         except Exception as e:
             log.warning("[tg] restart_single_camera(%s) failed: %s", cam_id, e)

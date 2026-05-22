@@ -6,6 +6,7 @@ by `_reload_telegram_service` whenever the bot config changes, so
 caching the reference at module import time would silently break
 after the first settings save.
 """
+
 from __future__ import annotations
 
 import logging
@@ -33,8 +34,7 @@ def api_telegram_status():
     try:
         return jsonify(tg.get_polling_status())
     except Exception as e:
-        return jsonify({"state": "off", "since_seconds": 0, "enabled": False,
-                        "error": str(e)}), 500
+        return jsonify({"state": "off", "since_seconds": 0, "enabled": False, "error": str(e)}), 500
 
 
 @bp.post('/api/telegram/test')
@@ -43,14 +43,23 @@ def api_telegram_test():
     base_cfg = app_state.base_cfg
     tg = app_state.telegram_service
     tg_cfg = settings.export_effective_config(base_cfg).get("telegram", {})
-    logging.getLogger(__name__).info("[tg] Test: enabled=%s token_set=%s chat_id=%s",
-        tg_cfg.get("enabled"), bool(tg_cfg.get("token")), tg_cfg.get("chat_id"))
+    logging.getLogger(__name__).info(
+        "[tg] Test: enabled=%s token_set=%s chat_id=%s",
+        tg_cfg.get("enabled"),
+        bool(tg_cfg.get("token")),
+        tg_cfg.get("chat_id"),
+    )
     if not tg or not tg.enabled:
         reasons = []
-        if not tg_cfg.get("enabled"): reasons.append("Telegram nicht aktiviert")
-        if not tg_cfg.get("token"): reasons.append("Token fehlt")
-        if not tg_cfg.get("chat_id"): reasons.append("Chat-ID fehlt")
-        return jsonify({"ok": False, "error": " · ".join(reasons) or "Telegram nicht konfiguriert"}), 400
+        if not tg_cfg.get("enabled"):
+            reasons.append("Telegram nicht aktiviert")
+        if not tg_cfg.get("token"):
+            reasons.append("Token fehlt")
+        if not tg_cfg.get("chat_id"):
+            reasons.append("Chat-ID fehlt")
+        return jsonify(
+            {"ok": False, "error": " · ".join(reasons) or "Telegram nicht konfiguriert"}
+        ), 400
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     msg = f"TAM-spy Test ✓ Verbindung funktioniert! {ts}"
     try:
@@ -137,9 +146,9 @@ def api_system_telegram():
       enabled=True && connected=False          → red dot, "getrennt"
     """
     out = {
-        "enabled":         False,
-        "connected":       False,
-        "last_send_iso":   None,
+        "enabled": False,
+        "connected": False,
+        "last_send_iso": None,
         "last_send_age_s": None,
     }
     tg = app_state.telegram_service
@@ -155,7 +164,9 @@ def api_system_telegram():
     last_push = getattr(tg, "_last_push_ts", None)
     if last_push:
         try:
-            out["last_send_iso"] = datetime.fromtimestamp(float(last_push)).isoformat(timespec="seconds")
+            out["last_send_iso"] = datetime.fromtimestamp(float(last_push)).isoformat(
+                timespec="seconds"
+            )
             out["last_send_age_s"] = round(time.time() - float(last_push), 1)
         except Exception:
             pass

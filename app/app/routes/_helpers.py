@@ -3,6 +3,7 @@
 Things that don't belong in any single domain — path-traversal guards
 for query params, cam_id format checks, etc.
 """
+
 from __future__ import annotations
 
 import re

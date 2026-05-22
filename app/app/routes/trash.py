@@ -14,6 +14,7 @@ Endpoint URLs match the prompt spec verbatim:
 ``<id>`` is the event_id (unique across cameras for motion events).
 The cam_id is read from the trash entry's meta.json so the URL stays
 flat."""
+
 from __future__ import annotations
 
 import logging

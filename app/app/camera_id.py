@@ -24,6 +24,7 @@ Examples (IPs from RFC 5737/3849 documentation ranges)::
                     "Pförtnerhäuschen — älter", "2001:db8::042a")
         → "reolink_rlc810a_pfortnerhauschenalter_042a"
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -34,12 +35,19 @@ import unicodedata
 # We do this BEFORE the regex strip so "ä → a" doesn't get dropped to nothing
 # and "ß → ss" stays as two letters. Anything not in the table is handled by
 # Unicode NFKD decomposition + ASCII filter further down.
-_TRANSLITERATIONS = str.maketrans({
-    "ä": "ae", "ö": "oe", "ü": "ue",
-    "Ä": "ae", "Ö": "oe", "Ü": "ue",
-    "ß": "ss",
-    "ñ": "n", "ç": "c",
-})
+_TRANSLITERATIONS = str.maketrans(
+    {
+        "ä": "ae",
+        "ö": "oe",
+        "ü": "ue",
+        "Ä": "ae",
+        "Ö": "oe",
+        "Ü": "ue",
+        "ß": "ss",
+        "ñ": "n",
+        "ç": "c",
+    }
+)
 
 
 def _sanitise(segment: str) -> str:
@@ -115,7 +123,7 @@ def camera_slug(settings, camera_id: str) -> str:
     if settings is not None:
         try:
             data = getattr(settings, "data", None) or {}
-            for cam in (data.get("cameras") or []):
+            for cam in data.get("cameras") or []:
                 if isinstance(cam, dict) and cam.get("id") == camera_id:
                     name = cam.get("name") or ""
                     break

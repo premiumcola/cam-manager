@@ -44,7 +44,10 @@ class MQTTService:
         body = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
         try:
             info = self.client.publish(
-                f"{self.base_topic}/{topic}", body, qos=0, retain=retain,
+                f"{self.base_topic}/{topic}",
+                body,
+                qos=0,
+                retain=retain,
             )
             rc = getattr(info, "rc", mqtt.MQTT_ERR_SUCCESS)
             if rc != mqtt.MQTT_ERR_SUCCESS:
@@ -55,7 +58,9 @@ class MQTTService:
                     self._publish_warn_ts[key] = now
                     log.warning(
                         "MQTT publish %s failed: rc=%d (%s)",
-                        topic, rc, mqtt.error_string(rc),
+                        topic,
+                        rc,
+                        mqtt.error_string(rc),
                     )
         except Exception as e:
             log.warning("MQTT publish failed: %s", e)

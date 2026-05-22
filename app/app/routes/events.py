@@ -4,6 +4,7 @@ Migrated from server.py during R01.4. Every write goes through the
 `store.update_event` / `store.delete_event` API; the storage layer
 handles atomic writes since B08.
 """
+
 from __future__ import annotations
 
 import logging
@@ -78,7 +79,9 @@ def api_event_delete_bulk(cam_id):
             failed.append(eid)
     logging.getLogger(__name__).info(
         "[bulk-delete→trash] cam=%s trashed=%d failed=%d",
-        cam_id, deleted, len(failed),
+        cam_id,
+        deleted,
+        len(failed),
     )
     return jsonify({"ok": True, "deleted": deleted, "failed": failed})
 

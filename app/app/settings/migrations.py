@@ -7,6 +7,7 @@ migrations append to the end; never reorder existing entries because
 they may depend on one another (e.g. migrate_class_severity reads
 alarm_profile which migrate_camera_defaults backfills).
 """
+
 from __future__ import annotations
 
 import logging
@@ -53,8 +54,7 @@ def migrate_camera_defaults(data: dict, base_config: dict) -> None:
     # original id on the next boot. Two cams sharing the same name is
     # already handled elsewhere — this just stops the migration from
     # silently un-doing itself.
-    by_name = {(c.get("name") or "").strip().lower(): c
-               for c in cameras if c.get("name")}
+    by_name = {(c.get("name") or "").strip().lower(): c for c in cameras if c.get("name")}
     for c in base_config.get("cameras", []):
         base_name = (c.get("name") or "").strip().lower()
         if c["id"] in by_id:
@@ -84,7 +84,7 @@ def migrate_schedules(data: dict) -> bool:
         if isinstance(sch, dict) and "actions" in sch:
             # Already in the new shape; just make sure all sub-keys exist.
             sch.setdefault("from", sch.get("start", "21:00"))
-            sch.setdefault("to",   sch.get("end",   "06:00"))
+            sch.setdefault("to", sch.get("end", "06:00"))
             acts = sch.setdefault("actions", {})
             acts.setdefault("record", True)
             acts.setdefault("telegram", True)
@@ -93,27 +93,33 @@ def migrate_schedules(data: dict) -> bool:
 
         rec_enabled = bool(cam.get("recording_schedule_enabled"))
         rec_start = cam.get("recording_schedule_start", "08:00")
-        rec_end   = cam.get("recording_schedule_end",   "22:00")
+        rec_end = cam.get("recording_schedule_end", "22:00")
         ale_dict = sch if isinstance(sch, dict) else {}
         ale_enabled = bool(ale_dict.get("enabled"))
         ale_start = ale_dict.get("start", "22:00")
-        ale_end   = ale_dict.get("end",   "06:00")
+        ale_end = ale_dict.get("end", "06:00")
 
         if not rec_enabled and not ale_enabled:
             new_sched = {
-                "enabled": False, "from": "21:00", "to": "06:00",
+                "enabled": False,
+                "from": "21:00",
+                "to": "06:00",
                 "actions": {"record": True, "telegram": True, "hard": True},
             }
             src = "both-off"
         elif rec_enabled and not ale_enabled:
             new_sched = {
-                "enabled": True, "from": rec_start, "to": rec_end,
+                "enabled": True,
+                "from": rec_start,
+                "to": rec_end,
                 "actions": {"record": True, "telegram": True, "hard": False},
             }
             src = "recording-only"
         elif not rec_enabled and ale_enabled:
             new_sched = {
-                "enabled": True, "from": ale_start, "to": ale_end,
+                "enabled": True,
+                "from": ale_start,
+                "to": ale_end,
                 "actions": {"record": True, "telegram": True, "hard": True},
             }
             src = "alerting-only"
@@ -126,7 +132,9 @@ def migrate_schedules(data: dict) -> bool:
             else:
                 f, t = ale_start, ale_end
             new_sched = {
-                "enabled": True, "from": f, "to": t,
+                "enabled": True,
+                "from": f,
+                "to": t,
                 "actions": {"record": True, "telegram": True, "hard": True},
             }
             src = f"both-on (rec={rec_dur}m ale={ale_dur}m → wider)"
@@ -137,12 +145,21 @@ def migrate_schedules(data: dict) -> bool:
         cam.pop("recording_schedule_end", None)
         log.info(
             "Schedule-Migration: %s → %s (%s → enabled=%s %s-%s actions=%s)",
-            cam.get("id", "?"), src,
-            "rec=%s/%s/%s ale=%s/%s/%s" % (
-                rec_enabled, rec_start, rec_end,
-                ale_enabled, ale_start, ale_end,
+            cam.get("id", "?"),
+            src,
+            "rec=%s/%s/%s ale=%s/%s/%s"
+            % (
+                rec_enabled,
+                rec_start,
+                rec_end,
+                ale_enabled,
+                ale_start,
+                ale_end,
             ),
-            new_sched["enabled"], new_sched["from"], new_sched["to"], new_sched["actions"],
+            new_sched["enabled"],
+            new_sched["from"],
+            new_sched["to"],
+            new_sched["actions"],
         )
         migrated += 1
     return migrated > 0
@@ -161,14 +178,14 @@ def migrate_class_severity(data: dict) -> None:
         if cam.get("class_severity"):
             continue
         profile = (cam.get("alarm_profile") or "soft").strip() or "soft"
-        mapping = ALARM_PROFILE_TO_SEVERITY.get(
-            profile, ALARM_PROFILE_TO_SEVERITY["soft"]
-        )
+        mapping = ALARM_PROFILE_TO_SEVERITY.get(profile, ALARM_PROFILE_TO_SEVERITY["soft"])
         cam["class_severity"] = dict(mapping)
         migrated += 1
         log.info(
             "class_severity-Migration: %s ← alarm_profile=%s → %s",
-            cam.get("id", "?"), profile, mapping,
+            cam.get("id", "?"),
+            profile,
+            mapping,
         )
     if migrated:
         log.info("class_severity-Migration: %d Kameras migriert", migrated)
@@ -201,23 +218,26 @@ def migrate_alerting_schedules(data: dict) -> None:
         actions = sch.get("actions") or {}
         sch_enabled = bool(sch.get("enabled"))
         sch_from = sch.get("from") or "21:00"
-        sch_to   = sch.get("to")   or "06:00"
+        sch_to = sch.get("to") or "06:00"
         if not has_n:
             cam["schedule_notify"] = {
                 "enabled": sch_enabled and actions.get("telegram", True) is not False,
                 "from": sch_from,
-                "to":   sch_to,
+                "to": sch_to,
             }
         if not has_r:
             cam["schedule_record"] = {
                 "enabled": sch_enabled and actions.get("record", True) is not False,
                 "from": sch_from,
-                "to":   sch_to,
+                "to": sch_to,
             }
         migrated += 1
         log.info(
             "Alerting-Schedule-Migration: %s ← legacy=%s → notify=%s record=%s",
-            cam.get("id", "?"), sch, cam["schedule_notify"], cam["schedule_record"],
+            cam.get("id", "?"),
+            sch,
+            cam["schedule_notify"],
+            cam["schedule_record"],
         )
     if migrated:
         log.info("Alerting-Schedule-Migration: %d Kameras migriert", migrated)
@@ -361,9 +381,11 @@ def migrate_timelapse_intervals(data: dict) -> None:
                 touched_fps += 1
     if touched_intervals or touched_fps:
         log.info(
-            "[migration] timelapse-floor: clamped %d interval_s ≥ %ds, "
-            "forced %d fps → %d",
-            touched_intervals, floor_s, touched_fps, fixed_fps,
+            "[migration] timelapse-floor: clamped %d interval_s ≥ %ds, " "forced %d fps → %d",
+            touched_intervals,
+            floor_s,
+            touched_fps,
+            fixed_fps,
         )
 
 
@@ -393,8 +415,8 @@ def migrate_label_thresholds(data: dict) -> None:
             touched += 1
     if touched:
         log.info(
-            "[migration] label-thresholds: rewrote stale person=0.65 → 0.45 "
-            "on %d Kameras", touched,
+            "[migration] label-thresholds: rewrote stale person=0.65 → 0.45 " "on %d Kameras",
+            touched,
         )
 
 

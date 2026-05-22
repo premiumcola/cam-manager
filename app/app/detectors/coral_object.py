@@ -3,6 +3,7 @@ motion-only) COCO-style object detector.
 
 Carved out of `_legacy_classes.py` during R02.2.
 """
+
 from __future__ import annotations
 
 import logging
@@ -19,7 +20,9 @@ log = logging.getLogger(__name__)
 
 
 def _letterbox(
-    img: np.ndarray, dst_w: int, dst_h: int,
+    img: np.ndarray,
+    dst_w: int,
+    dst_h: int,
 ) -> tuple[np.ndarray, float, int, int]:
     """Fit `img` into a `dst_w x dst_h` canvas without distorting aspect.
 
@@ -45,7 +48,7 @@ def _letterbox(
     pad_x = (dst_w - new_w) // 2
     pad_y = (dst_h - new_h) // 2
     canvas = np.full((dst_h, dst_w, 3), 114, dtype=resized.dtype)
-    canvas[pad_y:pad_y + new_h, pad_x:pad_x + new_w] = resized
+    canvas[pad_y : pad_y + new_h, pad_x : pad_x + new_w] = resized
     return canvas, scale, pad_x, pad_y
 
 
@@ -91,7 +94,9 @@ class CoralObjectDetector:
         # "crow detected as elephant" weeks later.
         lp = self.cfg.get("labels_path")
         sample = {k: self.labels[k] for k in sorted(self.labels)[:25]}
-        log.info("CoralObjectDetector labels: %s — %d entries, head=%s", lp, len(self.labels), sample)
+        log.info(
+            "CoralObjectDetector labels: %s — %d entries, head=%s", lp, len(self.labels), sample
+        )
         model_path = self.cfg.get("model_path")
         if not model_path:
             self.reason = "missing model_path"
@@ -101,6 +106,7 @@ class CoralObjectDetector:
         try:
             from pycoral.adapters import common, detect  # type: ignore
             from pycoral.utils.edgetpu import make_interpreter  # type: ignore
+
             self.common = common
             self.detect = detect
             self.interpreter = make_interpreter(model_path, device=self.device)
@@ -125,6 +131,7 @@ class CoralObjectDetector:
         for try_path in filter(None, [cpu_model, model_path]):
             try:
                 import tflite_runtime.interpreter as tflite  # type: ignore
+
                 interp = tflite.Interpreter(model_path=try_path)
                 interp.allocate_tensors()
                 self.interpreter = interp
@@ -170,13 +177,18 @@ class CoralObjectDetector:
         """
         if not self.available:
             return []
-        threshold = float(min_score) if (min_score is not None and min_score > 0) else self.min_score
+        threshold = (
+            float(min_score) if (min_score is not None and min_score > 0) else self.min_score
+        )
         if self._cpu_mode:
             dets = self._detect_cpu(frame, threshold)
         else:
             dets = self._detect_coral(frame, threshold)
         kept, drops = self._apply_label_filters_with_reasons(
-            dets, frame, label_thresholds, threshold,
+            dets,
+            frame,
+            label_thresholds,
+            threshold,
         )
         if cam_id and log.isEnabledFor(logging.INFO):
             try:
@@ -219,7 +231,12 @@ class CoralObjectDetector:
                     drops.append((d, f"size_floor (h_frac={bb_h / h:.2f} < {min_h_frac:.2f})"))
                     continue
                 if bb_area < min_area_frac * frame_area:
-                    drops.append((d, f"size_floor (area_frac={bb_area / frame_area:.3f} < {min_area_frac:.3f})"))
+                    drops.append(
+                        (
+                            d,
+                            f"size_floor (area_frac={bb_area / frame_area:.3f} < {min_area_frac:.3f})",
+                        )
+                    )
                     continue
             out.append(d)
         return out, drops
@@ -228,7 +245,9 @@ class CoralObjectDetector:
     # _apply_label_filters keeps the old single-return-value semantics.
     def _apply_label_filters(self, dets, frame, label_thresholds):
         kept, _ = self._apply_label_filters_with_reasons(
-            dets, frame, label_thresholds,
+            dets,
+            frame,
+            label_thresholds,
             self.min_score,
         )
         return kept
@@ -298,17 +317,19 @@ class CoralObjectDetector:
         """
         if kept:
             if drops:
-                log.info("[det][cam:%s] ✓ erkannt: %s · ✗ verworfen: %s",
-                         cam_id, self._fmt_dets(kept), self._fmt_drops(drops))
+                log.info(
+                    "[det][cam:%s] ✓ erkannt: %s · ✗ verworfen: %s",
+                    cam_id,
+                    self._fmt_dets(kept),
+                    self._fmt_drops(drops),
+                )
             else:
-                log.info("[det][cam:%s] ✓ erkannt: %s",
-                         cam_id, self._fmt_dets(kept))
+                log.info("[det][cam:%s] ✓ erkannt: %s", cam_id, self._fmt_dets(kept))
             return
         if drops:
             # Sort by score descending so "almost made it" labels come first.
             ordered = sorted(drops, key=lambda x: x[0].score, reverse=True)
-            log.info("[det][cam:%s] ✗ verworfen: %s",
-                     cam_id, self._fmt_drops(ordered))
+            log.info("[det][cam:%s] ✗ verworfen: %s", cam_id, self._fmt_drops(ordered))
 
     def detect_frame_raw(self, frame: np.ndarray, threshold: float = 0.20) -> list[Detection]:
         """Run inference and return the raw model output BEFORE label
@@ -349,9 +370,16 @@ class CoralObjectDetector:
             # references are released before the next caller can run set_input.
             objs = self.detect.get_objects(self.interpreter, score_threshold=score_threshold)
             snapshot = [
-                (int(o.id), float(o.score),
-                 (float(o.bbox.xmin), float(o.bbox.ymin),
-                  float(o.bbox.xmax), float(o.bbox.ymax)))
+                (
+                    int(o.id),
+                    float(o.score),
+                    (
+                        float(o.bbox.xmin),
+                        float(o.bbox.ymin),
+                        float(o.bbox.xmax),
+                        float(o.bbox.ymax),
+                    ),
+                )
                 for o in objs
             ]
         h, w = frame.shape[:2]
@@ -398,9 +426,9 @@ class CoralObjectDetector:
             self.interpreter.set_tensor(input_details[0]['index'], inp)
             self.interpreter.invoke()
             # Standard SSD output order: boxes [N,4], classes [N], scores [N], count
-            boxes   = np.copy(self.interpreter.get_tensor(output_details[0]['index'])[0])
+            boxes = np.copy(self.interpreter.get_tensor(output_details[0]['index'])[0])
             classes = np.copy(self.interpreter.get_tensor(output_details[1]['index'])[0])
-            scores  = np.copy(self.interpreter.get_tensor(output_details[2]['index'])[0])
+            scores = np.copy(self.interpreter.get_tensor(output_details[2]['index'])[0])
         h, w = frame.shape[:2]
         inv_scale = 1.0 / scale if scale > 0 else 1.0
         out: list[Detection] = []
@@ -415,5 +443,7 @@ class CoralObjectDetector:
             y2 = max(0, min(h, int(round((ymax * in_h - pad_y) * inv_scale))))
             cls_id = int(classes[i])
             label = self.labels.get(cls_id, str(cls_id))
-            out.append(Detection(label=label, score=score, bbox=(x1, y1, x2, y2), raw_cls_id=cls_id))
+            out.append(
+                Detection(label=label, score=score, bbox=(x1, y1, x2, y2), raw_cls_id=cls_id)
+            )
         return _apply_region_filter(out, self._region_filter)

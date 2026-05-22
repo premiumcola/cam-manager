@@ -12,6 +12,7 @@ server.py. Those imports are lazy (inside the route function body) to
 avoid the import-time cycle. R01.6 cleans this up by relocating the
 boot helpers out of server.py.
 """
+
 from __future__ import annotations
 
 
@@ -40,6 +41,7 @@ def register_blueprints(app) -> None:
         trash,
         weather,
     )
+
     app.register_blueprint(tracking.bp)
     app.register_blueprint(sichtungen.bp)
     app.register_blueprint(admin.bp)

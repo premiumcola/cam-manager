@@ -28,6 +28,7 @@ Filename collisions: when two source files would land at the same
 target name in the family bucket, the migrator appends ``_<n>`` before
 the suffix to disambiguate. Original frames are never overwritten.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -95,8 +96,7 @@ def flatten(rejects_dir: Path, *, dry_run: bool = False) -> dict[str, int]:
             if not fp.is_file():
                 continue
             target = _unique_target(bucket, fp.name)
-            log.info("[flatten] %s/%s -> %s/%s",
-                     sub.name, fp.name, family, target.name)
+            log.info("[flatten] %s/%s -> %s/%s", sub.name, fp.name, family, target.name)
             if dry_run:
                 counters["moved"] += 1
                 continue
@@ -123,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
         "run_dir",
         type=Path,
         help="Path to either the run directory (containing _rejected/) "
-             "or the _rejected/ directory itself.",
+        "or the _rejected/ directory itself.",
     )
     parser.add_argument(
         "--dry-run",
@@ -141,7 +141,9 @@ def main(argv: list[str] | None = None) -> int:
     counters = flatten(rej, dry_run=args.dry_run)
     log.info(
         "[flatten] done: moved=%d skipped=%d removed=%d errors=%d",
-        counters["moved"], counters["skipped"], counters["removed"],
+        counters["moved"],
+        counters["skipped"],
+        counters["removed"],
         counters["errors"],
     )
     return 0 if counters["errors"] == 0 else 2

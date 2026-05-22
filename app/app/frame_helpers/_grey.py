@@ -1,6 +1,7 @@
 """Grey / flat-gray / dead-area heuristics. Carved out of the original
 ``frame_helpers.py`` during the modular refactor; behaviour
 unchanged."""
+
 from __future__ import annotations
 
 import cv2
@@ -27,7 +28,7 @@ from ._profile import (
 )
 
 
-def is_grey_frame(img, profile: "FrameValidatorProfile | None" = None) -> tuple[bool, str]:
+def is_grey_frame(img, profile: FrameValidatorProfile | None = None) -> tuple[bool, str]:
     """True when the frame is a uniform mid-grey hickup. False on real imagery
     (including IR/night frames, which have plenty of noise across channels).
     ``profile`` lets the caller relax the mid-grey total-std threshold for
@@ -68,8 +69,10 @@ def is_grey_frame(img, profile: "FrameValidatorProfile | None" = None) -> tuple[
     if std_sum < grey_channel_std_sum:
         return True, f"grey_uniform(std_sum={std_sum:.1f})"
     mean_brightness = float((img[:, :, 0].mean() + img[:, :, 1].mean() + img[:, :, 2].mean()) / 3.0)
-    if (_GREY_MIDBAND_MIN <= mean_brightness <= _GREY_MIDBAND_MAX
-            and std_sum < grey_midband_total_std):
+    if (
+        _GREY_MIDBAND_MIN <= mean_brightness <= _GREY_MIDBAND_MAX
+        and std_sum < grey_midband_total_std
+    ):
         return True, f"grey_midband(brightness={mean_brightness:.0f},std_sum={std_sum:.1f})"
     return False, ""
 
@@ -112,8 +115,10 @@ def dead_area_score(img) -> tuple[float, int, int]:
             bstd = float(blurred_tile.std())
             tmean = float(blurred_tile.mean())
             tile_dead = False
-            if bstd < _TILE_DEAD_BLURRED_STD_FLOOR or (_TILE_GREY_BAND_MIN <= tmean <= _TILE_GREY_BAND_MAX
-                  and bstd < _TILE_GREY_BAND_BLURRED_STD):
+            if bstd < _TILE_DEAD_BLURRED_STD_FLOOR or (
+                _TILE_GREY_BAND_MIN <= tmean <= _TILE_GREY_BAND_MAX
+                and bstd < _TILE_GREY_BAND_BLURRED_STD
+            ):
                 tile_dead = True
             elif _TILE_GREY_BAND_MIN <= tmean <= _TILE_GREY_BAND_MAX:
                 # Chroma uniformity check — only fires inside the
@@ -125,9 +130,7 @@ def dead_area_score(img) -> tuple[float, int, int]:
                     b = tile_bgr[:, :, 0].astype(np.int16)
                     g = tile_bgr[:, :, 1].astype(np.int16)
                     r = tile_bgr[:, :, 2].astype(np.int16)
-                    chroma_std = float(
-                        (np.abs(b - g).std() + np.abs(b - r).std()) / 2.0
-                    )
+                    chroma_std = float((np.abs(b - g).std() + np.abs(b - r).std()) / 2.0)
                     if chroma_std < _TILE_CHROMA_STD_FLOOR:
                         tile_dead = True
             if tile_dead:
@@ -161,7 +164,6 @@ def is_flat_gray_full_frame(img) -> tuple[bool, str]:
         s = float(gray.std())
     except Exception:
         return False, ""
-    if (_FLAT_GRAY_BAND_MIN <= m <= _FLAT_GRAY_BAND_MAX
-            and s < _FLAT_GRAY_STD_MAX):
+    if _FLAT_GRAY_BAND_MIN <= m <= _FLAT_GRAY_BAND_MAX and s < _FLAT_GRAY_STD_MAX:
         return True, f"flat_gray_full_frame(mean={m:.0f},std={s:.1f})"
     return False, ""

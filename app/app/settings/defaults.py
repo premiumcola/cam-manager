@@ -3,6 +3,7 @@
 Pure data; no SettingsStore reference. Imported by store.py at boot to
 seed self.data; imported by migrations.py for camera-default backfill.
 """
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -20,7 +21,7 @@ def default_schedule() -> dict:
     return {
         "enabled": False,
         "from": "21:00",
-        "to":   "06:00",
+        "to": "06:00",
         "actions": {"record": True, "telegram": True, "hard": True},
     }
 
@@ -73,15 +74,19 @@ def default_camera(cam: dict | None = None) -> dict:
         # {"person": 0.72} are upgraded to the 4-class default. Cams
         # with anything else (custom person value, extra labels)
         # keep their config — never stomp user-tuned settings.
-        "label_thresholds": (dict(LABEL_THRESHOLD_DEFAULTS)
-                              if cam.get("label_thresholds", None) in (None, {"person": 0.72})
-                              else cam.get("label_thresholds")),
+        "label_thresholds": (
+            dict(LABEL_THRESHOLD_DEFAULTS)
+            if cam.get("label_thresholds", None) in (None, {"person": 0.72})
+            else cam.get("label_thresholds")
+        ),
         # N-of-M confirmation window. Falsy / missing → fresh defaults
         # so existing cams pick up the gate on the next config reload.
         # User-customised dicts pass through untouched.
-        "confirmation_window": (cam.get("confirmation_window")
-                                 if cam.get("confirmation_window")
-                                 else dict(CONFIRMATION_WINDOW_DEFAULTS)),
+        "confirmation_window": (
+            cam.get("confirmation_window")
+            if cam.get("confirmation_window")
+            else dict(CONFIRMATION_WINDOW_DEFAULTS)
+        ),
         "timelapse": {
             "enabled": _tl.get("enabled", False),
             "fps": _tl.get("fps", 30),
@@ -140,28 +145,28 @@ def default_camera(cam: dict | None = None) -> dict:
         # upsert_camera builds dropped them and existing.update(merged)
         # could never overwrite the previously-stored value. 0.0 keeps
         # tracker_core's module default.
-        "track_spawn_min_score":     float(cam.get("track_spawn_min_score") or 0.0),
-        "track_continue_min_score":  float(cam.get("track_continue_min_score") or 0.0),
-        "track_miss_grace_seconds":  float(cam.get("track_miss_grace_seconds") or 0.0),
+        "track_spawn_min_score": float(cam.get("track_spawn_min_score") or 0.0),
+        "track_continue_min_score": float(cam.get("track_continue_min_score") or 0.0),
+        "track_miss_grace_seconds": float(cam.get("track_miss_grace_seconds") or 0.0),
         "track_iou_match_threshold": float(cam.get("track_iou_match_threshold") or 0.0),
-        "track_postclip_precision":  (cam.get("track_postclip_precision") or "standard"),
+        "track_postclip_precision": (cam.get("track_postclip_precision") or "standard"),
         # L07 — ghost-track pruning toggle. Default True so existing
         # cams pick up the cleanup on their next save without user
         # action. `setdefault`-style read with False fallback ONLY when
         # explicitly stored False (the explicit-False case the user
         # wants for debugging).
-        "track_filter_ghosts":       (False if cam.get("track_filter_ghosts") is False else True),
+        "track_filter_ghosts": (False if cam.get("track_filter_ghosts") is False else True),
         # Reolink HTTP-CGI port override — same persistence hole as the
         # tracker fields above, surfaced by task vk257 when the image-
         # mode panel's port number was getting dropped on save.
-        "reolink_http_port":         int(cam.get("reolink_http_port") or 0),
-        "wildlife_min_score":        float(cam.get("wildlife_min_score") or 0.0),
+        "reolink_http_port": int(cam.get("reolink_http_port") or 0),
+        "wildlife_min_score": float(cam.get("wildlife_min_score") or 0.0),
         # Per-camera streaming preferences + timestamp-overlay calibration.
         # Empty dicts mean "use the module-level defaults"; the runtime
         # only checks them when present so an unset camera keeps its
         # historical behaviour.
-        "streaming":                 (cam.get("streaming") or {}),
-        "timestamp_overlay_zone":    (cam.get("timestamp_overlay_zone") or {}),
+        "streaming": (cam.get("streaming") or {}),
+        "timestamp_overlay_zone": (cam.get("timestamp_overlay_zone") or {}),
     }
 
 
@@ -170,13 +175,17 @@ def build_defaults(base_config: dict) -> dict:
     return {
         "app": {
             "name": base_config.get("app", {}).get("name", "TAM-spy"),
-            "tagline": base_config.get("app", {}).get("tagline", "Analyse · Sicherheit · Tierbeobachtung"),
+            "tagline": base_config.get("app", {}).get(
+                "tagline", "Analyse · Sicherheit · Tierbeobachtung"
+            ),
             "logo": base_config.get("app", {}).get("logo", "🐈‍⬛"),
             "theme": base_config.get("app", {}).get("theme", "dark"),
         },
         "server": {
             "public_base_url": base_config.get("server", {}).get("public_base_url", ""),
-            "default_discovery_subnet": base_config.get("server", {}).get("default_discovery_subnet", "192.168.1.0/24"),
+            "default_discovery_subnet": base_config.get("server", {}).get(
+                "default_discovery_subnet", "192.168.1.0/24"
+            ),
         },
         "telegram": {
             "enabled": base_config.get("telegram", {}).get("enabled", False),
@@ -197,18 +206,20 @@ def build_defaults(base_config: dict) -> dict:
         "review": {},
         "ui": {"wizard_completed": bool(cams)},
         "timelapse_settings": {
-            "global_enabled": base_config.get("timelapse_settings", {}).get("global_enabled", False),
+            "global_enabled": base_config.get("timelapse_settings", {}).get(
+                "global_enabled", False
+            ),
         },
         # Ephemeral runtime data (callback verdicts, suppress windows,
         # offline state). Persisted so a service reload doesn't lose
         # active mute timers or in-flight system_state.
         "runtime": {
-            "event_feedback":       {},
-            "suppress":             {},
-            "system_state":         {},
-            "alert_index":          {},
+            "event_feedback": {},
+            "suppress": {},
+            "system_state": {},
+            "alert_index": {},
             "last_storage_warn_ts": 0,
-            "last_coral_state":     "",
+            "last_coral_state": "",
         },
     }
 
@@ -216,12 +227,14 @@ def build_defaults(base_config: dict) -> dict:
 def window_minutes(start: str, end: str) -> int:
     """Length of an HH:MM window in minutes, supports midnight wrap.
     Empty/equal start+end → 1440 (always)."""
+
     def _p(s):
         try:
             h, m = (s or "").split(":", 1)
             return int(h) * 60 + int(m)
         except Exception:
             return 0
+
     s_min, e_min = _p(start), _p(end)
     if s_min == e_min:
         return 1440

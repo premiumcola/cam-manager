@@ -34,8 +34,8 @@ from ..event_logic import (
 )
 from ._consts import (
     _FFMPEG_AVAILABLE,
-    _PROFILES,
     _PROFILE_PERIOD_DEFAULTS,
+    _PROFILES,
     _SPECIES_TO_ACH_ID,
     _WILDLIFE_BBOX_DONORS,
     _bbox_iou,
@@ -86,11 +86,14 @@ class LifecycleMixin:
                 elapsed = time.time() - t_start
                 if elapsed >= 300:
                     attempt = 0
-                wait = min(2 ** attempt, 60)
+                wait = min(2**attempt, 60)
                 self._supervisor_restarts += 1
                 log.error(
                     "[%s][supervisor] Thread '%s' crashed: %s — restarting in %ds",
-                    self.camera_id, name, exc, wait,
+                    self.camera_id,
+                    name,
+                    exc,
+                    wait,
                 )
                 attempt += 1
                 deadline = time.time() + wait
@@ -108,18 +111,25 @@ class LifecycleMixin:
             log.warning("[%s] stale timelapse frame cleanup error: %s", self.camera_id, _e)
         # Main ingest loop — sole reader of self.capture (RTSP / HTTP snapshot)
         self.thread = threading.Thread(
-            target=self._supervised, args=(self._loop, "loop"), daemon=True,
+            target=self._supervised,
+            args=(self._loop, "loop"),
+            daemon=True,
         )
         self.thread.start()
         # Sub-stream preview loop — sole reader of self.preview_cap
         threading.Thread(
-            target=self._supervised, args=(self._preview_loop, "preview_loop"), daemon=True,
+            target=self._supervised,
+            args=(self._preview_loop, "preview_loop"),
+            daemon=True,
         ).start()
         # Per-profile timelapse threads — read from self.frame (no direct camera access)
         for prof_name in _PROFILES:
             t = threading.Thread(
                 target=self._supervised,
-                args=(lambda pn=prof_name: self._timelapse_profile_loop(pn), f"timelapse_{prof_name}"),
+                args=(
+                    lambda pn=prof_name: self._timelapse_profile_loop(pn),
+                    f"timelapse_{prof_name}",
+                ),
                 daemon=True,
             )
             t.start()
@@ -148,4 +158,3 @@ class LifecycleMixin:
                 except Exception:
                     pass
                 self.preview_cap = None
-

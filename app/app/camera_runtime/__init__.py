@@ -7,10 +7,11 @@ plus the module-level constants and helpers a few callers reach into:
     from app.camera_runtime import _PROFILES, _PROFILE_PERIOD_DEFAULTS
     from app.camera_runtime import _SPECIES_TO_ACH_ID, _bbox_iou
 """
+
 from ._consts import (
     _FFMPEG_AVAILABLE,
-    _PROFILES,
     _PROFILE_PERIOD_DEFAULTS,
+    _PROFILES,
     _SPECIES_TO_ACH_ID,
     _WILDLIFE_BBOX_DONORS,
     _bbox_iou,

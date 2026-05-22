@@ -1,9 +1,7 @@
-
 from __future__ import annotations
 
 import copy as _copy
 import logging
-import os
 import threading
 import time
 from datetime import datetime
@@ -14,7 +12,7 @@ from flask import Flask
 # Centralised logging setup — installs the explicit StreamHandler with a
 # parseable format, the in-memory buffer for the web UI, and the WARNING+
 # rate-limit filter. Must run before any subsystem imports that emit logs.
-from .logging_setup import console_level, setup_logging
+from .logging_setup import setup_logging
 
 setup_logging()
 
@@ -22,6 +20,24 @@ from . import app_state
 from .camera_runtime import CameraRuntime
 from .cat_identity import IdentityRegistry
 from .config_loader import load_config
+
+# Boot helpers — moved to lifecycle.py during the modular refactor.
+# The names re-exported here keep `from ..server import _BUILD_INFO,
+# _PROCESS_START_ISO` (routes/bootstrap.py) and every in-file caller
+# resolving without a path change.
+from .lifecycle import (  # noqa: E402
+    _emit_boot_inventory,
+    _fetch_github_commit_count,
+    _file_hash,
+    _install_shutdown_hooks,
+    _startup_media_scan,
+)
+from .maintenance import (  # noqa: E402
+    _heartbeat_emit,
+    _run_daily_cleanup,
+    _run_daily_quest_rollover_check,
+    _run_hourly_quest_eval,
+)
 from .mqtt_service import MQTTService
 from .settings_store import SettingsStore
 from .storage import EventStore
@@ -29,31 +45,6 @@ from .telegram_bot import TelegramService
 from .timelapse import TimelapseBuilder
 from .tracking_worker import build_worker as build_tracking_worker
 from .weather_service import WeatherService
-
-
-# Boot helpers — moved to lifecycle.py during the modular refactor.
-# The names re-exported here keep `from ..server import _BUILD_INFO,
-# _PROCESS_START_ISO` (routes/bootstrap.py) and every in-file caller
-# resolving without a path change.
-from .lifecycle import (  # noqa: E402
-    _BUILD_INFO,
-    _PROCESS_START_ISO,
-    _disk_free_gb_cached,
-    _emit_boot_inventory,
-    _emit_shutdown_bilanz,
-    _fetch_github_commit_count,
-    _file_hash,
-    _format_uptime,
-    _get_build_info,
-    _install_shutdown_hooks,
-    _startup_media_scan,
-)
-from .maintenance import (  # noqa: E402
-    _run_daily_quest_rollover_check,
-    _heartbeat_emit,
-    _run_daily_cleanup,
-    _run_hourly_quest_eval,
-)
 
 _fetch_github_commit_count()
 
@@ -71,9 +62,12 @@ web_root = Path(__file__).resolve().parent.parent / "web"
 # No-op when the partials dir is empty (e.g. mid-bootstrap), so it's harmless
 # regardless of phase. See app/app/css_builder.py + app/web/static/css/README.md
 from .css_builder import build_css as _build_css
+
 _build_css(log=logging.getLogger("app.css"))
 
-app = Flask(__name__, template_folder=str(web_root / "templates"), static_folder=str(web_root / "static"))
+app = Flask(
+    __name__, template_folder=str(web_root / "templates"), static_folder=str(web_root / "static")
+)
 
 # Jinja `?v=...` cache-bust helper — the template tag {{ static_v('app.css') }}
 # calls _file_hash which lives in lifecycle.py post-refactor.
@@ -101,10 +95,12 @@ except Exception as _e:
 # so the camera threads pick up the new ids on first start, never the old.
 try:
     from .storage_migration import migrate as _migrate_storage
+
     _migrate_storage(settings, storage_root)
 except Exception as _e:
     logging.getLogger(__name__).error(
-        "[migration] storage migration failed (continuing with existing state): %s", _e,
+        "[migration] storage migration failed (continuing with existing state): %s",
+        _e,
         exc_info=True,
     )
 # Sun-Timelapse layout split: legacy `weather/<cam>/sun_timelapse/`
@@ -114,16 +110,24 @@ except Exception as _e:
 # only sees the new layout.
 try:
     from .weather_service import migrate_sun_timelapse_layout as _migrate_sun_tl
+
     _migrate_sun_tl(storage_root)
 except Exception as _e:
     logging.getLogger(__name__).error(
-        "[migration] sun_timelapse split failed (continuing with existing state): %s", _e,
+        "[migration] sun_timelapse split failed (continuing with existing state): %s",
+        _e,
         exc_info=True,
     )
 cfg = settings.export_effective_config(base_cfg)
-cat_registry = IdentityRegistry(storage_root / "cat_registry.json", threshold=int(cfg.get("processing", {}).get("cat_identity", {}).get("match_threshold", 10)))
+cat_registry = IdentityRegistry(
+    storage_root / "cat_registry.json",
+    threshold=int(cfg.get("processing", {}).get("cat_identity", {}).get("match_threshold", 10)),
+)
 app_state.cat_registry = cat_registry
-person_registry = IdentityRegistry(storage_root / "person_registry.json", threshold=int(cfg.get("processing", {}).get("person_identity", {}).get("match_threshold", 10)))
+person_registry = IdentityRegistry(
+    storage_root / "person_registry.json",
+    threshold=int(cfg.get("processing", {}).get("person_identity", {}).get("match_threshold", 10)),
+)
 app_state.person_registry = person_registry
 timelapse_builder = TimelapseBuilder(storage_root)
 app_state.timelapse_builder = timelapse_builder
@@ -131,6 +135,7 @@ app_state.timelapse_builder = timelapse_builder
 # call its on_new_species hook from the motion-finalize path; the API
 # layer reads via app_state.bird_dossiers and triggers manual refetches.
 from .bird_dossiers import BirdDossierService as _BirdDossierService
+
 app_state.bird_dossiers = _BirdDossierService(storage_root / "bird_dossiers.json")
 # F06 first-since detector — flags motion events that arrive after an
 # unusually long gap for their class. Built once at boot; the recording
@@ -139,8 +144,11 @@ app_state.bird_dossiers = _BirdDossierService(storage_root / "bird_dossiers.json
 # the detector lazily resolves the merged effective config on each
 # evaluate() call.
 from .first_since import FirstSinceDetector as _FirstSinceDetector
+
 app_state.first_since_detector = _FirstSinceDetector(
-    store=store, settings=settings, storage_root=storage_root,
+    store=store,
+    settings=settings,
+    storage_root=storage_root,
 )
 mqtt_service = None
 telegram_service = None
@@ -162,6 +170,7 @@ app_state._runtime_cfgs = _runtime_cfgs
 # exact moment — they'll be populated by rebuild_services /
 # rebuild_runtimes a few hundred lines below.
 from .routes import register_blueprints as _register_blueprints
+
 _register_blueprints(app)
 
 # Single-flight lock + last-applied snapshot for telegram reloads. The lock
@@ -198,7 +207,9 @@ def _reload_telegram_service():
         if telegram_service is not None:
             try:
                 was_polling = telegram_service.get_polling_status().get("state") in (
-                    "active", "starting", "conflict",
+                    "active",
+                    "starting",
+                    "conflict",
                 )
             except Exception:
                 was_polling = False
@@ -279,7 +290,8 @@ def _compute_camera_diff(
     to_remove = set(current_ids) - new_ids
     to_add = new_ids - set(current_ids)
     to_restart = {
-        cam_id for cam_id in set(current_ids) & new_ids
+        cam_id
+        for cam_id in set(current_ids) & new_ids
         if current_cfgs.get(cam_id) != new_cam_cfgs.get(cam_id)
     }
     return to_remove, to_add, to_restart
@@ -311,9 +323,16 @@ def restart_single_camera(cam_id: str, *, reason: str = "bound"):
     # TODO: drop the `enabled` field entirely once a settings-store
     # migration scrubs it from existing JSONs.
     try:
-        rt = CameraRuntime(cam_id, get_camera_cfg, cfg, store, telegram_service,
-                           mqtt=mqtt_service, cat_registry=cat_registry,
-                           person_registry=person_registry)
+        rt = CameraRuntime(
+            cam_id,
+            get_camera_cfg,
+            cfg,
+            store,
+            telegram_service,
+            mqtt=mqtt_service,
+            cat_registry=cat_registry,
+            person_registry=person_registry,
+        )
         runtimes[cam_id] = rt
         _runtime_cfgs[cam_id] = _copy.deepcopy(cam_cfg)
         rt.start()
@@ -322,8 +341,7 @@ def restart_single_camera(cam_id: str, *, reason: str = "bound"):
         else:
             log.info("[boot] cam %s: %s", cam_id, reason)
     except Exception as e:
-        log.error("[boot] cam %s: constructor failed: %s — will retry",
-                  cam_id, e, exc_info=True)
+        log.error("[boot] cam %s: constructor failed: %s — will retry", cam_id, e, exc_info=True)
 
 
 def rebuild_runtimes():
@@ -360,10 +378,12 @@ def rebuild_runtimes():
     expected = list(new_cam_cfgs.keys())
     running = sorted(runtimes.keys())
     missing = sorted(set(expected) - set(running))
-    log.info("[boot] runtimes ready: %d camera(s) (ids: %s)%s",
-             len(running),
-             ", ".join(running) if running else "—",
-             f" — {len(missing)} skipped/failed: {', '.join(missing)}" if missing else "")
+    log.info(
+        "[boot] runtimes ready: %d camera(s) (ids: %s)%s",
+        len(running),
+        ", ".join(running) if running else "—",
+        f" — {len(missing)} skipped/failed: {', '.join(missing)}" if missing else "",
+    )
 
 
 rebuild_runtimes()
@@ -372,30 +392,24 @@ rebuild_runtimes()
 # block from settings on every job so a settings reload swaps the
 # detector without restarting the worker thread.
 _tracking_cfg_getter = lambda: (
-    settings.export_effective_config(base_cfg)
-    .get("processing", {})
-    .get("detection", {})
+    settings.export_effective_config(base_cfg).get("processing", {}).get("detection", {})
 )
-build_tracking_worker(storage_root=storage_root,
-                      detection_cfg_getter=_tracking_cfg_getter,
-                      cam_cfg_getter=lambda cam_id: settings.get_camera(cam_id) or {})
+build_tracking_worker(
+    storage_root=storage_root,
+    detection_cfg_getter=_tracking_cfg_getter,
+    cam_cfg_getter=lambda cam_id: settings.get_camera(cam_id) or {},
+)
 logging.getLogger("app.app.boot").info("[boot] ── inventory complete ──")
-
 
 
 _startup_media_scan()
 
 
-
 _run_daily_cleanup()
-
 
 
 _run_hourly_quest_eval()
 _run_daily_quest_rollover_check()
-
-
-
 
 
 # Fire the first heartbeat 60 s after boot so the inventory block + first
@@ -404,8 +418,6 @@ _run_daily_quest_rollover_check()
 _first_hb = threading.Timer(60.0, _heartbeat_emit)
 _first_hb.daemon = True
 _first_hb.start()
-
-
 
 
 _install_shutdown_hooks()
@@ -418,7 +430,10 @@ from . import migrations as _migrations
 _migrations.migrate_timelapse_events(storage_root=storage_root, settings=settings)
 _migrations.generate_missing_thumbnails(storage_root=storage_root)
 _migrations.migrate_timelapse_to_eventstore(
-    storage_root=storage_root, settings=settings, store=store, base_cfg=base_cfg,
+    storage_root=storage_root,
+    settings=settings,
+    store=store,
+    base_cfg=base_cfg,
 )
 # Diagnostic only — logs a single line when older-schema tracks.json
 # sidecars are present so the operator knows to hit
@@ -431,4 +446,8 @@ _migrations.check_tracks_schema_version(storage_root=storage_root)
 
 
 if __name__ == '__main__':
-    app.run(host=cfg.get('server', {}).get('host', '0.0.0.0'), port=int(cfg.get('server', {}).get('port', 8099)), threaded=True)
+    app.run(
+        host=cfg.get('server', {}).get('host', '0.0.0.0'),
+        port=int(cfg.get('server', {}).get('port', 8099)),
+        threaded=True,
+    )

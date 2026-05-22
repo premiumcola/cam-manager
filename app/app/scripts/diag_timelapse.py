@@ -24,6 +24,7 @@ Output (excerpt):
     - dominant reject reason: twilight_too_dark
     - auto-adjust events: none
 """
+
 from __future__ import annotations
 
 import argparse
@@ -41,8 +42,7 @@ log = logging.getLogger("diag")
 # Coloured-dot glyphs (unicode bullets + colour-name text) so the
 # report stays emoji-free and renders cleanly in monospace pastes.
 _GRADE_DOT = {"green": "●", "yellow": "●", "red": "●", "unknown": "○"}
-_GRADE_COLOR = {"green": "green", "yellow": "yellow",
-                "red": "red", "unknown": "grey"}
+_GRADE_COLOR = {"green": "green", "yellow": "yellow", "red": "red", "unknown": "grey"}
 
 
 def _iter_qa_paths(storage_root: Path, camera_id: str):
@@ -57,8 +57,7 @@ def _iter_qa_paths(storage_root: Path, camera_id: str):
             candidates.append((p.stat().st_mtime, p))
     wx_dir = storage_root / "weather" / camera_id
     if wx_dir.exists():
-        for sub in ("sunrise_timelapse", "sunset_timelapse",
-                    "event_timelapse", "sun_timelapse"):
+        for sub in ("sunrise_timelapse", "sunset_timelapse", "event_timelapse", "sun_timelapse"):
             d = wx_dir / sub
             if d.exists():
                 for p in d.glob("*.qa.json"):
@@ -75,8 +74,7 @@ def _filter_by_date(records, date_str: str | None):
     zone still match the date the build STARTED on."""
     if not date_str:
         return records
-    return [r for r in records
-            if str(r.get("build_at") or "").startswith(date_str)]
+    return [r for r in records if str(r.get("build_at") or "").startswith(date_str)]
 
 
 def _filter_by_profile(records, profile_name: str | None):
@@ -85,16 +83,17 @@ def _filter_by_profile(records, profile_name: str | None):
     return [r for r in records if r.get("profile_name") == profile_name]
 
 
-def _emit_report(camera_id: str, sidecars: list[dict],
-                 date_filter: str | None) -> str:
+def _emit_report(camera_id: str, sidecars: list[dict], date_filter: str | None) -> str:
     if not sidecars:
-        return (f"# Timelapse quality · {camera_id}\n"
-                "No sidecars found for the requested filters.\n")
+        return (
+            f"# Timelapse quality · {camera_id}\n" "No sidecars found for the requested filters.\n"
+        )
     lines: list[str] = []
     range_label = date_filter or "all dates"
     lines.append(f"# Timelapse quality · `{camera_id}`")
-    lines.append(f"Range: {range_label} ({len(sidecars)} sidecar"
-                 f"{'s' if len(sidecars) != 1 else ''})")
+    lines.append(
+        f"Range: {range_label} ({len(sidecars)} sidecar" f"{'s' if len(sidecars) != 1 else ''})"
+    )
     lines.append("")
     # Per-mp4 blocks — chronological. The iterator is newest-first;
     # flip so the report reads top-to-bottom by build time.
@@ -117,7 +116,7 @@ def _emit_report(camera_id: str, sidecars: list[dict],
             f"- dup_ratio {dup_ratio * 100:.0f} % · "
             f"freezes {len(freezes)} (total {freeze_total:.2f} s)"
         )
-        reasons = (cap.get("reject_reasons") or {})
+        reasons = cap.get("reject_reasons") or {}
         if reasons:
             top3 = sorted(reasons.items(), key=lambda kv: -kv[1])[:3]
             top3_str = ", ".join(f"{k} ({v})" for k, v in top3)
@@ -130,8 +129,7 @@ def _emit_report(camera_id: str, sidecars: list[dict],
             lines.append(f"- build profile: `{s['profile_name']}`")
         lines.append("")
     # Footer aggregate.
-    unique_fps_vals = [float((s.get("playback") or {}).get("unique_fps") or 0)
-                       for s in sidecars]
+    unique_fps_vals = [float((s.get("playback") or {}).get("unique_fps") or 0) for s in sidecars]
     mean_unique = sum(unique_fps_vals) / len(unique_fps_vals) if unique_fps_vals else 0.0
     reason_totals: Counter[str] = Counter()
     for s in sidecars:
@@ -141,8 +139,7 @@ def _emit_report(camera_id: str, sidecars: list[dict],
             except (TypeError, ValueError):
                 pass
     dominant = reason_totals.most_common(1)[0][0] if reason_totals else "(none recorded)"
-    lines.append(f"## Aggregate ({len(sidecars)} build"
-                 f"{'s' if len(sidecars) != 1 else ''})")
+    lines.append(f"## Aggregate ({len(sidecars)} build" f"{'s' if len(sidecars) != 1 else ''})")
     lines.append(f"- mean unique_fps: {mean_unique:.2f}")
     lines.append(f"- dominant reject reason: {dominant}")
     # Auto-adjust events — best-effort scan of the recent log lines
@@ -161,22 +158,31 @@ def _build_argparser() -> argparse.ArgumentParser:
         description="Plain-text quality report from QA sidecars.",
     )
     p.add_argument("camera_id", help="Canonical camera id (manufacturer_model_name_octet).")
-    p.add_argument("--date", default=None,
-                   help="ISO date YYYY-MM-DD. Defaults to today; pass 'all' "
-                        "to range across every sidecar.")
-    p.add_argument("--profile", default=None,
-                   help="Filter to one profile_name (sunrise/sunset/day/event/…).")
-    p.add_argument("--last", type=int, default=None,
-                   help="Limit to the N most recent sidecars after filtering.")
-    p.add_argument("--storage-root", type=Path, default=None,
-                   help="Override storage root.")
+    p.add_argument(
+        "--date",
+        default=None,
+        help="ISO date YYYY-MM-DD. Defaults to today; pass 'all' " "to range across every sidecar.",
+    )
+    p.add_argument(
+        "--profile", default=None, help="Filter to one profile_name (sunrise/sunset/day/event/…)."
+    )
+    p.add_argument(
+        "--last",
+        type=int,
+        default=None,
+        help="Limit to the N most recent sidecars after filtering.",
+    )
+    p.add_argument("--storage-root", type=Path, default=None, help="Override storage root.")
     return p
 
 
 def main(argv=None) -> int:
     args = _build_argparser().parse_args(argv)
-    logging.basicConfig(format="%(asctime)s %(levelname)-7s %(name)-8s %(message)s",
-                        datefmt="%H:%M:%S", level=logging.INFO)
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)-7s %(name)-8s %(message)s",
+        datefmt="%H:%M:%S",
+        level=logging.INFO,
+    )
     cfg = load_config()
     storage_root = args.storage_root or Path(cfg["storage"]["root"]).resolve()
     date_filter = args.date
@@ -193,7 +199,7 @@ def main(argv=None) -> int:
     records = _filter_by_date(records, date_filter)
     records = _filter_by_profile(records, args.profile)
     if args.last is not None and args.last > 0:
-        records = records[:args.last]
+        records = records[: args.last]
     sys.stdout.write(_emit_report(args.camera_id, records, date_filter))
     return 0
 

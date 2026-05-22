@@ -2,6 +2,7 @@
 
 Carved out of the original detectors.py during R02.1.
 """
+
 from __future__ import annotations
 
 import json
@@ -71,7 +72,11 @@ def _load_bird_latin_to_de(path: str | None) -> dict[str, str]:
     try:
         with open(use_path, encoding="utf-8") as f:
             raw = json.load(f)
-        data = {k: v for k, v in raw.items() if isinstance(k, str) and isinstance(v, str) and not k.startswith("_")}
+        data = {
+            k: v
+            for k, v in raw.items()
+            if isinstance(k, str) and isinstance(v, str) and not k.startswith("_")
+        }
     except FileNotFoundError:
         log.info("Bird latin→de map: %s not found — species will show Latin names only.", use_path)
     except Exception as e:
@@ -103,7 +108,9 @@ def _extract_latin(raw: str | None) -> str | None:
     return parts[0].capitalize() + " " + parts[1].lower()
 
 
-def _pretty_bird_label(raw: str | None, mapping: dict[str, str] | None = None) -> tuple[str | None, str | None]:
+def _pretty_bird_label(
+    raw: str | None, mapping: dict[str, str] | None = None
+) -> tuple[str | None, str | None]:
     """Return (display_name, latin_binomial) for an iNaturalist label.
 
     Display name is the German common name when the Latin binomial is in

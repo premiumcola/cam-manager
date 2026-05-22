@@ -7,6 +7,7 @@ lazy inside the route bodies — same pattern admin.py uses for
 `/api/reload`. Settings/app save also calls `rebuild_runtimes` for
 config changes that affect runtime behaviour.
 """
+
 from __future__ import annotations
 
 import json as _json
@@ -37,10 +38,19 @@ def api_cameras():
     cams = []
     for cam in app_state.get_effective_config().get("cameras", []):
         rt = runtimes.get(cam["id"])
-        s = rt.status() if rt else {
-            "id": cam["id"], "name": cam.get("name", cam["id"]), "location": cam.get("location", ""), "enabled": cam.get("enabled", True),
-            "armed": cam.get("armed", True), "status": "disabled", "today_events": 0
-        }
+        s = (
+            rt.status()
+            if rt
+            else {
+                "id": cam["id"],
+                "name": cam.get("name", cam["id"]),
+                "location": cam.get("location", ""),
+                "enabled": cam.get("enabled", True),
+                "armed": cam.get("armed", True),
+                "status": "disabled",
+                "today_events": 0,
+            }
+        )
         # snap_url / stream_url are dashboard-display-only derived URLs.
         # They MUST use a distinct key so they are never confused with the persisted
         # upstream snapshot_url / rtsp_url (which live in settings.json).
@@ -61,7 +71,9 @@ def api_cameras():
         # the new shape; the legacy recording_schedule_* fields no longer
         # exist in the persisted config.
         s["schedule"] = cam.get("schedule") or {
-            "enabled": False, "from": "21:00", "to": "06:00",
+            "enabled": False,
+            "from": "21:00",
+            "to": "06:00",
             "actions": {"record": True, "telegram": True, "hard": True},
         }
         s["bottom_crop_px"] = cam.get("bottom_crop_px", 0)
@@ -84,7 +96,7 @@ def api_cameras():
         s["track_iou_match_threshold"] = float(cam.get("track_iou_match_threshold") or 0.0)
         # L07 · expose to the cam-edit form. Default True so legacy
         # cameras without the field read as enabled on first hydrate.
-        s["track_filter_ghosts"] = (cam.get("track_filter_ghosts") is not False)
+        s["track_filter_ghosts"] = cam.get("track_filter_ghosts") is not False
         s["zones"] = cam.get("zones", [])
         s["masks"] = cam.get("masks", [])
         s["resolution"] = cam.get("resolution", "auto")
@@ -139,14 +151,16 @@ def api_settings_backups_list():
                     has_cam = True
                     has_connection = bool(c.get("rtsp_url") and c.get("username"))
                     break
-        items.append({
-            "filename": p.name,
-            "mtime_iso": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
-            "size": st.st_size,
-            "n_cameras": n_cameras,
-            "has_cam": has_cam,
-            "has_connection": has_connection,
-        })
+        items.append(
+            {
+                "filename": p.name,
+                "mtime_iso": datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"),
+                "size": st.st_size,
+                "n_cameras": n_cameras,
+                "has_cam": has_cam,
+                "has_connection": has_connection,
+            }
+        )
     return jsonify({"items": items})
 
 
@@ -165,15 +179,17 @@ def api_settings_backup_cam(filename: str, cam_id: str):
         return jsonify({"ok": False, "error": "backup not parseable"}), 400
     for c in data.get("cameras", []) or []:
         if c.get("id") == cam_id:
-            return jsonify({
-                "ok": True,
-                "cam_id": cam_id,
-                "name": c.get("name", ""),
-                "rtsp_url_masked": _mask_password_in_url(c.get("rtsp_url", "")),
-                "snapshot_url_masked": _mask_password_in_url(c.get("snapshot_url", "")),
-                "username": c.get("username", ""),
-                "password_set": bool(c.get("password")),
-            })
+            return jsonify(
+                {
+                    "ok": True,
+                    "cam_id": cam_id,
+                    "name": c.get("name", ""),
+                    "rtsp_url_masked": _mask_password_in_url(c.get("rtsp_url", "")),
+                    "snapshot_url_masked": _mask_password_in_url(c.get("snapshot_url", "")),
+                    "username": c.get("username", ""),
+                    "password_set": bool(c.get("password")),
+                }
+            )
     return jsonify({"ok": False, "error": "cam not in this backup"}), 404
 
 
@@ -186,6 +202,7 @@ def api_settings_cam_restore_connection(cam_id: str):
     is left alone. Triggers restart_single_camera so the cam comes back
     online without a full reload."""
     from ..server import restart_single_camera
+
     settings = app_state.settings
     payload = request.get_json(force=True) or {}
     filename = (payload.get("filename") or "").strip()
@@ -212,17 +229,20 @@ def api_settings_cam_restore_connection(cam_id: str):
     except ValueError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 422
     restart_single_camera(cam_id)
-    return jsonify({
-        "ok": True,
-        "cam_id": cam_id,
-        "restored_fields": list(_RESTORE_CONN_FIELDS),
-        "from": filename,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "cam_id": cam_id,
+            "restored_fields": list(_RESTORE_CONN_FIELDS),
+            "from": filename,
+        }
+    )
 
 
 @bp.post('/api/settings/cameras')
 def api_settings_cameras_save():
     from ..server import restart_single_camera
+
     settings = app_state.settings
     runtimes = app_state.runtimes
     _runtime_cfgs = app_state._runtime_cfgs
@@ -255,7 +275,7 @@ def api_settings_cameras_save():
     # broke the Telegram bot's cam picker for an hour until something
     # else triggered a rebuild_runtimes.
     enabled_now = payload.get("enabled", True)
-    id_renamed = (old_id != new_id)
+    id_renamed = old_id != new_id
     conn_changed = any(payload.get(f) != old_cfg.get(f) for f in _CONN_FIELDS)
     if id_renamed:
         existing = runtimes.pop(old_id, None)
@@ -266,14 +286,16 @@ def api_settings_cameras_save():
             restart_single_camera(new_id, reason="rebound after migration")
     elif conn_changed or (new_id not in runtimes and enabled_now):
         restart_single_camera(new_id, reason="rebound after edit")
-    return jsonify({
-        "ok": True,
-        "camera": settings.get_camera(new_id),
-        "reloaded": conn_changed or id_renamed,
-        "id": new_id,
-        "id_renamed_from": old_id if id_renamed else None,
-        "auto_detected": auto_detected,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "camera": settings.get_camera(new_id),
+            "reloaded": conn_changed or id_renamed,
+            "id": new_id,
+            "id_renamed_from": old_id if id_renamed else None,
+            "auto_detected": auto_detected,
+        }
+    )
 
 
 @bp.post('/api/cameras/<cam_id>/probe-device-info')
@@ -295,6 +317,7 @@ def api_camera_probe_device_info(cam_id: str):
         return jsonify({"ok": False, "error": "no credentials configured"}), 400
     try:
         from urllib.parse import urlparse
+
         host = urlparse(rtsp_url).hostname
     except Exception:
         host = None
@@ -302,6 +325,7 @@ def api_camera_probe_device_info(cam_id: str):
         return jsonify({"ok": False, "error": "cannot parse host from rtsp_url"}), 400
     try:
         from .. import reolink_api
+
         token = reolink_api.login(host, user, password, timeout=4.0)
         if not token:
             return jsonify({"ok": False, "error": "login failed"}), 502
@@ -311,17 +335,19 @@ def api_camera_probe_device_info(cam_id: str):
         return jsonify({"ok": False, "error": f"probe failed: {e}"}), 502
     if not info:
         return jsonify({"ok": False, "error": "no device info returned"}), 502
-    return jsonify({
-        "ok":           True,
-        "manufacturer": info["manufacturer"],
-        "model":        info["model"],
-        "firmware":     info["firmware"],
-        "hardware":     info["hardware"],
-        "current": {
-            "manufacturer": cam.get("manufacturer", ""),
-            "model":        cam.get("model", ""),
-        },
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "manufacturer": info["manufacturer"],
+            "model": info["model"],
+            "firmware": info["firmware"],
+            "hardware": info["hardware"],
+            "current": {
+                "manufacturer": cam.get("manufacturer", ""),
+                "model": cam.get("model", ""),
+            },
+        }
+    )
 
 
 @bp.post('/api/cameras/<cam_id>/reolink/image-mode')
@@ -341,18 +367,22 @@ def api_camera_reolink_image_mode(cam_id: str):
         return jsonify({"ok": False, "error": "camera not found"}), 404
     vendor = (cam.get("manufacturer") or "").strip().lower()
     if vendor != "reolink":
-        return jsonify({
-            "ok":    False,
-            "error": "image-mode override is Reolink-only "
-                     f"(camera vendor={cam.get('manufacturer') or '?'})",
-        }), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "image-mode override is Reolink-only "
+                f"(camera vendor={cam.get('manufacturer') or '?'})",
+            }
+        ), 400
     body = request.get_json(silent=True) or {}
     mode = str(body.get("mode") or "").strip().lower()
     if mode not in ("auto", "color", "bw"):
-        return jsonify({
-            "ok":    False,
-            "error": "mode must be one of auto / color / bw",
-        }), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "mode must be one of auto / color / bw",
+            }
+        ), 400
     # Pull host from rtsp_url (we never persist the bare host
     # separately — the URL is the source of truth). Fall back to
     # snapshot_url if rtsp_url is empty.
@@ -361,6 +391,7 @@ def api_camera_reolink_image_mode(cam_id: str):
         return jsonify({"ok": False, "error": "no rtsp/snapshot URL configured"}), 400
     try:
         from urllib.parse import urlparse
+
         host = urlparse(src).hostname
     except Exception:
         host = None
@@ -374,21 +405,31 @@ def api_camera_reolink_image_mode(cam_id: str):
         port = 80
     try:
         from .. import reolink_api
+
         result = reolink_api.set_image_mode(
-            host, port, user, password, mode, timeout=4.0,
+            host,
+            port,
+            user,
+            password,
+            mode,
+            timeout=4.0,
         )
     except Exception as e:
-        return jsonify({
-            "ok":    False,
-            "error": f"image-mode call failed: {e}",
-        }), 502
+        return jsonify(
+            {
+                "ok": False,
+                "error": f"image-mode call failed: {e}",
+            }
+        ), 502
     status_code = 200 if result.get("ok") else 502
-    return jsonify({
-        "ok":     bool(result.get("ok")),
-        "mode":   mode,
-        "rc":     result.get("rc"),
-        "detail": result.get("detail", ""),
-    }), status_code
+    return jsonify(
+        {
+            "ok": bool(result.get("ok")),
+            "mode": mode,
+            "rc": result.get("rc"),
+            "detail": result.get("detail", ""),
+        }
+    ), status_code
 
 
 @bp.post('/api/camera/<cam_id>/reload')
@@ -405,7 +446,10 @@ def api_camera_reload(cam_id: str):
     cam_cfg = settings.get_camera(cam_id)
     if cam_cfg and cam_cfg.get("enabled", True):
         rt = CameraRuntime(
-            cam_id, app_state.get_camera_cfg, cfg, store,
+            cam_id,
+            app_state.get_camera_cfg,
+            cfg,
+            store,
             app_state.telegram_service,
             mqtt=app_state.mqtt_service,
             cat_registry=app_state.cat_registry,
@@ -498,8 +542,10 @@ def api_camera_merge(source_id, target_id):
             ev["camera_name"] = settings.get_camera(target_id).get("name", target_id)
 
             # Move snapshot + video media files alongside the JSON
-            for rel_key, url_key in (("snapshot_relpath", "snapshot_url"),
-                                     ("video_relpath", "video_url")):
+            for rel_key, url_key in (
+                ("snapshot_relpath", "snapshot_url"),
+                ("video_relpath", "video_url"),
+            ):
                 rel = ev.get(rel_key)
                 if not rel:
                     continue
@@ -575,14 +621,16 @@ def api_camera_merge(source_id, target_id):
         if rt:
             rt.stop()
 
-    return jsonify({
-        "ok": True,
-        "source_id": source_id,
-        "target_id": target_id,
-        "moved_files": moved_files,
-        "moved_events": moved_events,
-        "moved_timelapses": moved_timelapses,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "source_id": source_id,
+            "target_id": target_id,
+            "moved_files": moved_files,
+            "moved_events": moved_events,
+            "moved_timelapses": moved_timelapses,
+        }
+    )
 
 
 @bp.get('/api/settings/app')
@@ -593,10 +641,10 @@ def api_settings_app():
     bird_cfg = eff.get("bird_species", {}) or {}
     wl_cfg = eff.get("wildlife", {}) or {}
     bird_model_path = bird_cfg.get("model_path")
-    bird_cpu_path   = bird_cfg.get("cpu_model_path")
+    bird_cpu_path = bird_cfg.get("cpu_model_path")
     bird_labels_path = bird_cfg.get("labels_path")
     wl_model_path = wl_cfg.get("model_path")
-    wl_cpu_path   = wl_cfg.get("cpu_model_path")
+    wl_cpu_path = wl_cfg.get("cpu_model_path")
     wl_labels_path = wl_cfg.get("labels_path")
     bird_model_available = any(p and Path(p).exists() for p in (bird_model_path, bird_cpu_path))
     bird_labels_available = bool(bird_labels_path and Path(bird_labels_path).exists())
@@ -607,37 +655,41 @@ def api_settings_app():
     # so the API response and runtime stay in sync.
     if not wl_model_available:
         from ..detectors import discover_wildlife_paths
+
         disc = discover_wildlife_paths()
         if disc:
             wl_model_path = disc.get("model_path") or wl_model_path
-            wl_cpu_path   = disc.get("cpu_model_path") or wl_cpu_path
+            wl_cpu_path = disc.get("cpu_model_path") or wl_cpu_path
             wl_model_available = True
             if not wl_labels_available and disc.get("labels_path"):
                 wl_labels_path = disc["labels_path"]
                 wl_labels_available = True
-    return jsonify({
-        "app": settings.data.get("app", {}),
-        "server": settings.data.get("server", {}),
-        "telegram": settings.data.get("telegram", {}),
-        "mqtt": settings.data.get("mqtt", {}),
-        "ui": settings.data.get("ui", {}),
-        "processing": {
-            "coral_enabled": proc.get("detection", {}).get("mode", "none") == "coral",
-            "bird_species_enabled": bool(proc.get("bird_species", {}).get("enabled", False)),
-            "bird_model_available": bird_model_available,
-            "bird_labels_available": bird_labels_available,
-            "bird_model_path": bird_model_path,
-            "wildlife_enabled": bool(proc.get("wildlife", {}).get("enabled", False)),
-            "wildlife_model_available": wl_model_available,
-            "wildlife_labels_available": wl_labels_available,
-            "wildlife_model_path": wl_model_path,
-        },
-    })
+    return jsonify(
+        {
+            "app": settings.data.get("app", {}),
+            "server": settings.data.get("server", {}),
+            "telegram": settings.data.get("telegram", {}),
+            "mqtt": settings.data.get("mqtt", {}),
+            "ui": settings.data.get("ui", {}),
+            "processing": {
+                "coral_enabled": proc.get("detection", {}).get("mode", "none") == "coral",
+                "bird_species_enabled": bool(proc.get("bird_species", {}).get("enabled", False)),
+                "bird_model_available": bird_model_available,
+                "bird_labels_available": bird_labels_available,
+                "bird_model_path": bird_model_path,
+                "wildlife_enabled": bool(proc.get("wildlife", {}).get("enabled", False)),
+                "wildlife_model_available": wl_model_available,
+                "wildlife_labels_available": wl_labels_available,
+                "wildlife_model_path": wl_model_path,
+            },
+        }
+    )
 
 
 @bp.post('/api/settings/app')
 def api_settings_app_save():
     from ..server import rebuild_runtimes
+
     settings = app_state.settings
     payload = request.get_json(force=True) or {}
     needs_rebuild = False

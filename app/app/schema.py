@@ -14,6 +14,7 @@ validate_and_coerce(data, schema) returns a NEW dict with validated and
 coerced values. Unknown keys are passed through unchanged (forward-compatible).
 Raises ValueError with a descriptive message on failure.
 """
+
 from __future__ import annotations
 
 # Sentinel for required fields. `object()` is unique so it can't collide
@@ -22,17 +23,23 @@ REQUIRED = object()
 
 # Object classes the system can filter, label, badge, and chart. Frontend
 # pill lists, server stats sets and event_logic mirror this — keep in sync.
-KNOWN_OBJECT_LABELS: frozenset[str] = frozenset({
-    "person", "cat", "bird", "car", "dog", "squirrel",
-})
+KNOWN_OBJECT_LABELS: frozenset[str] = frozenset(
+    {
+        "person",
+        "cat",
+        "bird",
+        "car",
+        "dog",
+        "squirrel",
+    }
+)
 
 
 def _coerce(val, target_type, field_name: str):
     # list/dict cannot be safely coerced from scalar values
     if target_type in (list, dict):
         raise ValueError(
-            f"Field {field_name}: expected {target_type.__name__}, "
-            f"got {type(val).__name__}"
+            f"Field {field_name}: expected {target_type.__name__}, " f"got {type(val).__name__}"
         )
     # bool needs special handling: bool("false") is True in Python
     if target_type is bool:
@@ -44,15 +51,12 @@ def _coerce(val, target_type, field_name: str):
                 return True
             if low in ("false", "0", "no", "off", ""):
                 return False
-        raise ValueError(
-            f"Field {field_name}: expected bool, got {type(val).__name__}"
-        )
+        raise ValueError(f"Field {field_name}: expected bool, got {type(val).__name__}")
     try:
         return target_type(val)
     except (TypeError, ValueError):
         raise ValueError(
-            f"Field {field_name}: expected {target_type.__name__}, "
-            f"got {type(val).__name__}"
+            f"Field {field_name}: expected {target_type.__name__}, " f"got {type(val).__name__}"
         )
 
 
@@ -84,29 +88,29 @@ def validate_and_coerce(data: dict, schema: dict) -> dict:
 # ── Camera ─────────────────────────────────────────────────────────────────────
 
 CAMERA_SCHEMA: dict = {
-    "id":                  (str,   REQUIRED),
-    "name":                (str,   REQUIRED),
+    "id": (str, REQUIRED),
+    "name": (str, REQUIRED),
     # Free-form identity hints that feed into build_camera_id() and the
     # camera-edit form's live ID preview. Empty strings on legacy cameras
     # collapse to "unknown" segments in the canonical id, which is fine
     # because the migration runner picks up old folders by IP-octet match
     # regardless of these fields.
-    "manufacturer":        (str,   ""),
-    "model":               (str,   ""),
-    "enabled":             (bool,  True),
-    "rtsp_url":            (str,   ""),
-    "snapshot_url":        (str,   ""),
-    "username":            (str,   ""),
-    "password":            (str,   ""),
-    "location":            (str,   ""),
-    "armed":               (bool,  True),
-    "telegram_enabled":    (bool,  True),
-    "mqtt_enabled":        (bool,  True),
-    "resolution":          (str,   "auto"),
-    "frame_interval_ms":   (int,   350),
-    "snapshot_interval_s": (int,   8),
-    "bottom_crop_px":      (int,   0),
-    "motion_sensitivity":  (float, 0.5),
+    "manufacturer": (str, ""),
+    "model": (str, ""),
+    "enabled": (bool, True),
+    "rtsp_url": (str, ""),
+    "snapshot_url": (str, ""),
+    "username": (str, ""),
+    "password": (str, ""),
+    "location": (str, ""),
+    "armed": (bool, True),
+    "telegram_enabled": (bool, True),
+    "mqtt_enabled": (bool, True),
+    "resolution": (str, "auto"),
+    "frame_interval_ms": (int, 350),
+    "snapshot_interval_s": (int, 8),
+    "bottom_crop_px": (int, 0),
+    "motion_sensitivity": (float, 0.5),
     # Higher = more sensitive (smaller motions count). Used as a parallel
     # second-pass in _motion_detect when the wildlife classifier is on,
     # so e.g. a single squirrel jump can trigger the wildlife stage even
@@ -116,32 +120,32 @@ CAMERA_SCHEMA: dict = {
     # Per-camera override for the wildlife classifier confidence floor.
     # 0.0 = use the global processing.wildlife.min_score (default 0.35).
     "wildlife_min_score": (float, 0.0),
-    "motion_enabled":      (bool,  True),
-    "detection_trigger":   (str,   "motion_and_objects"),
-    "post_motion_tail_s":  (float, 0.0),  # 0 = use global default
+    "motion_enabled": (bool, True),
+    "detection_trigger": (str, "motion_and_objects"),
+    "post_motion_tail_s": (float, 0.0),  # 0 = use global default
     "detection_min_score": (float, 0.0),
-    "alarm_profile":       (str,   ""),
+    "alarm_profile": (str, ""),
     # Per-class severity matrix — one of "off" / "info" / "alarm" per
     # known class (person, cat, bird, squirrel, dog, car, motion). Empty
     # default; a one-time migration in settings_store derives a sensible
     # matrix from the legacy alarm_profile on first load. This replaces
     # the alarm_profile semantics (alarm_profile is still persisted for
     # backward compat but is no longer the source of truth).
-    "class_severity":      (dict,  {}),
+    "class_severity": (dict, {}),
     # Whether a triggered event should be archived on disk. Default True
     # preserves the historical behaviour where the recording-schedule
     # action defaulted to on. Schedule_record (added alongside the
     # schedule split) gates this further by time of day.
-    "recording_enabled":   (bool,  True),
-    "object_filter":       (list,  []),
-    "label_thresholds":    (dict,  {}),
+    "recording_enabled": (bool, True),
+    "object_filter": (list, []),
+    "label_thresholds": (dict, {}),
     # Per-class N-of-M confirmation window. Schema default {} means "use
     # DetectionConfirmer's per-class fallbacks" so legacy settings.json
     # files load without crashing on the missing field.
-    "confirmation_window": (dict,  {}),
-    "zones":               (list,  []),
-    "masks":               (list,  []),
-    "whitelist_names":     (list,  []),
+    "confirmation_window": (dict, {}),
+    "zones": (list, []),
+    "masks": (list, []),
+    "whitelist_names": (list, []),
     # Where this camera burns its timestamp readout. The horizontal-
     # anomaly-band detector treats bands that fit entirely within
     # ``[y_pct - 2, y_pct + h_pct + 2]`` as the clock, not corruption.
@@ -155,8 +159,8 @@ CAMERA_SCHEMA: dict = {
     # A Pi-grade host can disable HLS on a noisy camera to keep the
     # CPU budget free.
     "streaming": (dict, {}),
-    "timelapse":           (dict,  {}),
-    "schedule":            (dict,  {}),
+    "timelapse": (dict, {}),
+    "schedule": (dict, {}),
     # Two independent schedules — one for notifications (Telegram/MQTT),
     # one for archival recording. Replaces the single 'schedule' dict's
     # actions={record,telegram,hard} pattern. Empty dict on a fresh
@@ -164,8 +168,8 @@ CAMERA_SCHEMA: dict = {
     # / disabled schedules as 24/7 active). _migrate_alerting_schedules
     # in settings_store derives both from the legacy schedule on first
     # load.
-    "schedule_notify":     (dict,  {}),
-    "schedule_record":     (dict,  {}),
+    "schedule_notify": (dict, {}),
+    "schedule_record": (dict, {}),
     # Per-class notification cooldown — minimum seconds between two
     # successive pushes for the same label on the same camera. Empty
     # default falls back to per-class hardcoded fallbacks in the
@@ -209,11 +213,11 @@ CAMERA_SCHEMA: dict = {
     #                                (less likely to collapse two real
     #                                subjects together). 0.0 = use
     #                                tracker_core.IOU_MATCH_THRESHOLD.
-    "track_spawn_min_score":      (float, 0.0),
-    "track_continue_min_score":   (float, 0.0),
-    "track_miss_grace_seconds":   (float, 0.0),
-    "track_postclip_precision":   (str,   "standard"),
-    "track_iou_match_threshold":  (float, 0.0),
+    "track_spawn_min_score": (float, 0.0),
+    "track_continue_min_score": (float, 0.0),
+    "track_miss_grace_seconds": (float, 0.0),
+    "track_postclip_precision": (str, "standard"),
+    "track_iou_match_threshold": (float, 0.0),
     #   track_filter_ghosts        — L07. When True (default) the
     #                                post-clip tracking worker drops any
     #                                track whose best_score never reached
@@ -225,13 +229,13 @@ CAMERA_SCHEMA: dict = {
     #                                or shadow in the saved event.
     #                                Set to False to keep ghosts for
     #                                debugging.
-    "track_filter_ghosts":        (bool,  True),
+    "track_filter_ghosts": (bool, True),
     # ── Reolink-only · HTTP CGI port for image-mode override ─────────────
     # Most Reolink cams listen on plain HTTP/80, but the user may have
     # remapped that to e.g. 8000 when port-forwarding. Treated as 80 if
     # unset/zero. Only consumed by /api/cameras/<id>/reolink/image-mode;
     # the RTSP capture path is unaffected.
-    "reolink_http_port":          (int,   0),
+    "reolink_http_port": (int, 0),
     # ── User-facing identity colour override ─────────────────────────────
     # tx412 — optional per-camera hex colour ("#b48b6a"). When set this
     # beats the auto-tone the frontend's getCameraColor() derives from
@@ -239,43 +243,43 @@ CAMERA_SCHEMA: dict = {
     # (frontend falls back to the auto-tone). The frontend Color-Picker
     # in cam-edit's Allgemein tab writes here; the "Auto" button clears
     # it back to "".
-    "color":                      (str,   ""),
+    "color": (str, ""),
 }
 
 # ── Section schemas (for update_section; all fields optional) ──────────────────
 
 SECTION_SCHEMAS: dict = {
     "app": {
-        "name":    str,
+        "name": str,
         "tagline": str,
-        "logo":    str,
-        "theme":   str,
+        "logo": str,
+        "theme": str,
     },
     "server": {
-        "public_base_url":          str,
+        "public_base_url": str,
         "default_discovery_subnet": str,
     },
     "telegram": {
         "enabled": bool,
-        "token":   str,
+        "token": str,
         "chat_id": str,
         # `format` is a legacy field still persisted in some installs.
         # `push` is the dict-shaped sub-config managed by the push system —
         # it carries its own nested defaults so we accept it as-is.
-        "format":  str,
-        "push":    dict,
+        "format": str,
+        "push": dict,
     },
     "mqtt": {
-        "enabled":    bool,
-        "host":       str,
-        "port":       int,
-        "username":   str,
-        "password":   str,
+        "enabled": bool,
+        "host": str,
+        "port": int,
+        "username": str,
+        "password": str,
         "base_topic": str,
     },
     "storage": {
-        "retention_days":       int,
-        "media_limit_default":  int,
+        "retention_days": int,
+        "media_limit_default": int,
         "auto_cleanup_enabled": bool,
     },
     "ui": {

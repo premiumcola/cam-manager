@@ -42,6 +42,11 @@ from ..telegram_helpers import (
     truncate_caption,
 )
 from ._consts import (
+    _MUTE_DEFAULT_S,
+    _MUTE_EXTEND_S,
+    _NOTIFY_COOLDOWN_DEFAULTS,
+    _PHOTO_LIMIT_BYTES,
+    _VIDEO_LIMIT_BYTES,
     ACTION_CAMS,
     ACTION_CLIP,
     ACTION_LIVE,
@@ -52,11 +57,6 @@ from ._consts import (
     BOT_COMMANDS,
     PERSISTENT_KB_KEY,
     PERSISTENT_KEYBOARD,
-    _MUTE_DEFAULT_S,
-    _MUTE_EXTEND_S,
-    _NOTIFY_COOLDOWN_DEFAULTS,
-    _PHOTO_LIMIT_BYTES,
-    _VIDEO_LIMIT_BYTES,
     _parse_hhmm,
     log,
 )
@@ -83,7 +83,9 @@ class InboundMixin:
             log.warning("[tg] anchor open failed: %s", e)
             text, markup = self._root_view()
             await update.message.reply_text(
-                text, reply_markup=markup, parse_mode="HTML",
+                text,
+                reply_markup=markup,
+                parse_mode="HTML",
             )
 
     async def cmd_today(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -106,20 +108,32 @@ class InboundMixin:
         """Send a snapshot or — when there are multiple cams — an inline
         cam picker. The picker buttons route through cam:<id>:livebild
         which the existing dispatcher already handles."""
-        log.info("[tg] /live invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
+        log.info(
+            "[tg] /live invoked by chat=%s",
+            update.effective_chat.id if update.effective_chat else "?",
+        )
         cams = self._active_cams()
         if not cams:
-            await update.message.reply_text("Keine Kameras konfiguriert.",
-                                            reply_markup=PERSISTENT_KEYBOARD)
+            await update.message.reply_text(
+                "Keine Kameras konfiguriert.", reply_markup=PERSISTENT_KEYBOARD
+            )
             return
         if len(cams) == 1:
             info = cams[0]
             icon = self._cam_status_icon_for(info)
-            text, markup = ("📷 Kamera wählen — livebild",
-                            InlineKeyboardMarkup([
-                                [InlineKeyboardButton(f"{icon} {info['name']}",
-                                                      callback_data=f"cam:{info['cam_id']}:livebild"[:64])],
-                            ]))
+            text, markup = (
+                "📷 Kamera wählen — livebild",
+                InlineKeyboardMarkup(
+                    [
+                        [
+                            InlineKeyboardButton(
+                                f"{icon} {info['name']}",
+                                callback_data=f"cam:{info['cam_id']}:livebild"[:64],
+                            )
+                        ],
+                    ]
+                ),
+            )
             await update.message.reply_text(text, reply_markup=markup)
             return
         text, markup = self._cam_picker("livebild")
@@ -128,19 +142,27 @@ class InboundMixin:
     async def _handle_clip5(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """5-s clip cam picker. We deliberately don't offer 'all cams' —
         running 4 ad-hoc ffmpeg recordings in parallel pegs the host."""
-        log.info("[tg] /clip invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
+        log.info(
+            "[tg] /clip invoked by chat=%s",
+            update.effective_chat.id if update.effective_chat else "?",
+        )
         cams = self._active_cams()
         if not cams:
-            await update.message.reply_text("Keine Kameras konfiguriert.",
-                                            reply_markup=PERSISTENT_KEYBOARD)
+            await update.message.reply_text(
+                "Keine Kameras konfiguriert.", reply_markup=PERSISTENT_KEYBOARD
+            )
             return
         rows = []
         for info in cams:
             icon = self._cam_status_icon_for(info)
-            rows.append([InlineKeyboardButton(
-                f"{icon} 🎬 {info['name']}",
-                callback_data=f"cam:{info['cam_id']}:clip:5"[:64],
-            )])
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        f"{icon} 🎬 {info['name']}",
+                        callback_data=f"cam:{info['cam_id']}:clip:5"[:64],
+                    )
+                ]
+            )
         await update.message.reply_text(
             "🎬 Kamera wählen — 5 s Clip",
             reply_markup=InlineKeyboardMarkup(rows),
@@ -148,39 +170,51 @@ class InboundMixin:
 
     async def _handle_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Compact system overview: cams + Telegram polling + Coral + weather + storage."""
-        log.info("[tg] /status invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
+        log.info(
+            "[tg] /status invoked by chat=%s",
+            update.effective_chat.id if update.effective_chat else "?",
+        )
         try:
             text = self._render_system_status_text()
         except Exception as e:
             log.warning("[tg] status render failed: %s", e)
             text = "Status nicht verfügbar."
-        await update.message.reply_text(text, parse_mode="HTML",
-                                        reply_markup=PERSISTENT_KEYBOARD)
+        await update.message.reply_text(text, parse_mode="HTML", reply_markup=PERSISTENT_KEYBOARD)
 
     async def _handle_mute_all(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Set runtime.global_mute_until = now + 1 h and reply with a confirm
         bubble carrying two inline buttons (end-now / extend-to-4h)."""
-        log.info("[tg] /mute invoked by chat=%s", update.effective_chat.id if update.effective_chat else "?")
+        log.info(
+            "[tg] /mute invoked by chat=%s",
+            update.effective_chat.id if update.effective_chat else "?",
+        )
         until = time.time() + _MUTE_DEFAULT_S
         if self.settings_store:
             self.settings_store.runtime_set("global_mute_until", until)
         end_local = datetime.fromtimestamp(until).strftime("%H:%M")
         log.info("[tg] mute_all activated until %s (epoch=%d)", end_local, int(until))
-        markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("Sofort beenden", callback_data="mute:end"),
-             InlineKeyboardButton("Auf 4 h verlängern", callback_data="mute:ext4h")],
-        ])
+        markup = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton("Sofort beenden", callback_data="mute:end"),
+                    InlineKeyboardButton("Auf 4 h verlängern", callback_data="mute:ext4h"),
+                ],
+            ]
+        )
         await update.message.reply_text(
             f"🔇 Alle Pushes pausiert bis <b>{end_local}</b>",
-            parse_mode="HTML", reply_markup=markup,
+            parse_mode="HTML",
+            reply_markup=markup,
         )
 
     async def _handle_cameras(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Per-cam drilldown picker. Tapping the persistent ``📹 Kameras``
         row sends an inline keyboard with one button per camera; tapping
         a camera opens its drilldown view via cam:<id>:drilldown."""
-        log.info("[tg] /cameras invoked by chat=%s",
-                 update.effective_chat.id if update.effective_chat else "?")
+        log.info(
+            "[tg] /cameras invoked by chat=%s",
+            update.effective_chat.id if update.effective_chat else "?",
+        )
         cams = self._active_cams()
         if not cams:
             await update.message.reply_text(
@@ -191,12 +225,17 @@ class InboundMixin:
         rows = []
         for info in cams:
             icon = self._cam_status_icon_for(info)
-            rows.append([InlineKeyboardButton(
-                f"{icon} {info['name']}",
-                callback_data=f"cam:{info['cam_id']}:drilldown"[:64],
-            )])
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        f"{icon} {info['name']}",
+                        callback_data=f"cam:{info['cam_id']}:drilldown"[:64],
+                    )
+                ]
+            )
         await update.message.reply_text(
-            "📹 Kamera wählen", reply_markup=InlineKeyboardMarkup(rows),
+            "📹 Kamera wählen",
+            reply_markup=InlineKeyboardMarkup(rows),
         )
 
     async def on_text(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -213,11 +252,11 @@ class InboundMixin:
         # Legacy button labels — kept reachable so old clients with the
         # 5-button keyboard cached don't suddenly see "💡 Tipp" replies.
         legacy_map = {
-            ACTION_LIVE:   self._handle_livebild,
-            ACTION_CLIP:   self._handle_clip5,
+            ACTION_LIVE: self._handle_livebild,
+            ACTION_CLIP: self._handle_clip5,
             ACTION_STATUS: self._handle_status,
-            ACTION_MUTE:   self._handle_mute_all,
-            ACTION_CAMS:   self._handle_cameras,
+            ACTION_MUTE: self._handle_mute_all,
+            ACTION_CAMS: self._handle_cameras,
         }
         handler = legacy_map.get(txt)
         if handler:
@@ -290,21 +329,25 @@ class InboundMixin:
                 await q.answer("Bereits bewertet")
                 return
             verdict = "ok" if verb == "ok" else "no"
-            ss.runtime_set_subkey("event_feedback", eid, {
-                "verdict": verdict,
-                "by": "telegram",
-                "ts": time.time(),
-            })
+            ss.runtime_set_subkey(
+                "event_feedback",
+                eid,
+                {
+                    "verdict": verdict,
+                    "by": "telegram",
+                    "ts": time.time(),
+                },
+            )
             ts_str = datetime.now().strftime("%H:%M")
-            badge = (f"✅ Gültig · {ts_str}" if verdict == "ok"
-                     else f"❌ Falsch · {ts_str}")
+            badge = f"✅ Gültig · {ts_str}" if verdict == "ok" else f"❌ Falsch · {ts_str}"
             await self._set_badge(q, badge)
             await q.answer(badge)
             return
 
         if verb == "m1h":
             idx = ss.runtime_get_subkey("alert_index", eid) if ss else None
-            cam = (idx or {}).get("cam"); label = (idx or {}).get("label")
+            cam = (idx or {}).get("cam")
+            label = (idx or {}).get("label")
             if not cam or not label:
                 await q.answer("Daten zur Erkennung fehlen.")
                 return
@@ -348,8 +391,7 @@ class InboundMixin:
         verb = data.split(":", 1)[1] if ":" in data else ""
         if verb == "end":
             self.settings_store.runtime_set("global_mute_until", 0)
-            log.info("[tg] mute_all cleared by chat=%s",
-                     q.message.chat_id if q.message else "?")
+            log.info("[tg] mute_all cleared by chat=%s", q.message.chat_id if q.message else "?")
             await self._set_badge(q, "✅ Pushes wieder aktiv")
             await q.answer("✅ Pushes wieder aktiv")
             return
@@ -392,8 +434,9 @@ class InboundMixin:
                 if kind == "hi":
                     # sendDocument keeps full resolution (sendPhoto would
                     # downscale to 1280 long-edge).
-                    await q.message.reply_document(document=f, filename=snap_path.name,
-                                                   caption=f"🖼 {snap_path.name}")
+                    await q.message.reply_document(
+                        document=f, filename=snap_path.name, caption=f"🖼 {snap_path.name}"
+                    )
                 else:
                     await q.message.reply_photo(photo=f, caption=f"📤 {snap_path.name}")
         except Exception as e:
@@ -413,7 +456,8 @@ class InboundMixin:
             try:
                 with open(full, "rb") as f:
                     await context.bot.send_video(
-                        chat_id=q.message.chat_id, video=f,
+                        chat_id=q.message.chat_id,
+                        video=f,
                         caption=f"⏱ {rel}",
                     )
             except Exception as e:
@@ -487,7 +531,9 @@ class InboundMixin:
             return
         if verb == "reconnect":
             try:
-                rt.stop(); time.sleep(0.5); rt.start()
+                rt.stop()
+                time.sleep(0.5)
+                rt.start()
                 await q.answer(f"🔄 {cam_name}: Neuverbindung gestartet")
             except Exception as e:
                 log.warning("[tg] reconnect failed: %s", e)
@@ -497,17 +543,23 @@ class InboundMixin:
 
     async def _cam_send_snapshot(self, q, context, cam_id, rt, cam_name):
         await q.answer("📷 Snapshot wird geholt…")
-        log.info("[tg] cam:%s:livebild triggered by chat=%s",
-                 cam_id, q.message.chat_id if q.message else "?")
+        log.info(
+            "[tg] cam:%s:livebild triggered by chat=%s",
+            cam_id,
+            q.message.chat_id if q.message else "?",
+        )
         jpeg = rt.snapshot_jpeg() if hasattr(rt, "snapshot_jpeg") else None
         if not jpeg:
             await q.message.reply_text(f"Kein Live-Bild für {cam_name} verfügbar.")
             return
-        bio = BytesIO(jpeg); bio.name = f"{cam_id}.jpg"
-        rows = [[
-            InlineKeyboardButton("🔄 Neu", callback_data=f"cam:{cam_id}:livebild"),
-            InlineKeyboardButton("🎬 5 s Clip", callback_data=f"cam:{cam_id}:clip:5"),
-        ]]
+        bio = BytesIO(jpeg)
+        bio.name = f"{cam_id}.jpg"
+        rows = [
+            [
+                InlineKeyboardButton("🔄 Neu", callback_data=f"cam:{cam_id}:livebild"),
+                InlineKeyboardButton("🎬 5 s Clip", callback_data=f"cam:{cam_id}:clip:5"),
+            ]
+        ]
         nav_row = self._other_cam_nav_row(cam_id, "livebild")
         if nav_row:
             rows.append(nav_row)
@@ -518,9 +570,11 @@ class InboundMixin:
             # alert bubble in the Telegram client, so the user can scroll back
             # and see the alert + their requested follow-ups together.
             await context.bot.send_photo(
-                chat_id=q.message.chat_id, photo=bio,
+                chat_id=q.message.chat_id,
+                photo=bio,
                 caption=f"📷 <b>{cam_name}</b> · {ts_hm}",
-                parse_mode="HTML", reply_markup=markup,
+                parse_mode="HTML",
+                reply_markup=markup,
                 reply_to_message_id=q.message.message_id if q.message else None,
             )
         except Exception as e:
@@ -538,8 +592,12 @@ class InboundMixin:
 
     async def _cam_send_clip(self, q, context, cam_id, rt, cam_name, sec):
         await q.answer(f"🎬 {sec}-s Clip wird aufgenommen…")
-        log.info("[tg] cam:%s:clip:%d triggered by chat=%s",
-                 cam_id, sec, q.message.chat_id if q.message else "?")
+        log.info(
+            "[tg] cam:%s:clip:%d triggered by chat=%s",
+            cam_id,
+            sec,
+            q.message.chat_id if q.message else "?",
+        )
         # The blocking ffmpeg subprocess runs in a worker thread via run_in_executor
         # so it doesn't pin the asyncio loop while the recording is in progress.
         loop = asyncio.get_running_loop()
@@ -551,16 +609,19 @@ class InboundMixin:
         if not path:
             await q.message.reply_text(
                 f"Clip-Aufnahme für {cam_name} fehlgeschlagen "
-                f"(ffmpeg/RTSP-Problem). Snapshot stattdessen verfügbar.")
+                f"(ffmpeg/RTSP-Problem). Snapshot stattdessen verfügbar."
+            )
             return
         ts_hm = datetime.now().strftime("%H:%M")
         # Same nav layout as snapshots: same-cam refresh / snapshot row,
         # plus a row of OTHER cameras (or a single "Andere Kamera" picker
         # when there are too many to fit).
-        rows = [[
-            InlineKeyboardButton("🔄 Neuer Clip", callback_data=f"cam:{cam_id}:clip:5"),
-            InlineKeyboardButton("📷 Live-Bild", callback_data=f"cam:{cam_id}:livebild"),
-        ]]
+        rows = [
+            [
+                InlineKeyboardButton("🔄 Neuer Clip", callback_data=f"cam:{cam_id}:clip:5"),
+                InlineKeyboardButton("📷 Live-Bild", callback_data=f"cam:{cam_id}:livebild"),
+            ]
+        ]
         nav_row = self._other_cam_nav_row(cam_id, "clip:5")
         if nav_row:
             rows.append(nav_row)
@@ -568,9 +629,11 @@ class InboundMixin:
         try:
             with open(path, "rb") as f:
                 await context.bot.send_video(
-                    chat_id=q.message.chat_id, video=f,
+                    chat_id=q.message.chat_id,
+                    video=f,
                     caption=f"🎬 <b>{cam_name}</b> · {sec} s · {ts_hm}",
-                    parse_mode="HTML", reply_markup=markup,
+                    parse_mode="HTML",
+                    reply_markup=markup,
                     reply_to_message_id=q.message.message_id if q.message else None,
                 )
         except Exception as e:
@@ -605,20 +668,33 @@ class InboundMixin:
         we render in the same bubble via edit_message_text."""
         self.log_action("menu_" + data.split(":", 1)[1])
         if data == "menu:root":
-            await self._render_view(q, self._root_view()); await q.answer(); return
+            await self._render_view(q, self._root_view())
+            await q.answer()
+            return
         if data == "menu:livebild":
-            await self._render_view(q, self._cam_picker("livebild")); await q.answer(); return
+            await self._render_view(q, self._cam_picker("livebild"))
+            await q.answer()
+            return
         if data == "menu:clip":
-            await self._render_view(q, self._cam_picker("clip")); await q.answer(); return
+            await self._render_view(q, self._cam_picker("clip"))
+            await q.answer()
+            return
         if data == "menu:cams":
-            await self._render_view(q, self._cam_picker("drilldown")); await q.answer(); return
+            await self._render_view(q, self._cam_picker("drilldown"))
+            await q.answer()
+            return
         if data == "menu:zeitraffer":
-            await self._render_view(q, self._zeitraffer_view()); await q.answer(); return
+            await self._render_view(q, self._zeitraffer_view())
+            await q.answer()
+            return
         if data == "menu:zeitraffer:today":
             # Pick the newest of today's timelapses across cameras.
             today_pref = datetime.now().strftime("%Y-%m-%d")
-            tls = [t for t in self._list_recent_timelapses(limit=20)
-                   if datetime.fromtimestamp(t["mtime"]).strftime("%Y-%m-%d") == today_pref]
+            tls = [
+                t
+                for t in self._list_recent_timelapses(limit=20)
+                if datetime.fromtimestamp(t["mtime"]).strftime("%Y-%m-%d") == today_pref
+            ]
             if not tls:
                 await q.answer("Heute kein Zeitraffer vorhanden.")
                 return
@@ -634,9 +710,14 @@ class InboundMixin:
         if data == "menu:erkennungen":
             chat_id = q.message.chat_id if q.message else None
             st = self._tile_state_for(chat_id)
-            await self._render_view(q, self._erkennungen_view(
-                filter_cam=st.get("det_cam"), filter_kind=st.get("det_kind"), page=0))
-            await q.answer(); return
+            await self._render_view(
+                q,
+                self._erkennungen_view(
+                    filter_cam=st.get("det_cam"), filter_kind=st.get("det_kind"), page=0
+                ),
+            )
+            await q.answer()
+            return
         # Erkennungen pagination + filter sub-view + filter-state setters.
         if data.startswith("det:page:"):
             try:
@@ -645,51 +726,80 @@ class InboundMixin:
                 page = 0
             chat_id = q.message.chat_id if q.message else None
             st = self._tile_state_for(chat_id)
-            await self._render_view(q, self._erkennungen_view(
-                filter_cam=st.get("det_cam"), filter_kind=st.get("det_kind"), page=page))
-            await q.answer(); return
+            await self._render_view(
+                q,
+                self._erkennungen_view(
+                    filter_cam=st.get("det_cam"), filter_kind=st.get("det_kind"), page=page
+                ),
+            )
+            await q.answer()
+            return
         if data == "det:filter":
             chat_id = q.message.chat_id if q.message else None
             await self._render_view(q, self._erkennungen_filter_view(chat_id))
-            await q.answer(); return
+            await q.answer()
+            return
         if data.startswith("det:setcam:"):
             chat_id = q.message.chat_id if q.message else None
             st = self._tile_state_for(chat_id)
             sel = data.split(":", 2)[2]
             st["det_cam"] = None if sel == "_all" else sel
             await self._render_view(q, self._erkennungen_filter_view(chat_id))
-            await q.answer(); return
+            await q.answer()
+            return
         if data.startswith("det:setkind:"):
             chat_id = q.message.chat_id if q.message else None
             st = self._tile_state_for(chat_id)
             sel = data.split(":", 2)[2]
             st["det_kind"] = None if sel == "_all" else sel
             await self._render_view(q, self._erkennungen_filter_view(chat_id))
-            await q.answer(); return
+            await q.answer()
+            return
         if data == "det:apply":
             chat_id = q.message.chat_id if q.message else None
             st = self._tile_state_for(chat_id)
-            await self._render_view(q, self._erkennungen_view(
-                filter_cam=st.get("det_cam"), filter_kind=st.get("det_kind"), page=0))
-            await q.answer(); return
+            await self._render_view(
+                q,
+                self._erkennungen_view(
+                    filter_cam=st.get("det_cam"), filter_kind=st.get("det_kind"), page=0
+                ),
+            )
+            await q.answer()
+            return
         if data == "menu:stats" or data == "menu:stats:today":
-            await self._render_view(q, self._stats_view(days=1)); await q.answer(); return
+            await self._render_view(q, self._stats_view(days=1))
+            await q.answer()
+            return
         if data == "menu:stats:week":
-            await self._render_view(q, self._stats_view(days=7)); await q.answer(); return
+            await self._render_view(q, self._stats_view(days=7))
+            await q.answer()
+            return
         if data == "menu:stats:month":
-            await self._render_view(q, self._stats_view(days=30)); await q.answer(); return
+            await self._render_view(q, self._stats_view(days=30))
+            await q.answer()
+            return
         if data == "menu:status":
-            await self._render_view(q, self._status_view()); await q.answer(); return
+            await self._render_view(q, self._status_view())
+            await q.answer()
+            return
         if data == "menu:logs":
-            await self._render_view(q, self._logs_view()); await q.answer(); return
+            await self._render_view(q, self._logs_view())
+            await q.answer()
+            return
         # Phase-1 stubs: tiles routed end-to-end so the navigation feels
         # complete even though the detail content lands in phase-2.
         if data == "menu:tierlog":
-            await self._render_view(q, self._tier_log_view()); await q.answer(); return
+            await self._render_view(q, self._tier_log_view())
+            await q.answer()
+            return
         if data == "menu:wetter":
-            await self._render_view(q, self._wetter_view()); await q.answer(); return
+            await self._render_view(q, self._wetter_view())
+            await q.answer()
+            return
         if data == "menu:system":
-            await self._render_view(q, self._system_view()); await q.answer(); return
+            await self._render_view(q, self._system_view())
+            await q.answer()
+            return
         if data == "menu:muteall":
             # Same effect as the /mute command, but renders inside the
             # anchor and snaps back to root afterwards.
@@ -705,5 +815,3 @@ class InboundMixin:
             await q.answer(f"🔇 Alle Pushes pausiert bis {end_local}")
             return
         await q.answer()
-
-

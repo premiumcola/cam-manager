@@ -5,22 +5,22 @@ imports these rules; the test panel and live runtime both pass through
 the same predicates so a "fox-likely" label is treated the same way
 everywhere.
 """
-from __future__ import annotations
 
+from __future__ import annotations
 
 # Substring→category rules. Case-insensitive match against the ImageNet
 # human-readable label. Ordering matters — first hit wins, so put the more
 # specific rule first (e.g. "red fox" before bare "fox" to avoid flying-fox
 # or corsac-fox false positives).
 _WILDLIFE_LABEL_RULES: tuple[tuple[str, str], ...] = (
-    ("red fox",       "fox"),
-    ("grey fox",      "fox"),
-    ("gray fox",      "fox"),
-    ("kit fox",       "fox"),
-    ("arctic fox",    "fox"),
-    ("fox squirrel",  "squirrel"),
-    ("squirrel",      "squirrel"),
-    ("hedgehog",      "hedgehog"),
+    ("red fox", "fox"),
+    ("grey fox", "fox"),
+    ("gray fox", "fox"),
+    ("kit fox", "fox"),
+    ("arctic fox", "fox"),
+    ("fox squirrel", "squirrel"),
+    ("squirrel", "squirrel"),
+    ("hedgehog", "hedgehog"),
 )
 
 
@@ -44,11 +44,11 @@ def _wildlife_category(raw_label: str | None) -> str | None:
 # only fire once a mammal-capable iNat model is dropped into models/ and
 # pointed at via processing.wildlife.inat_*.
 _INAT_WILDLIFE_RULES: tuple[tuple[str, str], ...] = (
-    ("sciurus",   "squirrel"),     # Sciurus vulgaris, S. carolinensis, etc.
-    ("tamias",    "squirrel"),     # chipmunk genus — close enough for our purposes
-    ("vulpes",    "fox"),          # Vulpes vulpes, V. lagopus, V. corsac
-    ("erinaceus", "hedgehog"),     # Erinaceus europaeus
-    ("meles",     "hedgehog"),     # badger genus — optional fallback per spec
+    ("sciurus", "squirrel"),  # Sciurus vulgaris, S. carolinensis, etc.
+    ("tamias", "squirrel"),  # chipmunk genus — close enough for our purposes
+    ("vulpes", "fox"),  # Vulpes vulpes, V. lagopus, V. corsac
+    ("erinaceus", "hedgehog"),  # Erinaceus europaeus
+    ("meles", "hedgehog"),  # badger genus — optional fallback per spec
 )
 
 
@@ -69,13 +69,19 @@ def _inat_wildlife_category(raw_label: str | None) -> str | None:
 # when an independent iNat-secondary check returns a Sciuridae genus
 # (see classify_crop cross-validation).
 _SQUIRREL_LIKELY_LABELS: tuple[str, ...] = (
-    "hare", "mongoose", "mink", "weasel",
-    "polecat", "ferret", "marmot",
+    "hare",
+    "mongoose",
+    "mink",
+    "weasel",
+    "polecat",
+    "ferret",
+    "marmot",
     # Bias-from-American-training-set cases — already in
     # _WILDLIFE_LABEL_RULES as direct hits, but listed here too so the
     # cross-check can boost a soft 0.45-ish "fox squirrel" with a strong
     # iNat "Sciurus vulgaris".
-    "fox squirrel", "gray squirrel",
+    "fox squirrel",
+    "gray squirrel",
 )
 
 
@@ -89,8 +95,13 @@ def _is_squirrel_likely(label: str | None) -> bool:
 # Sciuridae-family Latin genera the iNat secondary may emit on a squirrel
 # crop. Used as the cross-check half of the "squirrel-likely" rule above.
 _SCIURIDAE_GENERA: tuple[str, ...] = (
-    "sciurus", "tamias", "marmota", "tamiasciurus", "callosciurus",
-    "spermophilus", "glaucomys",
+    "sciurus",
+    "tamias",
+    "marmota",
+    "tamiasciurus",
+    "callosciurus",
+    "spermophilus",
+    "glaucomys",
 )
 
 

@@ -4,6 +4,7 @@ Hosts ``parse_hhmm`` — previously copy-pasted into three modules
 (telegram_bot/_consts, telegram_helpers, event_logic). Future
 time-of-day helpers belong here too.
 """
+
 from __future__ import annotations
 
 

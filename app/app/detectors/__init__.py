@@ -10,6 +10,7 @@ Every consumer outside this package keeps working unchanged thanks to
 the wildcard re-exports below. New code should import from the
 specific submodule when it cares about provenance.
 """
+
 from __future__ import annotations
 
 from ._label_loader import (
@@ -25,13 +26,13 @@ from ._wildlife_rules import (
     _is_squirrel_likely,
     _wildlife_category,
 )
-from .draw import draw_detections
 
 # R02.3 finished the carve-out — every detector class now lives in
 # its own module and `_legacy_classes.py` is gone.
 from .bird_species import BirdSpeciesClassifier
 from .coral_object import CoralObjectDetector
 from .discovery import discover_wildlife_paths
+from .draw import draw_detections
 from .wildlife import WildlifeClassifier
 
 __all__ = [

@@ -7,6 +7,7 @@ persistence (`_load_achievements`, `_save_achievements`) lives here
 because nothing else in the codebase reads or writes
 `achievements.json`.
 """
+
 from __future__ import annotations
 
 import json as _json_mod
@@ -61,7 +62,10 @@ def _register_identity(registry: IdentityRegistry, cam_id: str, identity_type: s
     if not det:
         return jsonify({"ok": False, "error": f"Kein {identity_type} in diesem Event"}), 400
     b = det.get("bbox") or {}
-    crop = img[max(0, int(b.get("y1", 0))):max(0, int(b.get("y2", 0))), max(0, int(b.get("x1", 0))):max(0, int(b.get("x2", 0)))]
+    crop = img[
+        max(0, int(b.get("y1", 0))) : max(0, int(b.get("y2", 0))),
+        max(0, int(b.get("x1", 0))) : max(0, int(b.get("x2", 0))),
+    ]
     if crop.size == 0:
         return jsonify({"ok": False, "error": "Crop leer"}), 400
     ok = registry.register_crop(name, crop, whitelisted=whitelisted, notes=notes)
@@ -130,12 +134,15 @@ def api_achievements_get():
     # frontend gets active + archive + upcoming-preview in one roundtrip.
     # Existing clients ignore unknown keys — purely additive.
     from ..quests import preview_upcoming_quests
-    return jsonify({
-        "achievements": data,
-        "quests": data.get("quests") or {},
-        "quests_archive": data.get("quests_archive") or {},
-        "upcoming": preview_upcoming_quests(),
-    })
+
+    return jsonify(
+        {
+            "achievements": data,
+            "quests": data.get("quests") or {},
+            "quests_archive": data.get("quests_archive") or {},
+            "upcoming": preview_upcoming_quests(),
+        }
+    )
 
 
 @bp.post('/api/achievements/quests/reevaluate')
@@ -144,6 +151,7 @@ def api_achievements_quests_reevaluate():
     Sichtungen pinboard. Same evaluator that runs hourly in the
     background and after every motion event."""
     from ..quests import reevaluate_and_save
+
     result = reevaluate_and_save()
     return jsonify(result)
 
@@ -194,7 +202,11 @@ def api_bird_dossier_detail(latin: str):
         return jsonify({"ok": False, "error": "not found"}), 404
     store = app_state.store
     settings = app_state.settings
-    cams = settings.export_effective_config(app_state.base_cfg).get("cameras", []) or [] if settings else []
+    cams = (
+        settings.export_effective_config(app_state.base_cfg).get("cameras", []) or []
+        if settings
+        else []
+    )
     events: list = []
     for cam in cams:
         cam_id = cam.get("id")
@@ -228,6 +240,7 @@ def api_achievements_media(species_id: str):
     variant that collapses into that ID ("Grünfink" / "Gruenfink") and
     union the results."""
     from ..camera_runtime import _SPECIES_TO_ACH_ID
+
     settings = app_state.settings
     store = app_state.store
     sid = (species_id or "").strip().lower()
@@ -262,5 +275,5 @@ def api_achievements_media(species_id: str):
                 pool.append(ev)
     pool.sort(key=lambda x: x.get("time", ""), reverse=True)
     total = len(pool)
-    page = pool[offset:offset + limit]
+    page = pool[offset : offset + limit]
     return jsonify({"items": page, "total_count": total})

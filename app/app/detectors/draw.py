@@ -1,5 +1,6 @@
 """Bbox overlay renderer used by the Coral test panel and the lightbox
 preview path. Carved out of the original detectors.py during R02.1."""
+
 from __future__ import annotations
 
 import cv2
@@ -30,5 +31,7 @@ def draw_detections(frame: np.ndarray, detections: list[Detection]) -> np.ndarra
             parts.append(det.identity)
         parts.append(f"{det.score:.2f}")
         text = " | ".join(parts)
-        cv2.putText(out, text, (x1, max(24, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.58, color, 2, cv2.LINE_AA)
+        cv2.putText(
+            out, text, (x1, max(24, y1 - 8)), cv2.FONT_HERSHEY_SIMPLEX, 0.58, color, 2, cv2.LINE_AA
+        )
     return out

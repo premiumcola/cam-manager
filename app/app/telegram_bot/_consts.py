@@ -3,6 +3,7 @@
 Lives in its own file so mixin modules import these without creating a
 circular dependency with service.py (which imports the mixins).
 """
+
 from __future__ import annotations
 
 import logging
@@ -12,7 +13,6 @@ from telegram import (
     KeyboardButton,
     ReplyKeyboardMarkup,
 )
-
 
 # Pinned logger name so log filters and grep keep matching the legacy
 # module path after the package split.
@@ -82,13 +82,13 @@ _MUTE_EXTEND_S = 4 * 3600
 # tight cooldown so a real intruder isn't gated. Motion is rare in
 # practice (severity=off by default in soft profile) so 30 s.
 _NOTIFY_COOLDOWN_DEFAULTS = {
-    "person":   60,
-    "cat":      120,
-    "bird":     300,
+    "person": 60,
+    "cat": 120,
+    "bird": 300,
     "squirrel": 300,
-    "dog":      120,
-    "car":      30,
-    "motion":   30,
+    "dog": 120,
+    "car": 30,
+    "motion": 30,
 }
 
 

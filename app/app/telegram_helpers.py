@@ -4,6 +4,7 @@ Single source of truth for German label names, scoring weights, quiet/night
 detection and the most-specific label rule used both by the alert pipeline
 and the daily report.
 """
+
 from __future__ import annotations
 
 import logging
@@ -13,37 +14,44 @@ log = logging.getLogger(__name__)
 
 # Mirror of OBJ_LABEL in app/web/static/app.js — keep in sync.
 LABEL_DE: dict[str, str] = {
-    "person":       "Person",
-    "cat":          "Katze",
-    "bird":         "Vogel",
-    "car":          "Auto",
-    "dog":          "Hund",
-    "squirrel":     "Eichhörnchen",
-    "fox":          "Fuchs",
-    "hedgehog":     "Igel",
-    "motion":       "Bewegung",
-    "alarm":        "Alarm",
-    "timelapse":    "Timelapse",
-    "object":       "Objekt",
+    "person": "Person",
+    "cat": "Katze",
+    "bird": "Vogel",
+    "car": "Auto",
+    "dog": "Hund",
+    "squirrel": "Eichhörnchen",
+    "fox": "Fuchs",
+    "hedgehog": "Igel",
+    "motion": "Bewegung",
+    "alarm": "Alarm",
+    "timelapse": "Timelapse",
+    "object": "Objekt",
     "notification": "Benachrichtigung",
 }
 
 # Object labels (more specific than motion). Order matters: when an event
 # carries multiple labels we pick the highest-priority one as "primary".
 OBJECT_LABELS: tuple[str, ...] = (
-    "person", "car", "dog", "cat", "squirrel", "fox", "hedgehog", "bird",
+    "person",
+    "car",
+    "dog",
+    "cat",
+    "squirrel",
+    "fox",
+    "hedgehog",
+    "bird",
 )
 
 # Highlight-of-the-day scoring weights — wildlife wins over routine pets/people.
 LABEL_WEIGHT: dict[str, float] = {
     "squirrel": 1.5,
-    "fox":      1.5,
+    "fox": 1.5,
     "hedgehog": 1.5,
-    "bird":     1.2,
-    "cat":      1.1,
-    "person":   1.0,
-    "dog":      1.0,
-    "car":      0.8,
+    "bird": 1.2,
+    "cat": 1.1,
+    "person": 1.0,
+    "dog": 1.0,
+    "car": 0.8,
 }
 
 # Birds that are routine in this region and shouldn't win highlight-of-the-day.
@@ -102,16 +110,20 @@ def is_night(night_cfg: dict | None, now: datetime | None = None) -> bool:
         try:
             from astral import LocationInfo
             from astral.sun import elevation
+
             loc = LocationInfo(latitude=float(lat), longitude=float(lon))
             elev = elevation(loc.observer, now)
             return elev < NIGHT_ELEV_DEG
         except Exception as e:
             log.debug("[night] astral failed, falling back to clock: %s", e)
     # Fallback: fixed hh:mm window (defaults to 22:00–07:00).
-    return is_quiet_now({
-        "start": night_cfg.get("start", "22:00"),
-        "end":   night_cfg.get("end",   "07:00"),
-    }, now)
+    return is_quiet_now(
+        {
+            "start": night_cfg.get("start", "22:00"),
+            "end": night_cfg.get("end", "07:00"),
+        },
+        now,
+    )
 
 
 def truncate_caption(text: str, limit: int = 1024) -> str:

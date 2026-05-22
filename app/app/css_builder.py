@@ -12,6 +12,7 @@ If the partials directory is empty (or missing), build is a no-op and the
 existing ``app.css`` is left untouched. That guard keeps the build harmless
 during the bootstrap phase before partials have been written.
 """
+
 from __future__ import annotations
 
 import logging

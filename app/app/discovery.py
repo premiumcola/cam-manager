@@ -48,6 +48,7 @@ def _http_banner(ip: str, port: int, timeout: float = 1.5) -> dict:
                 conn = http.client.HTTPConnection(ip, port, timeout=timeout)
             else:
                 import ssl
+
                 ctx = ssl.create_default_context()
                 ctx.check_hostname = False
                 ctx.verify_mode = ssl.CERT_NONE
@@ -110,10 +111,18 @@ def _guess(open_ports: list[int], banners: dict) -> str:
     # in Server header / WWW-Authenticate realm / <title> / first 2 KB of body.
     # Reolink in particular ships the vendor as inline JS strings.
     for keyword, vendor in [
-        ("reolink", "Reolink"), ("hikvision", "Hikvision"), ("hik", "Hikvision"),
-        ("dahua", "Dahua"), ("amcrest", "Amcrest"), ("axis", "Axis"),
-        ("hanwha", "Hanwha"), ("uniview", "Uniview"), ("vivotek", "Vivotek"),
-        ("foscam", "Foscam"), ("tp-link", "TP-Link"), ("tapo", "TP-Link Tapo"),
+        ("reolink", "Reolink"),
+        ("hikvision", "Hikvision"),
+        ("hik", "Hikvision"),
+        ("dahua", "Dahua"),
+        ("amcrest", "Amcrest"),
+        ("axis", "Axis"),
+        ("hanwha", "Hanwha"),
+        ("uniview", "Uniview"),
+        ("vivotek", "Vivotek"),
+        ("foscam", "Foscam"),
+        ("tp-link", "TP-Link"),
+        ("tapo", "TP-Link Tapo"),
     ]:
         if keyword in server or keyword in title or keyword in www_auth or keyword in body:
             return vendor
@@ -186,6 +195,7 @@ def discover_hosts(
       • candidate    — {ip, hostname, guess, open_ports}
     Errors are NOT emitted from here — the caller wraps the call.
     """
+
     def _emit(kind: str, payload: dict) -> None:
         if progress is None:
             return
@@ -227,11 +237,14 @@ def discover_hosts(
             # Throttle progress events to ~5/s so the SSE channel doesn't drown
             # the browser. Always emit the very first and last update unthrottled.
             if (now - last_emit) >= 0.2 or len(scanned_ips) == len(hosts):
-                _emit("progress", {
-                    "scanned": len(scanned_ips),
-                    "total": len(hosts),
-                    "current_ip": ip,
-                })
+                _emit(
+                    "progress",
+                    {
+                        "scanned": len(scanned_ips),
+                        "total": len(hosts),
+                        "current_ip": ip,
+                    },
+                )
                 last_emit = now
 
     # Phase-1 visibility: log every host that answered, even ones _guess() will
@@ -295,12 +308,15 @@ def discover_hosts(
             rtsp_port = next((p for p in (554, 8554) if p in open_ports), 554)
             entry["reolink_hints"] = _reolink_rtsp_hints(ip, rtsp_port)
         results.append(entry)
-        _emit("candidate", {
-            "ip": ip,
-            "hostname": hostname,
-            "guess": guess,
-            "open_ports": open_ports,
-        })
+        _emit(
+            "candidate",
+            {
+                "ip": ip,
+                "hostname": hostname,
+                "guess": guess,
+                "open_ports": open_ports,
+            },
+        )
 
     results.sort(key=lambda x: list(map(int, x["ip"].split("."))))
     return results, len(hosts)
@@ -347,9 +363,12 @@ def discover_hosts_stream(
     if result["error"]:
         yield ("error", {"message": result["error"]})
         return
-    yield ("done", {
-        "subnet": subnet,
-        "total_scanned": result["total_scanned"],
-        "found": len(result["results"]),
-        "results": result["results"],
-    })
+    yield (
+        "done",
+        {
+            "subnet": subnet,
+            "total_scanned": result["total_scanned"],
+            "found": len(result["results"]),
+            "results": result["results"],
+        },
+    )

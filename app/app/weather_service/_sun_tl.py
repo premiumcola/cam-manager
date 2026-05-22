@@ -23,8 +23,8 @@ import requests
 from ._consts import (
     EVENT_ICON_HEX,
     EVENT_LABEL_DE,
-    HISTORY_FIELDS,
     HISTORY_FIELD_TO_EVENT,
+    HISTORY_FIELDS,
     HISTORY_LABELS_DE,
     HISTORY_MAXLEN,
     HISTORY_UNITS,
@@ -34,7 +34,6 @@ from ._consts import (
     _safe_subset,
     log,
 )
-
 
 # 70/30 pre-event bias on the sun-timelapse window: most of the captured
 # minutes sit BEFORE the sun event so a sunrise video starts in twilight
@@ -73,6 +72,7 @@ class _SunTLTestSession:
     daemon thread populates it. The frames_dir reference lets the
     status endpoint pull live counters directly from the same
     `_stats.json` the production capture path writes."""
+
     cam_id: str
     phase: str
     duration_s: int
@@ -144,12 +144,14 @@ class _SunTLTestLogHandler(logging.Handler):
 
     _TAGS = ("[sun-tl-test]", "[weather]", "[capture-stats]")
 
-    def __init__(self, session: "_SunTLTestSession"):
+    def __init__(self, session: _SunTLTestSession):
         super().__init__()
-        self.setFormatter(logging.Formatter(
-            "%(asctime)s %(levelname)s %(message)s",
-            datefmt="%H:%M:%S",
-        ))
+        self.setFormatter(
+            logging.Formatter(
+                "%(asctime)s %(levelname)s %(message)s",
+                datefmt="%H:%M:%S",
+            )
+        )
         self.session = session
 
     def emit(self, record: logging.LogRecord):
@@ -170,12 +172,12 @@ class _SunTLTestLogHandler(logging.Handler):
 # fired against the old instance. The daemon thread holds its own
 # direct reference into the dataclass, so the GC chain stays intact
 # even when these globals are replaced by a subsequent test.
-_active_test_session: "_SunTLTestSession | None" = None
-_active_test_handler: "_SunTLTestLogHandler | None" = None
+_active_test_session: _SunTLTestSession | None = None
+_active_test_handler: _SunTLTestLogHandler | None = None
 _test_session_lock = threading.Lock()
 
 
-def _raw_dir_relpath(session: "_SunTLTestSession", sightings_dir: Path) -> str | None:
+def _raw_dir_relpath(session: _SunTLTestSession, sightings_dir: Path) -> str | None:
     """Return ``session.raw_dir`` as a path string relative to the
     storage root (i.e. starting with ``weather/...``) so the UI can
     render a copyable hint. None when the session has no raw_dir yet
@@ -205,9 +207,13 @@ def _sun_window_bounds(sun_dt: datetime, window_min: int) -> tuple[datetime, dat
 
 
 def _write_sun_skip_json(
-    out_dir: Path, stem: str, *,
-    phase: str, camera_id: str,
-    skip_reason: str, n_written: int,
+    out_dir: Path,
+    stem: str,
+    *,
+    phase: str,
+    camera_id: str,
+    skip_reason: str,
+    n_written: int,
     min_required: int,
     log_tail: list[str] | None = None,
     extra: dict | None = None,
@@ -226,13 +232,13 @@ def _write_sun_skip_json(
     message for loop crashes). All writes are best-effort — a failure
     here only emits a warning, never raises."""
     payload = {
-        "phase":         phase,
-        "camera_id":     camera_id,
-        "skip_reason":   skip_reason,
-        "n_written":     int(n_written),
-        "min_required":  int(min_required),
-        "captured_at":   datetime.now().isoformat(timespec="seconds"),
-        "log_tail":      list(log_tail or [])[-30:],
+        "phase": phase,
+        "camera_id": camera_id,
+        "skip_reason": skip_reason,
+        "n_written": int(n_written),
+        "min_required": int(min_required),
+        "captured_at": datetime.now().isoformat(timespec="seconds"),
+        "log_tail": list(log_tail or [])[-30:],
     }
     if extra:
         # Caller-supplied keys take precedence over defaults so a
@@ -243,13 +249,15 @@ def _write_sun_skip_json(
         out_dir.mkdir(parents=True, exist_ok=True)
         _atomic_write_json(out_dir / f"{stem}_skip.json", payload)
         log.info(
-            "[weather] _skip.json written: %s/%s_skip.json (reason=%s, "
-            "n_written=%d, min=%d)",
-            out_dir.name, stem, skip_reason, n_written, min_required,
+            "[weather] _skip.json written: %s/%s_skip.json (reason=%s, " "n_written=%d, min=%d)",
+            out_dir.name,
+            stem,
+            skip_reason,
+            n_written,
+            min_required,
         )
     except Exception as e:
-        log.warning("[weather] _skip.json write failed: %s · %s",
-                    out_dir / f"{stem}_skip.json", e)
+        log.warning("[weather] _skip.json write failed: %s · %s", out_dir / f"{stem}_skip.json", e)
 
 
 class SunTimelapseMixin:
@@ -272,8 +280,12 @@ class SunTimelapseMixin:
         try:
             from astral import Observer
             from astral.sun import sun as _sun
-            obs = Observer(latitude=float(lat), longitude=float(lon),
-                           elevation=float(loc.get("elevation") or 0.0))
+
+            obs = Observer(
+                latitude=float(lat),
+                longitude=float(lon),
+                elevation=float(loc.get("elevation") or 0.0),
+            )
             d = when or date.today()
             evts = _sun(obs, date=d)
             dt = evts.get(phase)
@@ -290,7 +302,8 @@ class SunTimelapseMixin:
             return []
         try:
             return [
-                j.id for j in self._scheduler.get_jobs()
+                j.id
+                for j in self._scheduler.get_jobs()
                 if (
                     j.id.startswith("sun_tl_capture_")
                     or j.id.startswith("sun_tl_dnov_")
@@ -320,6 +333,7 @@ class SunTimelapseMixin:
             log.info("[weather] Standort fehlt — keine Sun-Jobs registriert")
             return
         from apscheduler.triggers.date import DateTrigger
+
         today = date.today()
         registered = []
         cams = self._cfg_cameras()
@@ -344,14 +358,19 @@ class SunTimelapseMixin:
                 # With a 30-min window that's -21 / +9 around the event.
                 start_dt, _end_dt, _pre, _post = _sun_window_bounds(sun_dt, window)
                 if start_dt <= datetime.now():
-                    log.info("[weather] %s %s @ %s already passed — skipping today",
-                             cam_name, phase, sun_dt.strftime("%H:%M"))
+                    log.info(
+                        "[weather] %s %s @ %s already passed — skipping today",
+                        cam_name,
+                        phase,
+                        sun_dt.strftime("%H:%M"),
+                    )
                     continue
                 key = f"sun_tl_capture_{cam_id}_{phase}_{today.isoformat()}"
                 self._scheduler.add_job(
                     self._run_sun_capture_safe,
                     DateTrigger(run_date=start_dt),
-                    id=key, replace_existing=True,
+                    id=key,
+                    replace_existing=True,
                     args=[cam_id, phase, sun_dt, dict(pcfg)],
                 )
                 registered.append(
@@ -376,25 +395,26 @@ class SunTimelapseMixin:
                     lead_min = max(1, min(15, int(dnov.get("lead_min", 5) or 5)))
                     override_at = start_dt - timedelta(minutes=lead_min)
                     revert_at = _end_dt + timedelta(minutes=lead_min)
-                    revert_mode = (
-                        "Black&White"
-                        if dnov.get("revert", "auto") == "off"
-                        else "Auto"
-                    )
+                    revert_mode = "Black&White" if dnov.get("revert", "auto") == "off" else "Auto"
                     if not (cam.get("rtsp_url") or "").strip():
                         log.warning(
                             "[weather] %s %s: no rtsp_url, cannot infer Reolink host — daynight override skipped",
-                            cam_name, phase)
+                            cam_name,
+                            phase,
+                        )
                     elif override_at <= datetime.now():
                         log.info(
                             "[weather] %s %s: daynight override window already passed, capture-only",
-                            cam_name, phase)
+                            cam_name,
+                            phase,
+                        )
                     else:
                         dn_key = f"sun_tl_dnov_{cam_id}_{phase}_{today.isoformat()}"
                         self._scheduler.add_job(
                             self._apply_daynight_override,
                             DateTrigger(run_date=override_at),
-                            id=dn_key, replace_existing=True,
+                            id=dn_key,
+                            replace_existing=True,
                             args=[cam_id, "Color", phase, lead_min],
                         )
                         registered.append(
@@ -405,7 +425,8 @@ class SunTimelapseMixin:
                         self._scheduler.add_job(
                             self._apply_daynight_override,
                             DateTrigger(run_date=revert_at),
-                            id=rv_key, replace_existing=True,
+                            id=rv_key,
+                            replace_existing=True,
                             args=[cam_id, revert_mode, phase, lead_min],
                         )
                         registered.append(
@@ -416,8 +437,9 @@ class SunTimelapseMixin:
         else:
             log.info("[weather] Keine Sun-Jobs heute (alle aus oder Fenster vorbei)")
 
-    def _apply_daynight_override(self, cam_id: str, mode: str,
-                                 phase: str = "", lead_min: int = 0) -> bool:
+    def _apply_daynight_override(
+        self, cam_id: str, mode: str, phase: str = "", lead_min: int = 0
+    ) -> bool:
         """Force a camera's day/night mode via the Reolink HTTP CGI.
 
         Called from the scheduler (lead-in: mode="Color") and from
@@ -428,6 +450,7 @@ class SunTimelapseMixin:
         from urllib.parse import urlparse
 
         from .. import reolink_api
+
         cam = next((c for c in self._cfg_cameras() if c.get("id") == cam_id), None)
         if cam is None:
             log.warning("[weather] daynight override: cam %s not in config", cam_id)
@@ -456,8 +479,12 @@ class SunTimelapseMixin:
             reolink_api.logout(host, token)
         if ok:
             if mode == "Color" and lead_min:
-                log.info("[weather] daynight override Color: %s (für %s in %d min)",
-                         cam_name, phase or "?", lead_min)
+                log.info(
+                    "[weather] daynight override Color: %s (für %s in %d min)",
+                    cam_name,
+                    phase or "?",
+                    lead_min,
+                )
             else:
                 log.info("[weather] daynight override %s: %s", mode, cam_name)
         else:
@@ -468,7 +495,8 @@ class SunTimelapseMixin:
             log.warning(
                 "[weather] daynight override %s: SetIspCfg(%s) failed — "
                 "siehe vorhergehende [reolink] Zeile für rspCode/detail",
-                cam_name, mode,
+                cam_name,
+                mode,
             )
         return ok
 
@@ -503,13 +531,19 @@ class SunTimelapseMixin:
         still gets a clean revert at the proper time."""
         self._run_sun_capture_inner(cam_id, phase, sun_dt, pcfg)
 
-    def _run_sun_capture_inner(self, cam_id: str, phase: str, sun_dt: datetime,
-                               pcfg: dict, test_session: "_SunTLTestSession | None" = None):
+    def _run_sun_capture_inner(
+        self,
+        cam_id: str,
+        phase: str,
+        sun_dt: datetime,
+        pcfg: dict,
+        test_session: _SunTLTestSession | None = None,
+    ):
         from ..frame_helpers import (
-            CaptureStats,
             DAY_PROFILE,
             NIGHT_PROFILE,
             TWILIGHT_PROFILE,
+            CaptureStats,
             grab_valid_frame,
             is_valid_frame,
             pick_profile_from_baseline,
@@ -525,6 +559,7 @@ class SunTimelapseMixin:
             if p is TWILIGHT_PROFILE:
                 return DAY_PROFILE
             return DAY_PROFILE
+
         rt = self.runtimes.get(cam_id)
         if rt is None or not hasattr(rt, "snapshot_jpeg_hires"):
             log.warning("[weather] cam %s nicht verfügbar — capture abgebrochen", cam_id)
@@ -561,14 +596,20 @@ class SunTimelapseMixin:
             if test_session is None:
                 log.warning(
                     "[%s] refusing capture: drift=%dmin > limit=%dmin cam=%s phase=%s",
-                    log_tag, drift_min, _SUN_TL_DRIFT_LIMIT_MIN, cam_id, phase,
+                    log_tag,
+                    drift_min,
+                    _SUN_TL_DRIFT_LIMIT_MIN,
+                    cam_id,
+                    phase,
                 )
                 return
             # Test mode: log and proceed; surface drift on session.
             log.warning(
                 "[%s] drift=%dmin (limit=%dmin) — proceeding because this "
                 "is a diagnostic test run",
-                log_tag, drift_min, _SUN_TL_DRIFT_LIMIT_MIN,
+                log_tag,
+                drift_min,
+                _SUN_TL_DRIFT_LIMIT_MIN,
             )
             test_session.phase_drift_min = drift_min
             test_session.phase_drift_warning = warn_msg
@@ -588,7 +629,9 @@ class SunTimelapseMixin:
                 "[weather] %s %s: interval_s=%d below 8 s floor — "
                 "clamping (settings.json passed through without "
                 "migration?)",
-                cam_id, phase, _raw_interval,
+                cam_id,
+                phase,
+                _raw_interval,
             )
         interval_s = max(8, _raw_interval)
         # E1 · output fps is fixed at 15 across all timelapse paths.
@@ -617,6 +660,7 @@ class SunTimelapseMixin:
         # via ``camera_slug`` so it tracks the camera's display
         # name when the user renames the camera.
         from ..camera_id import camera_slug
+
         cam_slug = camera_slug(self.settings_store, cam_id)
         if test_session is not None:
             stem = f"_test_{datetime.now().strftime('%H%M%S')}_{date_label}_{phase}_{cam_slug}"
@@ -639,8 +683,15 @@ class SunTimelapseMixin:
         # Wetter-Snapshot zum Trigger-Zeitpunkt (für Score + Recap-Picker).
         api_snapshot = self._latest_api_snapshot_safe()
         end_at = datetime.now() + timedelta(seconds=window_seconds)
-        log.info("[%s] Capture start: %s %s (Fenster %ds, %ds-Intervall, %d fps)",
-                 log_tag, cam_name, phase, window_seconds, interval_s, target_fps)
+        log.info(
+            "[%s] Capture start: %s %s (Fenster %ds, %ds-Intervall, %d fps)",
+            log_tag,
+            cam_name,
+            phase,
+            window_seconds,
+            interval_s,
+            target_fps,
+        )
         # ── Adaptive validator profile ─────────────────────────────────────
         # Take 3 quick samples ~0.5 s apart to gauge actual scene
         # brightness, then pick DAY/TWILIGHT/NIGHT thresholds. Without
@@ -666,6 +717,7 @@ class SunTimelapseMixin:
             try:
                 import cv2 as _cv2_b  # noqa: PLC0415
                 import numpy as _np_b  # noqa: PLC0415
+
                 means = []
                 for s in baseline_samples:
                     arr = _np_b.frombuffer(bytes(s), dtype=_np_b.uint8)
@@ -679,9 +731,11 @@ class SunTimelapseMixin:
                 pass
         log.info(
             "[%s] profile=%s brightness_med=%s cam=%s phase=%s",
-            log_tag, active_profile.name.upper(),
+            log_tag,
+            active_profile.name.upper(),
             f"{baseline_med:.0f}" if baseline_med is not None else "?",
-            cam_name, phase,
+            cam_name,
+            phase,
         )
         # ── stats container first ──────────────────────────────────────────
         # The stats mutations + slot loop below all reference ``stats``;
@@ -738,6 +792,7 @@ class SunTimelapseMixin:
                 rejects_dir = None
         if rejects_dir is not None:
             import cv2 as _cv2  # noqa: PLC0415 — lazy, avoids extra boot cost
+
             def _save_reject(frame, reason, attempt_idx):
                 # No frame to persist (grab_fn returned None or raised) — skip.
                 if frame is None:
@@ -759,7 +814,7 @@ class SunTimelapseMixin:
                 # listing tells the story without opening every file.
                 detail = ""
                 if "(" in reason and reason.endswith(")"):
-                    detail = reason[reason.index("(") + 1:-1]
+                    detail = reason[reason.index("(") + 1 : -1]
                     detail = re.sub(r"[^a-z0-9._=-]+", "_", detail.lower())[:60]
                 fname = f"slot{i:05d}_a{attempt_idx}{('_' + detail) if detail else ''}.jpg"
                 # Encode ndarray → JPEG bytes if needed; bytes pass through.
@@ -767,12 +822,12 @@ class SunTimelapseMixin:
                     if isinstance(frame, (bytes, bytearray, memoryview)):
                         (bucket / fname).write_bytes(bytes(frame))
                     else:
-                        ok, buf = _cv2.imencode(".jpg", frame,
-                                                [int(_cv2.IMWRITE_JPEG_QUALITY), 85])
+                        ok, buf = _cv2.imencode(".jpg", frame, [int(_cv2.IMWRITE_JPEG_QUALITY), 85])
                         if ok:
                             (bucket / fname).write_bytes(buf.tobytes())
                 except Exception as e:
                     log.debug("[sun-tl-test] reject-save encode failed: %s", e)
+
             save_reject_cb = _save_reject
 
         def _finalise_scratch():
@@ -797,8 +852,7 @@ class SunTimelapseMixin:
             try:
                 frames_dir.rename(target)
             except Exception as e:
-                log.warning("[sun-tl-test] could not rename %s → %s: %s",
-                            frames_dir, target, e)
+                log.warning("[sun-tl-test] could not rename %s → %s: %s", frames_dir, target, e)
                 return
             test_session.raw_dir = target
             # Status endpoint reads stats from frames_dir on every poll —
@@ -819,6 +873,7 @@ class SunTimelapseMixin:
                     )
                 except Exception as e:
                     log.debug("[sun-tl-test] README write failed: %s", e)
+
         # Last successfully-grabbed JPEG. When grab_valid_frame's retry
         # budget is exhausted on a slot (typical for `dead_area` /
         # `grey_uniform` bursts that persist past the 5 s wall-clock
@@ -878,7 +933,9 @@ class SunTimelapseMixin:
                         if test_session.cancel_requested:
                             log.info(
                                 "[sun-tl-test] cancel requested at slot %05d "
-                                "(%d frames captured)", i, n_written,
+                                "(%d frames captured)",
+                                i,
+                                n_written,
                             )
                             test_session.cancelled = True
                     if test_session.cancelled:
@@ -898,7 +955,8 @@ class SunTimelapseMixin:
                             if new_prof is not active_profile:
                                 log.info(
                                     "[%s] profile-switch %s → %s mid-run",
-                                    log_tag, active_profile.name.upper(),
+                                    log_tag,
+                                    active_profile.name.upper(),
                                     new_prof.name.upper(),
                                 )
                                 active_profile = new_prof
@@ -944,7 +1002,9 @@ class SunTimelapseMixin:
                         # full collisions across millions of slots are
                         # astronomically rare and not load-bearing here.
                         try:
-                            jpg_bytes = bytes(jpg) if not isinstance(jpg, (bytes, bytearray)) else jpg
+                            jpg_bytes = (
+                                bytes(jpg) if not isinstance(jpg, (bytes, bytearray)) else jpg
+                            )
                             h = hashlib.sha1(jpg_bytes).hexdigest()[:12]
                         except Exception:
                             h = None
@@ -959,7 +1019,9 @@ class SunTimelapseMixin:
                                     "[%s] %s slot %05d: FRESH grab but SAME hash "
                                     "as last (consec_same=%d) — snapshot API "
                                     "likely cached",
-                                    log_tag, cam_name, i,
+                                    log_tag,
+                                    cam_name,
+                                    i,
                                     _hash_state["consec_same"],
                                 )
                             else:
@@ -971,9 +1033,13 @@ class SunTimelapseMixin:
                         # outcome is "cached" so the UI tooltip can
                         # explain WHY the cell is amber.
                         stats.record_slot(
-                            i, _slot_outcome,
-                            reason=(f"consec_same={_hash_state['consec_same']}"
-                                    if _slot_outcome == "cached" else None),
+                            i,
+                            _slot_outcome,
+                            reason=(
+                                f"consec_same={_hash_state['consec_same']}"
+                                if _slot_outcome == "cached"
+                                else None
+                            ),
                         )
                     except Exception:
                         pass
@@ -990,26 +1056,30 @@ class SunTimelapseMixin:
                     # per 30 s so a noisy slot can't stampede the picker
                     # into running on every iteration.
                     if last_reason and "dead_area" in last_reason:
-                        if (last_repick_at is None
-                                or (now_dt - last_repick_at).total_seconds() >= 30):
+                        if (
+                            last_repick_at is None
+                            or (now_dt - last_repick_at).total_seconds() >= 30
+                        ):
                             next_repick_at = now_dt
                     # Self-defence: re-validate the cached jpg under a
                     # tighter profile after > 3 consecutive uses. If even
                     # the stricter gate accepts it, keep using it; if it
                     # now fails, drop the cache so a corrupt frame that
                     # snuck through can't infect adjacent slots.
-                    if (last_valid_jpg is not None
-                            and n_consecutive_backfills >= 3):
+                    if last_valid_jpg is not None and n_consecutive_backfills >= 3:
                         strict = _stricter_profile(active_profile)
                         ok_strict, strict_reason = is_valid_frame(
-                            last_valid_jpg, profile=strict,
+                            last_valid_jpg,
+                            profile=strict,
                             timestamp_zone=timestamp_zone,
                         )
                         if not ok_strict:
                             log.info(
                                 "[%s] dropped backfill cache after %d consecutive "
                                 "uses — re-validation flagged %s",
-                                log_tag, n_consecutive_backfills, strict_reason,
+                                log_tag,
+                                n_consecutive_backfills,
+                                strict_reason,
                             )
                             last_valid_jpg = None
                             n_consecutive_backfills = 0
@@ -1036,16 +1106,26 @@ class SunTimelapseMixin:
                             out.write_bytes(last_valid_jpg)
                             n_consecutive_backfills += 1
                             stats.record_slot(i, "backfilled", reason=last_reason)
-                            log.info("[%s] [backfill] %s slot %05d: invalid "
-                                     "grab, filled with last valid frame "
-                                     "(consec=%d, %s)",
-                                     log_tag, cam_name, i,
-                                     n_consecutive_backfills, last_reason)
+                            log.info(
+                                "[%s] [backfill] %s slot %05d: invalid "
+                                "grab, filled with last valid frame "
+                                "(consec=%d, %s)",
+                                log_tag,
+                                cam_name,
+                                i,
+                                n_consecutive_backfills,
+                                last_reason,
+                            )
                         except Exception:
                             stats.record_slot(i, "rejected", reason=last_reason)
-                            log.info("[%s] [backfill] %s slot %05d: invalid "
-                                     "grab and backfill write failed (%s)",
-                                     log_tag, cam_name, i, last_reason)
+                            log.info(
+                                "[%s] [backfill] %s slot %05d: invalid "
+                                "grab and backfill write failed (%s)",
+                                log_tag,
+                                cam_name,
+                                i,
+                                last_reason,
+                            )
                     else:
                         # No held jpg to backfill from. Bucket by reason
                         # class — scene-level rejects (dead_area /
@@ -1053,12 +1133,18 @@ class SunTimelapseMixin:
                         # "skipped" so the heatmap visually separates
                         # them from transient validator failures.
                         from ..frame_helpers._validator import _classify_reason as _cls_reason
-                        _bucket = ("skipped" if _cls_reason(last_reason or "") == "scene"
-                                   else "rejected")
+
+                        _bucket = (
+                            "skipped" if _cls_reason(last_reason or "") == "scene" else "rejected"
+                        )
                         stats.record_slot(i, _bucket, reason=last_reason)
-                        log.info("[%s] %s slot %05d: invalid grabs, "
-                                 "leaving slot empty (%s)",
-                                 log_tag, cam_name, i, last_reason)
+                        log.info(
+                            "[%s] %s slot %05d: invalid grabs, " "leaving slot empty (%s)",
+                            log_tag,
+                            cam_name,
+                            i,
+                            last_reason,
+                        )
                 stats.flush()
                 i += 1
                 # ── Abort thresholds ────────────────────────────────────
@@ -1091,7 +1177,10 @@ class SunTimelapseMixin:
                         "[%s] %s: aborting capture — %d/%d slots "
                         "backfilled (%.0f%%) — camera not delivering "
                         "fresh frames",
-                        log_tag, cam_name, stats.backfilled_slots, i,
+                        log_tag,
+                        cam_name,
+                        stats.backfilled_slots,
+                        i,
                         100.0 * stats.backfilled_slots / i,
                     )
                     loop_exit_reason = "too_many_backfills"
@@ -1101,7 +1190,9 @@ class SunTimelapseMixin:
                         "[%s] %s: aborting capture — %d consecutive "
                         "backfills (~%d s without a fresh grab) — "
                         "camera offline or wedged",
-                        log_tag, cam_name, n_consecutive_backfills,
+                        log_tag,
+                        cam_name,
+                        n_consecutive_backfills,
                         n_consecutive_backfills * interval_s,
                     )
                     loop_exit_reason = "too_many_consecutive_backfills"
@@ -1137,7 +1228,10 @@ class SunTimelapseMixin:
             loop_exit_exc = _loop_exc
             log.warning(
                 "[%s] capture loop crashed at slot %d (n_written=%d): %s",
-                log_tag, i, n_written, _loop_exc,
+                log_tag,
+                i,
+                n_written,
+                _loop_exc,
             )
         finally:
             # Guarantee a final ``_stats.json`` write regardless of how
@@ -1153,13 +1247,18 @@ class SunTimelapseMixin:
             log.info(
                 "[%s] capture loop exit · reason=%s i=%d n_written=%d "
                 "fresh=%d backfilled=%d skipped=%d",
-                log_tag, loop_exit_reason, i, n_written,
-                int(stats.fresh_captures), int(stats.backfilled_slots),
+                log_tag,
+                loop_exit_reason,
+                i,
+                n_written,
+                int(stats.fresh_captures),
+                int(stats.backfilled_slots),
                 int(stats.skipped_slots),
             )
         sun_at_end = self._sun_position()
-        log.info("[%s] Capture done: %s %s · %d Frames erfasst",
-                 log_tag, cam_name, phase, n_written)
+        log.info(
+            "[%s] Capture done: %s %s · %d Frames erfasst", log_tag, cam_name, phase, n_written
+        )
         if test_session is not None:
             # Stats snapshot — taken once the loop ends so every
             # early-return branch below (too-few-frames, encode-fail,
@@ -1174,10 +1273,10 @@ class SunTimelapseMixin:
                 "scene_skips_by_reason": dict(stats.scene_skips_by_reason),
                 "rejected_by_reason_examples": dict(stats.rejected_by_reason_examples),
                 "backfill_cache_drops": int(stats.backfill_cache_drops),
-                "fresh_captures":   int(stats.fresh_captures),
+                "fresh_captures": int(stats.fresh_captures),
                 "backfilled_slots": int(stats.backfilled_slots),
-                "skipped_slots":    int(stats.skipped_slots),
-                "total_written":    int(stats.total_written),
+                "skipped_slots": int(stats.skipped_slots),
+                "total_written": int(stats.total_written),
                 # Snapshot-API cache fingerprint (cf. _hash_state in the
                 # capture loop). ``api_cached_grabs`` is the local hash
                 # state at loop end — last_hash / current run / total
@@ -1187,7 +1286,7 @@ class SunTimelapseMixin:
                 # snapshot API was stuck serving one buffer for many
                 # slots in a row, NOT that we backfilled them).
                 "api_cached_grabs": dict(_hash_state),
-                "max_consec_same":  int(stats.api_cached_grabs_max_consec),
+                "max_consec_same": int(stats.api_cached_grabs_max_consec),
                 "api_cached_grabs_total": int(stats.api_cached_grabs_total),
                 # G2 · also alias under api_cached_grabs_max_consec so
                 # the status endpoint's stats.get() picks it up after
@@ -1231,10 +1330,13 @@ class SunTimelapseMixin:
         # otherwise read an incomplete _stats.json.
         if loop_exit_exc is not None:
             _write_sun_skip_json(
-                out_dir, stem,
-                phase=phase, camera_id=cam_id,
+                out_dir,
+                stem,
+                phase=phase,
+                camera_id=cam_id,
                 skip_reason=f"capture_loop_crashed:{type(loop_exit_exc).__name__}",
-                n_written=n_written, min_required=min_frames,
+                n_written=n_written,
+                min_required=min_frames,
                 log_tail=_log_tail,
                 extra={"exception_message": str(loop_exit_exc)},
             )
@@ -1250,20 +1352,21 @@ class SunTimelapseMixin:
         # surface the abort via ``_skip.json``. Production gets an
         # honest "capture aborted" in the mediathek instead of a
         # worthless video file.
-        if loop_exit_reason in ("too_many_backfills",
-                                "too_many_consecutive_backfills"):
+        if loop_exit_reason in ("too_many_backfills", "too_many_consecutive_backfills"):
             _write_sun_skip_json(
-                out_dir, stem,
-                phase=phase, camera_id=cam_id,
+                out_dir,
+                stem,
+                phase=phase,
+                camera_id=cam_id,
                 skip_reason=loop_exit_reason,
-                n_written=n_written, min_required=min_frames,
+                n_written=n_written,
+                min_required=min_frames,
                 log_tail=_log_tail,
                 extra={
-                    "slots_attempted":  int(i),
-                    "fresh_captures":   int(stats.fresh_captures),
+                    "slots_attempted": int(i),
+                    "fresh_captures": int(stats.fresh_captures),
                     "backfilled_slots": int(stats.backfilled_slots),
-                    "backfill_ratio":   round(
-                        stats.backfilled_slots / max(1, i), 3),
+                    "backfill_ratio": round(stats.backfilled_slots / max(1, i), 3),
                 },
             )
             if test_session is not None and not test_session.error:
@@ -1279,10 +1382,13 @@ class SunTimelapseMixin:
             if not test_session.error:
                 test_session.error = "abgebrochen"
             _write_sun_skip_json(
-                out_dir, stem,
-                phase=phase, camera_id=cam_id,
+                out_dir,
+                stem,
+                phase=phase,
+                camera_id=cam_id,
                 skip_reason="cancelled",
-                n_written=n_written, min_required=min_frames,
+                n_written=n_written,
+                min_required=min_frames,
                 log_tail=_log_tail,
             )
             _finalise_scratch()
@@ -1292,15 +1398,17 @@ class SunTimelapseMixin:
         # Drop the guard to a static minimum during test so a short
         # window still produces a verifiable MP4.
         if n_written < min_frames:
-            log.warning("[%s] Zu wenige Frames (%d) — Encode übersprungen",
-                        log_tag, n_written)
+            log.warning("[%s] Zu wenige Frames (%d) — Encode übersprungen", log_tag, n_written)
             if test_session is not None:
                 test_session.error = f"too few frames ({n_written})"
             _write_sun_skip_json(
-                out_dir, stem,
-                phase=phase, camera_id=cam_id,
+                out_dir,
+                stem,
+                phase=phase,
+                camera_id=cam_id,
                 skip_reason="too_few_frames",
-                n_written=n_written, min_required=min_frames,
+                n_written=n_written,
+                min_required=min_frames,
                 log_tail=_log_tail,
             )
             _finalise_scratch()
@@ -1310,6 +1418,7 @@ class SunTimelapseMixin:
         # so we don't fork the encoder.
         try:
             from ..timelapse import TimelapseBuilder
+
             tb = TimelapseBuilder(self._sightings_dir().parent.parent)
             # Re-glob the scratch directory rather than trusting the
             # in-memory ``n_written`` counter. A mid-capture cleanup
@@ -1323,20 +1432,31 @@ class SunTimelapseMixin:
             if len(images) != n_written:
                 log.warning(
                     "[%s] frame-count mismatch · captured=%d on-disk=%d (%s %s) — using on-disk count",
-                    log_tag, n_written, len(images), cam_name, phase,
+                    log_tag,
+                    n_written,
+                    len(images),
+                    cam_name,
+                    phase,
                 )
             if len(images) < min_frames:
                 log.warning(
                     "[%s] re-glob found only %d frames (min=%d) — encode skipped (%s %s)",
-                    log_tag, len(images), min_frames, cam_name, phase,
+                    log_tag,
+                    len(images),
+                    min_frames,
+                    cam_name,
+                    phase,
                 )
                 if test_session is not None:
                     test_session.error = f"too few frames on disk ({len(images)})"
                 _write_sun_skip_json(
-                    out_dir, stem,
-                    phase=phase, camera_id=cam_id,
+                    out_dir,
+                    stem,
+                    phase=phase,
+                    camera_id=cam_id,
                     skip_reason="too_few_frames_on_disk",
-                    n_written=len(images), min_required=min_frames,
+                    n_written=len(images),
+                    min_required=min_frames,
                     log_tail=_log_tail,
                 )
                 _finalise_scratch()
@@ -1355,23 +1475,25 @@ class SunTimelapseMixin:
             # frames_dir lets the sidecar embed _stats.json; settings_store
             # enables fps auto-adjust per (cam_id, profile_name).
             qa_ctx = {
-                "camera_id":               cam_id,
-                "profile_name":            phase,
-                "validator_profile_used":  getattr(active_profile, "name", None),
-                "frames_dir":              frames_dir,
-                "settings_store":          self.settings_store,
+                "camera_id": cam_id,
+                "profile_name": phase,
+                "validator_profile_used": getattr(active_profile, "name", None),
+                "frames_dir": frames_dir,
+                "settings_store": self.settings_store,
             }
-            written = tb._write_video(images, mp4_path, target_seconds, target_fps,
-                                      qa_ctx=qa_ctx)
+            written = tb._write_video(images, mp4_path, target_seconds, target_fps, qa_ctx=qa_ctx)
             if not written or not mp4_path.exists():
                 log.warning("[%s] Encode failed for %s %s", log_tag, cam_name, phase)
                 if test_session is not None:
                     test_session.error = "encode failed"
                 _write_sun_skip_json(
-                    out_dir, stem,
-                    phase=phase, camera_id=cam_id,
+                    out_dir,
+                    stem,
+                    phase=phase,
+                    camera_id=cam_id,
                     skip_reason="encode_failed",
-                    n_written=n_written, min_required=min_frames,
+                    n_written=n_written,
+                    min_required=min_frames,
                     log_tail=_log_tail,
                 )
                 _finalise_scratch()
@@ -1381,10 +1503,13 @@ class SunTimelapseMixin:
             if test_session is not None:
                 test_session.error = f"encode crash: {e}"
             _write_sun_skip_json(
-                out_dir, stem,
-                phase=phase, camera_id=cam_id,
+                out_dir,
+                stem,
+                phase=phase,
+                camera_id=cam_id,
                 skip_reason=f"encode_crash:{type(e).__name__}",
-                n_written=n_written, min_required=min_frames,
+                n_written=n_written,
+                min_required=min_frames,
                 log_tail=_log_tail,
                 extra={"exception_message": str(e)},
             )
@@ -1403,50 +1528,60 @@ class SunTimelapseMixin:
         # so the id round-trips through `_manifest_path_for`.
         phase_suffix = "rise" if phase == "sunrise" else "set"
         manifest = {
-            "id":           f"{cam_id}__sun_timelapse_{phase_suffix}__{stem}",
-            "cam_id":       cam_id,
-            "cam_name":     cam_name,
-            "event_type":   "sun_timelapse",
-            "sun_phase":    phase,
-            "is_test":      test_session is not None,
-            "started_at":   datetime.now().isoformat(timespec="seconds"),
+            "id": f"{cam_id}__sun_timelapse_{phase_suffix}__{stem}",
+            "cam_id": cam_id,
+            "cam_name": cam_name,
+            "event_type": "sun_timelapse",
+            "sun_phase": phase,
+            "is_test": test_session is not None,
+            "started_at": datetime.now().isoformat(timespec="seconds"),
             # Actual sun event (sunrise/sunset) time. Distinct from
             # started_at, which is the moment the encode finished —
             # the Sichtungen card prefers this so the user sees
             # "Sonnenuntergang 20:32" instead of the window-end.
             "sun_event_at": sun_dt.isoformat(timespec="seconds"),
-            "score":        round(float(score), 3),
-            "severity":     round(float(score), 3),
-            "window_min":   round(window_seconds / 60.0, 2),
+            "score": round(float(score), 3),
+            "severity": round(float(score), 3),
+            "window_min": round(window_seconds / 60.0, 2),
             "window_seconds": window_seconds,
-            "interval_s":   interval_s,
-            "fps":          target_fps,
-            "api_snapshot": _safe_subset(api_snapshot or {}, [
-                "time", "precipitation", "snowfall", "lightning_potential",
-                "visibility", "wind_gusts_10m", "cloud_cover", "weather_code",
-            ]),
+            "interval_s": interval_s,
+            "fps": target_fps,
+            "api_snapshot": _safe_subset(
+                api_snapshot or {},
+                [
+                    "time",
+                    "precipitation",
+                    "snowfall",
+                    "lightning_potential",
+                    "visibility",
+                    "wind_gusts_10m",
+                    "cloud_cover",
+                    "weather_code",
+                ],
+            ),
             "sun_snapshot": {
                 "altitude_at_start": sun_at_start.get("altitude"),
-                "altitude_at_end":   sun_at_end.get("altitude"),
-                "azimuth_at_start":  sun_at_start.get("azimuth"),
-                "azimuth_at_end":    sun_at_end.get("azimuth"),
+                "altitude_at_end": sun_at_end.get("altitude"),
+                "azimuth_at_start": sun_at_start.get("azimuth"),
+                "azimuth_at_end": sun_at_end.get("azimuth"),
             },
-            "clip_path":    f"weather/{cam_id}/{phase_dir}/{mp4_path.name}",
-            "thumb_path":   f"weather/{cam_id}/{phase_dir}/{thumb_path.name}",
-            "duration_s":   max(1, len(images) // target_fps),
-            "width":  0, "height": 0,
+            "clip_path": f"weather/{cam_id}/{phase_dir}/{mp4_path.name}",
+            "thumb_path": f"weather/{cam_id}/{phase_dir}/{thumb_path.name}",
+            "duration_s": max(1, len(images) // target_fps),
+            "width": 0,
+            "height": 0,
         }
         try:
             import cv2
+
             cap = cv2.VideoCapture(str(mp4_path))
-            manifest["width"]  = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            manifest["width"] = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
             manifest["height"] = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
             cap.release()
         except Exception:
             pass
         _atomic_write_json(out_dir / f"{stem}.json", manifest)
-        log.info("[%s] Manifest geschrieben: %s · score=%.2f",
-                 log_tag, manifest["id"], score)
+        log.info("[%s] Manifest geschrieben: %s · score=%.2f", log_tag, manifest["id"], score)
         if test_session is not None:
             test_session.result_clip_path = manifest["clip_path"]
             test_session.result_sighting_id = manifest["id"]
@@ -1493,8 +1628,9 @@ class SunTimelapseMixin:
     _SUN_TL_TEST_DURATIONS = (300, 600, 900, 1200, 1800, 2700, 3600, 4500)
     _SUN_TL_TEST_TARGET_LENGTHS = (5, 10, 15, 20, 30, 37)
 
-    def start_sun_tl_test(self, cam_id: str, phase: str, duration_s: int,
-                          target_duration_s: int | None = None) -> dict:
+    def start_sun_tl_test(
+        self, cam_id: str, phase: str, duration_s: int, target_duration_s: int | None = None
+    ) -> dict:
         """Spawn a daemon thread that runs a parameterised sun-tl capture.
         Returns {"ok": bool, "error": str|None}. Idempotent against a
         running session — a second start while one is still active
@@ -1512,12 +1648,13 @@ class SunTimelapseMixin:
         try:
             duration_s = int(duration_s)
         except (TypeError, ValueError):
-            return {"ok": False,
-                    "error": f"duration_s must be an integer (got {duration_s!r})"}
+            return {"ok": False, "error": f"duration_s must be an integer (got {duration_s!r})"}
         if duration_s not in self._SUN_TL_TEST_DURATIONS:
-            return {"ok": False,
-                    "error": f"duration_s {duration_s} not in allowlist "
-                             f"{list(self._SUN_TL_TEST_DURATIONS)}"}
+            return {
+                "ok": False,
+                "error": f"duration_s {duration_s} not in allowlist "
+                f"{list(self._SUN_TL_TEST_DURATIONS)}",
+            }
         # G5 · target encoded MP4 length. None means "let the legacy
         # math decide" — that path is still supported. A value that's
         # present but not in the allowlist errors out for the same
@@ -1526,13 +1663,17 @@ class SunTimelapseMixin:
             try:
                 target_duration_s = int(target_duration_s)
             except (TypeError, ValueError):
-                return {"ok": False,
-                        "error": f"target_duration_s must be an integer or null "
-                                 f"(got {target_duration_s!r})"}
+                return {
+                    "ok": False,
+                    "error": f"target_duration_s must be an integer or null "
+                    f"(got {target_duration_s!r})",
+                }
             if target_duration_s not in self._SUN_TL_TEST_TARGET_LENGTHS:
-                return {"ok": False,
-                        "error": f"target_duration_s {target_duration_s} not in "
-                                 f"allowlist {list(self._SUN_TL_TEST_TARGET_LENGTHS)}"}
+                return {
+                    "ok": False,
+                    "error": f"target_duration_s {target_duration_s} not in "
+                    f"allowlist {list(self._SUN_TL_TEST_TARGET_LENGTHS)}",
+                }
         with _test_session_lock:
             existing = _active_test_session
             if existing is not None and not existing.finished:
@@ -1546,7 +1687,7 @@ class SunTimelapseMixin:
         if cam is None:
             return {"ok": False, "error": "camera not in config"}
 
-        pcfg_user = (((cam.get("weather") or {}).get("sun_timelapse") or {}).get(phase) or {})
+        pcfg_user = ((cam.get("weather") or {}).get("sun_timelapse") or {}).get(phase) or {}
         # E1 · same 8 s capture floor + fixed 15 fps the production
         # schedule enforces. Mirror here so the test panel runs against
         # exactly the values the real schedule will use.
@@ -1561,9 +1702,13 @@ class SunTimelapseMixin:
         }
         expected = int(duration_s / max(1, interval_s))
         session = _SunTLTestSession(
-            cam_id=cam_id, phase=phase, duration_s=duration_s,
-            started_at=datetime.now(), expected_frames=expected,
-            interval_s=interval_s, fps=target_fps,
+            cam_id=cam_id,
+            phase=phase,
+            duration_s=duration_s,
+            started_at=datetime.now(),
+            expected_frames=expected,
+            interval_s=interval_s,
+            fps=target_fps,
             target_duration_s=target_duration_s,
         )
         handler = _SunTLTestLogHandler(session)
@@ -1582,7 +1727,11 @@ class SunTimelapseMixin:
             _active_test_handler = handler
         log.info(
             "[sun-tl-test] %s · %s · %ds · interval=%ds fps=%d",
-            self._cam_name(cam_id), phase, duration_s, interval_s, target_fps,
+            self._cam_name(cam_id),
+            phase,
+            duration_s,
+            interval_s,
+            target_fps,
         )
         threading.Thread(
             target=self._run_sun_tl_test_thread,
@@ -1592,8 +1741,9 @@ class SunTimelapseMixin:
         ).start()
         return {"ok": True}
 
-    def _run_sun_tl_test_thread(self, cam_id: str, phase: str,
-                                pcfg: dict, session: "_SunTLTestSession"):
+    def _run_sun_tl_test_thread(
+        self, cam_id: str, phase: str, pcfg: dict, session: _SunTLTestSession
+    ):
         """Daemon body: apply daynight override, run the same capture
         path the real schedule uses, revert daynight, mark finished.
         All exceptions are swallowed onto session.error so the status
@@ -1606,31 +1756,31 @@ class SunTimelapseMixin:
             if dnov.get("enabled") and rtsp_url:
                 log.info("[sun-tl-test] applying daynight override → Color")
                 session.daynight_color_set = self._apply_daynight_override(
-                    cam_id, "Color", phase, 0)
+                    cam_id, "Color", phase, 0
+                )
             else:
                 log.info(
                     "[sun-tl-test] daynight override skipped (enabled=%s rtsp=%s)",
-                    bool(dnov.get("enabled")), bool(rtsp_url),
+                    bool(dnov.get("enabled")),
+                    bool(rtsp_url),
                 )
                 session.daynight_color_set = None
             # Pretend "now" is the sun event so the existing pre-bias
             # math + the manifest's sun_event_at field still resolve
             # to a valid timestamp.
             sun_dt = datetime.now()
-            self._run_sun_capture_inner(cam_id, phase, sun_dt, pcfg,
-                                        test_session=session)
+            self._run_sun_capture_inner(cam_id, phase, sun_dt, pcfg, test_session=session)
         except Exception as e:
             log.warning("[sun-tl-test] crashed: %s", e)
             session.error = str(e)
         finally:
             try:
                 if dnov.get("enabled") and rtsp_url and session.daynight_color_set:
-                    revert_mode = ("Black&White"
-                                   if dnov.get("revert", "auto") == "off"
-                                   else "Auto")
+                    revert_mode = "Black&White" if dnov.get("revert", "auto") == "off" else "Auto"
                     log.info("[sun-tl-test] reverting daynight → %s", revert_mode)
                     session.daynight_revert_set = self._apply_daynight_override(
-                        cam_id, revert_mode, phase, 0)
+                        cam_id, revert_mode, phase, 0
+                    )
             except Exception as e:
                 log.warning("[sun-tl-test] revert crashed: %s", e)
             session.finished = True
@@ -1659,8 +1809,9 @@ class SunTimelapseMixin:
             return {"ok": False, "error": "test already finished"}
         with session.lock:
             session.cancel_requested = True
-        log.info("[sun-tl-test] cancel signal sent (cam=%s phase=%s)",
-                 session.cam_id, session.phase)
+        log.info(
+            "[sun-tl-test] cancel signal sent (cam=%s phase=%s)", session.cam_id, session.phase
+        )
         return {"ok": True}
 
     def get_sun_tl_test_status(self, since: float = 0.0) -> dict:
@@ -1678,6 +1829,7 @@ class SunTimelapseMixin:
         returns the full list."""
         from ..frame_helpers import read_capture_stats
         from ..timelapse_qa import read_qa_sidecar
+
         with _test_session_lock:
             session = _active_test_session
         if session is None:
@@ -1733,10 +1885,10 @@ class SunTimelapseMixin:
             "scene_skips_by_reason": dict(stats.get("scene_skips_by_reason", {}) or {}),
             "rejected_by_reason_examples": dict(stats.get("rejected_by_reason_examples", {}) or {}),
             "backfill_cache_drops": int(stats.get("backfill_cache_drops", 0) or 0),
-            "fresh_captures":   int(stats.get("fresh_captures", 0) or 0),
+            "fresh_captures": int(stats.get("fresh_captures", 0) or 0),
             "backfilled_slots": int(stats.get("backfilled_slots", 0) or 0),
-            "skipped_slots":    int(stats.get("skipped_slots", 0) or 0),
-            "total_written":    int(stats.get("total_written", 0) or 0),
+            "skipped_slots": int(stats.get("skipped_slots", 0) or 0),
+            "total_written": int(stats.get("total_written", 0) or 0),
             "daynight_color_set": session.daynight_color_set,
             "daynight_revert_set": session.daynight_revert_set,
             "result_clip_path": session.result_clip_path,
@@ -1770,18 +1922,23 @@ class SunTimelapseMixin:
             # polling can ship the delta only. Default since=0
             # returns the whole list.
             "slot_events": [
-                e for e in (stats.get("slot_events") or [])
+                e
+                for e in (stats.get("slot_events") or [])
                 if float(e.get("ts") or 0.0) > float(since or 0.0)
             ],
             # G4 · QA-sidecar playback metrics for the post-run diff
             # panel. Only present once result_clip_path is set AND
             # the qa.json was found next to the mp4. Frontend renders
             # the quality_grade chip + unique_fps row from this block.
-            "qa": ({
-                "quality_grade":   qa_data.get("quality_grade"),
-                "playback":        qa_data.get("playback") or {},
-                "target_duration_s": qa_data.get("target_duration_s"),
-            } if qa_data else None),
+            "qa": (
+                {
+                    "quality_grade": qa_data.get("quality_grade"),
+                    "playback": qa_data.get("playback") or {},
+                    "target_duration_s": qa_data.get("target_duration_s"),
+                }
+                if qa_data
+                else None
+            ),
         }
 
     def sun_times_today(self) -> dict:
@@ -1793,8 +1950,7 @@ class SunTimelapseMixin:
         `next_is_tomorrow` lets the UI render "morgen" labels. ISO
         datetimes are emitted alongside the legacy HH:MM strings the
         existing UI already consumes."""
-        out = {"location_set": False, "sunrise": None, "sunset": None,
-               "cameras": []}
+        out = {"location_set": False, "sunrise": None, "sunset": None, "cameras": []}
         loc = self.server_cfg.get("location") or {}
         if loc.get("lat") is None or loc.get("lon") is None:
             return out
@@ -1804,16 +1960,19 @@ class SunTimelapseMixin:
         sr_today = self.sun_event_today("sunrise")
         ss_today = self.sun_event_today("sunset")
         out["sunrise"] = sr_today.isoformat(timespec="minutes") if sr_today else None
-        out["sunset"]  = ss_today.isoformat(timespec="minutes") if ss_today else None
+        out["sunset"] = ss_today.isoformat(timespec="minutes") if ss_today else None
 
         now = datetime.now()
         for cam in self._cfg_cameras():
             cw = cam.get("weather") or {}
             stl = cw.get("sun_timelapse") or {}
-            entry = {"id": cam.get("id"), "name": cam.get("name"),
-                     "weather_enabled": bool(cw.get("enabled")),
-                     "sunrise": dict(stl.get("sunrise") or {}),
-                     "sunset":  dict(stl.get("sunset")  or {})}
+            entry = {
+                "id": cam.get("id"),
+                "name": cam.get("name"),
+                "weather_enabled": bool(cw.get("enabled")),
+                "sunrise": dict(stl.get("sunrise") or {}),
+                "sunset": dict(stl.get("sunset") or {}),
+            }
             for phase in ("sunrise", "sunset"):
                 p = entry[phase]
                 if not p.get("enabled"):
@@ -1846,14 +2005,12 @@ class SunTimelapseMixin:
                     p["next_is_tomorrow"] = False
                     continue
                 start_dt, end_dt, _, _ = _sun_window_bounds(sun_dt, window)
-                p["window_start"]      = start_dt.strftime("%H:%M")
-                p["window_end"]        = end_dt.strftime("%H:%M")
-                p["sun_event"]         = sun_dt.strftime("%H:%M")
-                p["sun_event_iso"]     = sun_dt.isoformat(timespec="seconds")
+                p["window_start"] = start_dt.strftime("%H:%M")
+                p["window_end"] = end_dt.strftime("%H:%M")
+                p["sun_event"] = sun_dt.strftime("%H:%M")
+                p["sun_event_iso"] = sun_dt.isoformat(timespec="seconds")
                 p["capture_start_iso"] = start_dt.isoformat(timespec="seconds")
-                p["capture_end_iso"]   = end_dt.isoformat(timespec="seconds")
-                p["next_is_tomorrow"]  = next_is_tomorrow
+                p["capture_end_iso"] = end_dt.isoformat(timespec="seconds")
+                p["next_is_tomorrow"] = next_is_tomorrow
             out["cameras"].append(entry)
         return out
-
-

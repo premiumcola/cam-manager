@@ -8,6 +8,7 @@ with the shutdown bilanz, so ``_BOOT_TS`` / ``_format_uptime`` /
 ``_disk_free_gb_cached`` live in :mod:`lifecycle` and are imported
 here rather than duplicated.
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,7 +24,9 @@ def _run_daily_cleanup():
     try:
         removed = app_state.store.cleanup_old(retention)
         if removed:
-            logging.getLogger(__name__).info(f"[storage] Removed {removed} old event files (>{retention}d)")
+            logging.getLogger(__name__).info(
+                f"[storage] Removed {removed} old event files (>{retention}d)"
+            )
     except Exception as e:
         logging.getLogger(__name__).warning(f"[storage] Failed: {e}")
     t = threading.Timer(86400, _run_daily_cleanup)
@@ -40,8 +43,10 @@ def _run_hourly_quest_eval():
     `from`/`to`. Idempotent; runs detached.
     """
     import threading as _thr
+
     try:
         from .quests import reevaluate_and_save
+
         reevaluate_and_save()
     except Exception as e:
         logging.getLogger(__name__).warning("[quests] hourly eval failed: %s", e)
@@ -56,15 +61,24 @@ def _seconds_until_rollover_check() -> float:
     midnight) so the date has fully advanced before we check whether
     today is Monday / day-of-month-1."""
     import time as _time
+
     now = _time.localtime()
     # Build a struct_time for tomorrow at 00:05.
     tomorrow_secs = _time.mktime(now) + 86400
     target = _time.localtime(tomorrow_secs)
-    target_t = _time.struct_time((
-        target.tm_year, target.tm_mon, target.tm_mday,
-        0, 5, 0,
-        target.tm_wday, target.tm_yday, target.tm_isdst,
-    ))
+    target_t = _time.struct_time(
+        (
+            target.tm_year,
+            target.tm_mon,
+            target.tm_mday,
+            0,
+            5,
+            0,
+            target.tm_wday,
+            target.tm_yday,
+            target.tm_isdst,
+        )
+    )
     target_secs = _time.mktime(target_t)
     return max(60.0, target_secs - _time.mktime(now))
 
@@ -80,16 +94,19 @@ def _run_daily_quest_rollover_check():
     BETWEEN rollovers, the daily handles the rollover itself."""
     import threading as _thr
     from datetime import datetime as _dt
+
     try:
         today = _dt.now()
-        is_week_start = today.weekday() == 0          # Monday
+        is_week_start = today.weekday() == 0  # Monday
         is_month_start = today.day == 1
         if is_week_start or is_month_start:
             from .quests import reevaluate_and_save
+
             reevaluate_and_save(is_rollover=True)
     except Exception as e:
         logging.getLogger(__name__).warning(
-            "[quests] daily rollover check failed: %s", e,
+            "[quests] daily rollover check failed: %s",
+            e,
         )
     t = _thr.Timer(_seconds_until_rollover_check(), _run_daily_quest_rollover_check)
     t.daemon = True
@@ -141,6 +158,7 @@ def _heartbeat_emit():
                 if app_state.weather_service:
                     cur = (app_state.weather_service.status() or {}).get("current_state") or {}
                     from .weather_service import EVENT_LABEL_DE as _W_LBL
+
                     active = [_W_LBL.get(k, k) for k, on in cur.items() if on]
             except Exception:
                 pass

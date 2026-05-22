@@ -34,8 +34,8 @@ from ..event_logic import (
 )
 from ._consts import (
     _FFMPEG_AVAILABLE,
-    _PROFILES,
     _PROFILE_PERIOD_DEFAULTS,
+    _PROFILES,
     _SPECIES_TO_ACH_ID,
     _WILDLIFE_BBOX_DONORS,
     _bbox_iou,
@@ -56,10 +56,21 @@ class MainLoopMixin:
 
     def _loop(self):
         if self.cfg.get("rtsp_url"):
-            interval = max(0.05, float(self.cfg.get("frame_interval_ms") or self.global_cfg.get("processing", {}).get("motion", {}).get("frame_interval_ms", 150)) / 1000.0)
+            interval = max(
+                0.05,
+                float(
+                    self.cfg.get("frame_interval_ms")
+                    or self.global_cfg.get("processing", {})
+                    .get("motion", {})
+                    .get("frame_interval_ms", 150)
+                )
+                / 1000.0,
+            )
         else:
             interval = max(1.0, float(self.cfg.get("snapshot_interval_s") or 3))
-        cooldown = max(10, int(self.global_cfg.get("processing", {}).get("event_cooldown_seconds", 10)))
+        cooldown = max(
+            10, int(self.global_cfg.get("processing", {}).get("event_cooldown_seconds", 10))
+        )
 
         # ── Watchdog: hard-kill a wedged capture handle ──────────────────
         # CAP_PROP_READ_TIMEOUT_MSEC isn't reliably honoured across every
@@ -69,14 +80,16 @@ class MainLoopMixin:
         # reconnect branch via self.capture becoming None / not-opened.
         # Updated on every successful frame inside the loop below.
         self._last_activity = time.time()
+
         def _watchdog():
             while self.running:
                 time.sleep(10.0)
                 if not self.running:
                     return
                 if self.cfg.get("rtsp_url") and (time.time() - self._last_activity) > 20:
-                    log_cam.warning("[%s] watchdog: capture silent >20s, requesting reconnect",
-                                    self.camera_id)
+                    log_cam.warning(
+                        "[%s] watchdog: capture silent >20s, requesting reconnect", self.camera_id
+                    )
                     # Hand off to the main loop — calling release() from
                     # this thread races against the main-loop's read()
                     # and segfaults libav on corrupt HEVC streams (exit
@@ -84,8 +97,8 @@ class MainLoopMixin:
                     # at the top of every iteration.
                     self._force_reconnect = True
                     self._last_activity = time.time()
-        threading.Thread(target=_watchdog, daemon=True,
-                         name=f"cam-wd-{self.camera_id}").start()
+
+        threading.Thread(target=_watchdog, daemon=True, name=f"cam-wd-{self.camera_id}").start()
 
         while self.running:
             # Timelapse threads may request a forced reconnect when they detect a stale stream
@@ -95,7 +108,8 @@ class MainLoopMixin:
                 log_cam.warning(
                     "[cam:%s] forced reconnect — stale-feed recovery "
                     "(stale_streak=%d, last_frame_age=%.0fs, reconnects_24h=%d)",
-                    self.camera_id, self._stale_streak,
+                    self.camera_id,
+                    self._stale_streak,
                     (time.time() - self.frame_ts) if self.frame_ts > 0 else 0,
                     self._reconnect_count_24h(),
                 )
@@ -135,8 +149,7 @@ class MainLoopMixin:
                             self._frame_interval_ema_ms = delta_ms
                         else:
                             self._frame_interval_ema_ms = (
-                                0.9 * self._frame_interval_ema_ms
-                                + 0.1 * delta_ms
+                                0.9 * self._frame_interval_ema_ms + 0.1 * delta_ms
                             )
                 # First decoded frame after an open() — log latency so the
                 # operator can confirm a reconnect actually recovered the
@@ -144,16 +157,27 @@ class MainLoopMixin:
                 if self._rtsp_opened_at and not self._rtsp_first_frame_logged:
                     latency_ms = int((time.time() - self._rtsp_opened_at) * 1000)
                     masked = self._masked_rtsp_url()
-                    log_cam.info("[cam:%s] RTSP opened — %s · first frame in %d ms",
-                                 self.camera_id, masked, latency_ms)
+                    log_cam.info(
+                        "[cam:%s] RTSP opened — %s · first frame in %d ms",
+                        self.camera_id,
+                        masked,
+                        latency_ms,
+                    )
                     self._rtsp_first_frame_logged = True
                     self._last_rtsp_success_ts = time.time()
                 # Feed the watchdog — any successful grab resets the silence clock.
                 self._last_activity = time.time()
                 if self._error_streak > 0:
-                    downtime_s = int(time.time() - (self._last_rtsp_success_ts or self._rtsp_opened_at or time.time()))
-                    log_cam.info("[cam:%s] frame flow recovered after %d errors (downtime≈%ds)",
-                                 self.camera_id, self._error_streak, downtime_s)
+                    downtime_s = int(
+                        time.time()
+                        - (self._last_rtsp_success_ts or self._rtsp_opened_at or time.time())
+                    )
+                    log_cam.info(
+                        "[cam:%s] frame flow recovered after %d errors (downtime≈%ds)",
+                        self.camera_id,
+                        self._error_streak,
+                        downtime_s,
+                    )
                 self.last_error = None
                 self._error_streak = 0
                 # Apply bottom crop before processing (removes corrupt H.264 bottom strip)
@@ -233,12 +257,13 @@ class MainLoopMixin:
                 # tentative dets can only extend a still-unmatched IoU
                 # partner. Subjects survive short low-conf dips while
                 # genuine cold-start gating stays the confirmer's job.
-                spawn_for = (lambda _lbl: self._tracker.spawn_default)
+                spawn_for = lambda _lbl: self._tracker.spawn_default
                 if label_thresholds:
                     _lt = dict(label_thresholds)
                     _default = self._tracker.spawn_default
-                    spawn_for = (lambda lbl, _lt=_lt, _d=_default:
-                                 float(_lt[lbl]) if lbl in _lt else _d)
+                    spawn_for = (
+                        lambda lbl, _lt=_lt, _d=_default: float(_lt[lbl]) if lbl in _lt else _d
+                    )
                 # Effective fps for grace-window math. Falls back to a
                 # conservative 3 Hz when the rolling measurement hasn't
                 # warmed up yet (first ~5 s of a camera's session).
@@ -252,7 +277,8 @@ class MainLoopMixin:
                 if log.isEnabledFor(logging.DEBUG) and detections:
                     log.debug(
                         "[%s] tracker: %d dets survived (active=%d)",
-                        self.camera_id, len(detections),
+                        self.camera_id,
+                        len(detections),
                         self._tracker.active_count(),
                     )
                 labels = effective_motion + [d.label for d in detections]
@@ -260,11 +286,15 @@ class MainLoopMixin:
                     for d in detections:
                         if d.label == "bird":
                             crop = self._crop(proc_frame, d.bbox)
-                            species, species_latin, species_score = self.bird_classifier.classify_crop(crop)
+                            species, species_latin, species_score = (
+                                self.bird_classifier.classify_crop(crop)
+                            )
                             if species:
                                 d.species = species
                                 d.species_latin = species_latin
-                                d.species_score = float(species_score) if species_score is not None else None
+                                d.species_score = (
+                                    float(species_score) if species_score is not None else None
+                                )
                 # Wildlife second-stage: catches fox / squirrel / hedgehog —
                 # none of which have a COCO class. Gating logic:
                 #   - Confident COCO bird / dog / person → skip wildlife.
@@ -289,7 +319,8 @@ class MainLoopMixin:
                     try:
                         wl_min = self.cfg.get("wildlife_min_score") or None
                         cat, raw_lbl, wscore = self.wildlife_classifier.classify_crop(
-                            proc_frame, min_score=wl_min,
+                            proc_frame,
+                            min_score=wl_min,
                         )
                     except Exception:
                         cat, raw_lbl, wscore = None, None, None
@@ -301,7 +332,10 @@ class MainLoopMixin:
                         # the geometry is right — we only borrow the bbox.
                         # Falls back to the motion bbox, then the full frame.
                         bb = _refine_wildlife_bbox(
-                            self.detector, proc_frame, effective_bbox, (w0, h0),
+                            self.detector,
+                            proc_frame,
+                            effective_bbox,
+                            (w0, h0),
                         )
                         wl_det = Detection(
                             label=cat,
@@ -317,10 +351,16 @@ class MainLoopMixin:
                             # frontal squirrel "cat" with moderate
                             # confidence. If wildlife is sure enough, drop
                             # the soft-cat detection and let squirrel win.
-                            if cat == "squirrel" and soft_cat is not None and float(wscore or 0) >= 0.45:
+                            if (
+                                cat == "squirrel"
+                                and soft_cat is not None
+                                and float(wscore or 0) >= 0.45
+                            ):
                                 log.info(
                                     "[%s] cat→squirrel override: cat %.2f replaced by wildlife squirrel %.2f",
-                                    self.camera_id, soft_cat.score, float(wscore),
+                                    self.camera_id,
+                                    soft_cat.score,
+                                    float(wscore),
                                 )
                                 detections = [d for d in detections if d is not soft_cat]
                                 labels = [L for L in labels if L != "cat"]
@@ -333,14 +373,18 @@ class MainLoopMixin:
                             if cat == "squirrel" and float(wscore or 0) >= 0.55:
                                 pre = len(detections)
                                 detections = _suppress_overlap(
-                                    detections, bb,
+                                    detections,
+                                    bb,
                                     drop_labels=("cat", "dog", "bear", "teddy bear"),
                                     iou_min=0.3,
                                 )
                                 if len(detections) != pre:
-                                    labels = [L for L in labels
-                                              if L not in ("cat", "dog", "bear", "teddy bear")
-                                              or any(d.label == L for d in detections)]
+                                    labels = [
+                                        L
+                                        for L in labels
+                                        if L not in ("cat", "dog", "bear", "teddy bear")
+                                        or any(d.label == L for d in detections)
+                                    ]
                             detections.append(wl_det)
                             labels.append(cat)
                 if self.cat_registry:
@@ -361,7 +405,9 @@ class MainLoopMixin:
                 with self.lock:
                     self.preview = drawn
                 # ── MAD glitch check vs previous accepted frame ───────────────
-                if self.cfg.get("rtsp_url") and self._is_frame_too_different(proc_frame, self._prev_good_frame):
+                if self.cfg.get("rtsp_url") and self._is_frame_too_different(
+                    proc_frame, self._prev_good_frame
+                ):
                     log.warning("[%s] Frame MAD>60 (glitch/corrupt), skipped", self.camera_id)
                     time.sleep(interval)
                     continue
@@ -410,7 +456,8 @@ class MainLoopMixin:
                         log.debug(
                             "[det][cam:%s] ↓ sub-threshold: %s %d%% "
                             "(< spawn %d%%) — Bestätigung unverändert",
-                            self.camera_id, d.label,
+                            self.camera_id,
+                            d.label,
                             int(round(d.score * 100)),
                             int(round(spawn_threshold * 100)),
                         )
@@ -420,7 +467,10 @@ class MainLoopMixin:
                         cur = self._confirmer.current_count(self.camera_id, d.label)
                         log.info(
                             "[det][cam:%s] ✅ BESTÄTIGT: %s — %d Treffer in %.1fs → Alert ausgelöst",
-                            self.camera_id, d.label, cur, secs,
+                            self.camera_id,
+                            d.label,
+                            cur,
+                            secs,
                         )
                         confirmed_object_labels.append(d.label)
                     elif self._confirmer.is_confirmed(self.camera_id, d.label):
@@ -429,8 +479,12 @@ class MainLoopMixin:
                         cur = self._confirmer.current_count(self.camera_id, d.label)
                         log.info(
                             "[det][cam:%s] ⏳ wartend: %s %d%% (Bestätigung %d/%d in %.1fs)",
-                            self.camera_id, d.label, int(round(d.score * 100)),
-                            cur, n, secs,
+                            self.camera_id,
+                            d.label,
+                            int(round(d.score * 100)),
+                            cur,
+                            n,
+                            secs,
                         )
 
                 now_dt = datetime.now()
@@ -467,9 +521,11 @@ class MainLoopMixin:
                 # recording_enabled toggle is the master record on/off.
                 if has_motion and not self._recording:
                     if not self.cfg.get("recording_enabled", True):
-                        time.sleep(interval); continue
+                        time.sleep(interval)
+                        continue
                     if not is_schedule_window_active(self.cfg.get("schedule_record") or {}):
-                        time.sleep(interval); continue
+                        time.sleep(interval)
+                        continue
 
                 if self.cfg.get("rtsp_url"):
                     # ── RTSP: pre-buffer + per-session video recording ────────
@@ -482,7 +538,9 @@ class MainLoopMixin:
                         self._main_fps_window_start = time.time()
 
                     # Clip boundary knobs (configurable); ffmpeg stream-copy ignores pre-buffer
-                    _clip_max = int(self.global_cfg.get("processing", {}).get("clip_max_duration_s", 120))
+                    _clip_max = int(
+                        self.global_cfg.get("processing", {}).get("clip_max_duration_s", 120)
+                    )
                     _post_tail = float(
                         self.cfg.get("post_motion_tail_s")
                         or self.global_cfg.get("processing", {}).get("post_motion_tail_s", 3.0)
@@ -498,14 +556,18 @@ class MainLoopMixin:
                             elapsed = (now_dt - self.last_event_at).total_seconds()
                             if has_person or elapsed >= cooldown:
                                 rec_meta = self._build_event_meta(
-                                    now_dt, labels, detections, drawn, effective_bbox)
+                                    now_dt, labels, detections, drawn, effective_bbox
+                                )
                                 # Zone trigger flag: if every detection in
                                 # this event sits in a zone with save_video
                                 # turned off, skip recording entirely. Cheap
                                 # short-circuit before ffmpeg launches.
                                 if not rec_meta.get("save_video", True):
-                                    log.debug("[%s] event %s: save_video=False, skipping clip",
-                                              self.camera_id, rec_meta.get("event_id"))
+                                    log.debug(
+                                        "[%s] event %s: save_video=False, skipping clip",
+                                        self.camera_id,
+                                        rec_meta.get("event_id"),
+                                    )
                                     continue
                                 started = False
                                 if _FFMPEG_AVAILABLE:
@@ -523,26 +585,43 @@ class MainLoopMixin:
                                     self._rec_start_time = now_dt
                                     self._rec_corrupt_frames = 0
                                     pre_cutoff = time.time() - 3.0
-                                    self._rec_frames = [f for f, ts in self._pre_buffer if ts >= pre_cutoff]
+                                    self._rec_frames = [
+                                        f for f, ts in self._pre_buffer if ts >= pre_cutoff
+                                    ]
                                     self._rec_event_meta = rec_meta
                                     self.last_event_at = now_dt
                                     self.event_counter_today += 1
-                                    log.info("[%s] Motion recording started (OpenCV, labels=%s, prebuf=%d frames)",
-                                             self.camera_id, labels, len(self._rec_frames))
+                                    log.info(
+                                        "[%s] Motion recording started (OpenCV, labels=%s, prebuf=%d frames)",
+                                        self.camera_id,
+                                        labels,
+                                        len(self._rec_frames),
+                                    )
                         # Append frames only in OpenCV mode — ffmpeg records itself
                         if self._recording and self._ffmpeg_proc is None:
                             self._rec_frames.append(proc_frame.copy())
 
                     elif self._recording:
-                        since_last = (now_dt - self._last_motion_ts).total_seconds() if self._last_motion_ts else 999
-                        since_start = (now_dt - self._rec_start_time).total_seconds() if self._rec_start_time else 0
+                        since_last = (
+                            (now_dt - self._last_motion_ts).total_seconds()
+                            if self._last_motion_ts
+                            else 999
+                        )
+                        since_start = (
+                            (now_dt - self._rec_start_time).total_seconds()
+                            if self._rec_start_time
+                            else 0
+                        )
                         # In OpenCV mode we keep accumulating tail frames
                         if self._ffmpeg_proc is None:
                             self._rec_frames.append(proc_frame.copy())
                         if since_last >= _post_tail or since_start >= _clip_max:
                             if self._rec_corrupt_frames > 5:
-                                log.warning("[%s] %d corrupt frames rejected in this clip",
-                                            self.camera_id, self._rec_corrupt_frames)
+                                log.warning(
+                                    "[%s] %d corrupt frames rejected in this clip",
+                                    self.camera_id,
+                                    self._rec_corrupt_frames,
+                                )
                             if self._ffmpeg_proc is not None:
                                 # ffmpeg mode: stop subprocess + queue re-encode
                                 self._stop_ffmpeg_and_queue_reencode()
@@ -555,8 +634,11 @@ class MainLoopMixin:
                                 # OpenCV fallback: finalize from frame buffer
                                 frames_snap = self._rec_frames[:]
                                 meta_snap = self._rec_event_meta
-                                measured_fps = (max(5.0, min(30.0, len(frames_snap) / since_start))
-                                                if since_start > 0.5 else (self._main_fps or 10.0))
+                                measured_fps = (
+                                    max(5.0, min(30.0, len(frames_snap) / since_start))
+                                    if since_start > 0.5
+                                    else (self._main_fps or 10.0)
+                                )
                                 self._recording = False
                                 self._rec_frames = []
                                 self._rec_start_time = None
@@ -564,9 +646,11 @@ class MainLoopMixin:
                                 self._rec_event_meta = None
                                 self._rec_corrupt_frames = 0
                                 if meta_snap and len(frames_snap) >= 3:
-                                    threading.Thread(target=self._finalize_motion_clip,
-                                                     args=(frames_snap, meta_snap, measured_fps),
-                                                     daemon=True).start()
+                                    threading.Thread(
+                                        target=self._finalize_motion_clip,
+                                        args=(frames_snap, meta_snap, measured_fps),
+                                        daemon=True,
+                                    ).start()
 
                 else:
                     # ── Snapshot camera: save JPEG event (unchanged behaviour) ─
@@ -577,29 +661,47 @@ class MainLoopMixin:
                         self.event_counter_today += 1
                         ts = now_dt
                         event_id = ts.strftime("%Y%m%d-%H%M%S-%f")
-                        day_dir = (Path(self.global_cfg["storage"]["root"]) / "motion_detection"
-                                   / self.camera_id / ts.strftime("%Y-%m-%d"))
+                        day_dir = (
+                            Path(self.global_cfg["storage"]["root"])
+                            / "motion_detection"
+                            / self.camera_id
+                            / ts.strftime("%Y-%m-%d")
+                        )
                         day_dir.mkdir(parents=True, exist_ok=True)
                         # Build event meta first so we know whether the
                         # zone(s) the detections fell into actually want a
                         # photo saved. save_photo:false zones still log the
                         # event JSON but skip the JPEG write.
-                        ev_meta = self._build_event_meta(ts, labels, detections, drawn, effective_bbox)
+                        ev_meta = self._build_event_meta(
+                            ts, labels, detections, drawn, effective_bbox
+                        )
                         snap_path = day_dir / f"{event_id}.jpg"
                         rel = snap_path.relative_to(Path(self.global_cfg["storage"]["root"]))
-                        public_base = (self.global_cfg.get("server", {}).get("public_base_url") or "").rstrip("/")
+                        public_base = (
+                            self.global_cfg.get("server", {}).get("public_base_url") or ""
+                        ).rstrip("/")
                         snapshot_url = None
                         if ev_meta.get("save_photo", True):
                             save_frame = drawn.copy()
                             if effective_bbox is not None:
                                 mx, my, mw, mh = effective_bbox
-                                cv2.rectangle(save_frame, (mx, my), (mx + mw, my + mh), (0, 220, 0), 2)
+                                cv2.rectangle(
+                                    save_frame, (mx, my), (mx + mw, my + mh), (0, 220, 0), 2
+                                )
                             h_px, w_px = save_frame.shape[:2]
                             if w_px > 1280:
                                 scale = 1280 / w_px
-                                save_frame = cv2.resize(save_frame, (1280, int(h_px * scale)), interpolation=cv2.INTER_AREA)
-                            cv2.imwrite(str(snap_path), save_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60])
-                            snapshot_url = f"{public_base}/media/{rel.as_posix()}" if public_base else None
+                                save_frame = cv2.resize(
+                                    save_frame,
+                                    (1280, int(h_px * scale)),
+                                    interpolation=cv2.INTER_AREA,
+                                )
+                            cv2.imwrite(
+                                str(snap_path), save_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 60]
+                            )
+                            snapshot_url = (
+                                f"{public_base}/media/{rel.as_posix()}" if public_base else None
+                            )
                         event = {
                             "event_id": event_id,
                             "camera_id": self.camera_id,
@@ -641,11 +743,16 @@ class MainLoopMixin:
                                 except Exception:
                                     pass
                             self.notifier.send_alert_sync(
-                                caption=(f"ℹ️ {', '.join(ev_meta['labels'])}\n"
-                                         f"📷 {self.cfg.get('name', self.camera_id)}\n"
-                                         f"🕒 {event['time']}"),
-                                jpeg_bytes=thumb, snapshot_url=snapshot_url,
-                                dashboard_url=public_base, camera_id=self.camera_id)
+                                caption=(
+                                    f"ℹ️ {', '.join(ev_meta['labels'])}\n"
+                                    f"📷 {self.cfg.get('name', self.camera_id)}\n"
+                                    f"🕒 {event['time']}"
+                                ),
+                                jpeg_bytes=thumb,
+                                snapshot_url=snapshot_url,
+                                dashboard_url=public_base,
+                                camera_id=self.camera_id,
+                            )
                 self.last_error = None
             except Exception as e:
                 self._error_streak += 1
@@ -653,9 +760,21 @@ class MainLoopMixin:
                 if self._error_streak == 1:
                     log.debug("[%s] Frame lesen fehlgeschlagen: %s", self.camera_id, e)
                 elif self._error_streak == 5:
-                    log_cam.warning("[%s] Verbindungsprobleme – %d aufeinanderfolgende Fehler: %s", self.camera_id, self._error_streak, e)
-                elif self._error_streak == 15 or (self._error_streak > 15 and self._error_streak % 30 == 0):
-                    log.error("[%s] Stream verloren (streak=%d): %s", self.camera_id, self._error_streak, e)
+                    log_cam.warning(
+                        "[%s] Verbindungsprobleme – %d aufeinanderfolgende Fehler: %s",
+                        self.camera_id,
+                        self._error_streak,
+                        e,
+                    )
+                elif self._error_streak == 15 or (
+                    self._error_streak > 15 and self._error_streak % 30 == 0
+                ):
+                    log.error(
+                        "[%s] Stream verloren (streak=%d): %s",
+                        self.camera_id,
+                        self._error_streak,
+                        e,
+                    )
                 try:
                     if self.capture is not None:
                         self.capture.release()
@@ -665,7 +784,10 @@ class MainLoopMixin:
                 self._reconnect_count += 1
                 self._reconnect_log.append(time.time())
                 # Short backoff for transient dropouts, longer for persistent failures
-                sleep_t = 2.0 if self._error_streak <= 3 else min(30.0, 5.0 * (self._error_streak // 5 + 1))
+                sleep_t = (
+                    2.0
+                    if self._error_streak <= 3
+                    else min(30.0, 5.0 * (self._error_streak // 5 + 1))
+                )
                 time.sleep(sleep_t)
             time.sleep(interval)
-

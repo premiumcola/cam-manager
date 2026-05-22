@@ -34,8 +34,8 @@ from ..event_logic import (
 )
 from ._consts import (
     _FFMPEG_AVAILABLE,
-    _PROFILES,
     _PROFILE_PERIOD_DEFAULTS,
+    _PROFILES,
     _SPECIES_TO_ACH_ID,
     _WILDLIFE_BBOX_DONORS,
     _bbox_iou,
@@ -59,8 +59,10 @@ class StatusMixin:
         Priority: sub-stream clean frame → annotated main-stream frame → raw main-stream frame.
         All three live in self.lock — safe to call from multiple HTTP threads concurrently."""
         with self.lock:
-            frame = self._preview_frame if self._preview_frame is not None else (
-                self.preview if self.preview is not None else self.frame
+            frame = (
+                self._preview_frame
+                if self._preview_frame is not None
+                else (self.preview if self.preview is not None else self.frame)
             )
             if frame is None:
                 return None
@@ -94,7 +96,9 @@ class StatusMixin:
                 h, w = frame.shape[:2]
                 log.info(
                     "[cam:%s] hires snapshot active — main-stream %dx%d",
-                    self.camera_id, w, h,
+                    self.camera_id,
+                    w,
+                    h,
                 )
             except Exception:
                 pass
@@ -113,13 +117,14 @@ class StatusMixin:
         # "TPU is up". Mismatches between mode and detector.available are
         # logged as a defensive tripwire below.
         det_ready = bool(getattr(self.detector, "available", False))
-        coral_avail = (det_mode == "coral")
+        coral_avail = det_mode == "coral"
         prev_warned = getattr(self, "_det_state_warned", None)
         cur_state = (det_mode, det_ready)
         if det_mode in ("coral", "cpu") and not det_ready and prev_warned != cur_state:
             log.warning(
                 "[det] inconsistent state: cam=%s mode=%s detector_ready=false",
-                self.camera_id, det_mode,
+                self.camera_id,
+                det_mode,
             )
             self._det_state_warned = cur_state
         # Explicit coral_mode for the cam-edit Erkennung-tab status strip:
@@ -127,11 +132,11 @@ class StatusMixin:
         # display states the frontend can map to a dot variant without
         # re-deriving the combination.
         if det_mode == "coral" and det_ready:
-            coral_mode = "tpu"           # green dot, "Coral läuft"
+            coral_mode = "tpu"  # green dot, "Coral läuft"
         elif det_mode == "cpu":
             coral_mode = "cpu_fallback"  # orange pulse, "CPU-Notfall"
         else:
-            coral_mode = "off"           # grey dot, "Coral aus" / motion-only / disabled
+            coral_mode = "off"  # grey dot, "Coral aus" / motion-only / disabled
         return {
             "id": self.camera_id,
             "name": cfg.get("name", self.camera_id),
@@ -140,7 +145,9 @@ class StatusMixin:
             "armed": cfg.get("armed", True),
             "source": "rtsp" if cfg.get("rtsp_url") else "snapshot",
             "last_error": self.last_error,
-            "status": "error" if self._error_streak >= 10 else ("active" if self.frame is not None else "starting"),
+            "status": "error"
+            if self._error_streak >= 10
+            else ("active" if self.frame is not None else "starting"),
             "today_events": self.event_counter_today,
             "timelapse_enabled": bool((cfg.get("timelapse") or {}).get("enabled")),
             "detection_mode": det_mode,
@@ -162,7 +169,8 @@ class StatusMixin:
             "stream_mode": "live" if self._live_viewers > 0 else "baseline",
             "supervisor_restarts": self._supervisor_restarts,
             "inference_avg_ms": (sum(self._inference_times_ms) / len(self._inference_times_ms))
-                                if self._inference_times_ms else None,
+            if self._inference_times_ms
+            else None,
             "reconnect_count_24h": self._reconnect_count_24h(),
         }
 

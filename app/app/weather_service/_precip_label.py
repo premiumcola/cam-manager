@@ -18,6 +18,7 @@ Note: this is for the *current observed rate*. The
 `EVENT_LABEL_DE["heavy_rain"]` mapping over in _consts.py stays as-is —
 that one names the event TYPE, not the instantaneous reading.
 """
+
 from __future__ import annotations
 
 

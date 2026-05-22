@@ -30,6 +30,7 @@ Side-file `storage/first_since_records.json`:
     side-file is updated. Pure best-effort persistence — a corrupt or
     missing file resets the records, never blocks event creation.
 """
+
 from __future__ import annotations
 
 import json as _json_mod
@@ -104,8 +105,7 @@ class FirstSinceDetector:
     inline from `_recording.py::_finalize_motion_clip`.
     """
 
-    def __init__(self, store, settings, storage_root: Path,
-                 boot_ts: float | None = None):
+    def __init__(self, store, settings, storage_root: Path, boot_ts: float | None = None):
         self.store = store
         self.settings = settings
         self.records_path = storage_root / "first_since_records.json"
@@ -115,10 +115,11 @@ class FirstSinceDetector:
     def _cfg_block(self) -> dict:
         try:
             from . import app_state
+
             eff = self.settings.export_effective_config(app_state.base_cfg)
         except Exception:
             return {}
-        return ((eff.get("processing") or {}).get("first_since") or {})
+        return (eff.get("processing") or {}).get("first_since") or {}
 
     def _enabled(self) -> bool:
         # Default ON when not specified — the feature is opt-out.
@@ -134,7 +135,7 @@ class FirstSinceDetector:
 
     def _threshold_hours(self, label: str) -> float:
         block = self._cfg_block()
-        thresholds = (block.get("thresholds") or {})
+        thresholds = block.get("thresholds") or {}
         # Per-label override → effective default → built-in label →
         # built-in default. Each step is parsed via _parse_hours so the
         # operator can write "12h" or 12 interchangeably.
@@ -143,7 +144,8 @@ class FirstSinceDetector:
             if v is not None:
                 return v
         return _BUILTIN_THRESHOLDS_HOURS.get(
-            label, _BUILTIN_THRESHOLDS_HOURS["default"],
+            label,
+            _BUILTIN_THRESHOLDS_HOURS["default"],
         )
 
     # ── Records side-file ──────────────────────────────────────────────
@@ -163,14 +165,14 @@ class FirstSinceDetector:
     def _save_records(self, data: dict) -> None:
         try:
             tmp = self.records_path.with_suffix(self.records_path.suffix + ".tmp")
-            tmp.write_text(_json_mod.dumps(data, ensure_ascii=False, indent=2),
-                           encoding="utf-8")
+            tmp.write_text(_json_mod.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
             os.replace(str(tmp), str(self.records_path))
         except Exception as e:
             log.debug("[first_since] records save failed: %s", e)
 
-    def _check_and_update_record(self, cam_id: str, label: str,
-                                 gap_hours: float, event_id: str) -> bool:
+    def _check_and_update_record(
+        self, cam_id: str, label: str, gap_hours: float, event_id: str
+    ) -> bool:
         """Returns True if `gap_hours` is the new max for (cam, label)."""
         with _records_lock:
             data = self._load_records()
@@ -225,8 +227,7 @@ class FirstSinceDetector:
         best_marker: dict | None = None
         best_gap_h: float = -1.0
         for label in labels:
-            prev = self._previous_event(cam_id, label, before=ts_str,
-                                        exclude_event_id=event_id)
+            prev = self._previous_event(cam_id, label, before=ts_str, exclude_event_id=event_id)
             if prev is None:
                 # First-ever event of this label on this camera. Skip
                 # rather than fire — we have no baseline, and on a
@@ -262,19 +263,25 @@ class FirstSinceDetector:
         # New-record check is done last so a non-fired threshold doesn't
         # bump the side-file. Only bumps when we're emitting a marker.
         is_new = self._check_and_update_record(
-            cam_id, best_marker["label"],
-            best_marker["gap_hours"], event_id,
+            cam_id,
+            best_marker["label"],
+            best_marker["gap_hours"],
+            event_id,
         )
         best_marker["is_new_record"] = is_new
         log.info(
             "[first_since] cam=%s label=%s gap=%.1fh threshold=%.1fh new_record=%s",
-            cam_id, best_marker["label"],
-            best_marker["gap_hours"], best_marker["threshold_hours"], is_new,
+            cam_id,
+            best_marker["label"],
+            best_marker["gap_hours"],
+            best_marker["threshold_hours"],
+            is_new,
         )
         return best_marker
 
-    def _previous_event(self, cam_id: str, label: str, before: str,
-                        exclude_event_id: str | None) -> dict | None:
+    def _previous_event(
+        self, cam_id: str, label: str, before: str, exclude_event_id: str | None
+    ) -> dict | None:
         """Most recent event of `label` on `cam_id` strictly before
         `before` (ISO ts). Excludes the just-finalized event by id so
         we don't compare an event against itself when the JSON has

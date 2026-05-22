@@ -13,6 +13,7 @@ store, NO Flask app state. Both callers wrap this module with their
 own orchestration — see ``tracking_worker.TrackingWorker`` (post-clip)
 and ``camera_runtime._main_loop`` (live).
 """
+
 from __future__ import annotations
 
 import logging
@@ -132,9 +133,21 @@ def color_for_track(track_id: str) -> str:
     server-side palette table. Picks from a hue-spread set of saturated
     colours so two adjacent tracks never collide."""
     palette = [
-        "#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#a855f7",
-        "#14b8a6", "#ec4899", "#84cc16", "#f97316", "#06b6d4",
-        "#eab308", "#8b5cf6", "#10b981", "#f43f5e", "#0ea5e9",
+        "#22c55e",
+        "#3b82f6",
+        "#f59e0b",
+        "#ef4444",
+        "#a855f7",
+        "#14b8a6",
+        "#ec4899",
+        "#84cc16",
+        "#f97316",
+        "#06b6d4",
+        "#eab308",
+        "#8b5cf6",
+        "#10b981",
+        "#f43f5e",
+        "#0ea5e9",
     ]
     h = sum(ord(c) for c in track_id) % len(palette)
     return palette[h]
@@ -232,12 +245,24 @@ class Track:
     stay on the class so the post-clip worker can call ``close()``
     and ``to_dict()`` without conditional branches."""
 
-    __slots__ = ("track_id", "label", "color", "samples",
-                 "first_frame", "last_frame", "best_score", "best_frame_idx",
-                 "active", "missed_windows",
-                 "end_reason", "last_score",
-                 "last_bbox_w_px", "last_bbox_h_px",
-                 "last_bbox_frac_h", "last_bbox_frac_area")
+    __slots__ = (
+        "track_id",
+        "label",
+        "color",
+        "samples",
+        "first_frame",
+        "last_frame",
+        "best_score",
+        "best_frame_idx",
+        "active",
+        "missed_windows",
+        "end_reason",
+        "last_score",
+        "last_bbox_w_px",
+        "last_bbox_h_px",
+        "last_bbox_frac_h",
+        "last_bbox_frac_area",
+    )
 
     def __init__(self, track_id: str, label: str, frame_idx: int):
         self.track_id = track_id
@@ -260,9 +285,15 @@ class Track:
         self.last_bbox_frac_h: float | None = None
         self.last_bbox_frac_area: float | None = None
 
-    def add_sample(self, frame_idx: int, t_s: float, bbox_dict: dict,
-                   score: float | None, source: str,
-                   label: str | None = None):
+    def add_sample(
+        self,
+        frame_idx: int,
+        t_s: float,
+        bbox_dict: dict,
+        score: float | None,
+        source: str,
+        label: str | None = None,
+    ):
         # Squelch micro-jitter samples — only emit when the bbox moved
         # by ≥ SAMPLE_BBOX_DELTA_PX pixels at the centroid OR this is a
         # detection sample (always kept so score history is preserved).
@@ -275,14 +306,16 @@ class Track:
             if bbox_centroid_dist(last, bbox_dict) < SAMPLE_BBOX_DELTA_PX:
                 return
         sample_label = label if label else self.label
-        self.samples.append({
-            "f": frame_idx,
-            "t": round(t_s, 3),
-            "bbox": bbox_dict,
-            "score": (round(float(score), 4) if score is not None else None),
-            "source": source,
-            "label": sample_label,
-        })
+        self.samples.append(
+            {
+                "f": frame_idx,
+                "t": round(t_s, 3),
+                "bbox": bbox_dict,
+                "score": (round(float(score), 4) if score is not None else None),
+                "source": source,
+                "label": sample_label,
+            }
+        )
         self.last_frame = frame_idx
         if score is not None and score > self.best_score:
             self.best_score = float(score)
@@ -318,8 +351,7 @@ class Track:
                 max_count = max(counts.values())
                 current_count = counts.get(self.label, 0)
                 if max_count > current_count:
-                    self.label = max(
-                        counts.items(), key=lambda kv: kv[1])[0]
+                    self.label = max(counts.items(), key=lambda kv: kv[1])[0]
 
     def close(self, reason: str, frame_w: int, frame_h: int) -> None:
         """Mark the track inactive and capture diagnostic fields from
@@ -384,8 +416,9 @@ class TrackerState:
     """Per-run mutable state shared across the per-frame helpers. The
     live runtime uses ONE instance per camera (lives the session); the
     post-clip worker creates ONE instance per clip."""
-    active: list = field(default_factory=list)   # list[Track]
-    closed: list = field(default_factory=list)   # list[Track]
+
+    active: list = field(default_factory=list)  # list[Track]
+    closed: list = field(default_factory=list)  # list[Track]
     samples_emitted: int = 0
     best_top: dict | None = None
 
@@ -432,8 +465,7 @@ def predicted_bbox(track: Track, frame_idx: int) -> tuple[int, int, int, int]:
     detect_samples = [s for s in track.samples if s.get("source") == "detect"]
     if len(detect_samples) < 2:
         last = track.samples[-1]["bbox"]
-        return (int(last["x1"]), int(last["y1"]),
-                int(last["x2"]), int(last["y2"]))
+        return (int(last["x1"]), int(last["y1"]), int(last["x2"]), int(last["y2"]))
     s_last = detect_samples[-1]
     bb_last = s_last["bbox"]
     bw = bb_last["x2"] - bb_last["x1"]
@@ -442,7 +474,7 @@ def predicted_bbox(track: Track, frame_idx: int) -> tuple[int, int, int, int]:
     cy_last = (bb_last["y1"] + bb_last["y2"]) / 2.0
     # Wider window than before (6 samples vs 4) — five-plus pairwise
     # deltas drown an outlier reversal frame in the median.
-    window = detect_samples[-min(6, len(detect_samples)):]
+    window = detect_samples[-min(6, len(detect_samples)) :]
     dxs: list[float] = []
     dys: list[float] = []
     for i in range(1, len(window)):
@@ -461,12 +493,10 @@ def predicted_bbox(track: Track, frame_idx: int) -> tuple[int, int, int, int]:
     # velocity. If the subject barely moved across the window, do
     # NOT extrapolate; the next detection should match against the
     # last-observed position. Compute mean speed = mean(sqrt(dx² + dy²)).
-    mean_speed = sum((d * d + e * e) ** 0.5
-                     for d, e in zip(dxs, dys)) / max(1, len(dxs))
+    mean_speed = sum((d * d + e * e) ** 0.5 for d, e in zip(dxs, dys)) / max(1, len(dxs))
     min_dim = max(1.0, float(min(bw, bh)))
     if mean_speed < STATIONARY_SPEED_FRAC * min_dim:
-        return (int(bb_last["x1"]), int(bb_last["y1"]),
-                int(bb_last["x2"]), int(bb_last["y2"]))
+        return (int(bb_last["x1"]), int(bb_last["y1"]), int(bb_last["x2"]), int(bb_last["y2"]))
     dxs.sort()
     dys.sort()
     dx = dxs[len(dxs) // 2]
@@ -491,8 +521,7 @@ def predicted_bbox(track: Track, frame_idx: int) -> tuple[int, int, int, int]:
     p_cy = cy_last + total_dy
     half_w = bw / 2.0
     half_h = bh / 2.0
-    return (int(p_cx - half_w), int(p_cy - half_h),
-            int(p_cx + half_w), int(p_cy + half_h))
+    return (int(p_cx - half_w), int(p_cy - half_h), int(p_cx + half_w), int(p_cy + half_h))
 
 
 def _try_reidentify(state: TrackerState, det, t_s: float):
@@ -526,8 +555,12 @@ def _try_reidentify(state: TrackerState, det, t_s: float):
         if not tr.samples:
             continue
         last_bb = tr.samples[-1]["bbox"]
-        last_tuple = (int(last_bb["x1"]), int(last_bb["y1"]),
-                      int(last_bb["x2"]), int(last_bb["y2"]))
+        last_tuple = (
+            int(last_bb["x1"]),
+            int(last_bb["y1"]),
+            int(last_bb["x2"]),
+            int(last_bb["y2"]),
+        )
         if iou(bb, last_tuple) > REID_OCCUPIED_IOU:
             return None
     cx = (bb[0] + bb[2]) / 2.0
@@ -617,8 +650,7 @@ def _last_n_detect_bboxes(track: Track, n: int):
         if src not in ("detect", "track"):
             continue
         bb = s["bbox"]
-        out.append((int(bb["x1"]), int(bb["y1"]),
-                    int(bb["x2"]), int(bb["y2"])))
+        out.append((int(bb["x1"]), int(bb["y1"]), int(bb["x2"]), int(bb["y2"])))
         if len(out) >= n:
             break
     out.reverse()
@@ -631,8 +663,7 @@ def _track_quality_score(track: Track) -> float:
     samples first (longer history = canonical), then best_score
     (stronger evidence). Ties broken by first_frame (earlier id
     keeps the id the operator already learned)."""
-    detect_n = sum(1 for s in (track.samples or [])
-                   if s.get("source") in ("detect", "track"))
+    detect_n = sum(1 for s in (track.samples or []) if s.get("source") in ("detect", "track"))
     return detect_n * 100.0 + float(track.best_score or 0.0) * 10.0
 
 
@@ -701,7 +732,7 @@ def _merge_active_duplicates(state: TrackerState):
             # its own bbox for any frame both touched (its sample is
             # already in its list).
             existing_frames = {s.get("f") for s in (winner.samples or [])}
-            for s in (loser.samples or []):
+            for s in loser.samples or []:
                 if s.get("f") in existing_frames:
                     continue
                 winner.samples.append(s)
@@ -709,7 +740,7 @@ def _merge_active_duplicates(state: TrackerState):
             # Refresh aggregate fields from the merged sample set.
             winner.first_frame = min(winner.first_frame, loser.first_frame)
             winner.last_frame = max(winner.last_frame, loser.last_frame)
-            for s in (winner.samples or []):
+            for s in winner.samples or []:
                 sc = s.get("score")
                 if sc is not None and float(sc) > float(winner.best_score):
                     winner.best_score = float(sc)
@@ -747,14 +778,19 @@ def update_best_top(state: TrackerState, det, frame_idx: int, t_s: float) -> Non
         }
 
 
-def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
-                         *,
-                         frame_w: int = 0, frame_h: int = 0,
-                         spawn_score: float = TRACK_SPAWN_SCORE,
-                         spawn_for: Callable[[str], float] | None = None,
-                         miss_grace_samples: int = TRACK_MISS_WINDOWS,
-                         iou_threshold: float = IOU_MATCH_THRESHOLD,
-                         ) -> list[tuple[int, Track]]:
+def associate_detections(
+    state: TrackerState,
+    dets,
+    frame_idx: int,
+    t_s: float,
+    *,
+    frame_w: int = 0,
+    frame_h: int = 0,
+    spawn_score: float = TRACK_SPAWN_SCORE,
+    spawn_for: Callable[[str], float] | None = None,
+    miss_grace_samples: int = TRACK_MISS_WINDOWS,
+    iou_threshold: float = IOU_MATCH_THRESHOLD,
+) -> list[tuple[int, Track]]:
     """Two-tier greedy IoU pairing + spawn + age-out for one frame.
 
     Rules:
@@ -784,12 +820,14 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
     if spawn_for is None:
         spawn_lookup = lambda _lbl: float(spawn_score)
     else:
+
         def _resolve(lbl: str) -> float:
             try:
                 v = spawn_for(lbl)
             except Exception:
                 v = None
             return float(v) if v is not None else float(spawn_score)
+
         spawn_lookup = _resolve
 
     # J1 · NMS at the entry so every later stage works on a deduped
@@ -842,10 +880,13 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
         for di, ti in di_ti_pairs:
             d = pool_by_di[di]
             tr = state.active[ti]
-            bbox_dict = {"x1": int(d.bbox[0]), "y1": int(d.bbox[1]),
-                         "x2": int(d.bbox[2]), "y2": int(d.bbox[3])}
-            tr.add_sample(frame_idx, t_s, bbox_dict,
-                          float(d.score), "detect", d.label)
+            bbox_dict = {
+                "x1": int(d.bbox[0]),
+                "y1": int(d.bbox[1]),
+                "x2": int(d.bbox[2]),
+                "y2": int(d.bbox[3]),
+            }
+            tr.add_sample(frame_idx, t_s, bbox_dict, float(d.score), "detect", d.label)
             state.samples_emitted += 1
             update_best_top(state, d, frame_idx, t_s)
             matches.append((di, tr))
@@ -866,6 +907,7 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
     # `taken_tracks` and immediately gets missed_windows += 1 on its
     # birth frame — halving the intended grace period.
     original_count = len(state.active)
+
     # Phase 3 — unmatched confirmed dets. The flow now is:
     #
     #   1. SPAWN-BLOCK check (J2). If the det's bbox strongly
@@ -896,8 +938,12 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
             # Predicted bbox was computed at frame entry — reuse.
             pred = predicted[ti] if ti < len(predicted) else None
             last_bb = tr.samples[-1]["bbox"]
-            last_tuple = (int(last_bb["x1"]), int(last_bb["y1"]),
-                          int(last_bb["x2"]), int(last_bb["y2"]))
+            last_tuple = (
+                int(last_bb["x1"]),
+                int(last_bb["y1"]),
+                int(last_bb["x2"]),
+                int(last_bb["y2"]),
+            )
             iou_pred = iou(det.bbox, pred) if pred is not None else 0.0
             iou_last = iou(det.bbox, last_tuple)
             best_for_track = max(iou_pred, iou_last)
@@ -909,8 +955,12 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
     for di, d in confirmed:
         if di in taken_confirmed:
             continue
-        bbox_dict = {"x1": int(d.bbox[0]), "y1": int(d.bbox[1]),
-                     "x2": int(d.bbox[2]), "y2": int(d.bbox[3])}
+        bbox_dict = {
+            "x1": int(d.bbox[0]),
+            "y1": int(d.bbox[1]),
+            "x2": int(d.bbox[2]),
+            "y2": int(d.bbox[3]),
+        }
         blocker = _spawn_blocking_track(d)
         if blocker is not None:
             # J5 · attach the det to the blocker REGARDLESS of label.
@@ -920,8 +970,7 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
             # on a person) gets absorbed into the same track and the
             # majority "person" wins, so no parallel cross-label
             # ghost ever materialises.
-            blocker.add_sample(frame_idx, t_s, bbox_dict,
-                               float(d.score), "detect", d.label)
+            blocker.add_sample(frame_idx, t_s, bbox_dict, float(d.score), "detect", d.label)
             blocker.missed_windows = 0
             state.samples_emitted += 1
             update_best_top(state, d, frame_idx, t_s)
@@ -941,8 +990,7 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
             revived.active = True
             revived.end_reason = None
             revived.missed_windows = 0
-            revived.add_sample(frame_idx, t_s, bbox_dict,
-                               float(d.score), "detect", d.label)
+            revived.add_sample(frame_idx, t_s, bbox_dict, float(d.score), "detect", d.label)
             state.active.append(revived)
             state.samples_emitted += 1
             update_best_top(state, d, frame_idx, t_s)
@@ -950,8 +998,7 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
             continue
         tid = short_id()
         tr = Track(tid, d.label, frame_idx)
-        tr.add_sample(frame_idx, t_s, bbox_dict,
-                      float(d.score), "detect", d.label)
+        tr.add_sample(frame_idx, t_s, bbox_dict, float(d.score), "detect", d.label)
         state.active.append(tr)
         state.samples_emitted += 1
         update_best_top(state, d, frame_idx, t_s)
@@ -971,6 +1018,7 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
     # scaled to 0.7 (floor 0.05) — a coarse "still tracking, lower
     # confidence" signal that doesn't invent fresh evidence.
     grace = max(1, int(miss_grace_samples))
+
     # K4 · helper — is a bbox touching/exceeding the frame edge?
     def _at_frame_edge(bb):
         if frame_w <= 0 or frame_h <= 0:
@@ -981,6 +1029,7 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
             or bb["x2"] >= frame_w - EDGE_MARGIN_PX
             or bb["y2"] >= frame_h - EDGE_MARGIN_PX
         )
+
     for ti, tr in enumerate(state.active[:original_count]):
         if ti in taken_tracks:
             continue
@@ -996,15 +1045,18 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
         if frame_h > 0:
             py1 = max(0, min(frame_h, py1))
             py2 = max(0, min(frame_h, py2))
-        bbox_dict = {"x1": int(px1), "y1": int(py1),
-                     "x2": int(px2), "y2": int(py2)}
+        bbox_dict = {"x1": int(px1), "y1": int(py1), "x2": int(px2), "y2": int(py2)}
         last_detect_score = next(
-            (s.get("score") for s in reversed(tr.samples)
-             if s.get("source") == "detect" and s.get("score") is not None),
+            (
+                s.get("score")
+                for s in reversed(tr.samples)
+                if s.get("source") == "detect" and s.get("score") is not None
+            ),
             None,
         )
-        pred_score = (max(0.05, float(last_detect_score) * 0.7)
-                      if last_detect_score is not None else 0.05)
+        pred_score = (
+            max(0.05, float(last_detect_score) * 0.7) if last_detect_score is not None else 0.05
+        )
         tr.add_sample(frame_idx, t_s, bbox_dict, pred_score, "predicted")
         state.samples_emitted += 1
         tr.missed_windows += 1
@@ -1015,8 +1067,7 @@ def associate_detections(state: TrackerState, dets, frame_idx: int, t_s: float,
         # timeline with a long predicted tail. Cap effective grace
         # at EDGE_GRACE_SAMPLES so the track closes promptly.
         last_detect_bb = next(
-            (s["bbox"] for s in reversed(tr.samples)
-             if s.get("source") in ("detect", "track")),
+            (s["bbox"] for s in reversed(tr.samples) if s.get("source") in ("detect", "track")),
             None,
         )
         effective_grace = grace
@@ -1055,15 +1106,24 @@ class LiveTracker:
     """
 
     __slots__ = (
-        "camera_id", "state", "_frame_idx",
-        "spawn_default", "floor", "grace_seconds", "iou_threshold",
+        "camera_id",
+        "state",
+        "_frame_idx",
+        "spawn_default",
+        "floor",
+        "grace_seconds",
+        "iou_threshold",
     )
 
-    def __init__(self, camera_id: str, *,
-                 spawn_default: float = TRACK_SPAWN_SCORE,
-                 floor: float = TRACK_FLOOR_SCORE,
-                 grace_seconds: float = MISS_GRACE_DEFAULT_SECONDS,
-                 iou_threshold: float = IOU_MATCH_THRESHOLD):
+    def __init__(
+        self,
+        camera_id: str,
+        *,
+        spawn_default: float = TRACK_SPAWN_SCORE,
+        floor: float = TRACK_FLOOR_SCORE,
+        grace_seconds: float = MISS_GRACE_DEFAULT_SECONDS,
+        iou_threshold: float = IOU_MATCH_THRESHOLD,
+    ):
         self.camera_id = camera_id
         self.state = TrackerState()
         self._frame_idx = 0
@@ -1072,9 +1132,14 @@ class LiveTracker:
         self.grace_seconds = float(grace_seconds)
         self.iou_threshold = float(iou_threshold)
 
-    def configure(self, *, spawn_default: float, floor: float,
-                  grace_seconds: float,
-                  iou_threshold: float | None = None) -> None:
+    def configure(
+        self,
+        *,
+        spawn_default: float,
+        floor: float,
+        grace_seconds: float,
+        iou_threshold: float | None = None,
+    ) -> None:
         """Replace the per-camera thresholds. Called on settings reload
         so a tweaked spawn / continue / grace / iou value takes effect
         without rebuilding the runtime. ``iou_threshold`` defaults to
@@ -1086,8 +1151,9 @@ class LiveTracker:
         if iou_threshold is not None:
             self.iou_threshold = float(iou_threshold)
 
-    def step(self, detections, *, t_s: float, fps: float,
-             spawn_for: Callable[[str], float] | None = None) -> list:
+    def step(
+        self, detections, *, t_s: float, fps: float, spawn_for: Callable[[str], float] | None = None
+    ) -> list:
         """Run one tracker step and return the surviving detections.
 
         ``fps`` is the camera's effective per-frame inference rate —
@@ -1105,8 +1171,10 @@ class LiveTracker:
         if spawn_for is None:
             spawn_for = lambda _lbl: self.spawn_default  # noqa: E731
         matches = associate_detections(
-            self.state, list(detections),
-            frame_idx=self._frame_idx, t_s=float(t_s),
+            self.state,
+            list(detections),
+            frame_idx=self._frame_idx,
+            t_s=float(t_s),
             spawn_score=self.spawn_default,
             spawn_for=spawn_for,
             miss_grace_samples=grace,

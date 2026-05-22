@@ -26,6 +26,7 @@ The COCO inference call lives inside helpers that need it (cascade,
 coco_only, all_independent). Failures propagate; the route shell
 catches and emits the legacy error row.
 """
+
 from __future__ import annotations
 
 import base64
@@ -44,8 +45,11 @@ from ._coral_helpers import _nickname_tflite
 
 # ── Mode + folder constants ────────────────────────────────────────────────
 ALLOWED_MODES = (
-    "cascade", "coco_only", "bird_species_only",
-    "wildlife_only", "all_independent",
+    "cascade",
+    "coco_only",
+    "bird_species_only",
+    "wildlife_only",
+    "all_independent",
 )
 COCO_MODES = {"cascade", "coco_only", "all_independent"}
 WILDLIFE_FOLDERS = {"fox", "hedgehog", "squirrel"}
@@ -91,7 +95,8 @@ def build_classifiers_for_mode(mode, det_cfg, bird_cfg, wl_cfg, needs_wildlife):
     wildlife_disabled_warning = (
         "Wildlife-Erkennung ist deaktiviert — Eichhörnchen/Fuchs/Igel werden nicht erkannt. "
         "In Einstellungen aktivieren."
-        if (needs_wildlife and not wildlife_settings_enabled) else None
+        if (needs_wildlife and not wildlife_settings_enabled)
+        else None
     )
     return detector, bird_clf, wl_clf, wildlife_disabled_warning
 
@@ -113,8 +118,7 @@ def resolve_candidate_dirs(storage_root, folder_filter):
         candidate_dirs = [base / folder_filter]
     else:
         candidate_dirs = sorted(
-            d for d in base.iterdir()
-            if d.is_dir() and not d.name.startswith("_")
+            d for d in base.iterdir() if d.is_dir() and not d.name.startswith("_")
         )
     return candidate_dirs, None
 
@@ -205,8 +209,10 @@ def run_mode_cascade(frame, detector, bird_clf, wl_clf, folder_name, counters):
                 continue
             x1, y1, x2, y2 = dd.bbox
             pad = 6
-            cx1 = max(0, x1 - pad); cy1 = max(0, y1 - pad)
-            cx2 = min(ww, x2 + pad); cy2 = min(hh, y2 + pad)
+            cx1 = max(0, x1 - pad)
+            cy1 = max(0, y1 - pad)
+            cx2 = min(ww, x2 + pad)
+            cy2 = min(hh, y2 + pad)
             crop = frame[cy1:cy2, cx1:cx2]
             if crop is None or crop.size == 0:
                 continue
@@ -241,28 +247,37 @@ def run_mode_cascade(frame, detector, bird_clf, wl_clf, folder_name, counters):
                     break
             if cat == "squirrel" and float(wscore or 0) >= 0.55 and refined_bbox is not None:
                 from ..camera_runtime import _bbox_iou as _iou
+
                 _DROP = {"cat", "dog", "bear", "teddy bear"}
                 dets = [
-                    dd for dd in dets
+                    dd
+                    for dd in dets
                     if not (dd.label in _DROP and _iou(tuple(dd.bbox), refined_bbox) >= 0.3)
                 ]
             promoted_bbox = refined_bbox if refined_bbox is not None else (0, 0, int(fw), int(fh))
             # Promoted wildlife hit gets a "wildlife" tag.
-            tagged.append((Detection(
-                label=cat,
-                score=float(wscore) if wscore is not None else 0.5,
-                bbox=promoted_bbox,
-                raw_cls_id=-1,
-                species=raw_lbl,
-                species_latin=None,
-                species_score=float(wscore) if wscore is not None else None,
-            ), "wildlife"))
+            tagged.append(
+                (
+                    Detection(
+                        label=cat,
+                        score=float(wscore) if wscore is not None else 0.5,
+                        bbox=promoted_bbox,
+                        raw_cls_id=-1,
+                        species=raw_lbl,
+                        species_latin=None,
+                        species_score=float(wscore) if wscore is not None else None,
+                    ),
+                    "wildlife",
+                )
+            )
         if raw_lbl is not None:
             wildlife_info = {
                 "label": cat,
                 "imagenet": raw_lbl,
                 "score": round(float(wscore), 3) if wscore is not None else None,
-                "bbox": list(refined_bbox) if refined_bbox is not None else [0, 0, int(fw), int(fh)],
+                "bbox": list(refined_bbox)
+                if refined_bbox is not None
+                else [0, 0, int(fw), int(fh)],
             }
             if cat:
                 wildlife_counts[cat] = wildlife_counts.get(cat, 0) + 1
@@ -363,12 +378,17 @@ def serialise_image_b64(frame, max_w=480):
         scale = max_w / orig_w
         transport = cv2.resize(frame, (max_w, int(orig_h * scale)))
     ok, buf = cv2.imencode('.jpg', transport, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
-    image_b64 = ("data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode('ascii')) if ok else None
+    image_b64 = (
+        ("data:image/jpeg;base64," + base64.b64encode(buf.tobytes()).decode('ascii'))
+        if ok
+        else None
+    )
     return image_b64, int(orig_w), int(orig_h)
 
 
-def serialise_result_row(folder_name, filename, ms, image_b64,
-                         orig_w, orig_h, stages_run, tagged, wildlife_info):
+def serialise_result_row(
+    folder_name, filename, ms, image_b64, orig_w, orig_h, stages_run, tagged, wildlife_info
+):
     """Render the per-image result dict that the test-panel UI consumes."""
     return {
         "folder": folder_name,
@@ -378,16 +398,21 @@ def serialise_result_row(folder_name, filename, ms, image_b64,
         "image_w": int(orig_w),
         "image_h": int(orig_h),
         "stages_run": stages_run,
-        "detections": [{
-            "label": dd.label,
-            "score": round(float(dd.score), 3),
-            "bbox": list(dd.bbox),
-            "raw_cls_id": int(dd.raw_cls_id),
-            "species": dd.species,
-            "species_latin": dd.species_latin,
-            "species_score": round(float(dd.species_score), 3) if dd.species_score is not None else None,
-            "source_model": src,
-        } for (dd, src) in tagged],
+        "detections": [
+            {
+                "label": dd.label,
+                "score": round(float(dd.score), 3),
+                "bbox": list(dd.bbox),
+                "raw_cls_id": int(dd.raw_cls_id),
+                "species": dd.species,
+                "species_latin": dd.species_latin,
+                "species_score": round(float(dd.species_score), 3)
+                if dd.species_score is not None
+                else None,
+                "source_model": src,
+            }
+            for (dd, src) in tagged
+        ],
         "wildlife": wildlife_info,
     }
 
@@ -396,6 +421,7 @@ def build_models_active(detector, bird_clf, wl_clf, det_cfg, bird_cfg, wl_cfg):
     """Per-model availability badges for the UI's status strip.
     Nicknames come from `_nickname_tflite` so the test panel can render
     short pill-friendly labels rather than the raw filenames."""
+
     def _card(cfg, clf, default_reason):
         fname = Path((cfg or {}).get("model_path") or "").name
         return {
@@ -403,8 +429,9 @@ def build_models_active(detector, bird_clf, wl_clf, det_cfg, bird_cfg, wl_cfg):
             "available": bool(clf and clf.available),
             "reason": (clf.reason if clf else default_reason) or "ok",
         }
+
     return {
-        "coco":         _card(det_cfg, detector, "disabled"),
+        "coco": _card(det_cfg, detector, "disabled"),
         "bird_species": _card(bird_cfg, bird_clf, "disabled"),
-        "wildlife":     _card(wl_cfg, wl_clf, "disabled"),
+        "wildlife": _card(wl_cfg, wl_clf, "disabled"),
     }

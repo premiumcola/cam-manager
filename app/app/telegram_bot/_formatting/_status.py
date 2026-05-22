@@ -42,6 +42,11 @@ from ...telegram_helpers import (
     truncate_caption,
 )
 from .._consts import (
+    _MUTE_DEFAULT_S,
+    _MUTE_EXTEND_S,
+    _NOTIFY_COOLDOWN_DEFAULTS,
+    _PHOTO_LIMIT_BYTES,
+    _VIDEO_LIMIT_BYTES,
     ACTION_CAMS,
     ACTION_CLIP,
     ACTION_LIVE,
@@ -52,11 +57,6 @@ from .._consts import (
     BOT_COMMANDS,
     PERSISTENT_KB_KEY,
     PERSISTENT_KEYBOARD,
-    _MUTE_DEFAULT_S,
-    _MUTE_EXTEND_S,
-    _NOTIFY_COOLDOWN_DEFAULTS,
-    _PHOTO_LIMIT_BYTES,
-    _VIDEO_LIMIT_BYTES,
     _parse_hhmm,
     log,
 )
@@ -98,16 +98,19 @@ class _StatusMixin:
             n_today = "?"
             if self.store:
                 try:
-                    n_today = len(self.store.list_events(
-                        cam_id, start=today_iso, limit=5000))
+                    n_today = len(self.store.list_events(cam_id, start=today_iso, limit=5000))
                 except Exception:
                     n_today = "?"
-            lines.append(
-                f"{icon} <b>{name}</b> · {arm_label}{extra} · {n_today} Events heute")
-            rows.append([
-                InlineKeyboardButton(("🔇 Stumm" if armed else "🛡 Scharf") + f" {name[:10]}", callback_data=f"cam:{cam_id}:arm"),
-                InlineKeyboardButton("🔄 Reconnect", callback_data=f"cam:{cam_id}:reconnect"),
-            ])
+            lines.append(f"{icon} <b>{name}</b> · {arm_label}{extra} · {n_today} Events heute")
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        ("🔇 Stumm" if armed else "🛡 Scharf") + f" {name[:10]}",
+                        callback_data=f"cam:{cam_id}:arm",
+                    ),
+                    InlineKeyboardButton("🔄 Reconnect", callback_data=f"cam:{cam_id}:reconnect"),
+                ]
+            )
         rows.append([self._back_btn()])
         return "\n".join(lines), InlineKeyboardMarkup(rows)
 
@@ -139,31 +142,35 @@ class _StatusMixin:
             except Exception:
                 st = {}
             kind = st.get("status") or "starting"
-            out.append({
-                "cam_id":      cam_id,
-                "name":        st.get("name") or cam_id,
-                "source":      "runtime",
-                "runtime":     rt,
-                "cfg":         None,
-                "status_kind": kind,
-                "status":      st,
-            })
+            out.append(
+                {
+                    "cam_id": cam_id,
+                    "name": st.get("name") or cam_id,
+                    "source": "runtime",
+                    "runtime": rt,
+                    "cfg": None,
+                    "status_kind": kind,
+                    "status": st,
+                }
+            )
             seen.add(cam_id)
-        for cam_cfg in (self._cfg().get("cameras", []) or []):
+        for cam_cfg in self._cfg().get("cameras", []) or []:
             cid = cam_cfg.get("id")
             if not cid or cid in seen:
                 continue
             if not cam_cfg.get("enabled", True):
                 continue
-            out.append({
-                "cam_id":      cid,
-                "name":        cam_cfg.get("name") or cid,
-                "source":      "settings",
-                "runtime":     None,
-                "cfg":         cam_cfg,
-                "status_kind": "fallback",
-                "status":      {},
-            })
+            out.append(
+                {
+                    "cam_id": cid,
+                    "name": cam_cfg.get("name") or cid,
+                    "source": "settings",
+                    "runtime": None,
+                    "cfg": cam_cfg,
+                    "status_kind": "fallback",
+                    "status": {},
+                }
+            )
         return out
 
     def _cam_status_icon_for(self, info: dict) -> str:
@@ -215,9 +222,9 @@ class _StatusMixin:
         if n is None:
             return "—"
         n = int(n)
-        if n >= 1024 ** 3:
+        if n >= 1024**3:
             return f"{n / 1024 ** 3:.1f} GB"
-        if n >= 1024 ** 2:
+        if n >= 1024**2:
             return f"{n / 1024 ** 2:.0f} MB"
         if n >= 1024:
             return f"{n / 1024:.0f} KB"
@@ -228,6 +235,7 @@ class _StatusMixin:
         /status bubble and the per-cam drilldown. Returns a list of
         already-formatted lines so the caller controls separators."""
         from html import escape as _esc
+
         today_iso = datetime.now().strftime("%Y-%m-%d")
         cam_id = info["cam_id"]
         name = _esc(info["name"])
@@ -248,8 +256,11 @@ class _StatusMixin:
             else:
                 rtsp_label = "getrennt"
             fps_str = f"{fps:.0f} fps" if isinstance(fps, (int, float)) and fps > 0 else "—"
-            age_str = (f"letzter Frame vor {int(age)} s"
-                       if isinstance(age, (int, float)) and age >= 0 else "kein Frame")
+            age_str = (
+                f"letzter Frame vor {int(age)} s"
+                if isinstance(age, (int, float)) and age >= 0
+                else "kein Frame"
+            )
             out.append(f"   RTSP: {rtsp_label} · {fps_str} · {age_str}")
         else:
             out.append("   Runtime nicht aktiv — wird gestartet …")
@@ -269,8 +280,9 @@ class _StatusMixin:
         cam_mute = 0.0
         if self.settings_store:
             try:
-                cam_mute = float(self.settings_store.runtime_get_subkey(
-                    "cam_mute_until", cam_id, 0) or 0)
+                cam_mute = float(
+                    self.settings_store.runtime_get_subkey("cam_mute_until", cam_id, 0) or 0
+                )
             except Exception:
                 cam_mute = 0.0
         if cam_mute and time.time() < cam_mute:
@@ -296,6 +308,7 @@ class _StatusMixin:
             🔇 Pushes pausiert bis HH:MM   (only when muted)
         """
         import shutil as _sh
+
         cfg = self._cfg()
         lines = ["📊 <b>System-Status</b>", "━━━━━━━━━━━━━━", ""]
         cams_info = self._active_cams()
@@ -305,8 +318,7 @@ class _StatusMixin:
                 lines.extend(self._render_camera_block(info))
                 lines.append("")
             except Exception as e:
-                log.warning("[tg] cam block render failed for %s: %s",
-                            info.get("cam_id"), e)
+                log.warning("[tg] cam block render failed for %s: %s", info.get("cam_id"), e)
                 continue
             try:
                 cam_disk_total += self._cam_disk_usage_bytes(info["cam_id"])
@@ -322,8 +334,9 @@ class _StatusMixin:
         except Exception:
             ps = {}
         ps_state = ps.get("state", "?")
-        ps_icon = {"active": "🟢", "conflict": "🟡",
-                   "starting": "🟡", "off": "⚪"}.get(ps_state, "⚪")
+        ps_icon = {"active": "🟢", "conflict": "🟡", "starting": "🟡", "off": "⚪"}.get(
+            ps_state, "⚪"
+        )
         ps_dur_min = (ps.get("since_seconds", 0) or 0) // 60
         lines.append(f"Telegram   {ps_icon} Polling {ps_dur_min} min")
         # Coral state + rolling-average inference latency from any active cam
@@ -334,13 +347,15 @@ class _StatusMixin:
             v = (info.get("status") or {}).get("inference_avg_ms")
             if isinstance(v, (int, float)) and v > 0:
                 avg_inferences.append(v)
-        infer_str = (f" · {sum(avg_inferences)/len(avg_inferences):.0f} ms ø"
-                     if avg_inferences else "")
+        infer_str = (
+            f" · {sum(avg_inferences)/len(avg_inferences):.0f} ms ø" if avg_inferences else ""
+        )
         lines.append(f"Coral      {coral_icon} {det_mode}{infer_str}")
         # Weather — last poll age + summary of active event triggers
         weather_line = "Wetter     ⚪ kein Poll bekannt"
         try:
             from .. import server as _srv
+
             wsvc = getattr(_srv, "weather_service", None)
         except Exception:
             wsvc = None
@@ -351,18 +366,25 @@ class _StatusMixin:
                 age_min = None
                 if last_iso:
                     try:
-                        age_min = int((datetime.now() - datetime.fromisoformat(last_iso)).total_seconds() / 60)
+                        age_min = int(
+                            (datetime.now() - datetime.fromisoformat(last_iso)).total_seconds() / 60
+                        )
                     except Exception:
                         age_min = None
                 cur = wstat.get("current_state") or {}
                 # Compact event chip list — only the events the user has
                 # turned on (dot icon + label).
                 from ...weather_service import EVENT_LABEL_DE
+
                 ev_chips = []
                 for evt, lbl in EVENT_LABEL_DE.items():
                     active = bool(cur.get(evt))
                     ev_chips.append(f"{lbl} {'🟡' if active else '⚪'}")
-                age_str = f"letzter Poll vor {age_min} min" if age_min is not None else "kein Poll bekannt"
+                age_str = (
+                    f"letzter Poll vor {age_min} min"
+                    if age_min is not None
+                    else "kein Poll bekannt"
+                )
                 weather_line = f"Wetter     🟢 {age_str} · {' · '.join(ev_chips)}"
         except Exception as e:
             log.debug("[tg] weather row render failed: %s", e)
@@ -371,7 +393,7 @@ class _StatusMixin:
         # Storage: free disk + sum of per-cam belegt
         try:
             root = str(self._storage_root())
-            free_gb = _sh.disk_usage(root).free / (1024 ** 3)
+            free_gb = _sh.disk_usage(root).free / (1024**3)
             cam_total_str = self._fmt_bytes(cam_disk_total) if cam_disk_total else "—"
             lines.append(
                 f"Speicher:  <b>{free_gb:.1f} GB</b> frei · {cam_total_str} von Cams belegt"
@@ -393,6 +415,7 @@ class _StatusMixin:
         """🛠 System — per-cam disk breakdown + global health checks."""
         import shutil as _sh
         from html import escape as _esc
+
         lines = ["🛠 <b>System</b>", "─────────────"]
         # Per-cam storage breakdown
         cams_info = self._active_cams()
@@ -405,9 +428,11 @@ class _StatusMixin:
                 root = self._storage_root()
                 parts = []
                 row_total = 0
-                for sub_label, sub in [("Events", "motion_detection"),
-                                        ("TL", "timelapse"),
-                                        ("Frames", "timelapse_frames")]:
+                for sub_label, sub in [
+                    ("Events", "motion_detection"),
+                    ("TL", "timelapse"),
+                    ("Frames", "timelapse_frames"),
+                ]:
                     p = root / sub / cam_id
                     bs = 0
                     if p.exists():
@@ -423,13 +448,15 @@ class _StatusMixin:
                     row_total += bs
                     parts.append(f"{sub_label} {self._fmt_bytes(bs)}")
                 cam_disk_total += row_total
-                lines.append(f"  {name:<12s} {self._fmt_bytes(row_total):>8s}  ({' · '.join(parts)})")
+                lines.append(
+                    f"  {name:<12s} {self._fmt_bytes(row_total):>8s}  ({' · '.join(parts)})"
+                )
             lines.append("")
         # Free disk
         try:
             usage = _sh.disk_usage(str(self._storage_root()))
-            free_gb = usage.free / (1024 ** 3)
-            total_gb = usage.total / (1024 ** 3)
+            free_gb = usage.free / (1024**3)
+            total_gb = usage.total / (1024**3)
             lines.append(f"Gesamt frei: <b>{free_gb:.1f} GB</b> von {total_gb:.0f} GB")
         except Exception:
             free_gb = None
@@ -488,7 +515,9 @@ class _StatusMixin:
             lines.append(f"  🔴 Telegram-Polling {ps_state}")
 
         rows = [
-            [InlineKeyboardButton("🔄 Aktualisieren", callback_data="menu:system"),
-             InlineKeyboardButton("🏠 Hauptmenü",     callback_data="menu:root")],
+            [
+                InlineKeyboardButton("🔄 Aktualisieren", callback_data="menu:system"),
+                InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root"),
+            ],
         ]
         return "\n".join(lines), InlineKeyboardMarkup(rows)

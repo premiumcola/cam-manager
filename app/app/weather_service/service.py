@@ -2,32 +2,34 @@
 
 `from .weather_service import WeatherService` keeps working byte-for-byte.
 """
+
 from __future__ import annotations
 
 import threading
 from collections import deque
 from datetime import date
 
+from ._clip import ClipMixin
+
 # Re-export public mappings + module helpers from _consts so external
 # callers can still write `from app.weather_service import EVENT_LABEL_DE`.
 from ._consts import (  # noqa: F401
     EVENT_ICON_HEX,
     EVENT_LABEL_DE,
-    HISTORY_FIELDS,
     HISTORY_FIELD_TO_EVENT,
+    HISTORY_FIELDS,
     HISTORY_LABELS_DE,
     HISTORY_MAXLEN,
     HISTORY_UNITS,
+    _atomic_write_json,
     _CooldownTracker,
     _HysteresisState,
-    _atomic_write_json,
     _is_quiet_now,
     _safe_dt,
     _safe_subset,
     log,
     migrate_sun_timelapse_layout,
 )
-from ._clip import ClipMixin
 from ._detection import DetectionMixin
 from ._event_tl import EventTimelapseMixin
 from ._history import HistoryMixin
@@ -56,8 +58,9 @@ class WeatherService(
     here so all instance state assignments live in a single visible block.
     """
 
-    def __init__(self, cfg: dict, runtimes: dict, settings_store, server_cfg: dict,
-                 telegram_getter=None):
+    def __init__(
+        self, cfg: dict, runtimes: dict, settings_store, server_cfg: dict, telegram_getter=None
+    ):
         self.cfg = cfg or {}
         # NEVER do `runtimes or {}` here: an empty dict is falsy, so that
         # idiom returns a fresh `{}` instead of the live reference. We need
@@ -84,9 +87,9 @@ class WeatherService(
         # under self._lock to avoid the "current state" tearing.
         self._lock = threading.Lock()
         self._status: dict = {
-            "enabled":      bool(self.cfg.get("enabled", True)),
+            "enabled": bool(self.cfg.get("enabled", True)),
             "last_poll_at": None,
-            "last_api_ok":  None,
+            "last_api_ok": None,
             "current_state": {k: False for k in EVENT_LABEL_DE},
             "current_values": {k: None for k in HISTORY_FIELDS},
             "location": {
@@ -105,4 +108,3 @@ class WeatherService(
             log.warning("[weather] history load failed (starting fresh): %s", e)
 
     # ── Lifecycle ───────────────────────────────────────────────────────────
-

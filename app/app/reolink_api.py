@@ -49,14 +49,19 @@ def login(host: str, username: str, password: str, timeout: float = 5.0) -> str 
     if not host or not username:
         # password may legitimately be empty on factory-default cams;
         # only bail if we have neither host nor user.
-        log.warning("[reolink] daynight override needs cam credentials, skipping (host=%r user=%r)",
-                    host, username or "")
+        log.warning(
+            "[reolink] daynight override needs cam credentials, skipping (host=%r user=%r)",
+            host,
+            username or "",
+        )
         return None
-    body = [{
-        "cmd":    "Login",
-        "action": 0,
-        "param":  {"User": {"userName": username, "password": password or ""}},
-    }]
+    body = [
+        {
+            "cmd": "Login",
+            "action": 0,
+            "param": {"User": {"userName": username, "password": password or ""}},
+        }
+    ]
     try:
         r = _session.post(
             _base_url(host),
@@ -76,13 +81,15 @@ def login(host: str, username: str, password: str, timeout: float = 5.0) -> str 
         rsp = (first.get("value") or {}).get("Token") or {}
         token = rsp.get("name")
         if not token:
-            log.warning("[reolink] login OK but no token in response host=%s body=%s",
-                        host, str(payload)[:200])
+            log.warning(
+                "[reolink] login OK but no token in response host=%s body=%s",
+                host,
+                str(payload)[:200],
+            )
             return None
         return token
     except Exception as e:
-        log.warning("[reolink] login parse error host=%s: %s body=%s",
-                    host, e, r.text[:200])
+        log.warning("[reolink] login parse error host=%s: %s body=%s", host, e, r.text[:200])
         return None
 
 
@@ -93,24 +100,25 @@ def login(host: str, username: str, password: str, timeout: float = 5.0) -> str 
 # is staring at "set_daynight … rspCode=-6" trying to figure out why
 # the override silently no-ops.
 _REOLINK_RSPCODE_HINTS: dict[int, str] = {
-     0: "ok",
+    0: "ok",
     -1: "ungültige Parameter (Firmware erwartet andere Feldnamen?)",
     -2: "Antwort fehlerhaft / unerwartetes Format",
     -3: "Antwort konnte nicht geparst werden",
     -6: "kein Admin-Recht — User-Account hat keine ISP-Rechte",
     -7: "Login fehlgeschlagen / Token ungültig",
     -8: "zu viele gleichzeitige Verbindungen — Kamera lehnt weitere Sessions ab",
-   -10: "Fähigkeit nicht unterstützt (Firmware kennt SetIspCfg.dayNight nicht)",
-   -11: "Token abgelaufen — bitte neu verbinden",
-   -13: ("Funktion nicht unterstützt — diese Kamera/Firmware bietet kein "
-         "S/W-Schalten über die API. Manche älteren Modelle "
-         "(z. B. RLC-410/420 ohne Plus-Suffix) können das nicht."),
-  -502: "Zeitüberschreitung beim Warten auf die Kamera",
+    -10: "Fähigkeit nicht unterstützt (Firmware kennt SetIspCfg.dayNight nicht)",
+    -11: "Token abgelaufen — bitte neu verbinden",
+    -13: (
+        "Funktion nicht unterstützt — diese Kamera/Firmware bietet kein "
+        "S/W-Schalten über die API. Manche älteren Modelle "
+        "(z. B. RLC-410/420 ohne Plus-Suffix) können das nicht."
+    ),
+    -502: "Zeitüberschreitung beim Warten auf die Kamera",
 }
 
 
-def set_daynight(host: str, token: str, mode: str,
-                 channel: int = 0, timeout: float = 5.0) -> bool:
+def set_daynight(host: str, token: str, mode: str, channel: int = 0, timeout: float = 5.0) -> bool:
     """Force the cam's day/night mode. mode ∈ {Color, Black&White, Auto}.
 
     Returns True iff Reolink reports a success rspCode (0 or 200 —
@@ -127,11 +135,13 @@ def set_daynight(host: str, token: str, mode: str,
     if not token:
         log.warning("[reolink] set_daynight host=%s mode=%s: empty token", host, mode)
         return False
-    body = [{
-        "cmd":    "SetIspCfg",
-        "action": 0,
-        "param":  {"Isp": {"channel": channel, "dayNight": mode}},
-    }]
+    body = [
+        {
+            "cmd": "SetIspCfg",
+            "action": 0,
+            "param": {"Isp": {"channel": channel, "dayNight": mode}},
+        }
+    ]
     try:
         r = _session.post(
             _base_url(host),
@@ -147,11 +157,14 @@ def set_daynight(host: str, token: str, mode: str,
     except Exception as e:
         log.warning(
             "[reolink] set_daynight network error host=%s mode=%s ch=%d: %s",
-            host, mode, channel, e,
+            host,
+            mode,
+            channel,
+            e,
         )
         return False
     status = r.status_code
-    body_txt = (r.text or "")
+    body_txt = r.text or ""
     # Truncate the formatted body in the log line to 600 chars — the
     # full JSON for an error response runs ~120 chars but a future
     # firmware may pad it; 600 is a safe upper bound that still fits
@@ -160,7 +173,11 @@ def set_daynight(host: str, token: str, mode: str,
     if status != 200:
         log.warning(
             "[reolink] set_daynight HTTP %d host=%s mode=%s ch=%d body=%s",
-            status, host, mode, channel, body_log,
+            status,
+            host,
+            mode,
+            channel,
+            body_log,
         )
         return False
     try:
@@ -168,7 +185,10 @@ def set_daynight(host: str, token: str, mode: str,
     except Exception as e:
         log.warning(
             "[reolink] set_daynight parse error host=%s mode=%s: %s body=%s",
-            host, mode, e, body_log,
+            host,
+            mode,
+            e,
+            body_log,
         )
         return False
     first = payload[0] if isinstance(payload, list) and payload else {}
@@ -204,7 +224,12 @@ def set_daynight(host: str, token: str, mode: str,
     log.warning(
         "[reolink] set_daynight host=%s mode=%s ch=%d FAILED · "
         "outer_code=%s rspCode=%s detail=%r%s · body=%s",
-        host, mode, channel, outer_code, rsp_code, err_detail,
+        host,
+        mode,
+        channel,
+        outer_code,
+        rsp_code,
+        err_detail,
         f" · hint={hint!r}" if hint else "",
         body_log,
     )
@@ -246,8 +271,12 @@ def get_device_info(host: str, token: str, timeout: float = 5.0) -> dict | None:
         payload = r.json()
         first = payload[0] if isinstance(payload, list) and payload else {}
         if first.get("code") != 0:
-            log.warning("[reolink] get_device_info host=%s code=%s rsp=%s",
-                        host, first.get("code"), str(payload)[:200])
+            log.warning(
+                "[reolink] get_device_info host=%s code=%s rsp=%s",
+                host,
+                first.get("code"),
+                str(payload)[:200],
+            )
             return None
         dev = (first.get("value") or {}).get("DevInfo") or {}
         model = str(dev.get("model", "") or "").strip()
@@ -255,13 +284,14 @@ def get_device_info(host: str, token: str, timeout: float = 5.0) -> dict | None:
             return None
         return {
             "manufacturer": "Reolink",
-            "model":        model,
-            "firmware":     str(dev.get("firmVer", "") or "").strip(),
-            "hardware":     str(dev.get("hardVer", "") or "").strip(),
+            "model": model,
+            "firmware": str(dev.get("firmVer", "") or "").strip(),
+            "hardware": str(dev.get("hardVer", "") or "").strip(),
         }
     except Exception as e:
-        log.warning("[reolink] get_device_info parse error host=%s: %s body=%s",
-                    host, e, r.text[:200])
+        log.warning(
+            "[reolink] get_device_info parse error host=%s: %s body=%s", host, e, r.text[:200]
+        )
         return None
 
 
@@ -279,14 +309,15 @@ def _login_with_port(
     panel where the camera may listen on a non-default port. Returns
     the session token or None on any failure."""
     if not host or not user:
-        log.warning("[reolink] image-mode login skipped · host=%r user=%r",
-                    host, user or "")
+        log.warning("[reolink] image-mode login skipped · host=%r user=%r", host, user or "")
         return None
-    body = [{
-        "cmd":    "Login",
-        "action": 0,
-        "param":  {"User": {"userName": user, "password": password or ""}},
-    }]
+    body = [
+        {
+            "cmd": "Login",
+            "action": 0,
+            "param": {"User": {"userName": user, "password": password or ""}},
+        }
+    ]
     try:
         r = _session.post(
             _make_url(host, port, https=https),
@@ -295,12 +326,10 @@ def _login_with_port(
             timeout=timeout,
         )
     except Exception as e:
-        log.warning("[reolink] image-mode login network error host=%s: %s",
-                    host, e)
+        log.warning("[reolink] image-mode login network error host=%s: %s", host, e)
         return None
     if r.status_code != 200:
-        log.warning("[reolink] image-mode login HTTP %s host=%s",
-                    r.status_code, host)
+        log.warning("[reolink] image-mode login HTTP %s host=%s", r.status_code, host)
         return None
     try:
         payload = r.json()
@@ -308,8 +337,7 @@ def _login_with_port(
         tok = ((first.get("value") or {}).get("Token") or {}).get("name")
         return tok or None
     except Exception as e:
-        log.warning("[reolink] image-mode login parse error host=%s: %s",
-                    host, e)
+        log.warning("[reolink] image-mode login parse error host=%s: %s", host, e)
         return None
 
 
@@ -317,9 +345,9 @@ def _login_with_port(
 # layer can echo the underlying values back to the UI on demand without
 # duplicating the dict.
 IMAGE_MODE_MAP: dict[str, tuple[str, str]] = {
-    "auto":  ("Auto",         "Auto"),
-    "color": ("Color",        "Off"),
-    "bw":    ("Black&White",  "Auto"),
+    "auto": ("Auto", "Auto"),
+    "color": ("Color", "Off"),
+    "bw": ("Black&White", "Auto"),
 }
 
 
@@ -350,24 +378,22 @@ def set_image_mode(
     """
     mode_norm = (mode or "").strip().lower()
     if mode_norm not in IMAGE_MODE_MAP:
-        log.warning("[reolink] set_image_mode invalid mode=%r host=%s",
-                    mode, host)
-        return {"ok": False, "rc": "bad-mode",
-                "detail": "mode muss auto/color/bw sein"}
+        log.warning("[reolink] set_image_mode invalid mode=%r host=%s", mode, host)
+        return {"ok": False, "rc": "bad-mode", "detail": "mode muss auto/color/bw sein"}
     day_night, ir_state = IMAGE_MODE_MAP[mode_norm]
-    token = _login_with_port(host, port, user, password,
-                             https=https, timeout=timeout)
+    token = _login_with_port(host, port, user, password, https=https, timeout=timeout)
     if not token:
-        log.info("[reolink] %s set_image_mode → %s (rc=login-failed)",
-                 host, mode_norm)
-        return {"ok": False, "rc": "login-failed",
-                "detail": "Login fehlgeschlagen — Host/Port/User prüfen"}
+        log.info("[reolink] %s set_image_mode → %s (rc=login-failed)", host, mode_norm)
+        return {
+            "ok": False,
+            "rc": "login-failed",
+            "detail": "Login fehlgeschlagen — Host/Port/User prüfen",
+        }
 
     def _send_pair(isp_param: dict) -> tuple[bool, object, str]:
         body = [
-            {"cmd": "SetIsp",      "action": 0, "param": isp_param},
-            {"cmd": "SetIrLights", "action": 0,
-             "param": {"IrLights": {"state": ir_state}}},
+            {"cmd": "SetIsp", "action": 0, "param": isp_param},
+            {"cmd": "SetIrLights", "action": 0, "param": {"IrLights": {"state": ir_state}}},
         ]
         try:
             r = _session.post(
@@ -398,8 +424,11 @@ def set_image_mode(
             outer = entry.get("code")
             if rc in (0, 200) or (outer == 0 and err is None):
                 continue
-            return (False, rc if rc is not None else (outer if outer is not None else "unknown"),
-                    (err or {}).get("detail", "") if err else "")
+            return (
+                False,
+                rc if rc is not None else (outer if outer is not None else "unknown"),
+                (err or {}).get("detail", "") if err else "",
+            )
         return (True, 0, "")
 
     # v0 SetIsp schema — the shape used by set_daynight() above. Works

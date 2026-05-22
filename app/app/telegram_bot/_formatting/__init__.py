@@ -5,6 +5,7 @@ them as a single mixin so service.py keeps inheriting one base class.
 The import path ``from ._formatting import FormattingMixin`` keeps
 working byte-for-byte.
 """
+
 from ._anchor import _AnchorMixin
 from ._cam import _CamMixin
 from ._erkennungen import _ErkennungenMixin
@@ -25,6 +26,7 @@ class FormattingMixin(
     matters only for diamond resolution; current code has no diamonds
     (no two mixins define the same method), so the order is
     alphabetical-ish and stable."""
+
     pass
 
 

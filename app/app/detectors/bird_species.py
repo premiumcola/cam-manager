@@ -3,6 +3,7 @@ crops. Same three-tier fallback as CoralObjectDetector.
 
 Carved out of `_legacy_classes.py` during R02.2.
 """
+
 from __future__ import annotations
 
 import logging
@@ -53,6 +54,7 @@ class BirdSpeciesClassifier:
         try:
             from pycoral.adapters import classify, common  # type: ignore
             from pycoral.utils.edgetpu import make_interpreter  # type: ignore
+
             self.common = common
             self.classify = classify
             self.interpreter = make_interpreter(model_path, device=self.cfg.get("device"))
@@ -76,6 +78,7 @@ class BirdSpeciesClassifier:
         for try_path in filter(None, [cpu_model, model_path]):
             try:
                 import tflite_runtime.interpreter as tflite  # type: ignore
+
                 interp = tflite.Interpreter(model_path=try_path)
                 interp.allocate_tensors()
                 self.interpreter = interp
@@ -110,7 +113,9 @@ class BirdSpeciesClassifier:
         resized = cv2.resize(rgb, (width, height))
         self.common.set_input(self.interpreter, resized)
         self.interpreter.invoke()
-        classes = self.classify.get_classes(self.interpreter, top_k=3, score_threshold=self.min_score)
+        classes = self.classify.get_classes(
+            self.interpreter, top_k=3, score_threshold=self.min_score
+        )
         if not classes:
             return None, None, None
         # Walk top-3 and return the first candidate that has a German mapping.
@@ -143,7 +148,11 @@ class BirdSpeciesClassifier:
         # one with a German mapping (iNat top-1 is often a North-American
         # species while a European cousin we know sits at #2/#3).
         out_dtype = output_details[0]['dtype']
-        scale, zero_point = output_details[0].get('quantization', (0.0, 0)) if out_dtype in (np.uint8, np.int8) else (None, None)
+        scale, zero_point = (
+            output_details[0].get('quantization', (0.0, 0))
+            if out_dtype in (np.uint8, np.int8)
+            else (None, None)
+        )
 
         def _to_prob(raw_score: float) -> float:
             if out_dtype in (np.uint8, np.int8):

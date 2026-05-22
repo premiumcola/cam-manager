@@ -4,6 +4,7 @@ Boot sequence: build_defaults() seeds self.data from base_config, load()
 merges any persisted state on top, then runs every migration in
 MIGRATIONS order, then save() persists the merged result.
 """
+
 from __future__ import annotations
 
 import json
@@ -88,7 +89,9 @@ class SettingsStore:
         removed = self._dedupe_cameras_by_id()
         if removed:
             log.warning("[Settings] removed %d duplicate camera entries during load", removed)
-        self.data.setdefault("ui", {}).setdefault("wizard_completed", bool(self.data.get("cameras")))
+        self.data.setdefault("ui", {}).setdefault(
+            "wizard_completed", bool(self.data.get("cameras"))
+        )
         # schedule_migrated saves explicitly inside the original migrate
         # method; preserved here through the persist pass below.
         if schedule_migrated:
@@ -141,10 +144,16 @@ class SettingsStore:
                     # Also restore rtsp_url if base has one (was wiped by the same bad save)
                     if base.get("rtsp_url"):
                         cam["rtsp_url"] = base["rtsp_url"]
-                    log.warning("settings: restored snapshot_url/rtsp_url for camera '%s' from base config", cam_id)
+                    log.warning(
+                        "settings: restored snapshot_url/rtsp_url for camera '%s' from base config",
+                        cam_id,
+                    )
                 else:
                     cam["snapshot_url"] = ""
-                    log.warning("settings: cleared corrupted snapshot_url for camera '%s' (not in base config; re-enter URL)", cam_id)
+                    log.warning(
+                        "settings: cleared corrupted snapshot_url for camera '%s' (not in base config; re-enter URL)",
+                        cam_id,
+                    )
                 count += 1
         if count:
             self.save()
@@ -284,6 +293,7 @@ class SettingsStore:
         if id_relevant_changed:
             try:
                 from ..storage_migration import migrate as _migrate
+
                 _migrate(self, self.path.parent)
             except Exception as e:
                 log.warning("[Settings] per-cam migration after save failed: %s", e)
@@ -354,7 +364,10 @@ class SettingsStore:
     def export_effective_config(self, base_cfg: dict) -> dict:
         cfg = deepcopy(base_cfg)
         cfg["app"] = deepcopy(self.data.get("app", {}))
-        cfg["server"] = {**deepcopy(base_cfg.get("server", {})), **deepcopy(self.data.get("server", {}))}
+        cfg["server"] = {
+            **deepcopy(base_cfg.get("server", {})),
+            **deepcopy(self.data.get("server", {})),
+        }
         cfg["telegram"] = deepcopy(self.data.get("telegram", {}))
         cfg["mqtt"] = deepcopy(self.data.get("mqtt", {}))
         cfg["cameras"] = deepcopy(self.data.get("cameras", []))
@@ -386,12 +399,25 @@ class SettingsStore:
         loaded = yaml.safe_load(text) if format == "yaml" else json.loads(text)
         if not isinstance(loaded, dict):
             raise ValueError("Import muss ein Objekt enthalten")
-        allowed = {"app", "server", "telegram", "mqtt", "cameras", "ui", "review", "telegram_actions", "timelapse_settings", "weather"}
+        allowed = {
+            "app",
+            "server",
+            "telegram",
+            "mqtt",
+            "cameras",
+            "ui",
+            "review",
+            "telegram_actions",
+            "timelapse_settings",
+            "weather",
+        }
         for key, value in loaded.items():
             if key in allowed:
                 self.data[key] = value
         migrate_camera_defaults(self.data, self.base_config)
-        self.data.setdefault("ui", {})["wizard_completed"] = bool(self.data.get("cameras")) or bool(self.data.get("ui", {}).get("wizard_completed"))
+        self.data.setdefault("ui", {})["wizard_completed"] = bool(self.data.get("cameras")) or bool(
+            self.data.get("ui", {}).get("wizard_completed")
+        )
         self.save()
 
     def bootstrap_state(self) -> dict:

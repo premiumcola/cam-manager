@@ -42,6 +42,11 @@ from ...telegram_helpers import (
     truncate_caption,
 )
 from .._consts import (
+    _MUTE_DEFAULT_S,
+    _MUTE_EXTEND_S,
+    _NOTIFY_COOLDOWN_DEFAULTS,
+    _PHOTO_LIMIT_BYTES,
+    _VIDEO_LIMIT_BYTES,
     ACTION_CAMS,
     ACTION_CLIP,
     ACTION_LIVE,
@@ -52,11 +57,6 @@ from .._consts import (
     BOT_COMMANDS,
     PERSISTENT_KB_KEY,
     PERSISTENT_KEYBOARD,
-    _MUTE_DEFAULT_S,
-    _MUTE_EXTEND_S,
-    _NOTIFY_COOLDOWN_DEFAULTS,
-    _PHOTO_LIMIT_BYTES,
-    _VIDEO_LIMIT_BYTES,
     _parse_hhmm,
     log,
 )
@@ -80,8 +80,9 @@ class _RootMixin:
             total = 0
             for info in cams:
                 try:
-                    total += len(self.store.list_events(
-                        info["cam_id"], start=today_iso, limit=5000))
+                    total += len(
+                        self.store.list_events(info["cam_id"], start=today_iso, limit=5000)
+                    )
                 except Exception:
                     pass
             kam = "Kamera" if n_cams == 1 else "Kameras"
@@ -98,22 +99,32 @@ class _RootMixin:
             except Exception:
                 mute_until = 0.0
         if mute_until and time.time() < mute_until:
-            mute_label = (f"🔊 Stumm bis "
-                          f"{datetime.fromtimestamp(mute_until).strftime('%H:%M')} — wieder anschalten")
+            mute_label = (
+                f"🔊 Stumm bis "
+                f"{datetime.fromtimestamp(mute_until).strftime('%H:%M')} — wieder anschalten"
+            )
             mute_cb = "mute:end"
         else:
             mute_label = "🔇 Alles still 1 h"
             mute_cb = "menu:muteall"
         rows = [
-            [InlineKeyboardButton("📷 Live-Bild",  callback_data="menu:livebild"),
-             InlineKeyboardButton("🎬 Clip",        callback_data="menu:clip")],
-            [InlineKeyboardButton("📋 Erkennungen", callback_data="menu:erkennungen"),
-             InlineKeyboardButton("📊 Statistik",   callback_data="menu:stats")],
-            [InlineKeyboardButton("🐦 Tier-Log",    callback_data="menu:tierlog"),
-             InlineKeyboardButton("⛅ Wetter",       callback_data="menu:wetter")],
-            [InlineKeyboardButton("📹 Kameras",     callback_data="menu:cams"),
-             InlineKeyboardButton("🛠 System",       callback_data="menu:system")],
-            [InlineKeyboardButton(mute_label,       callback_data=mute_cb)],
+            [
+                InlineKeyboardButton("📷 Live-Bild", callback_data="menu:livebild"),
+                InlineKeyboardButton("🎬 Clip", callback_data="menu:clip"),
+            ],
+            [
+                InlineKeyboardButton("📋 Erkennungen", callback_data="menu:erkennungen"),
+                InlineKeyboardButton("📊 Statistik", callback_data="menu:stats"),
+            ],
+            [
+                InlineKeyboardButton("🐦 Tier-Log", callback_data="menu:tierlog"),
+                InlineKeyboardButton("⛅ Wetter", callback_data="menu:wetter"),
+            ],
+            [
+                InlineKeyboardButton("📹 Kameras", callback_data="menu:cams"),
+                InlineKeyboardButton("🛠 System", callback_data="menu:system"),
+            ],
+            [InlineKeyboardButton(mute_label, callback_data=mute_cb)],
         ]
         return "\n".join(lines), InlineKeyboardMarkup(rows)
 
@@ -127,10 +138,14 @@ class _RootMixin:
         rows = []
         for info in self._active_cams():
             icon = self._cam_status_icon_for(info)
-            rows.append([InlineKeyboardButton(
-                f"{icon} {info['name']}",
-                callback_data=f"cam:{info['cam_id']}:{action}"[:64],
-            )])
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        f"{icon} {info['name']}",
+                        callback_data=f"cam:{info['cam_id']}:{action}"[:64],
+                    )
+                ]
+            )
         if not rows:
             rows.append([InlineKeyboardButton("(keine Kameras)", callback_data="noop")])
         rows.append([self._back_btn()])
@@ -140,9 +155,11 @@ class _RootMixin:
         rt = self.runtimes.get(cam_id)
         name = rt.status().get("name", cam_id) if rt else cam_id
         rows = [
-            [InlineKeyboardButton("5 s",  callback_data=f"cam:{cam_id}:clip:5"),
-             InlineKeyboardButton("15 s", callback_data=f"cam:{cam_id}:clip:15"),
-             InlineKeyboardButton("30 s", callback_data=f"cam:{cam_id}:clip:30")],
+            [
+                InlineKeyboardButton("5 s", callback_data=f"cam:{cam_id}:clip:5"),
+                InlineKeyboardButton("15 s", callback_data=f"cam:{cam_id}:clip:15"),
+                InlineKeyboardButton("30 s", callback_data=f"cam:{cam_id}:clip:30"),
+            ],
             [self._back_btn("menu:clip")],
         ]
         return f"🎬 Clip-Dauer für <b>{name}</b>", InlineKeyboardMarkup(rows)
@@ -166,25 +183,30 @@ class _RootMixin:
                 if meta_path.exists():
                     try:
                         import json as _j
+
                         meta = _j.loads(meta_path.read_text(encoding="utf-8"))
                     except Exception:
                         pass
-                items.append({
-                    "cam_id":   cam_dir.name,
-                    "filename": mp4.name,
-                    "relpath":  f"timelapse/{cam_dir.name}/{mp4.name}",
-                    "size_mb":  round(st.st_size / 1024 / 1024, 1),
-                    "mtime":    st.st_mtime,
-                    "profile":  meta.get("profile", ""),
-                    "target_s": int(meta.get("target_s", 0) or 0),
-                })
+                items.append(
+                    {
+                        "cam_id": cam_dir.name,
+                        "filename": mp4.name,
+                        "relpath": f"timelapse/{cam_dir.name}/{mp4.name}",
+                        "size_mb": round(st.st_size / 1024 / 1024, 1),
+                        "mtime": st.st_mtime,
+                        "profile": meta.get("profile", ""),
+                        "target_s": int(meta.get("target_s", 0) or 0),
+                    }
+                )
         items.sort(key=lambda x: x["mtime"], reverse=True)
         return items[:limit]
 
     def _zeitraffer_view(self) -> tuple[str, InlineKeyboardMarkup]:
         items = self._list_recent_timelapses(limit=5)
         if not items:
-            return "⏱ <b>Keine Zeitraffer vorhanden.</b>", InlineKeyboardMarkup([[self._back_btn()]])
+            return "⏱ <b>Keine Zeitraffer vorhanden.</b>", InlineKeyboardMarkup(
+                [[self._back_btn()]]
+            )
         cam_name_map = {c["id"]: c.get("name", c["id"]) for c in self._cfg().get("cameras", [])}
         profile_de = {"daily": "Tag", "weekly": "Woche", "monthly": "Monat", "custom": "Custom"}
         lines = ["⏱ <b>Verfügbare Zeitraffer</b>", ""]
@@ -193,11 +215,17 @@ class _RootMixin:
             cam = cam_name_map.get(it["cam_id"], it["cam_id"])
             prof = profile_de.get(it["profile"], it["profile"] or "Tag")
             date_label = datetime.fromtimestamp(it["mtime"]).strftime("%d.%m.")
-            lines.append(f"• <b>{cam}</b> · {prof} · {date_label}  ({it['target_s']}s, {it['size_mb']} MB)")
-            rows.append([InlineKeyboardButton(
-                f"📥 {cam} · {date_label}",
-                callback_data=f"tl:send:{it['cam_id']}/{it['filename']}"[:64],
-            )])
+            lines.append(
+                f"• <b>{cam}</b> · {prof} · {date_label}  ({it['target_s']}s, {it['size_mb']} MB)"
+            )
+            rows.append(
+                [
+                    InlineKeyboardButton(
+                        f"📥 {cam} · {date_label}",
+                        callback_data=f"tl:send:{it['cam_id']}/{it['filename']}"[:64],
+                    )
+                ]
+            )
         rows.append([self._back_btn()])
         return "\n".join(lines), InlineKeyboardMarkup(rows)
 
@@ -210,7 +238,9 @@ class _RootMixin:
         WILD = {"squirrel", "fox", "hedgehog", "bird", "cat", "dog"}
         wild_count = sum(per_label.get(l, 0) for l in WILD)
         # "Falsch" = events the user marked wrong via Telegram callbacks.
-        feedback = (self.settings_store.runtime_get("event_feedback") if self.settings_store else {}) or {}
+        feedback = (
+            self.settings_store.runtime_get("event_feedback") if self.settings_store else {}
+        ) or {}
         cutoff_ts = (datetime.now() - timedelta(days=days)).timestamp()
         wrong = 0
         for v in feedback.values():
@@ -232,9 +262,20 @@ class _RootMixin:
             for cam, cnt in summary["per_camera"].items():
                 lines.append(f"• {cam}: {cnt}")
         rows = [
-            [InlineKeyboardButton("📅 Heute" if days != 1 else "—", callback_data="menu:stats" if days != 1 else "noop"),
-             InlineKeyboardButton("📅 Diese Woche" if days != 7 else "—", callback_data="menu:stats:week" if days != 7 else "noop"),
-             InlineKeyboardButton("📅 Diesen Monat" if days != 30 else "—", callback_data="menu:stats:month" if days != 30 else "noop")],
+            [
+                InlineKeyboardButton(
+                    "📅 Heute" if days != 1 else "—",
+                    callback_data="menu:stats" if days != 1 else "noop",
+                ),
+                InlineKeyboardButton(
+                    "📅 Diese Woche" if days != 7 else "—",
+                    callback_data="menu:stats:week" if days != 7 else "noop",
+                ),
+                InlineKeyboardButton(
+                    "📅 Diesen Monat" if days != 30 else "—",
+                    callback_data="menu:stats:month" if days != 30 else "noop",
+                ),
+            ],
         ]
         base = self._dashboard_url().rstrip("/") if self._dashboard_url() else ""
         if base:
@@ -246,8 +287,10 @@ class _RootMixin:
         # Last 10 WARNING/ERROR lines from the in-memory log buffer in server.py.
         try:
             from .. import server as _srv
-            recs = [r for r in _srv.log_buffer.get(0)
-                    if r.get("level") in ("WARNING", "ERROR")][-10:]
+
+            recs = [r for r in _srv.log_buffer.get(0) if r.get("level") in ("WARNING", "ERROR")][
+                -10:
+            ]
         except Exception:
             recs = []
         if not recs:
@@ -258,4 +301,6 @@ class _RootMixin:
                 msg = (r.get("msg") or "").replace("<", "&lt;").replace(">", "&gt;")
                 lines.append(f"<code>{r.get('ts','')}</code> [{r.get('level','')}] {msg[:140]}")
             body = "\n".join(lines)
-        return f"📋 <b>Letzte Warnungen / Fehler</b>\n\n{body}", InlineKeyboardMarkup([[self._back_btn()]])
+        return f"📋 <b>Letzte Warnungen / Fehler</b>\n\n{body}", InlineKeyboardMarkup(
+            [[self._back_btn()]]
+        )

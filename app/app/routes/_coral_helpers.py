@@ -3,6 +3,7 @@
 Lives next to coral.py because every helper here is referenced from
 multiple routes inside that blueprint (test, test-batch, models,
 models/select). Single-route consumers stay inline."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,13 +11,13 @@ from pathlib import Path
 _MODELS_DIR = Path("/app/models")
 
 _TEST_FOLDER_LABELS = {
-    "bird":     {"label": "Vogel",        "icon": "🐦"},
-    "cat":      {"label": "Katze",        "icon": "🐱"},
-    "person":   {"label": "Person",       "icon": "🚶"},
-    "car":      {"label": "Auto",         "icon": "🚗"},
+    "bird": {"label": "Vogel", "icon": "🐦"},
+    "cat": {"label": "Katze", "icon": "🐱"},
+    "person": {"label": "Person", "icon": "🚶"},
+    "car": {"label": "Auto", "icon": "🚗"},
     "squirrel": {"label": "Eichhörnchen", "icon": "🐿️"},
-    "fox":      {"label": "Fuchs",        "icon": "🦊"},
-    "hedgehog": {"label": "Igel",         "icon": "🦔"},
+    "fox": {"label": "Fuchs", "icon": "🦊"},
+    "hedgehog": {"label": "Igel", "icon": "🦔"},
 }
 _TEST_VALID_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 
@@ -40,7 +41,7 @@ def _nickname_tflite(filename: str) -> str:
         return "Vögel"
     # Fallback: filename stem, no underscores, capped at 16 chars.
     stem = Path(filename or "").stem.replace("_", " ").strip()
-    return (stem[:16] if stem else "Modell")
+    return stem[:16] if stem else "Modell"
 
 
 def _describe_tflite(filename: str) -> str:
@@ -87,8 +88,10 @@ def _labels_for_model(filename: str) -> dict:
     low = filename.lower()
     candidates: list[Path] = []
     if ('ssd' in low and 'mobilenet' in low) or 'efficientdet' in low:
-        candidates = [Path("/app/config/coco_labels.example.txt"),
-                      Path("/app/config/coco_labels.txt")]
+        candidates = [
+            Path("/app/config/coco_labels.example.txt"),
+            Path("/app/config/coco_labels.txt"),
+        ]
     elif 'inat' in low and 'bird' in low:
         candidates = [Path("/app/models/inat_bird_labels.txt")]
     elif 'bavarian' in low and 'bird' in low:
@@ -98,7 +101,11 @@ def _labels_for_model(filename: str) -> dict:
     for c in candidates:
         if c.exists():
             try:
-                count = sum(1 for ln in c.read_text(encoding="utf-8", errors="ignore").splitlines() if ln.strip())
+                count = sum(
+                    1
+                    for ln in c.read_text(encoding="utf-8", errors="ignore").splitlines()
+                    if ln.strip()
+                )
             except Exception:
                 count = None
             return {"path": str(c), "filename": c.name, "exists": True, "count": count}

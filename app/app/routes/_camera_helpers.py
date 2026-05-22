@@ -4,6 +4,7 @@ Lives next to its callers (cameras.py, bootstrap.py) because every
 helper here is referenced from at least two routes across those
 modules. Single-route helpers stay inline in their blueprint per the
 R01.x pattern."""
+
 from __future__ import annotations
 
 import json
@@ -51,6 +52,7 @@ def _auto_detect_device_info(cam: dict) -> list[str]:
         return []
     try:
         from urllib.parse import urlparse
+
         host = urlparse(rtsp_url).hostname
     except Exception:
         host = None
@@ -58,6 +60,7 @@ def _auto_detect_device_info(cam: dict) -> list[str]:
         return []
     try:
         from .. import reolink_api
+
         token = reolink_api.login(host, user, password, timeout=4.0)
         if not token:
             return []
@@ -78,7 +81,8 @@ def _auto_detect_device_info(cam: dict) -> list[str]:
     if filled:
         logging.info(
             "[cam] auto-detected via Reolink GetDevInfo: %s %s (cam=%s)",
-            info["manufacturer"], info["model"],
+            info["manufacturer"],
+            info["model"],
             cam.get("name") or cam.get("id"),
         )
     return filled
@@ -102,9 +106,9 @@ def _mask_password_in_url(url: str) -> str:
 
 def _list_backup_files() -> list[Path]:
     """Backup sources, oldest-priority order:
-       1. settings.json.bak  (last save)
-       2. settings.json.bak2 (second-last save)
-       3. storage/backups/*.json (manual exports — newest first)"""
+    1. settings.json.bak  (last save)
+    2. settings.json.bak2 (second-last save)
+    3. storage/backups/*.json (manual exports — newest first)"""
     settings = app_state.settings
     out: list[Path] = []
     for name in ("settings.json.bak", "settings.json.bak2"):
@@ -113,7 +117,9 @@ def _list_backup_files() -> list[Path]:
             out.append(p)
     backups_dir = settings.path.parent / "backups"
     if backups_dir.exists():
-        out.extend(sorted(backups_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True))
+        out.extend(
+            sorted(backups_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        )
     return out
 
 

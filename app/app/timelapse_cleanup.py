@@ -9,6 +9,7 @@ Defensive: a single corrupt file never aborts the walk — errors are
 logged and the next file is processed. Only the per-window JPEG
 ringbuffer under ``storage/timelapse_frames/`` is touched; finalised
 ``.mp4`` files under ``storage/timelapse/`` are never read or deleted."""
+
 from __future__ import annotations
 
 import logging
@@ -19,9 +20,13 @@ from .frame_helpers import is_valid_frame
 log = logging.getLogger(__name__)
 
 
-def cleanup(storage_root: str | Path, *, dry_run: bool = False,
-            cam_id: str | None = None, profile: str | None = None
-            ) -> list[dict]:
+def cleanup(
+    storage_root: str | Path,
+    *,
+    dry_run: bool = False,
+    cam_id: str | None = None,
+    profile: str | None = None,
+) -> list[dict]:
     """Walk timelapse_frames and delete invalid JPEGs.
 
     Args:
@@ -75,19 +80,23 @@ def cleanup(storage_root: str | Path, *, dry_run: bool = False,
                         except Exception as e:
                             log.warning("[storage] unlink failed: %s (%s)", jpg, e)
             if scanned:
-                summaries.append({
-                    "cam_id": cam_dir.name,
-                    "profile": prof_dir.name,
-                    "scanned": scanned,
-                    "kept": kept,
-                    "deleted": deleted,
-                    "deleted_paths": deleted_paths,
-                    "dry_run": dry_run,
-                })
+                summaries.append(
+                    {
+                        "cam_id": cam_dir.name,
+                        "profile": prof_dir.name,
+                        "scanned": scanned,
+                        "kept": kept,
+                        "deleted": deleted,
+                        "deleted_paths": deleted_paths,
+                        "dry_run": dry_run,
+                    }
+                )
                 log.info(
                     "[storage] %s/%s: scanned %d, kept %d, %s %d (first 5: %s)",
-                    cam_dir.name, prof_dir.name,
-                    scanned, kept,
+                    cam_dir.name,
+                    prof_dir.name,
+                    scanned,
+                    kept,
                     "would delete" if dry_run else "deleted",
                     deleted,
                     "; ".join(deleted_paths) if deleted_paths else "—",

@@ -25,6 +25,7 @@ Usage from camera_runtime:
         # event/Telegram pipeline must skip this label
         ...
 """
+
 from __future__ import annotations
 
 import time
@@ -38,8 +39,7 @@ class DetectionConfirmer:
         # key = (cam_id, label) → bool
         self._confirmed: dict[tuple[str, str], bool] = {}
 
-    def check(self, cam_id: str, label: str,
-              window_n: int = 3, window_s: float = 5.0) -> bool:
+    def check(self, cam_id: str, label: str, window_n: int = 3, window_s: float = 5.0) -> bool:
         """Record a detection. Return True iff this hit is the FIRST one
         of a fresh confirmed sighting (first time we cross window_n hits
         in window_s seconds since the last decay)."""

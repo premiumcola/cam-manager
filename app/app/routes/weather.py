@@ -4,6 +4,7 @@ Migrated from server.py during R01.5. Every route reads
 `app_state.weather_service` fresh — `rebuild_services` may replace
 the instance after a settings save.
 """
+
 from __future__ import annotations
 
 import json
@@ -63,8 +64,7 @@ def _regenerate_weather_thumb(clip_path: Path, thumb_path: Path) -> bool:
                 ok, frame = cap.read()
             if not ok or frame is None:
                 return False
-            ok2, buf = cv2.imencode(".jpg", frame,
-                                    [int(cv2.IMWRITE_JPEG_QUALITY), 88])
+            ok2, buf = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY), 88])
             if not ok2:
                 return False
         finally:
@@ -72,9 +72,7 @@ def _regenerate_weather_thumb(clip_path: Path, thumb_path: Path) -> bool:
         thumb_path.parent.mkdir(parents=True, exist_ok=True)
         # Same-directory tempfile keeps the rename filesystem-local so
         # parallel readers never see a half-written JPEG.
-        tmp = thumb_path.with_name(
-            f".{thumb_path.name}.tmp.{os.getpid()}.{threading.get_ident()}"
-        )
+        tmp = thumb_path.with_name(f".{thumb_path.name}.tmp.{os.getpid()}.{threading.get_ident()}")
         tmp.write_bytes(buf.tobytes())
         os.replace(str(tmp), str(thumb_path))
         return True
@@ -127,8 +125,7 @@ def _synth_sun_manifest(cam_id: str, phase_dir: str, mp4_path: Path) -> dict:
     fills (api_snapshot, sun_snapshot, fps) get sensible defaults."""
     stem = mp4_path.stem
     sun_phase, phase_suffix = _phase_from_dir_and_stem(phase_dir, stem)
-    started = datetime.fromtimestamp(
-        mp4_path.stat().st_mtime).isoformat(timespec="seconds")
+    started = datetime.fromtimestamp(mp4_path.stat().st_mtime).isoformat(timespec="seconds")
     width = height = 0
     duration_s = 0
     try:
@@ -144,45 +141,49 @@ def _synth_sun_manifest(cam_id: str, phase_dir: str, mp4_path: Path) -> dict:
     except Exception:
         pass
     rel = f"weather/{cam_id}/{phase_dir}/{mp4_path.name}"
-    thumb_rel = rel[:-len(".mp4")] + ".jpg"
+    thumb_rel = rel[: -len(".mp4")] + ".jpg"
     return {
-        "id":           f"{cam_id}__sun_timelapse_{phase_suffix}__{stem}",
-        "cam_id":       cam_id,
-        "cam_name":     _cam_name_lookup(cam_id),
-        "event_type":   "sun_timelapse",
-        "sun_phase":    sun_phase,
-        "is_test":      False,
-        "started_at":   started,
-        "score":        0.6, "severity": 0.6,
-        "window_min":   0, "window_seconds": 0,
-        "interval_s":   0, "fps": 0,
+        "id": f"{cam_id}__sun_timelapse_{phase_suffix}__{stem}",
+        "cam_id": cam_id,
+        "cam_name": _cam_name_lookup(cam_id),
+        "event_type": "sun_timelapse",
+        "sun_phase": sun_phase,
+        "is_test": False,
+        "started_at": started,
+        "score": 0.6,
+        "severity": 0.6,
+        "window_min": 0,
+        "window_seconds": 0,
+        "interval_s": 0,
+        "fps": 0,
         "api_snapshot": {},
-        "clip_path":    rel,
-        "thumb_path":   thumb_rel,
-        "duration_s":   duration_s,
-        "width":        width, "height": height,
-        "rescanned":    True,
+        "clip_path": rel,
+        "thumb_path": thumb_rel,
+        "duration_s": duration_s,
+        "width": width,
+        "height": height,
+        "rescanned": True,
     }
 
 
 def _synth_event_manifest(cam_id: str, mp4_path: Path) -> dict:
     """Minimal manifest for an orphan event_timelapse mp4."""
     stem = mp4_path.stem
-    started = datetime.fromtimestamp(
-        mp4_path.stat().st_mtime).isoformat(timespec="seconds")
+    started = datetime.fromtimestamp(mp4_path.stat().st_mtime).isoformat(timespec="seconds")
     rel = f"weather/{cam_id}/event_timelapse/{mp4_path.name}"
-    thumb_rel = rel[:-len(".mp4")] + ".jpg"
+    thumb_rel = rel[: -len(".mp4")] + ".jpg"
     return {
-        "id":           f"{cam_id}__event_timelapse__{stem}",
-        "cam_id":       cam_id,
-        "cam_name":     _cam_name_lookup(cam_id),
-        "event_type":   "event_timelapse",
-        "is_test":      False,
-        "started_at":   started,
-        "score":        0.5, "severity": 0.5,
-        "clip_path":    rel,
-        "thumb_path":   thumb_rel,
-        "rescanned":    True,
+        "id": f"{cam_id}__event_timelapse__{stem}",
+        "cam_id": cam_id,
+        "cam_name": _cam_name_lookup(cam_id),
+        "event_type": "event_timelapse",
+        "is_test": False,
+        "started_at": started,
+        "score": 0.5,
+        "severity": 0.5,
+        "clip_path": rel,
+        "thumb_path": thumb_rel,
+        "rescanned": True,
     }
 
 
@@ -191,10 +192,8 @@ def _atomic_write_json(path: Path, data: dict) -> None:
     never sees a half-written manifest. Mirrors the helper in
     _consts.py without importing across packages."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(
-        f".{path.name}.tmp.{os.getpid()}.{threading.get_ident()}")
-    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False),
-                   encoding="utf-8")
+    tmp = path.with_name(f".{path.name}.tmp.{os.getpid()}.{threading.get_ident()}")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     os.replace(str(tmp), str(path))
 
 
@@ -217,9 +216,17 @@ def api_weather_rescan():
     thumbs may be regenerated)."""
     root = _weather_root()
     if root is None or not root.exists():
-        return jsonify({"ok": True, "registered": 0, "missing": 0,
-                        "thumbs_regen": 0, "scanned": 0, "errors": 0,
-                        "note": "no weather storage root"})
+        return jsonify(
+            {
+                "ok": True,
+                "registered": 0,
+                "missing": 0,
+                "thumbs_regen": 0,
+                "scanned": 0,
+                "errors": 0,
+                "note": "no weather storage root",
+            }
+        )
     registered = missing = thumbs_regen = scanned = errors = 0
     for cam_dir in sorted(p for p in root.iterdir() if p.is_dir()):
         if cam_dir.name.startswith(".") or cam_dir.name == "recaps":
@@ -251,12 +258,19 @@ def api_weather_rescan():
                     registered += 1
                     log.info(
                         "[weather] rescan: registered orphan mp4 %s/%s/%s",
-                        cam_id, phase, mp4_path.name)
+                        cam_id,
+                        phase,
+                        mp4_path.name,
+                    )
                 except Exception as e:
                     errors += 1
                     log.warning(
                         "[weather] rescan: synth manifest failed for %s/%s/%s: %s",
-                        cam_id, phase, mp4_path.name, e)
+                        cam_id,
+                        phase,
+                        mp4_path.name,
+                        e,
+                    )
             # Manifest whose clip vanished → tag missing (don't delete —
             # the user may want to inspect or recover from backup).
             for stem in sorted(json_stems - mp4_stems):
@@ -269,12 +283,13 @@ def api_weather_rescan():
                         missing += 1
                         log.info(
                             "[weather] rescan: marked missing-clip %s/%s/%s",
-                            cam_id, phase, j_path.name)
+                            cam_id,
+                            phase,
+                            j_path.name,
+                        )
                 except Exception as e:
                     errors += 1
-                    log.warning(
-                        "[weather] rescan: missing-clip mark failed %s: %s",
-                        j_path, e)
+                    log.warning("[weather] rescan: missing-clip mark failed %s: %s", j_path, e)
             # Thumb regen for every clip whose thumb is gone — covers
             # both newly registered orphans and pre-existing manifests
             # that lost their thumb (e.g. user-deleted jpgs).
@@ -292,14 +307,16 @@ def api_weather_rescan():
                         thumbs_regen += 1
                     else:
                         errors += 1
-    return jsonify({
-        "ok": True,
-        "registered":   registered,
-        "missing":      missing,
-        "thumbs_regen": thumbs_regen,
-        "scanned":      scanned,
-        "errors":       errors,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "registered": registered,
+            "missing": missing,
+            "thumbs_regen": thumbs_regen,
+            "scanned": scanned,
+            "errors": errors,
+        }
+    )
 
 
 @bp.post('/api/weather/thumbs/regen')
@@ -311,8 +328,15 @@ def api_weather_thumbs_regen():
     JPEG with a fresh decode is harmless."""
     root = _weather_root()
     if root is None or not root.exists():
-        return jsonify({"ok": True, "regenerated": 0, "skipped": 0,
-                        "errors": 0, "note": "no weather storage root"})
+        return jsonify(
+            {
+                "ok": True,
+                "regenerated": 0,
+                "skipped": 0,
+                "errors": 0,
+                "note": "no weather storage root",
+            }
+        )
     regenerated = skipped = errors = 0
     for cam_dir in sorted(p for p in root.iterdir() if p.is_dir()):
         if cam_dir.name.startswith(".") or cam_dir.name == "recaps":
@@ -339,12 +363,14 @@ def api_weather_thumbs_regen():
                     continue
                 if not (phase_dir / (jpg.stem + ".mp4")).exists():
                     skipped += 1
-    return jsonify({
-        "ok": True,
-        "regenerated": regenerated,
-        "skipped":     skipped,
-        "errors":      errors,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "regenerated": regenerated,
+            "skipped": skipped,
+            "errors": errors,
+        }
+    )
 
 
 @bp.get('/api/weather/sightings')
@@ -355,13 +381,15 @@ def api_weather_sightings():
     # Flask's type=int parser swallows non-int values into None;
     # the explicit `or 0` matches the prior try/except default.
     page = request.args.get('page', type=int, default=0) or 0
-    return jsonify(ws.list_sightings(
-        cam_id=request.args.get('cam_id') or None,
-        event_type=request.args.get('event_type') or None,
-        since_iso=request.args.get('from') or None,
-        until_iso=request.args.get('to') or None,
-        page=page,
-    ))
+    return jsonify(
+        ws.list_sightings(
+            cam_id=request.args.get('cam_id') or None,
+            event_type=request.args.get('event_type') or None,
+            since_iso=request.args.get('from') or None,
+            until_iso=request.args.get('to') or None,
+            page=page,
+        )
+    )
 
 
 @bp.get('/api/weather/sightings/<sighting_id>')
@@ -375,8 +403,7 @@ def api_weather_sighting_get(sighting_id: str):
     return jsonify(m)
 
 
-def _tolerant_resolve(stored_full: Path, storage_root: Path,
-                      ext: str) -> Path | None:
+def _tolerant_resolve(stored_full: Path, storage_root: Path, ext: str) -> Path | None:
     """When the path stored in a manifest no longer matches what's on
     disk (cam-slug suffix migration renamed files post-write), look for
     any file in the same directory that shares the stem prefix up to
@@ -439,11 +466,9 @@ def api_weather_sighting_clip(sighting_id: str):
         # giving up so the user doesn't see a broken card.
         alt = _tolerant_resolve(full, storage_root, "mp4")
         if alt is None:
-            log.warning("[weather] clip 404 — %s missing for %s",
-                        rel, sighting_id)
+            log.warning("[weather] clip 404 — %s missing for %s", rel, sighting_id)
             return Response(status=404)
-        log.info("[weather] clip resolved via fallback glob: %s → %s",
-                 rel, alt.name)
+        log.info("[weather] clip resolved via fallback glob: %s → %s", rel, alt.name)
         full = alt
     return send_from_directory(full.parent, full.name, mimetype='video/mp4')
 
@@ -469,8 +494,7 @@ def api_weather_sighting_thumb(sighting_id: str):
         # point at pre-rename filenames after the cam-slug migration.
         alt = _tolerant_resolve(full, storage_root, "jpg")
         if alt is not None:
-            log.info("[weather] thumb resolved via fallback glob: %s → %s",
-                     rel, alt.name)
+            log.info("[weather] thumb resolved via fallback glob: %s → %s", rel, alt.name)
             full = alt
     if not full.exists():
         # Thumb JPG still missing — try to regenerate from the clip
@@ -482,16 +506,13 @@ def api_weather_sighting_thumb(sighting_id: str):
             if alt_clip is not None:
                 clip_full = alt_clip
         if not clip_full or not clip_full.exists():
-            log.warning(
-                "[weather] thumb 404 — clip and thumb both missing for %s",
-                sighting_id)
+            log.warning("[weather] thumb 404 — clip and thumb both missing for %s", sighting_id)
             return Response(status=404)
         with _weather_thumb_regen_lock:
             # Re-check inside the lock — another request may have won.
             if not full.exists():
                 if not _regenerate_weather_thumb(clip_full, full):
-                    log.warning("[weather] thumb regen failed for %s",
-                                sighting_id)
+                    log.warning("[weather] thumb regen failed for %s", sighting_id)
                     return Response(status=404)
                 log.info("[weather] thumb regenerated for %s", sighting_id)
     return send_from_directory(full.parent, full.name, mimetype='image/jpeg')
@@ -514,8 +535,7 @@ def api_weather_sun_times():
     Settings → Wetter."""
     ws = app_state.weather_service
     if ws is None:
-        return jsonify({"location_set": False, "sunrise": None, "sunset": None,
-                        "cameras": []})
+        return jsonify({"location_set": False, "sunrise": None, "sunset": None, "cameras": []})
     return jsonify(ws.sun_times_today())
 
 
@@ -546,11 +566,16 @@ def api_weather_recap_clip(recap_id: str):
 def api_weather_status():
     ws = app_state.weather_service
     if ws is None:
-        return jsonify({
-            "enabled": False, "last_poll_at": None, "last_api_ok": None,
-            "current_state": {}, "current_values": {},
-            "location": {"lat": None, "lon": None},
-        })
+        return jsonify(
+            {
+                "enabled": False,
+                "last_poll_at": None,
+                "last_api_ok": None,
+                "current_state": {},
+                "current_values": {},
+                "location": {"lat": None, "lon": None},
+            }
+        )
     return jsonify(ws.status())
 
 
@@ -579,33 +604,35 @@ def api_weather_sun_tl_test_start():
     # 120 s coercion that misaligns the math readout.
     raw_duration = body.get("duration_s")
     if raw_duration is None:
-        return jsonify({"ok": False,
-                        "error": "duration_s required"}), 400
+        return jsonify({"ok": False, "error": "duration_s required"}), 400
     try:
         duration_s = int(raw_duration)
     except (TypeError, ValueError):
-        return jsonify({"ok": False,
-                        "error": f"duration_s must be an integer "
-                                 f"(got {raw_duration!r})"}), 400
+        return jsonify(
+            {"ok": False, "error": f"duration_s must be an integer " f"(got {raw_duration!r})"}
+        ), 400
     raw_target = body.get("target_duration_s")
     target_duration_s = None
     if raw_target is not None:
         try:
             target_duration_s = int(raw_target)
         except (TypeError, ValueError):
-            return jsonify({"ok": False,
-                            "error": f"target_duration_s must be an integer "
-                                     f"or null (got {raw_target!r})"}), 400
+            return jsonify(
+                {
+                    "ok": False,
+                    "error": f"target_duration_s must be an integer "
+                    f"or null (got {raw_target!r})",
+                }
+            ), 400
     if not cam_id or not phase:
         return jsonify({"ok": False, "error": "cam_id and phase required"}), 400
-    res = ws.start_sun_tl_test(cam_id, phase, duration_s,
-                               target_duration_s=target_duration_s)
+    res = ws.start_sun_tl_test(cam_id, phase, duration_s, target_duration_s=target_duration_s)
     if not res.get("ok"):
         # G5 · "not in allowlist" errors from start_sun_tl_test fall
         # under HTTP 400 (client supplied a value the server doesn't
         # accept). The legacy "test already running" stays at 409 so
         # the frontend's existing toast wording still applies.
-        err = (res.get("error") or "")
+        err = res.get("error") or ""
         code = 400 if "allowlist" in err or "must be an integer" in err else 409
         return jsonify(res), code
     return jsonify(res)
@@ -637,8 +664,7 @@ def api_weather_sun_tl_test_cancel():
     cancellation so the frontend can render the right end-state."""
     ws = app_state.weather_service
     if ws is None:
-        return jsonify({"ok": False,
-                        "error": "weather service not available"}), 503
+        return jsonify({"ok": False, "error": "weather service not available"}), 503
     res = ws.cancel_sun_tl_test()
     if not res.get("ok"):
         return jsonify(res), 409
@@ -653,9 +679,16 @@ def api_weather_history():
     triggers, units, German labels, and the configured poll interval."""
     ws = app_state.weather_service
     if ws is None:
-        return jsonify({
-            "hours": 24, "samples": [], "thresholds": {}, "units": {},
-            "labels_de": {}, "fields": [], "poll_interval_s": 300,
-        })
+        return jsonify(
+            {
+                "hours": 24,
+                "samples": [],
+                "thresholds": {},
+                "units": {},
+                "labels_de": {},
+                "fields": [],
+                "poll_interval_s": 300,
+            }
+        )
     hours = request.args.get("hours", type=int, default=24) or 24
     return jsonify(ws.history(hours))

@@ -4,6 +4,7 @@ Migrated from server.py during R01.2. /api/reload imports
 `rebuild_runtimes` lazily from `..server` because the boot helpers
 still live in server.py. R01.6 will relocate them and remove that
 last cross-import."""
+
 from __future__ import annotations
 
 import logging
@@ -37,23 +38,27 @@ def api_admin_timelapse_cleanup():
     'scanned X, kept K, deleted D' rows. Finalised .mp4 files are never
     touched — only the JPEG ringbuffer."""
     from ..timelapse_cleanup import cleanup as _cleanup
+
     payload = request.get_json(force=True, silent=True) or {}
     dry_run = bool(payload.get("dry_run", False))
     cam_id = payload.get("cam_id") or None
     profile = payload.get("profile") or None
-    storage_root = Path(app_state.get_effective_config().get("storage", {}).get("root", "/app/storage"))
+    storage_root = Path(
+        app_state.get_effective_config().get("storage", {}).get("root", "/app/storage")
+    )
     try:
-        summaries = _cleanup(storage_root, dry_run=dry_run,
-                             cam_id=cam_id, profile=profile)
+        summaries = _cleanup(storage_root, dry_run=dry_run, cam_id=cam_id, profile=profile)
         total_scanned = sum(s["scanned"] for s in summaries)
         total_deleted = sum(s["deleted"] for s in summaries)
-        return jsonify({
-            "ok": True,
-            "dry_run": dry_run,
-            "summaries": summaries,
-            "total_scanned": total_scanned,
-            "total_deleted": total_deleted,
-        })
+        return jsonify(
+            {
+                "ok": True,
+                "dry_run": dry_run,
+                "summaries": summaries,
+                "total_scanned": total_scanned,
+                "total_deleted": total_deleted,
+            }
+        )
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -64,5 +69,6 @@ def api_reload():
     # helpers and imports `routes` for blueprint registration. R01.6
     # relocates these into a dedicated module.
     from ..server import rebuild_runtimes
+
     rebuild_runtimes()
     return jsonify({"ok": True})

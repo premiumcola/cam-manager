@@ -69,6 +69,7 @@ class TimelapseBuilder:
         agree on what a "good" frame looks like. Update thresholds in
         ``frame_helpers`` rather than here."""
         from .frame_helpers import is_valid_frame as _is_valid
+
         return _is_valid(img)
 
     @staticmethod
@@ -80,8 +81,9 @@ class TimelapseBuilder:
         scale = max_w / w
         return (max_w, int(h * scale) // 2 * 2)
 
-    def _write_video_ffmpeg(self, valid_paths: list, out_path: Path,
-                            fps: float, ref_size: tuple[int, int]) -> str | None:
+    def _write_video_ffmpeg(
+        self, valid_paths: list, out_path: Path, fps: float, ref_size: tuple[int, int]
+    ) -> str | None:
         """Encode valid JPEG frames to H.264 MP4 via ffmpeg concat demuxer.
         No frame data is loaded into Python memory — ffmpeg reads files directly.
         Returns path string on success, None on failure."""
@@ -94,7 +96,8 @@ class TimelapseBuilder:
         if len(valid_paths) < 2:
             log.warning(
                 "timelapse: _write_video_ffmpeg refused — only %d input frame(s) for %s",
-                len(valid_paths), out_path.name,
+                len(valid_paths),
+                out_path.name,
             )
             return None
         w, h = ref_size
@@ -113,14 +116,28 @@ class TimelapseBuilder:
                     f.write(f"file '{str(valid_paths[-1]).replace(chr(92), '/')}'\n")
 
             cmd = [
-                "ffmpeg", "-y", "-loglevel", "error",
-                "-f", "concat", "-safe", "0", "-i", concat_path,
-                "-vf", f"scale={out_w}:{out_h}",
-                "-c:v", "libx264",
-                "-crf", "28",           # good quality/size balance
-                "-preset", "fast",
-                "-movflags", "+faststart",  # progressive download / iOS
-                "-pix_fmt", "yuv420p",  # required for broad iOS/Android compat
+                "ffmpeg",
+                "-y",
+                "-loglevel",
+                "error",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                concat_path,
+                "-vf",
+                f"scale={out_w}:{out_h}",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "28",  # good quality/size balance
+                "-preset",
+                "fast",
+                "-movflags",
+                "+faststart",  # progressive download / iOS
+                "-pix_fmt",
+                "yuv420p",  # required for broad iOS/Android compat
                 str(out_path),
             ]
             result = subprocess.run(cmd, capture_output=True, timeout=180)
@@ -132,17 +149,27 @@ class TimelapseBuilder:
             # rejecting any legitimate output.
             ok_size = out_path.exists() and out_path.stat().st_size >= 50_000
             if result.returncode == 0 and ok_size:
-                log.debug("timelapse: ffmpeg encoded %s (%d frames → H.264 %dx%d, %d bytes)",
-                          out_path.name, len(valid_paths), out_w, out_h, out_path.stat().st_size)
+                log.debug(
+                    "timelapse: ffmpeg encoded %s (%d frames → H.264 %dx%d, %d bytes)",
+                    out_path.name,
+                    len(valid_paths),
+                    out_w,
+                    out_h,
+                    out_path.stat().st_size,
+                )
                 return str(out_path)
             if result.returncode == 0 and out_path.exists() and not ok_size:
                 log.warning(
                     "timelapse: ffmpeg wrote %s but file is %d B < 50 KB · treating as failure",
-                    out_path.name, out_path.stat().st_size,
+                    out_path.name,
+                    out_path.stat().st_size,
                 )
             if result.returncode != 0:
-                log.warning("timelapse: ffmpeg failed for %s: %s",
-                            out_path.name, result.stderr.decode(errors="replace")[-300:])
+                log.warning(
+                    "timelapse: ffmpeg failed for %s: %s",
+                    out_path.name,
+                    result.stderr.decode(errors="replace")[-300:],
+                )
         except Exception as e:
             log.warning("timelapse: ffmpeg exception for %s: %s", out_path.name, e)
         finally:
@@ -170,16 +197,25 @@ class TimelapseBuilder:
         the caller should delete the file and write the diag sidecar."""
         try:
             import json as _json
+
             cmd = [
-                "ffprobe", "-v", "error",
-                "-print_format", "json",
-                "-show_format", "-show_streams",
+                "ffprobe",
+                "-v",
+                "error",
+                "-print_format",
+                "json",
+                "-show_format",
+                "-show_streams",
                 "-count_packets",  # populates nb_read_packets even when nb_frames is missing
                 str(out_path),
             ]
             r = subprocess.run(cmd, capture_output=True, timeout=15)
             if r.returncode != 0:
-                return (False, f"ffprobe rc={r.returncode}: {r.stderr.decode(errors='replace')[-200:]}", {})
+                return (
+                    False,
+                    f"ffprobe rc={r.returncode}: {r.stderr.decode(errors='replace')[-200:]}",
+                    {},
+                )
             info = _json.loads(r.stdout.decode(errors="replace") or "{}")
         except Exception as e:
             return (False, f"ffprobe exception: {e}", {})
@@ -220,8 +256,7 @@ class TimelapseBuilder:
         return (True, "", info)
 
     @staticmethod
-    def _write_encode_diag(out_path: Path, reason: str, info: dict,
-                            encode_args: dict) -> None:
+    def _write_encode_diag(out_path: Path, reason: str, info: dict, encode_args: dict) -> None:
         """Write a sibling ``<basename>.encode-diag.txt`` next to the
         bad MP4 with the rejection reason, encode args, and (when the
         probe succeeded enough to parse JSON) the ffprobe summary.
@@ -250,26 +285,22 @@ class TimelapseBuilder:
         try:
             diag_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         except Exception as e:
-            log.debug("timelapse: encode-diag write failed for %s: %s",
-                       diag_path.name, e)
+            log.debug("timelapse: encode-diag write failed for %s: %s", diag_path.name, e)
 
-    def _write_video_opencv(self, valid_paths: list, out_path: Path,
-                            fps: float, ref_size: tuple[int, int]) -> str | None:
+    def _write_video_opencv(
+        self, valid_paths: list, out_path: Path, fps: float, ref_size: tuple[int, int]
+    ) -> str | None:
         """Fallback encoder using OpenCV VideoWriter (mp4v/MPEG-4 Part 2).
         Reads and writes one frame at a time to keep peak memory low."""
         w, h = ref_size
         out_w, out_h = self._scale_dims(w, h)
         writer = cv2.VideoWriter(
-            str(out_path),
-            cv2.VideoWriter_fourcc(*"mp4v"),
-            fps, (out_w, out_h)
+            str(out_path), cv2.VideoWriter_fourcc(*"mp4v"), fps, (out_w, out_h)
         )
         if not writer.isOpened():
             writer.release()
             writer = cv2.VideoWriter(
-                str(out_path),
-                cv2.VideoWriter_fourcc(*"DIVX"),
-                fps, (out_w, out_h)
+                str(out_path), cv2.VideoWriter_fourcc(*"DIVX"), fps, (out_w, out_h)
             )
         for img_path in valid_paths:
             img = cv2.imread(str(img_path))
@@ -289,7 +320,8 @@ class TimelapseBuilder:
         if out_path.exists():
             log.warning(
                 "timelapse: opencv wrote %s but file is %d B < 50 KB · treating as failure",
-                out_path.name, out_path.stat().st_size,
+                out_path.name,
+                out_path.stat().st_size,
             )
         return None
 
@@ -309,9 +341,14 @@ class TimelapseBuilder:
         except Exception as e:
             log.debug("timelapse: thumbnail write failed: %s", e)
 
-    def _write_video(self, images: list, out_path: Path,
-                     target_duration_s: int, target_fps: int,
-                     qa_ctx: dict | None = None) -> str | None:
+    def _write_video(
+        self,
+        images: list,
+        out_path: Path,
+        target_duration_s: int,
+        target_fps: int,
+        qa_ctx: dict | None = None,
+    ) -> str | None:
         """Subsample images, deduplicate, validate each frame, skip corrupt ones, write to out_path.
         Uses ffmpeg (H.264, small files, iOS-safe) with OpenCV mp4v as fallback.
         Two-pass: Pass 1 validates + deduplicates (no frame data kept in memory),
@@ -341,7 +378,8 @@ class TimelapseBuilder:
         #      JPEG-compress and so the bit-pattern differs.
         # A slowly-rotating scene (real timelapse content) clears both
         # gates because its mean-abs-diff exceeds 1.5 byte-units.
-        from .frame_helpers import perceptual_hash, is_near_duplicate
+        from .frame_helpers import is_near_duplicate, perceptual_hash
+
         seen_hashes: set = set()
         kept_phashes: list[int] = []
         last_kept_frame = None
@@ -367,7 +405,11 @@ class TimelapseBuilder:
             if not ok:
                 log.debug("timelapse: skip corrupt frame %s — %s", img_path.name, reason)
                 skipped += 1
-                if reason.startswith("patterned_magenta") or reason.startswith("pink_artifact") or reason.startswith("partial_pink"):
+                if (
+                    reason.startswith("patterned_magenta")
+                    or reason.startswith("pink_artifact")
+                    or reason.startswith("partial_pink")
+                ):
                     magenta_drops += 1
                     if magenta_first is None:
                         magenta_first = img_path.name
@@ -406,7 +448,8 @@ class TimelapseBuilder:
             this_phash = perceptual_hash(img)
             if last_kept_frame is not None and is_near_duplicate(
                 kept_phashes[-1] if kept_phashes else 0,
-                last_kept_frame, img,
+                last_kept_frame,
+                img,
             ):
                 dup_count += 1
                 dup_last = img_path.name
@@ -424,23 +467,35 @@ class TimelapseBuilder:
         # so log filters can pull all encode outcomes at a glance.
         log.info(
             "[timelapse] %s: %d frames total, %d valid, %d skipped (grey/colorbar/corrupt), %d duplicates dropped",
-            out_path.name, total_input, len(valid_paths), skipped, dup_count,
+            out_path.name,
+            total_input,
+            len(valid_paths),
+            skipped,
+            dup_count,
         )
         if magenta_drops > 0:
             log.info(
                 "[timelapse] %s: %d magenta-corruption frame(s) dropped, first=%s last=%s",
-                out_path.name, magenta_drops,
-                magenta_first or "?", magenta_last or "?",
+                out_path.name,
+                magenta_drops,
+                magenta_first or "?",
+                magenta_last or "?",
             )
         if macroblock_drops > 0:
             log.info(
                 "[timelapse] %s: %d macroblock-corruption frame(s) dropped, first=%s last=%s",
-                out_path.name, macroblock_drops,
-                macroblock_first or "?", macroblock_last or "?",
+                out_path.name,
+                macroblock_drops,
+                macroblock_first or "?",
+                macroblock_last or "?",
             )
         if skipped > 0:
-            log.info("timelapse: skipped %d/%d corrupt frames for %s",
-                     skipped, total_input, out_path.name)
+            log.info(
+                "timelapse: skipped %d/%d corrupt frames for %s",
+                skipped,
+                total_input,
+                out_path.name,
+            )
         if dup_count > 0:
             # Now an active-filter count, not diagnostic — the duplicates
             # were dropped from valid_paths above, so we report against
@@ -448,17 +503,28 @@ class TimelapseBuilder:
             dup_ratio = dup_count / max(1, dup_count + len(valid_paths))
             log.info(
                 "[timelapse] %s: duplicates dropped: %d (%.0f%% of valid frames) · first=%s last=%s",
-                out_path.name, dup_count, dup_ratio * 100,
-                dup_first or "?", dup_last or "?",
+                out_path.name,
+                dup_count,
+                dup_ratio * 100,
+                dup_first or "?",
+                dup_last or "?",
             )
             if dup_ratio > 0.6:
-                log.warning("timelapse: %.0f%% duplicate frames in %s (%d) — "
-                            "stuck stream during capture window?",
-                            dup_ratio * 100, out_path.name, dup_count)
+                log.warning(
+                    "timelapse: %.0f%% duplicate frames in %s (%d) — "
+                    "stuck stream during capture window?",
+                    dup_ratio * 100,
+                    out_path.name,
+                    dup_count,
+                )
 
         if len(valid_paths) < 2:
-            log.warning("timelapse: only %d valid frames (of %d total) — "
-                        "skipping encode for %s", len(valid_paths), total_input, out_path.name)
+            log.warning(
+                "timelapse: only %d valid frames (of %d total) — " "skipping encode for %s",
+                len(valid_paths),
+                total_input,
+                out_path.name,
+            )
             return None
 
         # ── Compute fps to honour target_duration_s ──────────────────────────
@@ -474,7 +540,10 @@ class TimelapseBuilder:
                 "timelapse: %s will play at %.1f fps (< 15) — video will look "
                 "choppy; only %d frames for a %ds target. Lower target_seconds "
                 "or capture more frequently (shorter interval).",
-                out_path.name, fps, n, target_duration_s,
+                out_path.name,
+                fps,
+                n,
+                target_duration_s,
             )
 
         # ── Completeness report ───────────────────────────────────────────────
@@ -487,19 +556,24 @@ class TimelapseBuilder:
             "  corrupt  : %d frames dropped (%.1f%%)\n"
             "  result   : %.1fs video%s",
             out_path.name,
-            target_duration_s, target_fps, expected_frames,
-            frames_on_disk, coverage_pct,
+            target_duration_s,
+            target_fps,
+            expected_frames,
+            frames_on_disk,
+            coverage_pct,
             "" if coverage_pct >= 99 else " — app was down/restarting for part of window",
-            skipped, 100.0 * skipped / max(1, skipped + n),
+            skipped,
+            100.0 * skipped / max(1, skipped + n),
             actual_duration,
-            f" ⚠ shorter than target {target_duration_s}s" if shorter else " ✓"
+            f" ⚠ shorter than target {target_duration_s}s" if shorter else " ✓",
         )
 
         # ── Pass 2: encode ────────────────────────────────────────────────────
         path = self._write_video_ffmpeg(valid_paths, out_path, fps, ref_size)
         if path is None:
-            log.debug("timelapse: ffmpeg unavailable/failed, falling back to OpenCV for %s",
-                      out_path.name)
+            log.debug(
+                "timelapse: ffmpeg unavailable/failed, falling back to OpenCV for %s", out_path.name
+            )
             path = self._write_video_opencv(valid_paths, out_path, fps, ref_size)
 
         if path is None:
@@ -517,23 +591,25 @@ class TimelapseBuilder:
         if not ok:
             log.warning(
                 "timelapse: encode produced invalid MP4 %s — %s · deleting + writing diag",
-                out_path.name, reason,
+                out_path.name,
+                reason,
             )
             self._write_encode_diag(
-                out_path, reason, probe_info,
+                out_path,
+                reason,
+                probe_info,
                 encode_args={
                     "valid_paths_count": len(valid_paths),
                     "target_duration_s": target_duration_s,
-                    "target_fps":        target_fps,
-                    "effective_fps":     fps,
-                    "ref_size":          ref_size,
+                    "target_fps": target_fps,
+                    "effective_fps": fps,
+                    "ref_size": ref_size,
                 },
             )
             try:
                 out_path.unlink()
             except Exception as e:
-                log.debug("timelapse: unlink of bad mp4 %s failed: %s",
-                          out_path.name, e)
+                log.debug("timelapse: unlink of bad mp4 %s failed: %s", out_path.name, e)
             return None
 
         # ── Thumbnail from middle valid frame ─────────────────────────────────
@@ -550,6 +626,7 @@ class TimelapseBuilder:
         # build_* methods accept (cm-37 / qa hooks).
         try:
             from .timelapse_qa import write_qa_sidecar
+
             ctx = qa_ctx or {}
             write_qa_sidecar(
                 out_path,
@@ -567,9 +644,9 @@ class TimelapseBuilder:
 
     # ── Naming helpers ────────────────────────────────────────────────────────
 
-    def make_output_name(self, window_key: str, profile_name: str,
-                         period_s: int, target_s: int,
-                         cam_slug: str = "") -> str:
+    def make_output_name(
+        self, window_key: str, profile_name: str, period_s: int, target_s: int, cam_slug: str = ""
+    ) -> str:
         """Generate a human-readable filename stem.
 
         Example without slug: ``'2026-04-14_020435_custom_1min_to_10sec'``
@@ -596,10 +673,17 @@ class TimelapseBuilder:
             return 0
         return len(list(d.glob("*.jpg")))
 
-    def build_profile(self, camera_id: str, profile_name: str, day: str,
-                      target_duration_s: int = 60, target_fps: int = 30,
-                      force: bool = False, cam_slug: str = "",
-                      qa_ctx: dict | None = None) -> str | None:
+    def build_profile(
+        self,
+        camera_id: str,
+        profile_name: str,
+        day: str,
+        target_duration_s: int = 60,
+        target_fps: int = 30,
+        force: bool = False,
+        cam_slug: str = "",
+        qa_ctx: dict | None = None,
+    ) -> str | None:
         """Build timelapse for a specific profile (new per-profile path structure).
 
         ``cam_slug`` is appended to the output filename stem so two
@@ -631,19 +715,22 @@ class TimelapseBuilder:
         ctx.setdefault("camera_id", camera_id)
         ctx.setdefault("profile_name", profile_name)
         ctx.setdefault("frames_dir", frames_dir)
-        return self._write_video(images, out_path, target_duration_s, target_fps,
-                                 qa_ctx=ctx)
+        return self._write_video(images, out_path, target_duration_s, target_fps, qa_ctx=ctx)
 
     # ── Legacy (flat date directory) ─────────────────────────────────────────
 
-    def build_period(self, camera_id: str, day: str,
-                     target_duration_s: int = 60,
-                     target_fps: int = 30,
-                     period: str = "day",
-                     force: bool = False,
-                     images_override: list | None = None,
-                     cam_slug: str = "",
-                     qa_ctx: dict | None = None) -> str | None:
+    def build_period(
+        self,
+        camera_id: str,
+        day: str,
+        target_duration_s: int = 60,
+        target_fps: int = 30,
+        period: str = "day",
+        force: bool = False,
+        images_override: list | None = None,
+        cam_slug: str = "",
+        qa_ctx: dict | None = None,
+    ) -> str | None:
         """Build from legacy flat ``timelapse_frames/<cam>/<day>/``
         directory. ``cam_slug`` appended to the stem for unique
         cross-camera download filenames; see :func:`make_output_name`.
@@ -670,23 +757,31 @@ class TimelapseBuilder:
         ctx.setdefault("profile_name", period)
         if images_override is None:
             ctx.setdefault("frames_dir", self._timelapse_frames_dir(camera_id) / day)
-        return self._write_video(images, out_path, target_duration_s, target_fps,
-                                 qa_ctx=ctx)
+        return self._write_video(images, out_path, target_duration_s, target_fps, qa_ctx=ctx)
 
-    def build_for_day(self, camera_id: str, day: str, fps: int = 25,
-                      force: bool = False, cam_slug: str = "",
-                      qa_ctx: dict | None = None) -> str | None:
+    def build_for_day(
+        self,
+        camera_id: str,
+        day: str,
+        fps: int = 25,
+        force: bool = False,
+        cam_slug: str = "",
+        qa_ctx: dict | None = None,
+    ) -> str | None:
         """Backward-compatible wrapper. Tries timelapse_frames first,
         falls back to event snapshots. ``cam_slug`` flows through to
         both build paths so neither variant collides on cross-camera
         downloads."""
-        path = self.build_period(camera_id, day,
-                                 target_duration_s=60,
-                                 target_fps=fps,
-                                 period="day",
-                                 force=force,
-                                 cam_slug=cam_slug,
-                                 qa_ctx=qa_ctx)
+        path = self.build_period(
+            camera_id,
+            day,
+            target_duration_s=60,
+            target_fps=fps,
+            period="day",
+            force=force,
+            cam_slug=cam_slug,
+            qa_ctx=qa_ctx,
+        )
         if path:
             return path
 
@@ -705,8 +800,6 @@ class TimelapseBuilder:
         ctx.setdefault("profile_name", "day")
         return self._write_video(images, out_path, 60, fps, qa_ctx=ctx)
 
-    def build_yesterday_if_missing(self, camera_id: str, fps: int = 25,
-                                   cam_slug: str = ""):
+    def build_yesterday_if_missing(self, camera_id: str, fps: int = 25, cam_slug: str = ""):
         day = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-        return self.build_for_day(camera_id, day, fps=fps, force=False,
-                                  cam_slug=cam_slug)
+        return self.build_for_day(camera_id, day, fps=fps, force=False, cam_slug=cam_slug)

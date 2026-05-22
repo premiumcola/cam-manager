@@ -2,6 +2,7 @@
 reads. Carved out of the original ``frame_helpers.py`` during the
 modular refactor; tunable constants live HERE so siblings can import
 the names they care about without dragging the whole module."""
+
 from __future__ import annotations
 
 import logging
@@ -36,12 +37,12 @@ _PINK_QUAD_RATIO = 3.0
 # (which lift G almost as much as R/B) don't trip. We downscale the
 # frame before the per-pixel pass so the cost stays bounded — even on
 # a full-day timelapse rebuild this is cheap.
-_PATTERN_MAGENTA_DOWNSCALE = 256        # max width for the per-pixel scan
-_PATTERN_MAGENTA_R_MIN = 130            # red channel must reach this
-_PATTERN_MAGENTA_B_MIN = 130            # blue channel must reach this
-_PATTERN_MAGENTA_GREEN_MAX = 110        # green must be clearly below R+B
-_PATTERN_MAGENTA_DOMINANCE = 25         # min(R,B) must beat G by this much
-_PATTERN_MAGENTA_AREA_FRAC = 0.20       # ≥ 20 % of pixels in the wedge → reject
+_PATTERN_MAGENTA_DOWNSCALE = 256  # max width for the per-pixel scan
+_PATTERN_MAGENTA_R_MIN = 130  # red channel must reach this
+_PATTERN_MAGENTA_B_MIN = 130  # blue channel must reach this
+_PATTERN_MAGENTA_GREEN_MAX = 110  # green must be clearly below R+B
+_PATTERN_MAGENTA_DOMINANCE = 25  # min(R,B) must beat G by this much
+_PATTERN_MAGENTA_AREA_FRAC = 0.20  # ≥ 20 % of pixels in the wedge → reject
 
 # Spatial-detail floor in grayscale std. A truly flat frame (single color,
 # no texture, no noise) sits below ~2; legitimate dark frames at night still
@@ -66,7 +67,7 @@ _GREY_MIDBAND_TOTAL_STD = 12.0
 # horizontal-row uniformity (each row is one solid color) but very different
 # colors between rows. Cheap because we sample 9 rows.
 _COLORBAR_ROW_SAMPLES = 9
-_COLORBAR_PER_ROW_STD = 6.0   # each sampled row must be near-uniform
+_COLORBAR_PER_ROW_STD = 6.0  # each sampled row must be near-uniform
 _COLORBAR_BETWEEN_ROW_STD = 35.0  # but row-to-row variance is huge
 
 # Tile-based dead-area scoring — catches three real-world corruption modes
@@ -93,10 +94,10 @@ _TILE_GRID_H = 5
 # (blur kills it). Macroblock corruption produces tiles with high raw std
 # but low blurred std — exactly what we want to flag.
 _TILE_BLUR_KSIZE = 5
-_TILE_DEAD_BLURRED_STD_FLOOR = 3.0   # blurred std under this → no real structure
-_TILE_GREY_BAND_MIN = 100.0          # mid-grey band lower bound
-_TILE_GREY_BAND_MAX = 160.0          # mid-grey band upper bound
-_TILE_GREY_BAND_BLURRED_STD = 6.0    # mid-grey tile passes only with real low-freq detail
+_TILE_DEAD_BLURRED_STD_FLOOR = 3.0  # blurred std under this → no real structure
+_TILE_GREY_BAND_MIN = 100.0  # mid-grey band lower bound
+_TILE_GREY_BAND_MAX = 160.0  # mid-grey band upper bound
+_TILE_GREY_BAND_BLURRED_STD = 6.0  # mid-grey tile passes only with real low-freq detail
 # Per-tile chroma uniformity floor — catches macroblock smears that have
 # luma structure (bstd above floor) but no chroma variation (B≈G≈R per
 # pixel). Gated to the mid-grey luma band so IR/dark/sky tiles
@@ -106,7 +107,7 @@ _TILE_CHROMA_STD_FLOOR = 4.0
 # (the dominant cluster in user-reported timelapse corruption) lands
 # around 50 % dead-tile fraction and previously passed; a quarter-frame
 # corruption lands around 25 % and still passes.
-_TILE_DEAD_FRACTION = 0.35           # > 35 % dead tiles → reject the frame
+_TILE_DEAD_FRACTION = 0.35  # > 35 % dead tiles → reject the frame
 
 # Frame-level "grey-toned mid-luma" gate. Catches H.264 macroblock-corruption
 # frames that escape the per-tile dead-area test because each tile has
@@ -138,11 +139,12 @@ class FrameValidatorProfile:
     """Bundle of every threshold ``is_valid_frame`` reads. The defaults
     mirror the existing module-level constants so DAY_PROFILE is a
     pure no-op for daytime callers."""
+
     name: str = "day"
     # Brightness gates (unchanged across profiles — too dark = too dark
     # regardless of which profile we picked).
     brightness_floor: float = _BRIGHTNESS_FLOOR
-    brightness_ceil: float  = _BRIGHTNESS_CEIL
+    brightness_ceil: float = _BRIGHTNESS_CEIL
     # Pink/magenta gates — corruption looks the same at any time of day.
     pink_full_r_min: float = _PINK_FULL_R_MIN
     pink_full_ratio: float = _PINK_FULL_RATIO
@@ -248,8 +250,7 @@ def _is_flat_gray_corruption_sample(img: np.ndarray) -> bool:
         s = float(gray.std())
     except Exception:
         return False
-    return (_FLAT_GRAY_BAND_MIN <= m <= _FLAT_GRAY_BAND_MAX
-            and s < _FLAT_GRAY_STD_MAX)
+    return _FLAT_GRAY_BAND_MIN <= m <= _FLAT_GRAY_BAND_MAX and s < _FLAT_GRAY_STD_MAX
 
 
 def pick_profile_from_baseline(samples) -> FrameValidatorProfile:
@@ -297,9 +298,9 @@ def pick_profile_from_baseline(samples) -> FrameValidatorProfile:
     if not means:
         if rejected_corruption > 0:
             log.info(
-                "[picker] %d/%d baseline samples rejected as flat-grey "
-                "corruption; using night",
-                rejected_corruption, total,
+                "[picker] %d/%d baseline samples rejected as flat-grey " "corruption; using night",
+                rejected_corruption,
+                total,
             )
             return NIGHT_PROFILE
         return DAY_PROFILE
@@ -313,8 +314,9 @@ def pick_profile_from_baseline(samples) -> FrameValidatorProfile:
         picked = DAY_PROFILE
     if rejected_corruption > 0:
         log.info(
-            "[picker] %d/%d baseline samples rejected as flat-grey "
-            "corruption; using %s",
-            rejected_corruption, total, picked.name,
+            "[picker] %d/%d baseline samples rejected as flat-grey " "corruption; using %s",
+            rejected_corruption,
+            total,
+            picked.name,
         )
     return picked

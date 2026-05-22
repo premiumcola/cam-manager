@@ -1,13 +1,13 @@
 """Horizontal anomaly-band detection. Carved out of the original
 ``frame_helpers.py`` during the modular refactor; behaviour
 unchanged."""
+
 from __future__ import annotations
 
 import cv2
 import numpy as np
 
 from ._decode import _decode
-
 
 # ── Horizontal anomaly band ──────────────────────────────────────────────────
 # H.265 NAL/slice loss produces a horizontal band of corrupted rows
@@ -30,41 +30,41 @@ from ._decode import _decode
 # Both stages return (band_y_start, band_height, score) of the
 # longest contiguous run; either one tripping is enough to reject
 # the frame.
-_ANOMALY_BAND_SMOOTH_WIN = 16        # row-window for the smoothing pass
-_ANOMALY_BAND_BASELINE_PCT = 30      # robust baseline percentile
-_ANOMALY_BAND_BASELINE_MULT = 3.0    # row_delta threshold = baseline * this
-_ANOMALY_BAND_DELTA_FLOOR = 5.0      # …or this floor, whichever is higher
-_ANOMALY_BAND_MIN_HEIGHT = 30        # rows — shorter runs are noise
-_ANOMALY_BAND_MAX_HEIGHT_FRAC = 0.60 # bands covering > this much of the frame
-                                     # are "the whole image" not "a band" —
-                                     # skip them so a complex daytime scene
-                                     # with abrupt region boundaries doesn't
-                                     # trip the detector top-to-bottom.
-_ANOMALY_BAND_MIN_Z = 2.5            # row-delta z-score threshold
-                                     # Was 1.5 until 2026-05-12; the
-                                     # sunset test on garten-dach-terrasse
-                                     # showed a borderline false-positive
-                                     # cluster at score≈2.5 (clock-strip
-                                     # row-delta from the timestamp
-                                     # overlay; the per-camera zone
-                                     # exclusion above catches those
-                                     # cleanly when they fit the zone,
-                                     # but a slightly tighter floor kills
-                                     # the remaining 2.4-2.5 borderline
-                                     # cases that fall just outside the
-                                     # zone too). 3.0 was the original
-                                     # target but regressed the
-                                     # TestHorizontalAnomalyBand mid-
-                                     # band synthetic at z=2.99 — that
-                                     # detector unit test is the closest
-                                     # ground-truth we have, so the
-                                     # floor stays just below it.
-_ANOMALY_CHROMA_HUE_LO = 10          # warm-amber hue range (lamps/IR-cut)
+_ANOMALY_BAND_SMOOTH_WIN = 16  # row-window for the smoothing pass
+_ANOMALY_BAND_BASELINE_PCT = 30  # robust baseline percentile
+_ANOMALY_BAND_BASELINE_MULT = 3.0  # row_delta threshold = baseline * this
+_ANOMALY_BAND_DELTA_FLOOR = 5.0  # …or this floor, whichever is higher
+_ANOMALY_BAND_MIN_HEIGHT = 30  # rows — shorter runs are noise
+_ANOMALY_BAND_MAX_HEIGHT_FRAC = 0.60  # bands covering > this much of the frame
+# are "the whole image" not "a band" —
+# skip them so a complex daytime scene
+# with abrupt region boundaries doesn't
+# trip the detector top-to-bottom.
+_ANOMALY_BAND_MIN_Z = 2.5  # row-delta z-score threshold
+# Was 1.5 until 2026-05-12; the
+# sunset test on garten-dach-terrasse
+# showed a borderline false-positive
+# cluster at score≈2.5 (clock-strip
+# row-delta from the timestamp
+# overlay; the per-camera zone
+# exclusion above catches those
+# cleanly when they fit the zone,
+# but a slightly tighter floor kills
+# the remaining 2.4-2.5 borderline
+# cases that fall just outside the
+# zone too). 3.0 was the original
+# target but regressed the
+# TestHorizontalAnomalyBand mid-
+# band synthetic at z=2.99 — that
+# detector unit test is the closest
+# ground-truth we have, so the
+# floor stays just below it.
+_ANOMALY_CHROMA_HUE_LO = 10  # warm-amber hue range (lamps/IR-cut)
 _ANOMALY_CHROMA_HUE_HI = 40
-_ANOMALY_CHROMA_SAT_MIN = 60         # only saturated pixels count
-_ANOMALY_CHROMA_ROW_FRAC = 0.01      # threshold = 1 % of row width
-_ANOMALY_CHROMA_MIN_HEIGHT = 20      # rows — minimum band height
-_ANOMALY_CHROMA_PEAK_PCT = 1.0       # peak fraction of row width
+_ANOMALY_CHROMA_SAT_MIN = 60  # only saturated pixels count
+_ANOMALY_CHROMA_ROW_FRAC = 0.01  # threshold = 1 % of row width
+_ANOMALY_CHROMA_MIN_HEIGHT = 20  # rows — minimum band height
+_ANOMALY_CHROMA_PEAK_PCT = 1.0  # peak fraction of row width
 
 # Per-camera timestamp-overlay exclusion ──────────────────────────────────
 # Many cameras burn a 1-line clock into the lower-middle of the frame.
@@ -145,8 +145,7 @@ def _row_delta_anomaly_band(
         (1, _ANOMALY_BAND_SMOOTH_WIN),
     ).flatten()
     baseline = float(np.percentile(smooth, _ANOMALY_BAND_BASELINE_PCT))
-    threshold = max(baseline * _ANOMALY_BAND_BASELINE_MULT,
-                    _ANOMALY_BAND_DELTA_FLOOR)
+    threshold = max(baseline * _ANOMALY_BAND_BASELINE_MULT, _ANOMALY_BAND_DELTA_FLOOR)
     above = smooth > threshold
     start, length = _longest_above(above)
     if length < _ANOMALY_BAND_MIN_HEIGHT:
@@ -157,7 +156,7 @@ def _row_delta_anomaly_band(
         # height; the 60 % cap here keeps daytime scenes with abrupt
         # region boundaries out.
         return None
-    band_mean = float(smooth[start:start + length].mean())
+    band_mean = float(smooth[start : start + length].mean())
     z = (band_mean - baseline) / max(float(np.std(smooth)), 0.5)
     if z < min_z:
         return None
@@ -179,9 +178,8 @@ def _chroma_anomaly_band(img_bgr: np.ndarray) -> tuple[int, int, float] | None:
     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
     H = hsv[:, :, 0]
     S = hsv[:, :, 1]
-    wrong_mask = (
-        ((H < _ANOMALY_CHROMA_HUE_LO) | (H > _ANOMALY_CHROMA_HUE_HI))
-        & (S > _ANOMALY_CHROMA_SAT_MIN)
+    wrong_mask = ((H < _ANOMALY_CHROMA_HUE_LO) | (H > _ANOMALY_CHROMA_HUE_HI)) & (
+        S > _ANOMALY_CHROMA_SAT_MIN
     )
     wrong_per_row = wrong_mask.sum(axis=1).astype(np.float32)
     smooth = cv2.blur(
@@ -239,8 +237,7 @@ def is_horizontal_anomaly_band(
     if h < 40:
         return False, ""
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    min_z = getattr(profile, "horizontal_anomaly_band_min_z",
-                    _ANOMALY_BAND_MIN_Z)
+    min_z = getattr(profile, "horizontal_anomaly_band_min_z", _ANOMALY_BAND_MIN_Z)
     a = _row_delta_anomaly_band(gray, min_z=float(min_z))
     b = _chroma_anomaly_band(img)
     if a is None and b is None:
@@ -277,10 +274,15 @@ def is_horizontal_anomaly_band(
 # detector so behaviour is the new behaviour everywhere; the only
 # difference is the name kept in the public symbol set.
 def is_bottom_strip_anomaly(
-    img, *, timestamp_zone=None, profile=None,
+    img,
+    *,
+    timestamp_zone=None,
+    profile=None,
 ) -> tuple[bool, str]:
     return is_horizontal_anomaly_band(
-        img, timestamp_zone=timestamp_zone, profile=profile,
+        img,
+        timestamp_zone=timestamp_zone,
+        profile=profile,
     )
 
 

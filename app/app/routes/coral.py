@@ -8,6 +8,7 @@ mirrors what each model would say *with override flags* (force-enabled
 second-stage classifiers), and reusing a long-lived instance would lose
 that override semantic.
 """
+
 from __future__ import annotations
 
 import base64 as _b64
@@ -23,8 +24,8 @@ from flask import Blueprint, jsonify, request
 from .. import app_state
 from ._coral_helpers import (
     _MODELS_DIR,
-    _TEST_VALID_EXT,
     _TEST_FOLDER_LABELS,
+    _TEST_VALID_EXT,
     _categorize_tflite,
     _describe_tflite,
     _labels_for_model,
@@ -76,6 +77,7 @@ def api_coral_test():
         WildlifeClassifier,
         draw_detections,
     )
+
     settings = app_state.settings
     runtimes = app_state.runtimes
     payload = request.get_json(silent=True) or {}
@@ -110,6 +112,7 @@ def api_coral_test():
                 camera_name = cam_cfg.get("name", cam_id)
     if frame is None:
         import numpy as _np
+
         frame = _np.zeros((300, 300, 3), dtype=_np.uint8)
         frame[50:150, 50:150] = (255, 120, 0)
         frame[150:250, 100:200] = (80, 200, 0)
@@ -129,16 +132,18 @@ def api_coral_test():
             infer_ms = round((_time.perf_counter() - t0) * 1000, 1)
         except Exception as e:
             err_msg = str(e)
-    models_run.append({
-        "category": "detection",
-        "model": _os.path.basename(det_cfg.get("model_path") or "") or None,
-        "mode": detector.mode,
-        "available": bool(detector.available),
-        "reason": detector.reason,
-        "inference_ms": infer_ms,
-        "error": err_msg,
-        "results": [d.to_dict() for d in detections],
-    })
+    models_run.append(
+        {
+            "category": "detection",
+            "model": _os.path.basename(det_cfg.get("model_path") or "") or None,
+            "mode": detector.mode,
+            "available": bool(detector.available),
+            "reason": detector.reason,
+            "inference_ms": infer_ms,
+            "error": err_msg,
+            "results": [d.to_dict() for d in detections],
+        }
+    )
 
     # ── Stage 2: bird species classifier ─────────────────────────────────
     # Test-mode override: ignore .enabled so the user can see what the
@@ -156,8 +161,10 @@ def api_coral_test():
                 continue
             x1, y1, x2, y2 = d.bbox
             pad = 6
-            cx1 = max(0, x1 - pad); cy1 = max(0, y1 - pad)
-            cx2 = min(w_full, x2 + pad); cy2 = min(h_full, y2 + pad)
+            cx1 = max(0, x1 - pad)
+            cy1 = max(0, y1 - pad)
+            cx2 = min(w_full, x2 + pad)
+            cy2 = min(h_full, y2 + pad)
             crop = frame[cy1:cy2, cx1:cx2]
             if crop is None or crop.size == 0:
                 continue
@@ -169,23 +176,27 @@ def api_coral_test():
                 d.species = sp
                 d.species_latin = sp_latin
                 d.species_score = float(sp_score) if sp_score is not None else None
-                bird_results.append({
-                    "species": sp,
-                    "latin": sp_latin,
-                    "score": round(float(sp_score), 4) if sp_score is not None else None,
-                    "from_label": "bird",
-                })
+                bird_results.append(
+                    {
+                        "species": sp,
+                        "latin": sp_latin,
+                        "score": round(float(sp_score), 4) if sp_score is not None else None,
+                        "from_label": "bird",
+                    }
+                )
         bird_ms = round((_time.perf_counter() - t0) * 1000, 1)
-    models_run.append({
-        "category": "bird_species",
-        "model": _os.path.basename(bird_cfg.get("model_path") or "") or None,
-        "mode": bird_clf.mode,
-        "available": bool(bird_clf.available),
-        "reason": bird_clf.reason,
-        "inference_ms": bird_ms,
-        "error": None,
-        "results": bird_results,
-    })
+    models_run.append(
+        {
+            "category": "bird_species",
+            "model": _os.path.basename(bird_cfg.get("model_path") or "") or None,
+            "mode": bird_clf.mode,
+            "available": bool(bird_clf.available),
+            "reason": bird_clf.reason,
+            "inference_ms": bird_ms,
+            "error": None,
+            "results": bird_results,
+        }
+    )
 
     # ── Stage 3: wildlife classifier (mammals not covered by COCO) ───────
     # Same test-mode override: enabled=True so a CPU-only setup can
@@ -205,8 +216,10 @@ def api_coral_test():
                 continue
             x1, y1, x2, y2 = d.bbox
             pad = 6
-            cx1 = max(0, x1 - pad); cy1 = max(0, y1 - pad)
-            cx2 = min(w_full, x2 + pad); cy2 = min(h_full, y2 + pad)
+            cx1 = max(0, x1 - pad)
+            cy1 = max(0, y1 - pad)
+            cx2 = min(w_full, x2 + pad)
+            cy2 = min(h_full, y2 + pad)
             crop = frame[cy1:cy2, cx1:cx2]
             if crop is None or crop.size == 0:
                 continue
@@ -214,23 +227,27 @@ def api_coral_test():
                 category, imagenet_label, score = wild_clf.classify_crop(crop)
             except Exception:
                 category, imagenet_label, score = None, None, None
-            wild_results.append({
-                "from_label": d.label,
-                "imagenet": imagenet_label,
-                "mapped": category,  # "squirrel" / "fox" / "hedgehog" / null
-                "score": round(float(score), 4) if score is not None else None,
-            })
+            wild_results.append(
+                {
+                    "from_label": d.label,
+                    "imagenet": imagenet_label,
+                    "mapped": category,  # "squirrel" / "fox" / "hedgehog" / null
+                    "score": round(float(score), 4) if score is not None else None,
+                }
+            )
         wild_ms = round((_time.perf_counter() - t0) * 1000, 1)
-    models_run.append({
-        "category": "wildlife",
-        "model": _os.path.basename(wild_cfg.get("model_path") or "") or None,
-        "mode": wild_clf.mode,
-        "available": bool(wild_clf.available),
-        "reason": wild_clf.reason,
-        "inference_ms": wild_ms,
-        "error": None,
-        "results": wild_results,
-    })
+    models_run.append(
+        {
+            "category": "wildlife",
+            "model": _os.path.basename(wild_cfg.get("model_path") or "") or None,
+            "mode": wild_clf.mode,
+            "available": bool(wild_clf.available),
+            "reason": wild_clf.reason,
+            "inference_ms": wild_ms,
+            "error": None,
+            "results": wild_results,
+        }
+    )
 
     # ── Annotated preview (uses Stage-1 boxes) ──────────────────────────
     annotated = draw_detections(frame, detections)
@@ -239,7 +256,9 @@ def api_coral_test():
         scale = 640 / w
         annotated = cv2.resize(annotated, (640, int(h * scale)))
     ok, buf = cv2.imencode('.jpg', annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-    image_b64 = ("data:image/jpeg;base64," + _b64.b64encode(buf.tobytes()).decode('ascii')) if ok else None
+    image_b64 = (
+        ("data:image/jpeg;base64," + _b64.b64encode(buf.tobytes()).decode('ascii')) if ok else None
+    )
 
     usb_info = None
     try:
@@ -252,26 +271,28 @@ def api_coral_test():
     except Exception:
         pass
 
-    return jsonify({
-        "ok": True,
-        # Legacy flat fields — older test-panel renderers still read these.
-        "detector_mode": detector.mode,
-        "detector_available": detector.available,
-        "detector_reason": detector.reason,
-        "model_path": det_cfg.get("model_path"),
-        "bird_species_mode": bird_clf.mode,
-        "bird_species_reason": bird_clf.reason,
-        "source": source,
-        "camera_id": cam_id,
-        "camera_name": camera_name,
-        "inference_ms": infer_ms,
-        "inference_error": err_msg,
-        "detections": [d.to_dict() for d in detections],
-        "image_b64": image_b64,
-        "usb_info": usb_info,
-        # New per-model breakdown.
-        "models_run": models_run,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            # Legacy flat fields — older test-panel renderers still read these.
+            "detector_mode": detector.mode,
+            "detector_available": detector.available,
+            "detector_reason": detector.reason,
+            "model_path": det_cfg.get("model_path"),
+            "bird_species_mode": bird_clf.mode,
+            "bird_species_reason": bird_clf.reason,
+            "source": source,
+            "camera_id": cam_id,
+            "camera_name": camera_name,
+            "inference_ms": infer_ms,
+            "inference_error": err_msg,
+            "detections": [d.to_dict() for d in detections],
+            "image_b64": image_b64,
+            "usb_info": usb_info,
+            # New per-model breakdown.
+            "models_run": models_run,
+        }
+    )
 
 
 @bp.get('/api/coral/test-images')
@@ -287,19 +308,18 @@ def api_coral_test_images():
     for d in sorted(base.iterdir()):
         if not d.is_dir() or d.name.startswith("_"):
             continue
-        count = sum(
-            1 for p in d.iterdir()
-            if p.is_file() and p.suffix.lower() in _TEST_VALID_EXT
-        )
+        count = sum(1 for p in d.iterdir() if p.is_file() and p.suffix.lower() in _TEST_VALID_EXT)
         if count == 0:
             continue
         meta = _TEST_FOLDER_LABELS.get(d.name, {})
-        folders.append({
-            "name":  d.name,
-            "count": count,
-            "label": meta.get("label", d.name.capitalize()),
-            "icon":  meta.get("icon", "📁"),
-        })
+        folders.append(
+            {
+                "name": d.name,
+                "count": count,
+                "label": meta.get("label", d.name.capitalize()),
+                "icon": meta.get("icon", "📁"),
+            }
+        )
     return jsonify({"folders": folders})
 
 
@@ -315,11 +335,13 @@ def api_coral_test_batch():
     folder_filter = (payload.get("folder") or "").strip()
     mode = (payload.get("mode") or "cascade").strip()
     if mode not in ALLOWED_MODES:
-        return jsonify({
-            "ok": False,
-            "error": f"unknown mode: {mode!r}",
-            "allowed": list(ALLOWED_MODES),
-        }), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": f"unknown mode: {mode!r}",
+                "allowed": list(ALLOWED_MODES),
+            }
+        ), 400
 
     eff = app_state.get_effective_config()
     det_cfg = (eff.get("processing", {}) or {}).get("detection", {}) or {}
@@ -336,19 +358,25 @@ def api_coral_test_batch():
     wildlife_settings_enabled = bool(wl_cfg.get("enabled"))
 
     detector, bird_clf, wl_clf, wildlife_disabled_warning = build_classifiers_for_mode(
-        mode, det_cfg, bird_cfg, wl_cfg, needs_wildlife,
+        mode,
+        det_cfg,
+        bird_cfg,
+        wl_cfg,
+        needs_wildlife,
     )
     # COCO-less modes (bird_species_only, wildlife_only) tolerate the
     # detector being absent — they don't call detect_frame at all. Only
     # the modes that genuinely need COCO short-circuit on unavailability.
     if mode in COCO_MODES and not detector.available:
-        return jsonify({
-            "ok": False,
-            "error": "detector unavailable",
-            "detector_mode": detector.mode,
-            "detector_reason": detector.reason,
-            "results": [],
-        })
+        return jsonify(
+            {
+                "ok": False,
+                "error": "detector unavailable",
+                "detector_mode": detector.mode,
+                "detector_reason": detector.reason,
+                "results": [],
+            }
+        )
 
     results: list = []
     counters: dict = {"by_label": {}, "species": {}, "wildlife": {}}
@@ -365,55 +393,82 @@ def api_coral_test_batch():
                 continue
             frame = cv2.imread(str(img_path))
             if frame is None:
-                results.append({
-                    "folder": d.name,
-                    "filename": img_path.name,
-                    "error": "could not read image",
-                })
+                results.append(
+                    {
+                        "folder": d.name,
+                        "filename": img_path.name,
+                        "error": "could not read image",
+                    }
+                )
                 continue
             try:
                 if mode == "cascade":
                     tagged, wildlife_info, stages_run, ms = run_mode_cascade(
-                        frame, detector, bird_clf, wl_clf, d.name, counters,
+                        frame,
+                        detector,
+                        bird_clf,
+                        wl_clf,
+                        d.name,
+                        counters,
                     )
                 elif mode == "coco_only":
                     tagged, wildlife_info, stages_run, ms = run_mode_coco_only(
-                        frame, detector,
+                        frame,
+                        detector,
                     )
                 elif mode == "bird_species_only":
                     tagged, wildlife_info, stages_run, ms = run_mode_bird_only(
-                        frame, bird_clf, counters,
+                        frame,
+                        bird_clf,
+                        counters,
                     )
                 elif mode == "wildlife_only":
                     tagged, wildlife_info, stages_run, ms = run_mode_wildlife_only(
-                        frame, wl_clf, counters,
+                        frame,
+                        wl_clf,
+                        counters,
                     )
                 else:  # all_independent
                     tagged, wildlife_info, stages_run, ms = run_mode_all_independent(
-                        frame, detector, bird_clf, wl_clf, counters,
+                        frame,
+                        detector,
+                        bird_clf,
+                        wl_clf,
+                        counters,
                     )
             except Exception as e:
                 # Match the legacy error-row shape: stages_run is empty
                 # because the failure is the COCO detect_frame call inside
                 # the helper, which happens before any stage append.
-                results.append({
-                    "folder": d.name,
-                    "filename": img_path.name,
-                    "error": str(e),
-                    "stages_run": [],
-                })
+                results.append(
+                    {
+                        "folder": d.name,
+                        "filename": img_path.name,
+                        "error": str(e),
+                        "stages_run": [],
+                    }
+                )
                 continue
 
             image_b64, orig_w, orig_h = serialise_image_b64(frame)
-            results.append(serialise_result_row(
-                d.name, img_path.name, ms, image_b64, orig_w, orig_h,
-                stages_run, tagged, wildlife_info,
-            ))
+            results.append(
+                serialise_result_row(
+                    d.name,
+                    img_path.name,
+                    ms,
+                    image_b64,
+                    orig_w,
+                    orig_h,
+                    stages_run,
+                    tagged,
+                    wildlife_info,
+                )
+            )
             total_images += 1
             inference_times.append(ms)
             if tagged:
                 with_detections += 1
-                for (dd, _src) in tagged:
+                for dd, _src in tagged:
                     counters["by_label"][dd.label] = counters["by_label"].get(dd.label, 0) + 1
             # For wildlife folders, "hit" means either COCO found something
             # or wildlife classifier found fox/squirrel/hedgehog
@@ -424,7 +479,12 @@ def api_coral_test_batch():
         "ok": True,
         "mode": mode,
         "models_active": build_models_active(
-            detector, bird_clf, wl_clf, det_cfg, bird_cfg, wl_cfg,
+            detector,
+            bird_clf,
+            wl_clf,
+            det_cfg,
+            bird_cfg,
+            wl_cfg,
         ),
         "detector_mode": detector.mode,
         "detector_reason": detector.reason,
@@ -441,7 +501,9 @@ def api_coral_test_batch():
             "by_label": counters["by_label"],
             "by_species": counters["species"],
             "by_wildlife": counters["wildlife"],
-            "avg_ms": round(sum(inference_times) / len(inference_times), 1) if inference_times else 0.0,
+            "avg_ms": round(sum(inference_times) / len(inference_times), 1)
+            if inference_times
+            else 0.0,
         },
         "results": results,
     }
@@ -458,9 +520,9 @@ def api_coral_models():
     eff = app_state.get_effective_config()
     proc = eff.get("processing") or {}
     active_by_category = {
-        "detection":    (proc.get("detection") or {}).get("model_path"),
+        "detection": (proc.get("detection") or {}).get("model_path"),
         "bird_species": (proc.get("bird_species") or {}).get("model_path"),
-        "wildlife":     (proc.get("wildlife") or {}).get("model_path"),
+        "wildlife": (proc.get("wildlife") or {}).get("model_path"),
     }
     # Current (legacy field) kept for backward compat
     current = active_by_category.get("detection")
@@ -473,26 +535,30 @@ def api_coral_models():
                 size = 0
             category = _categorize_tflite(p.name)
             active_path = active_by_category.get(category)
-            items.append({
-                "filename": p.name,
-                "path": str(p),
-                "size_bytes": size,
-                "size_mb": round(size / 1048576, 2),
-                "description": _describe_tflite(p.name),
-                "nickname": _nickname_tflite(p.name),
-                "edgetpu": "_edgetpu" in p.name.lower(),
-                "model_category": category,
-                "labels": _labels_for_model(p.name),
-                "active": str(p) == current,                       # legacy: detection only
-                "active_in_category": str(p) == active_path,        # per-category flag
-            })
-    return jsonify({
-        "ok": True,
-        "models": items,
-        "current": current,
-        "active_by_category": active_by_category,
-        "models_dir": str(_MODELS_DIR),
-    })
+            items.append(
+                {
+                    "filename": p.name,
+                    "path": str(p),
+                    "size_bytes": size,
+                    "size_mb": round(size / 1048576, 2),
+                    "description": _describe_tflite(p.name),
+                    "nickname": _nickname_tflite(p.name),
+                    "edgetpu": "_edgetpu" in p.name.lower(),
+                    "model_category": category,
+                    "labels": _labels_for_model(p.name),
+                    "active": str(p) == current,  # legacy: detection only
+                    "active_in_category": str(p) == active_path,  # per-category flag
+                }
+            )
+    return jsonify(
+        {
+            "ok": True,
+            "models": items,
+            "current": current,
+            "active_by_category": active_by_category,
+            "models_dir": str(_MODELS_DIR),
+        }
+    )
 
 
 @bp.post('/api/coral/models/select')
@@ -505,6 +571,7 @@ def api_coral_models_select():
     Path traversal protection: target must resolve inside /app/models/.
     """
     from ..server import rebuild_runtimes
+
     settings = app_state.settings
     payload = request.get_json(silent=True) or {}
     raw_path = (payload.get("path") or "").strip()
@@ -520,10 +587,12 @@ def api_coral_models_select():
 
     category = _categorize_tflite(target.name)
     if category == "other":
-        return jsonify({
-            "ok": False,
-            "error": "Modell-Kategorie unbekannt — bitte Dateinamen prüfen",
-        }), 400
+        return jsonify(
+            {
+                "ok": False,
+                "error": "Modell-Kategorie unbekannt — bitte Dateinamen prüfen",
+            }
+        ), 400
 
     # Map category → settings.processing.<bucket> so each model writes
     # into its own bucket. cpu_model_path mirrors the EdgeTPU pick to
@@ -617,6 +686,7 @@ def api_test_detection(cam_id: str):
         has_corrupt_strip,
         pick_profile_from_baseline,
     )
+
     request_started_at = _time.time()
     deadline = _time.monotonic() + 2.5
     frame = None
@@ -700,23 +770,27 @@ def api_test_detection(cam_id: str):
             "frame_age_ms=%d frame_src=- raw=0 pass=0 belowthresh=0 "
             "filtered=0 inference_ms=0 top_raw=[] "
             "validator_reason=%r profile=%s",
-            cam_id, code, waited_s, retries, frame_age_ms_attempt,
+            cam_id,
+            code,
+            waited_s,
+            retries,
+            frame_age_ms_attempt,
             last_validator_reason or "-",
             (active_profile.name if active_profile else "-"),
         )
-        return jsonify({
-            "ok":           False,
-            "error":        msg,
-            "code":         code,
-            "frame_age_ms": frame_age_ms_attempt,
-            # H1 · expose the validator reason so the in-modal Diagnose
-            # panel can render "frames rejected by horizontal_anomaly
-            # _band" instead of just "corrupt frames".
-            "validator_reason": last_validator_reason or None,
-            "validator_profile": (
-                active_profile.name if active_profile else None
-            ),
-        }), 503
+        return jsonify(
+            {
+                "ok": False,
+                "error": msg,
+                "code": code,
+                "frame_age_ms": frame_age_ms_attempt,
+                # H1 · expose the validator reason so the in-modal Diagnose
+                # panel can render "frames rejected by horizontal_anomaly
+                # _band" instead of just "corrupt frames".
+                "validator_reason": last_validator_reason or None,
+                "validator_profile": (active_profile.name if active_profile else None),
+            }
+        ), 503
     frame_age_ms = int((_time.time() - frame_ts_accepted) * 1000)
     # rt.frame is written by camera_runtime/_main_loop on every successful
     # MAIN stream grab (RTSP main URL via cv2.VideoCapture). The sub-stream
@@ -734,7 +808,11 @@ def api_test_detection(cam_id: str):
             "[test-detection] cam=%s outcome=coral_unavailable waited=%.2fs "
             "retries=%d frame_age_ms=%d frame_src=%s raw=0 pass=0 "
             "belowthresh=0 filtered=0 top_raw=[]",
-            cam_id, waited_s, retries, frame_age_ms, frame_src_label,
+            cam_id,
+            waited_s,
+            retries,
+            frame_age_ms,
+            frame_src_label,
         )
         return jsonify({"error": "Coral nicht verfügbar (motion-only?)"}), 503
     inference_t0 = _time.monotonic()
@@ -750,7 +828,7 @@ def api_test_detection(cam_id: str):
     # simulation result reflects what would happen in production.
     global_floor = float(cam.get("detection_min_score") or 0.0)
     if global_floor <= 0:
-        proc = (app_state.get_effective_config().get("processing") or {})
+        proc = app_state.get_effective_config().get("processing") or {}
         global_floor = float((proc.get("detection") or {}).get("min_score") or 0.55)
     per_class = cam.get("label_thresholds") or {}
     obj_filter = set(cam.get("object_filter") or [])
@@ -767,13 +845,15 @@ def api_test_detection(cam_id: str):
             verdict = "pass"
             reason = ""
         x1, y1, x2, y2 = d.bbox
-        out.append({
-            "label":   d.label,
-            "score":   round(float(d.score), 4),
-            "bbox":    [int(x1), int(y1), int(max(0, x2 - x1)), int(max(0, y2 - y1))],
-            "verdict": verdict,
-            "reason":  reason,
-        })
+        out.append(
+            {
+                "label": d.label,
+                "score": round(float(d.score), 4),
+                "bbox": [int(x1), int(y1), int(max(0, x2 - x1)), int(max(0, y2 - y1))],
+                "verdict": verdict,
+                "reason": reason,
+            }
+        )
     out.sort(key=lambda r: r["score"], reverse=True)
     # ``?no_snapshot=1`` — Simulieren v2 (kr493): frontend drives the
     # video via the continuous MJPEG stream and only needs the bbox
@@ -804,8 +884,7 @@ def api_test_detection(cam_id: str):
             snap_scale = target_w / float(src_w)
             snap_w = target_w
             snap_h = max(2, int(round(src_h * snap_scale)) // 2 * 2)
-            snap_frame = cv2.resize(frame, (snap_w, snap_h),
-                                    interpolation=cv2.INTER_AREA)
+            snap_frame = cv2.resize(frame, (snap_w, snap_h), interpolation=cv2.INTER_AREA)
         else:
             snap_frame = frame
         # Rewrite bbox coords into the downscaled space when we
@@ -823,11 +902,20 @@ def api_test_detection(cam_id: str):
                 ]
         try:
             import base64
-            ok, jpg = cv2.imencode(".jpg", snap_frame, [
-                int(cv2.IMWRITE_JPEG_QUALITY), 65,
-                int(cv2.IMWRITE_JPEG_OPTIMIZE), 1,
-            ])
-            snapshot = f"data:image/jpeg;base64,{base64.b64encode(jpg.tobytes()).decode()}" if ok else None
+
+            ok, jpg = cv2.imencode(
+                ".jpg",
+                snap_frame,
+                [
+                    int(cv2.IMWRITE_JPEG_QUALITY),
+                    65,
+                    int(cv2.IMWRITE_JPEG_OPTIMIZE),
+                    1,
+                ],
+            )
+            snapshot = (
+                f"data:image/jpeg;base64,{base64.b64encode(jpg.tobytes()).decode()}" if ok else None
+            )
         except Exception as e:
             log.warning("[test-detection] %s encode failed: %s", cam_id, e)
             snapshot = None
@@ -843,6 +931,7 @@ def api_test_detection(cam_id: str):
     # even when nothing passed — "what WOULD have happened if a hit
     # passed" is often the actual debugging question.
     from ..event_logic import compute_severity_from_matrix, is_schedule_window_active
+
     trace: list[str] = []
     trace.append(
         f"[capture] frame {w}×{h} · age {frame_age_ms} ms · "
@@ -866,7 +955,9 @@ def api_test_detection(cam_id: str):
             trace.append(f"[det] {d['label']} {pct}% → FILTERED ({d['reason']})")
     pass_dets = [d for d in out if d["verdict"] == "pass"]
     if not pass_dets:
-        trace.append("[verdict] no detection survived the threshold/filter gates · alarm pipeline NOT triggered")
+        trace.append(
+            "[verdict] no detection survived the threshold/filter gates · alarm pipeline NOT triggered"
+        )
     class_sev_cfg = cam.get("class_severity") or {}
     trace.append(
         f"[matrix] class_severity: "
@@ -881,7 +972,9 @@ def api_test_detection(cam_id: str):
             severity = "alarm"
         trace.append(f"[matrix] resolved severity for {labels_pass}: {severity}")
     trace.append(f"[armed] camera armed={bool(cam.get('armed', True))}")
-    trace.append(f"[telegram_enabled] cam.telegram_enabled={bool(cam.get('telegram_enabled', True))}")
+    trace.append(
+        f"[telegram_enabled] cam.telegram_enabled={bool(cam.get('telegram_enabled', True))}"
+    )
     sch_notify = cam.get("schedule_notify") or {}
     if sch_notify:
         try:
@@ -908,6 +1001,7 @@ def api_test_detection(cam_id: str):
             cd_seconds = int(cd_cfg.get(top_label, 60))
             if last_mono:
                 import time as _t
+
                 elapsed = _t.monotonic() - last_mono
                 if elapsed < cd_seconds:
                     trace.append(
@@ -945,12 +1039,9 @@ def api_test_detection(cam_id: str):
     # WARNING level when raw=0 OR outcome != ok so a regression
     # surfaces in docker logs without --tail digging.
     belowthresh_n = sum(1 for d in out if d["verdict"] == "belowthresh")
-    filtered_n    = sum(1 for d in out if d["verdict"] == "filtered")
-    top_raw_pairs = [(d["label"], int(round(d["score"] * 100)))
-                     for d in out[:3]]
-    top_raw_str = "[" + ", ".join(
-        f"({lab},{pct}%)" for lab, pct in top_raw_pairs
-    ) + "]"
+    filtered_n = sum(1 for d in out if d["verdict"] == "filtered")
+    top_raw_pairs = [(d["label"], int(round(d["score"] * 100))) for d in out[:3]]
+    top_raw_str = "[" + ", ".join(f"({lab},{pct}%)" for lab, pct in top_raw_pairs) + "]"
     log_fn = log.info if (final_outcome == "ok" and len(raw) > 0) else log.warning
     # H1 · object_filter + global_floor surfaced in the log so the
     # Stage 3 case (raw>0 but filter eats everything → pass=0
@@ -963,11 +1054,20 @@ def api_test_detection(cam_id: str):
         "frame_age_ms=%d frame_src=%s raw=%d pass=%d belowthresh=%d "
         "filtered=%d inference_ms=%d top_raw=%s "
         "obj_filter=%s min_score=%.2f profile=%s",
-        cam_id, final_outcome, waited_s, retries,
-        frame_age_ms, frame_src_label,
-        len(raw), len(pass_dets), belowthresh_n, filtered_n,
-        inference_ms, top_raw_str,
-        _obj_filter_str, float(global_floor),
+        cam_id,
+        final_outcome,
+        waited_s,
+        retries,
+        frame_age_ms,
+        frame_src_label,
+        len(raw),
+        len(pass_dets),
+        belowthresh_n,
+        filtered_n,
+        inference_ms,
+        top_raw_str,
+        _obj_filter_str,
+        float(global_floor),
         (active_profile.name if active_profile else "-"),
     )
     # ── Decoder-backlog heuristic ────────────────────────────────────
@@ -984,34 +1084,27 @@ def api_test_detection(cam_id: str):
     # fps that may be skewed by the same backlog.
     interval_ms = int(cam.get("frame_interval_ms", 350) or 350)
     ema_ms = float(getattr(rt, "_frame_interval_ema_ms", 0.0) or 0.0)
-    backlog = (
-        ema_ms > 0
-        and interval_ms > 0
-        and ema_ms < 0.4 * interval_ms
-    )
+    backlog = ema_ms > 0 and interval_ms > 0 and ema_ms < 0.4 * interval_ms
     # C3 · diagnostic payload for the in-modal panel. Structured so
     # the frontend doesn't have to re-derive counts from `detections`
     # (and so future regression hunts have one canonical shape to
     # read against). All values either appear in the WARNING log
     # line above or extend it (per_class thresholds, inference_ms).
     diag = {
-        "frame_src":       "main",
-        "frame_size":      {"w": int(src_w_raw), "h": int(src_h_raw)},
-        "frame_age_ms":    int(frame_age_ms),
+        "frame_src": "main",
+        "frame_size": {"w": int(src_w_raw), "h": int(src_h_raw)},
+        "frame_age_ms": int(frame_age_ms),
         "coral_available": bool(getattr(detector, "available", False)),
-        "inference_ms":    int(inference_ms),
+        "inference_ms": int(inference_ms),
         "gates": {
-            "raw":         int(len(raw)),
-            "pass":        int(len(pass_dets)),
+            "raw": int(len(raw)),
+            "pass": int(len(pass_dets)),
             "belowthresh": int(belowthresh_n),
-            "filtered":    int(filtered_n),
+            "filtered": int(filtered_n),
         },
-        "top_raw": [
-            {"label": d["label"], "score": d["score"]}
-            for d in out[:3]
-        ],
+        "top_raw": [{"label": d["label"], "score": d["score"]} for d in out[:3]],
         "thresholds": {
-            "global":    round(float(global_floor), 3),
+            "global": round(float(global_floor), 3),
             "per_class": dict(per_class) if per_class else {},
         },
         # H1 · Stage 3 visibility — surface the object_filter the
@@ -1024,19 +1117,19 @@ def api_test_detection(cam_id: str):
         # the wait loop) the last rejection reason. On the success
         # path this is empty; on a corrupt-outcome 503 it carries
         # the single most-informative diagnostic.
-        "validator_profile": (
-            active_profile.name if active_profile else None
-        ),
+        "validator_profile": (active_profile.name if active_profile else None),
         "validator_reason": last_validator_reason or None,
     }
-    return jsonify({
-        "ok":             True,
-        "snapshot":       snapshot,
-        "frame_size":     {"w": int(w), "h": int(h)},
-        "frame_age_ms":   frame_age_ms,
-        "detections":     out,
-        "decision_trace": trace,
-        "diag":           diag,
-        "frame_interval_avg_ms":     int(round(ema_ms)) if ema_ms > 0 else 0,
-        "decoder_backlog_suspected": bool(backlog),
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "snapshot": snapshot,
+            "frame_size": {"w": int(w), "h": int(h)},
+            "frame_age_ms": frame_age_ms,
+            "detections": out,
+            "decision_trace": trace,
+            "diag": diag,
+            "frame_interval_avg_ms": int(round(ema_ms)) if ema_ms > 0 else 0,
+            "decoder_backlog_suspected": bool(backlog),
+        }
+    )

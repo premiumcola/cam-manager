@@ -42,6 +42,11 @@ from ...telegram_helpers import (
     truncate_caption,
 )
 from .._consts import (
+    _MUTE_DEFAULT_S,
+    _MUTE_EXTEND_S,
+    _NOTIFY_COOLDOWN_DEFAULTS,
+    _PHOTO_LIMIT_BYTES,
+    _VIDEO_LIMIT_BYTES,
     ACTION_CAMS,
     ACTION_CLIP,
     ACTION_LIVE,
@@ -52,11 +57,6 @@ from .._consts import (
     BOT_COMMANDS,
     PERSISTENT_KB_KEY,
     PERSISTENT_KEYBOARD,
-    _MUTE_DEFAULT_S,
-    _MUTE_EXTEND_S,
-    _NOTIFY_COOLDOWN_DEFAULTS,
-    _PHOTO_LIMIT_BYTES,
-    _VIDEO_LIMIT_BYTES,
     _parse_hhmm,
     log,
 )
@@ -69,14 +69,18 @@ class _WetterMixin:
         """⛅ Wetter — live snapshot from WeatherService.status() with
         threshold-aware status icons + sun position + active-event list."""
         from .. import server as _srv
+
         wsvc = getattr(_srv, "weather_service", None)
         now = datetime.now()
         lines = [f"⛅ <b>Wetter</b> · Stand {now.strftime('%H:%M')}", "─────────────"]
         if wsvc is None:
             lines.append("Wetter-Service nicht aktiv.")
-            return ("\n".join(lines),
-                    InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Hauptmenü",
-                                                                  callback_data="menu:root")]]))
+            return (
+                "\n".join(lines),
+                InlineKeyboardMarkup(
+                    [[InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root")]]
+                ),
+            )
         try:
             stat = wsvc.status() or {}
         except Exception:
@@ -91,10 +95,10 @@ class _WetterMixin:
         units = hist.get("units") or {}
         # Mapping from event_type → (icon, label, value-key, unit-fallback)
         rows_def = [
-            ("heavy_rain", "🌧 Regen",     "precipitation",       "mm/h"),
-            ("thunder",    "⚡ Gewitter",  "lightning_potential", "J/kg"),
-            ("snow",       "❄ Schnee",    "snowfall",            "cm/h"),
-            ("fog",        "🌫 Sicht",    "visibility",          "m"),
+            ("heavy_rain", "🌧 Regen", "precipitation", "mm/h"),
+            ("thunder", "⚡ Gewitter", "lightning_potential", "J/kg"),
+            ("snow", "❄ Schnee", "snowfall", "cm/h"),
+            ("fog", "🌫 Sicht", "visibility", "m"),
         ]
         for evt, label, key, unit_fb in rows_def:
             v = cur.get(key)
@@ -104,7 +108,7 @@ class _WetterMixin:
             if v is None:
                 vstr, pct, status_icon = "—", "—", "⚪"
             else:
-                vstr = (f"{v:.1f}" if abs(v) < 100 else f"{v:.0f}")
+                vstr = f"{v:.1f}" if abs(v) < 100 else f"{v:.0f}"
                 if thr is None or thr <= 0:
                     pct, status_icon = "—", "⚪"
                 else:
@@ -127,7 +131,7 @@ class _WetterMixin:
             if thr is None:
                 thr_str = "—"
             else:
-                thr_str = (f"{thr:.1f}" if abs(thr) < 100 else f"{thr:.0f}")
+                thr_str = f"{thr:.1f}" if abs(thr) < 100 else f"{thr:.0f}"
             # Precipitation row: append the DWD intensity band so a
             # 0.1 mm/h reading reads as "Nieselregen" instead of being
             # nameless. Single source of truth in
@@ -136,6 +140,7 @@ class _WetterMixin:
             band_suffix = ""
             if evt == "heavy_rain" and v is not None and float(v) > 0:
                 from ...weather_service import precipitation_label as _pl
+
                 band_suffix = f" · {_pl(v)}"
             lines.append(
                 f"{label:<11s} {status_icon} {vstr} / {thr_str} {unit}  ({pct}){band_suffix}"
@@ -161,12 +166,15 @@ class _WetterMixin:
             lines.append(f"☀ Sonne     {sun_alt:.0f}° hoch{sun_extra}")
         # Active events line
         from ...weather_service import EVENT_LABEL_DE
+
         active_evs = [EVENT_LABEL_DE.get(e, e) for e, on in cur_state.items() if on]
         lines.append("")
         lines.append("Aktive Ereignisse: " + (", ".join(active_evs) if active_evs else "keine"))
         rows = [
-            [InlineKeyboardButton("🔄 Aktualisieren", callback_data="menu:wetter"),
-             InlineKeyboardButton("🏠 Hauptmenü",     callback_data="menu:root")],
+            [
+                InlineKeyboardButton("🔄 Aktualisieren", callback_data="menu:wetter"),
+                InlineKeyboardButton("🏠 Hauptmenü", callback_data="menu:root"),
+            ],
         ]
         return "\n".join(lines), InlineKeyboardMarkup(rows)
 

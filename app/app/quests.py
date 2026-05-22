@@ -40,9 +40,9 @@ Evaluation runs at three trigger points (see CLAUDE.md feature doc F09):
 `evaluate_quests` is idempotent — running it twice in a row produces the
 same dict — so trigger (a) and (b) cannot diverge.
 """
+
 from __future__ import annotations
 
-import json as _json_mod
 import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -280,8 +280,9 @@ def _event_matches(ev: dict, criteria: dict) -> bool:
     return True
 
 
-def _all_motion_events_in_window(store, start_dt: datetime,
-                                 end_dt: datetime, cam_ids: list[str]) -> list[dict]:
+def _all_motion_events_in_window(
+    store, start_dt: datetime, end_dt: datetime, cam_ids: list[str]
+) -> list[dict]:
     """Pull every motion event across all cameras within the window.
 
     Done once per evaluation pass and reused for every quest, so the
@@ -314,11 +315,14 @@ def _all_motion_events_in_window(store, start_dt: datetime,
 
 
 # ── Main evaluator ─────────────────────────────────────────────────────────
-def evaluate_quests(store, achievements_data: dict,
-                    cam_ids: list[str],
-                    storage_root: Path,
-                    now: datetime | None = None,
-                    notify: Callable[[dict], None] | None = None) -> tuple[dict, list[str]]:
+def evaluate_quests(
+    store,
+    achievements_data: dict,
+    cam_ids: list[str],
+    storage_root: Path,
+    now: datetime | None = None,
+    notify: Callable[[dict], None] | None = None,
+) -> tuple[dict, list[str]]:
     """Re-evaluate every quest against the current event index.
 
     Args:
@@ -388,8 +392,7 @@ def evaluate_quests(store, achievements_data: dict,
             # but a label filter still applies if present.
             days_seen: set[str] = set()
             for ev in events:
-                if criteria.get("label") or criteria.get("labels") \
-                        or criteria.get("hour_in"):
+                if criteria.get("label") or criteria.get("labels") or criteria.get("hour_in"):
                     if not _event_matches(ev, criteria):
                         continue
                 t = ev.get("time") or ""
@@ -444,9 +447,10 @@ def evaluate_quests(store, achievements_data: dict,
 
 
 # ── Archive ────────────────────────────────────────────────────────────────
-def archive_closed_quests(achievements_data: dict,
-                          now: datetime | None = None,
-                          ) -> tuple[dict, list[dict]]:
+def archive_closed_quests(
+    achievements_data: dict,
+    now: datetime | None = None,
+) -> tuple[dict, list[dict]]:
     """Move window-closed quests with progress > 0 to ``quests_archive``;
     drop window-closed quests with progress == 0 silently.
 
@@ -495,8 +499,7 @@ def archive_closed_quests(achievements_data: dict,
             window_name = catalogue[base_id]["window"]
             stored_from_str = (q.get("window") or {}).get("from")
             try:
-                stored_from = datetime.fromisoformat(stored_from_str) \
-                    if stored_from_str else None
+                stored_from = datetime.fromisoformat(stored_from_str) if stored_from_str else None
             except ValueError:
                 stored_from = None
             logical_end = _window_logical_end(window_name, stored_from)
@@ -515,17 +518,22 @@ def archive_closed_quests(achievements_data: dict,
                 "archived_reason": reason,
             }
             archive[qid] = entry
-            archived_summaries.append({
-                "id": qid,
-                "title": q.get("title"),
-                "progress": progress,
-                "target": q.get("target"),
-                "window": q.get("window"),
-                "archived_reason": reason,
-            })
+            archived_summaries.append(
+                {
+                    "id": qid,
+                    "title": q.get("title"),
+                    "progress": progress,
+                    "target": q.get("target"),
+                    "window": q.get("window"),
+                    "archived_reason": reason,
+                }
+            )
             log.info(
                 "[quests] archived %s (%d/%s) reason=%s window=%s..%s",
-                qid, progress, q.get("target"), reason,
+                qid,
+                progress,
+                q.get("target"),
+                reason,
                 (q.get("window") or {}).get("from"),
                 (q.get("window") or {}).get("to"),
             )
@@ -538,9 +546,10 @@ def archive_closed_quests(achievements_data: dict,
 
 
 # ── Upcoming-quests preview ────────────────────────────────────────────────
-def preview_upcoming_quests(now: datetime | None = None,
-                            horizon_days: int = 60,
-                            ) -> list[dict]:
+def preview_upcoming_quests(
+    now: datetime | None = None,
+    horizon_days: int = 60,
+) -> list[dict]:
     """Walk QUESTS and return the entries whose NEXT window opens within
     ``horizon_days``. Skips quests whose current window is already active
     (those are on the active pinboard, not the preview). Result is
@@ -558,21 +567,22 @@ def preview_upcoming_quests(now: datetime | None = None,
         if opens_at is None or opens_at > horizon:
             continue
         closes_at = _next_window_close(q["window"], opens_at)
-        out.append({
-            "id": q["id"],
-            "title": q["title"],
-            "icon": q["icon"],
-            "description": q["description"],
-            "opens_at": opens_at.isoformat(timespec="seconds"),
-            "closes_at": closes_at.isoformat(timespec="seconds") if closes_at else None,
-            "opens_in_days": max(0, (opens_at - now).days),
-        })
+        out.append(
+            {
+                "id": q["id"],
+                "title": q["title"],
+                "icon": q["icon"],
+                "description": q["description"],
+                "opens_at": opens_at.isoformat(timespec="seconds"),
+                "closes_at": closes_at.isoformat(timespec="seconds") if closes_at else None,
+                "opens_in_days": max(0, (opens_at - now).days),
+            }
+        )
     out.sort(key=lambda x: x["opens_at"])
     return out
 
 
-def reevaluate_and_save(now: datetime | None = None,
-                        *, is_rollover: bool = False) -> dict:
+def reevaluate_and_save(now: datetime | None = None, *, is_rollover: bool = False) -> dict:
     """One-call helper: load achievements, evaluate, archive, save,
     return summary. Used by the hourly background job, the daily
     rollover timer, the inline post-event hook, and the manual
@@ -619,10 +629,22 @@ def reevaluate_and_save(now: datetime | None = None,
         # twice yields the same dict.
         updated, archived = archive_closed_quests(updated, now=now)
         _save_achievements(updated)
-    log.info("[quests] re-evaluated %d quests, %d newly completed, %d archived: %s",
-             len(updated.get("quests") or {}), len(newly), len(archived), newly)
+    log.info(
+        "[quests] re-evaluated %d quests, %d newly completed, %d archived: %s",
+        len(updated.get("quests") or {}),
+        len(newly),
+        len(archived),
+        newly,
+    )
     if is_rollover:
-        log.info("[quests] rollover: archived=%d new_active=%d",
-                 len(archived), len(updated.get("quests") or {}))
-    return {"ok": True, "evaluated": len(updated.get("quests") or {}),
-            "newly_completed": newly, "archived": [a["id"] for a in archived]}
+        log.info(
+            "[quests] rollover: archived=%d new_active=%d",
+            len(archived),
+            len(updated.get("quests") or {}),
+        )
+    return {
+        "ok": True,
+        "evaluated": len(updated.get("quests") or {}),
+        "newly_completed": newly,
+        "archived": [a["id"] for a in archived],
+    }

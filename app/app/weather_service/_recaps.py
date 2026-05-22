@@ -20,8 +20,8 @@ import requests
 from ._consts import (
     EVENT_ICON_HEX,
     EVENT_LABEL_DE,
-    HISTORY_FIELDS,
     HISTORY_FIELD_TO_EVENT,
+    HISTORY_FIELDS,
     HISTORY_LABELS_DE,
     HISTORY_MAXLEN,
     HISTORY_UNITS,
@@ -64,31 +64,38 @@ class RecapsMixin:
         # Quarterly (Q1–Q3): last Sunday of Mar/Jun/Sep at 16:00.
         for q, end_month in [(1, 3), (2, 6), (3, 9)]:
             run_d = self._last_sunday_of(year, end_month)
-            out.append({
-                "period_id":    f"q{q}_{year}",
-                "period_label": f"Q{q} {year}",
-                "run_at":       datetime(run_d.year, run_d.month, run_d.day, 16, 0),
-                "period_start": date(year, (q - 1) * 3 + 1, 1),
-                "period_end":   date(year, end_month, 28) + timedelta(days=4),  # last day of month, sloppy
-            })
+            out.append(
+                {
+                    "period_id": f"q{q}_{year}",
+                    "period_label": f"Q{q} {year}",
+                    "run_at": datetime(run_d.year, run_d.month, run_d.day, 16, 0),
+                    "period_start": date(year, (q - 1) * 3 + 1, 1),
+                    "period_end": date(year, end_month, 28)
+                    + timedelta(days=4),  # last day of month, sloppy
+                }
+            )
         # Q4 + Jahres-Recap: 02. Januar des FOLGEJAHRES um 16:00.
         # Both fire on the same day; period_id distinguishes them so the
         # idempotent re-registration treats them as separate jobs.
         run_q4 = datetime(year + 1, 1, 2, 16, 0)
-        out.append({
-            "period_id":    f"q4_{year}",
-            "period_label": f"Q4 {year}",
-            "run_at":       run_q4,
-            "period_start": date(year, 10, 1),
-            "period_end":   date(year, 12, 31),
-        })
-        out.append({
-            "period_id":    f"year_{year}",
-            "period_label": f"Jahres-Rückblick {year}",
-            "run_at":       run_q4 + timedelta(minutes=10),  # 16:10 same day
-            "period_start": date(year, 1, 1),
-            "period_end":   date(year, 12, 31),
-        })
+        out.append(
+            {
+                "period_id": f"q4_{year}",
+                "period_label": f"Q4 {year}",
+                "run_at": run_q4,
+                "period_start": date(year, 10, 1),
+                "period_end": date(year, 12, 31),
+            }
+        )
+        out.append(
+            {
+                "period_id": f"year_{year}",
+                "period_label": f"Jahres-Rückblick {year}",
+                "run_at": run_q4 + timedelta(minutes=10),  # 16:10 same day
+                "period_start": date(year, 1, 1),
+                "period_end": date(year, 12, 31),
+            }
+        )
         # Trim period_end to actual last day of month for quarterly periods.
         for r in out:
             if r["period_id"].startswith("q") and not r["period_id"].startswith("q4"):
@@ -104,6 +111,7 @@ class RecapsMixin:
         if not self._scheduler:
             return
         from apscheduler.triggers.date import DateTrigger
+
         now = datetime.now()
         registered = []
         for year in (now.year, now.year + 1):
@@ -130,41 +138,54 @@ class RecapsMixin:
         """Wrapper that runs the build in a daemon thread so the scheduler
         thread isn't blocked by a long ffmpeg run."""
         threading.Thread(
-            target=self._build_recap, args=[r],
-            daemon=True, name=f"weather-recap-{r['period_id']}",
+            target=self._build_recap,
+            args=[r],
+            daemon=True,
+            name=f"weather-recap-{r['period_id']}",
         ).start()
 
     def _build_recap(self, r: dict):
         try:
             cands = self._collect_recap_candidates(r["period_start"], r["period_end"])
             if len(cands) < 3:
-                log.info("[weather] Recap %s skipped — only %d candidates (need 3)",
-                         r["period_label"], len(cands))
+                log.info(
+                    "[weather] Recap %s skipped — only %d candidates (need 3)",
+                    r["period_label"],
+                    len(cands),
+                )
                 return
             picks = self._pick_recap_clips(cands)
             if len(picks) < 3:
-                log.info("[weather] Recap %s: only %d picks survived", r["period_label"], len(picks))
+                log.info(
+                    "[weather] Recap %s: only %d picks survived", r["period_label"], len(picks)
+                )
                 return
             self._recaps_dir().mkdir(parents=True, exist_ok=True)
             mp4_path = self._recaps_dir() / f"{r['period_id']}.mp4"
-            duration = self._concat_clips([self._sightings_dir().parent / p["clip_path"] for p in picks], mp4_path)
+            duration = self._concat_clips(
+                [self._sightings_dir().parent / p["clip_path"] for p in picks], mp4_path
+            )
             if not duration:
                 log.warning("[weather] Recap %s: ffmpeg concat failed", r["period_label"])
                 return
             manifest = {
-                "id":            r["period_id"],
-                "period_label":  r["period_label"],
-                "period_start":  r["period_start"].isoformat(),
-                "period_end":    r["period_end"].isoformat(),
-                "built_at":      datetime.now().isoformat(timespec="seconds"),
-                "clip_path":     f"weather/recaps/{mp4_path.name}",
-                "n_clips":       len(picks),
-                "duration_s":    int(duration),
+                "id": r["period_id"],
+                "period_label": r["period_label"],
+                "period_start": r["period_start"].isoformat(),
+                "period_end": r["period_end"].isoformat(),
+                "built_at": datetime.now().isoformat(timespec="seconds"),
+                "clip_path": f"weather/recaps/{mp4_path.name}",
+                "n_clips": len(picks),
+                "duration_s": int(duration),
                 "included_sightings": [p.get("id") for p in picks],
             }
             _atomic_write_json(self._recaps_dir() / f"{r['period_id']}.json", manifest)
-            log.info("[weather] Recap built: %s · %d Clips · %ds",
-                     r["period_label"], len(picks), int(duration))
+            log.info(
+                "[weather] Recap built: %s · %d Clips · %ds",
+                r["period_label"],
+                len(picks),
+                int(duration),
+            )
             self._maybe_push_recap(manifest, mp4_path)
         except Exception as e:
             log.warning("[weather] Recap %s build failed: %s", r.get("period_label"), e)
@@ -200,8 +221,9 @@ class RecapsMixin:
     _EVENT_TL_TRIGGERS: tuple[str, ...] = ("thunder_rising", "front_passing", "storm_front")
 
     @classmethod
-    def _pick_recap_clips(cls, cands: list[dict], per_type_max: int = 3,
-                          total_cap: int = 12) -> list[dict]:
+    def _pick_recap_clips(
+        cls, cands: list[dict], per_type_max: int = 3, total_cap: int = 12
+    ) -> list[dict]:
         # Group by event_type, take top `per_type_max` by score per group.
         # Event-Timelapse triggers get a higher cap because they're longer,
         # rarer and more curated than the 10-s clips — a dramatic quarter
@@ -214,7 +236,7 @@ class RecapsMixin:
             # (when read straight from disk by the recap collector). Map
             # back to the trigger so per-type bucketing matches the UI.
             if et == "event_timelapse":
-                et = (m.get("trigger") or et)
+                et = m.get("trigger") or et
             by_type.setdefault(et, []).append(m)
         picked = []
         for evt, items in by_type.items():
@@ -242,27 +264,44 @@ class RecapsMixin:
             encoding="utf-8",
         )
         cmd = [
-            "ffmpeg", "-y",
-            "-f", "concat", "-safe", "0",
-            "-i", str(list_file),
-            "-vf", "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,fps=15,format=yuv420p",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "23",
-            "-an", "-movflags", "+faststart",
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(list_file),
+            "-vf",
+            "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=black,fps=15,format=yuv420p",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "23",
+            "-an",
+            "-movflags",
+            "+faststart",
             str(out_path),
         ]
         try:
             proc = subprocess.run(cmd, capture_output=True, timeout=300)
             list_file.unlink(missing_ok=True)
             if proc.returncode != 0:
-                log.warning("[weather] ffmpeg concat rc=%s stderr=%s",
-                            proc.returncode, (proc.stderr or b"").decode("utf-8", "replace")[-300:])
+                log.warning(
+                    "[weather] ffmpeg concat rc=%s stderr=%s",
+                    proc.returncode,
+                    (proc.stderr or b"").decode("utf-8", "replace")[-300:],
+                )
                 return 0
             # Probe duration via opencv as a cheap fallback (no ffprobe dep).
             try:
                 import cv2
+
                 cap = cv2.VideoCapture(str(out_path))
                 try:
-                    fc  = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    fc = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                     fps = float(cap.get(cv2.CAP_PROP_FPS)) or 15.0
                 finally:
                     cap.release()
@@ -281,15 +320,17 @@ class RecapsMixin:
             tg = self.telegram_getter() if callable(self.telegram_getter) else None
             if tg is None or not getattr(tg, "enabled", False):
                 return
-            push_cfg = (getattr(tg, "push_cfg", {}) or {})
+            push_cfg = getattr(tg, "push_cfg", {}) or {}
             wcfg = push_cfg.get("weather") or {}
             if not wcfg.get("recap_push", True):
                 return
             n = manifest.get("n_clips", 0)
             dur = int(manifest.get("duration_s", 0) or 0)
             mm, ss = divmod(dur, 60)
-            cap = (f"<b>{manifest.get('period_label', '?')} · Wetter-Highlights</b>\n"
-                   f"{n} Sichtungen · {mm}:{ss:02d} min")
+            cap = (
+                f"<b>{manifest.get('period_label', '?')} · Wetter-Highlights</b>\n"
+                f"{n} Sichtungen · {mm}:{ss:02d} min"
+            )
             buttons = [[("🌐 Alle Sichtungen", self._dashboard_url("#weather"))]]
             tg.send(cap, video=str(mp4_path), buttons=buttons, silent=False)
             log.info("[weather] Recap-Push gesendet: %s", manifest.get("period_label"))
@@ -297,4 +338,3 @@ class RecapsMixin:
             log.warning("[weather] recap push failed: %s", e)
 
     # ── Recap read helpers (used by API) ────────────────────────────────────
-

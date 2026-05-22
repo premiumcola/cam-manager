@@ -6,6 +6,7 @@ filesystem I/O. Receive their dependencies (storage paths, settings
 store, event store, base config) as plain arguments so this module
 has zero coupling back to server.py.
 """
+
 from __future__ import annotations
 
 import json as _json
@@ -26,6 +27,7 @@ def migrate_timelapse_events(*, storage_root: Path, settings) -> None:
     in the EventStore (storage/motion_detection/<cam_id>/) under old code. These are now tracked
     as sidecar JSONs next to the .mp4 files in storage/timelapse/<cam_id>/.
     Covers both date-subdirectory and camera-level tl_*.json placements."""
+
     def _do_migrate():
         try:
             removed = 0
@@ -69,9 +71,7 @@ def migrate_timelapse_events(*, storage_root: Path, settings) -> None:
             for c in cameras:
                 tl = c.get("timelapse") or {}
                 profs = tl.get("profiles") or {}
-                enabled_profiles[c["id"]] = {
-                    p for p, cfg in profs.items() if cfg.get("enabled")
-                }
+                enabled_profiles[c["id"]] = {p for p, cfg in profs.items() if cfg.get("enabled")}
 
             cleaned = 0
             for cam_dir in frames_root.iterdir():
@@ -81,7 +81,9 @@ def migrate_timelapse_events(*, storage_root: Path, settings) -> None:
                     try:
                         _shutil.rmtree(str(cam_dir))
                         cleaned += 1
-                        log.info("[migration] Removed frame dir for deleted camera: %s", cam_dir.name)
+                        log.info(
+                            "[migration] Removed frame dir for deleted camera: %s", cam_dir.name
+                        )
                     except Exception as e:
                         log.warning("[migration] Could not remove %s: %s", cam_dir.name, e)
                     continue
@@ -94,8 +96,11 @@ def migrate_timelapse_events(*, storage_root: Path, settings) -> None:
                         try:
                             _shutil.rmtree(str(prof_dir))
                             cleaned += 1
-                            log.info("[migration] Removed frame dir for disabled profile: %s/%s",
-                                     cam_dir.name, prof_dir.name)
+                            log.info(
+                                "[migration] Removed frame dir for disabled profile: %s/%s",
+                                cam_dir.name,
+                                prof_dir.name,
+                            )
                         except Exception as e:
                             log.warning("[migration] Could not remove %s: %s", prof_dir, e)
             if cleaned:
@@ -109,6 +114,7 @@ def migrate_timelapse_events(*, storage_root: Path, settings) -> None:
 def generate_missing_thumbnails(*, storage_root: Path) -> None:
     """Generate thumbnail .jpg for any timelapse .mp4 that does not have one yet.
     Runs once on startup in background — safe to re-run, skips if thumb exists."""
+
     def _do():
         tl_base = storage_root / "timelapse"
         if not tl_base.exists():
@@ -141,6 +147,7 @@ def generate_missing_thumbnails(*, storage_root: Path) -> None:
                 _time.sleep(0.05)  # pace startup
         if count:
             log.info("[boot] Generated %d missing timelapse thumbnails", count)
+
     threading.Thread(target=_do, daemon=True).start()
 
 
@@ -152,11 +159,13 @@ def check_tracks_schema_version(*, storage_root: Path) -> None:
     NOT auto-reindex: a large archive could spawn thousands of jobs
     and saturate the worker for an hour.
     """
+
     def _do():
         try:
             # Local import keeps this helper independent of worker
             # construction order at boot.
             from .tracking_worker import TRACKS_SCHEMA
+
             events_root = storage_root / "motion_detection"
             if not events_root.exists():
                 return
@@ -181,7 +190,8 @@ def check_tracks_schema_version(*, storage_root: Path) -> None:
                         by_old[schema] = by_old.get(schema, 0) + 1
             if stale:
                 versions = ", ".join(
-                    f"v{k}={v}" for k, v in sorted(
+                    f"v{k}={v}"
+                    for k, v in sorted(
                         by_old.items(),
                         key=lambda kv: (kv[0] is None, kv[0]),
                     )
@@ -189,11 +199,12 @@ def check_tracks_schema_version(*, storage_root: Path) -> None:
                 log.info(
                     "[tracking] schema=%d (was=%d old sidecars detected: %s, "
                     "run /api/tracking/reindex-all to refresh)",
-                    TRACKS_SCHEMA, stale, versions,
+                    TRACKS_SCHEMA,
+                    stale,
+                    versions,
                 )
             elif current:
-                log.debug("[tracking] schema=%d (%d sidecars current)",
-                          TRACKS_SCHEMA, current)
+                log.debug("[tracking] schema=%d (%d sidecars current)", TRACKS_SCHEMA, current)
         except Exception as e:
             log.warning("[tracking] schema scan failed: %s", e)
 
@@ -205,6 +216,7 @@ def migrate_timelapse_to_eventstore(*, storage_root: Path, settings, store, base
     Walks storage/timelapse/<cam>/*.json; for each sidecar that has no matching
     motion_detection/<cam>/tl_<stem>.json yet, builds a tl_event dict and calls
     store.add_event(). Safe to re-run; skips entries that already exist."""
+
     def _do():
         tl_root = storage_root / "timelapse"
         if not tl_root.exists():
@@ -251,10 +263,20 @@ def migrate_timelapse_to_eventstore(*, storage_root: Path, settings, store, base
                     "frame_count": meta.get("frame_count", 0),
                     "filename": mp4.name,
                     "video_relpath": video_rel,
-                    "video_url": f"{public_base}/media/{video_rel}" if public_base else f"/media/{video_rel}",
+                    "video_url": f"{public_base}/media/{video_rel}"
+                    if public_base
+                    else f"/media/{video_rel}",
                     "snapshot_relpath": thumb_rel,
-                    "snapshot_url": (f"{public_base}/media/{thumb_rel}" if public_base else f"/media/{thumb_rel}") if thumb_rel else None,
-                    "thumb_url": (f"{public_base}/media/{thumb_rel}" if public_base else f"/media/{thumb_rel}") if thumb_rel else None,
+                    "snapshot_url": (
+                        f"{public_base}/media/{thumb_rel}" if public_base else f"/media/{thumb_rel}"
+                    )
+                    if thumb_rel
+                    else None,
+                    "thumb_url": (
+                        f"{public_base}/media/{thumb_rel}" if public_base else f"/media/{thumb_rel}"
+                    )
+                    if thumb_rel
+                    else None,
                     "size_mb": meta.get("size_mb", 0),
                     "duration_s": 0.0,
                     "file_size_bytes": mp4.stat().st_size if mp4.exists() else 0,
@@ -266,4 +288,5 @@ def migrate_timelapse_to_eventstore(*, storage_root: Path, settings, store, base
                     log.warning("[migration] timelapse register failed for %s: %s", stem, e)
         if registered:
             log.info("[migration] registered %d timelapse events in EventStore", registered)
+
     threading.Thread(target=_do, daemon=True).start()

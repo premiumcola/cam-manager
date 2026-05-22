@@ -29,6 +29,7 @@ The decode pass is single-thread cv2 frame-by-frame; iOS-grade
 hardware finishes a 30 s sunrise mp4 in well under a second so a
 synchronous run inside ``_write_video`` is fine.
 """
+
 from __future__ import annotations
 
 import json
@@ -54,7 +55,7 @@ _FREEZE_MIN_RUN = 5
 # rolling unique-fps / declared-fps ratio drops below the trigger.
 _AUTO_ADJUST_TRIGGER = 0.60
 _AUTO_ADJUST_BUCKETS = (5, 10, 15, 20)
-_AUTO_ADJUST_HISTORY = 3       # look back N sidecars per (cam, profile)
+_AUTO_ADJUST_HISTORY = 3  # look back N sidecars per (cam, profile)
 
 
 # ── Sidecar schema + grade ─────────────────────────────────────────────────
@@ -93,11 +94,11 @@ def _analyse_playback(mp4_path: Path) -> dict:
     if total <= 0 or declared <= 0:
         cap.release()
         return {
-            "duration_s":      0.0,
-            "frames_in_file":  total,
-            "container_fps":   round(declared, 3),
-            "effective_fps":   0.0,
-            "unique_fps":      0.0,
+            "duration_s": 0.0,
+            "frames_in_file": total,
+            "container_fps": round(declared, 3),
+            "effective_fps": 0.0,
+            "unique_fps": 0.0,
             "duplicate_count": 0,
             "duplicate_ratio": 0.0,
         }
@@ -140,12 +141,16 @@ def _analyse_playback(mp4_path: Path) -> dict:
             # Close the previous run if it crossed the threshold.
             if run_len >= _FREEZE_MIN_RUN and run_start_anchor is not None:
                 end_idx = frame_idx - 1
-                freezes.append({
-                    "frames": [int(run_start_anchor), int(end_idx)],
-                    "playback_s": [round(run_start_anchor / declared, 2),
-                                   round(end_idx / declared, 2)],
-                    "duration_s": round((end_idx - run_start_anchor) / declared, 2),
-                })
+                freezes.append(
+                    {
+                        "frames": [int(run_start_anchor), int(end_idx)],
+                        "playback_s": [
+                            round(run_start_anchor / declared, 2),
+                            round(end_idx / declared, 2),
+                        ],
+                        "duration_s": round((end_idx - run_start_anchor) / declared, 2),
+                    }
+                )
             unique_count += 1
             prev_phash = ph
             run_start_anchor = frame_idx
@@ -154,12 +159,13 @@ def _analyse_playback(mp4_path: Path) -> dict:
     # Final run flush — if the clip ends mid-freeze, record it.
     if run_len >= _FREEZE_MIN_RUN and run_start_anchor is not None:
         end_idx = frame_idx - 1
-        freezes.append({
-            "frames": [int(run_start_anchor), int(end_idx)],
-            "playback_s": [round(run_start_anchor / declared, 2),
-                           round(end_idx / declared, 2)],
-            "duration_s": round((end_idx - run_start_anchor) / declared, 2),
-        })
+        freezes.append(
+            {
+                "frames": [int(run_start_anchor), int(end_idx)],
+                "playback_s": [round(run_start_anchor / declared, 2), round(end_idx / declared, 2)],
+                "duration_s": round((end_idx - run_start_anchor) / declared, 2),
+            }
+        )
     cap.release()
     if total == 0:
         dup_ratio = 0.0
@@ -168,14 +174,14 @@ def _analyse_playback(mp4_path: Path) -> dict:
     effective_fps = total / duration_s if duration_s > 0 else 0.0
     unique_fps = unique_count / duration_s if duration_s > 0 else 0.0
     return {
-        "duration_s":      round(duration_s, 2),
-        "frames_in_file":  total,
-        "container_fps":   round(declared, 3),
-        "effective_fps":   round(effective_fps, 2),
-        "unique_fps":      round(unique_fps, 2),
+        "duration_s": round(duration_s, 2),
+        "frames_in_file": total,
+        "container_fps": round(declared, 3),
+        "effective_fps": round(effective_fps, 2),
+        "unique_fps": round(unique_fps, 2),
         "duplicate_count": duplicate_count,
         "duplicate_ratio": round(dup_ratio, 3),
-        "freezes":         freezes,
+        "freezes": freezes,
     }
 
 
@@ -215,16 +221,14 @@ def _load_capture_stats(frames_dir: Path | None) -> dict | None:
     try:
         return json.loads(stats_path.read_text(encoding="utf-8"))
     except Exception as e:
-        log.warning("[timelapse] capture stats read failed: %s · %s",
-                    stats_path, e)
+        log.warning("[timelapse] capture stats read failed: %s · %s", stats_path, e)
         return None
 
 
 # ── Atomic write ───────────────────────────────────────────────────────────
 def _atomic_write_json(path: Path, payload: dict) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2),
-                   encoding="utf-8")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(path)
 
 
@@ -247,15 +251,17 @@ def read_qa_sidecar(mp4_path: Path | str) -> dict | None:
         return None
 
 
-def write_qa_sidecar(out_path: Path | str,
-                     *,
-                     declared_fps: float,
-                     target_duration_s: float,
-                     frames_dir: Path | str | None = None,
-                     camera_id: str | None = None,
-                     profile_name: str | None = None,
-                     validator_profile_used: str | None = None,
-                     settings_store=None) -> dict | None:
+def write_qa_sidecar(
+    out_path: Path | str,
+    *,
+    declared_fps: float,
+    target_duration_s: float,
+    frames_dir: Path | str | None = None,
+    camera_id: str | None = None,
+    profile_name: str | None = None,
+    validator_profile_used: str | None = None,
+    settings_store=None,
+) -> dict | None:
     """Decode the just-written mp4, build the QA sidecar payload,
     write atomically, log a single ``[timelapse]`` INFO with the
     grade + top-3 reject reasons, and run the fps auto-adjust pass.
@@ -271,10 +277,10 @@ def write_qa_sidecar(out_path: Path | str,
     capture_block: dict = {}
     if cap_stats:
         capture_block = {
-            "expected_frames":   cap_stats.get("expected_frames"),
-            "captured_frames":   cap_stats.get("captured_frames"),
-            "rejected_frames":   cap_stats.get("invalid_frames"),
-            "reject_reasons":    dict(cap_stats.get("rejected_by_reason") or {}),
+            "expected_frames": cap_stats.get("expected_frames"),
+            "captured_frames": cap_stats.get("captured_frames"),
+            "rejected_frames": cap_stats.get("invalid_frames"),
+            "reject_reasons": dict(cap_stats.get("rejected_by_reason") or {}),
             "scene_skips_by_reason": dict(cap_stats.get("scene_skips_by_reason") or {}),
             "validator_profile": cap_stats.get("validator_profile"),
         }
@@ -282,49 +288,56 @@ def write_qa_sidecar(out_path: Path | str,
     unique_fps = float(playback.get("unique_fps") or 0.0)
     grade = _grade(dup_ratio, unique_fps, declared_fps)
     payload = {
-        "schema_version":  _SCHEMA_VERSION,
-        "video":           out_path.name,
-        "camera_id":       camera_id,
-        "profile_name":    profile_name,
-        "build_at":        time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "schema_version": _SCHEMA_VERSION,
+        "video": out_path.name,
+        "camera_id": camera_id,
+        "profile_name": profile_name,
+        "build_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
         "playback": {
-            "duration_s":      playback.get("duration_s", 0.0),
-            "frames_in_file":  playback.get("frames_in_file", 0),
-            "declared_fps":    float(declared_fps),
-            "container_fps":   playback.get("container_fps", 0.0),
-            "effective_fps":   playback.get("effective_fps", 0.0),
-            "unique_fps":      unique_fps,
+            "duration_s": playback.get("duration_s", 0.0),
+            "frames_in_file": playback.get("frames_in_file", 0),
+            "declared_fps": float(declared_fps),
+            "container_fps": playback.get("container_fps", 0.0),
+            "effective_fps": playback.get("effective_fps", 0.0),
+            "unique_fps": unique_fps,
             "duplicate_count": playback.get("duplicate_count", 0),
             "duplicate_ratio": dup_ratio,
         },
-        "capture":         capture_block,
-        "freezes":         playback.get("freezes", []),
-        "validator_profile_used": validator_profile_used
-                                   or capture_block.get("validator_profile"),
-        "quality_grade":   grade,
+        "capture": capture_block,
+        "freezes": playback.get("freezes", []),
+        "validator_profile_used": validator_profile_used or capture_block.get("validator_profile"),
+        "quality_grade": grade,
         "target_duration_s": float(target_duration_s),
     }
     try:
         _atomic_write_json(qa_sidecar_path(out_path), payload)
     except Exception as e:
-        log.warning("[timelapse] QA sidecar write failed: %s · %s",
-                    out_path.name, e)
+        log.warning("[timelapse] QA sidecar write failed: %s · %s", out_path.name, e)
         return None
     # Top-3 reject reasons for the one-line summary.
     reasons = capture_block.get("reject_reasons") or {}
     top3 = sorted(reasons.items(), key=lambda kv: -kv[1])[:3]
     top3_str = ", ".join(f"{k}={v}" for k, v in top3) or "(no _stats.json)"
-    log.info("[timelapse] QA %s grade=%s declared=%.0f unique=%.2f dup=%.0f%% "
-             "freezes=%d top=[%s] · %s (%.2fs)",
-             out_path.name, grade, declared_fps, unique_fps,
-             dup_ratio * 100, len(payload["freezes"]), top3_str,
-             camera_id or "?", time.monotonic() - t0)
+    log.info(
+        "[timelapse] QA %s grade=%s declared=%.0f unique=%.2f dup=%.0f%% "
+        "freezes=%d top=[%s] · %s (%.2fs)",
+        out_path.name,
+        grade,
+        declared_fps,
+        unique_fps,
+        dup_ratio * 100,
+        len(payload["freezes"]),
+        top3_str,
+        camera_id or "?",
+        time.monotonic() - t0,
+    )
     # fps auto-adjust — only when we have both a settings_store AND
     # a (camera_id, profile_name) pair to scope the rolling history.
     if settings_store is not None and camera_id and profile_name:
         try:
-            _maybe_auto_adjust_fps(settings_store, out_path, camera_id,
-                                   profile_name, declared_fps, unique_fps)
+            _maybe_auto_adjust_fps(
+                settings_store, out_path, camera_id, profile_name, declared_fps, unique_fps
+            )
         except Exception as e:
             log.warning("[timelapse] fps auto-adjust failed: %s", e)
     return payload
@@ -343,8 +356,7 @@ def _is_auto_adjust_enabled(settings_store) -> bool:
         return False
 
 
-def _recent_sidecars_for(profile_dir: Path, profile_name: str,
-                         limit: int) -> list[dict]:
+def _recent_sidecars_for(profile_dir: Path, profile_name: str, limit: int) -> list[dict]:
     """Scan a camera's timelapse output directory and return the last
     ``limit`` QA sidecars matching ``profile_name``, newest first.
 
@@ -378,9 +390,14 @@ def _nearest_bucket_at_or_above(measured: float) -> int:
     return _AUTO_ADJUST_BUCKETS[-1]
 
 
-def _maybe_auto_adjust_fps(settings_store, out_path: Path,
-                            camera_id: str, profile_name: str,
-                            declared_fps: float, unique_fps: float) -> None:
+def _maybe_auto_adjust_fps(
+    settings_store,
+    out_path: Path,
+    camera_id: str,
+    profile_name: str,
+    declared_fps: float,
+    unique_fps: float,
+) -> None:
     """When the last ``_AUTO_ADJUST_HISTORY`` sidecars for this
     (camera, profile) show a rolling mean unique/declared ratio
     below ``_AUTO_ADJUST_TRIGGER``, ratchet ``target_fps`` down to
@@ -390,8 +407,7 @@ def _maybe_auto_adjust_fps(settings_store, out_path: Path,
     if not _is_auto_adjust_enabled(settings_store):
         return
     profile_dir = out_path.parent
-    history = _recent_sidecars_for(profile_dir, profile_name,
-                                   _AUTO_ADJUST_HISTORY)
+    history = _recent_sidecars_for(profile_dir, profile_name, _AUTO_ADJUST_HISTORY)
     if len(history) < _AUTO_ADJUST_HISTORY:
         # Not enough samples yet — keep the configured fps. The
         # caller's <3-sidecars-no-adjust contract.
@@ -435,10 +451,17 @@ def _maybe_auto_adjust_fps(settings_store, out_path: Path,
         save = getattr(settings_store, "save", None)
         if callable(save):
             save()
-        log.warning("[timelapse] auto-adjust cam=%s profile=%s "
-                    "rolling_ratio=%.2f → target_fps=%d "
-                    "(measured unique=%.2f, declared=%.0f, history=%d)",
-                    camera_id, profile_name, mean_ratio, new_target,
-                    target_unique, declared_fps, len(history))
+        log.warning(
+            "[timelapse] auto-adjust cam=%s profile=%s "
+            "rolling_ratio=%.2f → target_fps=%d "
+            "(measured unique=%.2f, declared=%.0f, history=%d)",
+            camera_id,
+            profile_name,
+            mean_ratio,
+            new_target,
+            target_unique,
+            declared_fps,
+            len(history),
+        )
     except Exception as e:
         log.warning("[timelapse] auto-adjust persist failed: %s", e)

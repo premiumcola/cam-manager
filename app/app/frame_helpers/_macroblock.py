@@ -1,13 +1,13 @@
 """Localised macroblock-corruption detector. Carved out of the original
 ``frame_helpers.py`` during the modular refactor; behaviour
 unchanged."""
+
 from __future__ import annotations
 
 import cv2
 import numpy as np
 
 from ._decode import _decode
-
 
 # ── Localised macroblock-corruption detector ────────────────────────────────
 # H.264 P-frame chain corruption: a single lost slice produces a
@@ -111,7 +111,8 @@ def _flagged_macroblock_grid(img: np.ndarray) -> np.ndarray:
     pad = _MB_LAPLACIAN_LOCAL_WIN // 2
     padded = np.pad(energy, pad, mode="edge")
     windows = np.lib.stride_tricks.sliding_window_view(
-        padded, (_MB_LAPLACIAN_LOCAL_WIN, _MB_LAPLACIAN_LOCAL_WIN),
+        padded,
+        (_MB_LAPLACIAN_LOCAL_WIN, _MB_LAPLACIAN_LOCAL_WIN),
     )
     local_median = np.median(windows, axis=(-1, -2))
     # Floor the divisor at 1.0 so a near-zero local median (a perfectly

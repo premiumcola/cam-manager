@@ -5,6 +5,7 @@ Migrated from server.py during R01.4. The TimelapseBuilder lives in
 `app_state.timelapse_builder` and is reused fresh on every call —
 no caching here.
 """
+
 from __future__ import annotations
 
 import json as _json
@@ -23,6 +24,7 @@ bp = Blueprint("timelapse", __name__)
 @bp.get('/api/timelapse/status')
 def api_timelapse_status():
     from ..camera_runtime import _PROFILE_PERIOD_DEFAULTS, _PROFILES
+
     settings = app_state.settings
     timelapse_builder = app_state.timelapse_builder
     today = datetime.now().strftime("%Y-%m-%d")
@@ -54,20 +56,24 @@ def api_timelapse_status():
                 "interval_s": interval_s,
                 "fps": prof_fps,
             }
-        cameras_out.append({
-            "camera_id": cam_id,
-            "name": cam.get("name", cam_id),
-            "any_active": any_active,
-            "profiles": prof_status,
-        })
+        cameras_out.append(
+            {
+                "camera_id": cam_id,
+                "name": cam.get("name", cam_id),
+                "any_active": any_active,
+                "profiles": prof_status,
+            }
+        )
     total_active = sum(1 for c in cameras_out if c["any_active"])
-    return jsonify({
-        "ok": True,
-        "global_enabled": global_enabled,
-        "active_count": total_active,
-        "cameras": cameras_out,
-        "today": today,
-    })
+    return jsonify(
+        {
+            "ok": True,
+            "global_enabled": global_enabled,
+            "active_count": total_active,
+            "cameras": cameras_out,
+            "today": today,
+        }
+    )
 
 
 @bp.post('/api/settings/timelapse')
@@ -105,12 +111,14 @@ def api_camera_timelapse(cam_id):
     # colliding filenames in a single folder. Falls back through
     # display-name → camera_id → "unknown"; never raises.
     from ..camera_id import camera_slug
+
     cam_slug = camera_slug(app_state.store, cam_id)
     # QA context — passes settings_store through so the post-build
     # sidecar can run fps auto-adjust on the rolling history.
     qa_ctx = {"settings_store": app_state.store}
     path = timelapse_builder.build_period(
-        cam_id, day,
+        cam_id,
+        day,
         target_duration_s=target_s,
         target_fps=target_fps,
         period=period,
@@ -121,15 +129,24 @@ def api_camera_timelapse(cam_id):
     if not path:
         frames_dir = storage_root / "timelapse_frames" / cam_id / day
         day_dir = store.events_dir / cam_id / day
-        has_frames = (frames_dir.exists() and any(frames_dir.glob("*.jpg"))) or \
-                     (day_dir.exists() and any(day_dir.rglob("*.jpg")))
+        has_frames = (frames_dir.exists() and any(frames_dir.glob("*.jpg"))) or (
+            day_dir.exists() and any(day_dir.rglob("*.jpg"))
+        )
         if not has_frames:
             return jsonify({"ok": False, "error": "no_frames", "day": day}), 404
+
         def _bg_build():
-            timelapse_builder.build_period(cam_id, day, target_duration_s=target_s,
-                                           target_fps=target_fps, period=period,
-                                           force=True, cam_slug=cam_slug,
-                                           qa_ctx=qa_ctx)
+            timelapse_builder.build_period(
+                cam_id,
+                day,
+                target_duration_s=target_s,
+                target_fps=target_fps,
+                period=period,
+                force=True,
+                cam_slug=cam_slug,
+                qa_ctx=qa_ctx,
+            )
+
         _thr.Thread(target=_bg_build, daemon=True).start()
         return jsonify({"ok": False, "error": "building", "day": day, "retry_after": 15}), 202
     rel = Path(path).relative_to(storage_root)
@@ -149,6 +166,7 @@ def api_timelapse_qa(rel):
     grey "n/a" pill + Rebuild affordance.
     """
     from ..timelapse_qa import qa_sidecar_path, read_qa_sidecar
+
     storage_root = app_state.storage_root
     # Defence against directory traversal — resolve against storage_root
     # and reject anything that escapes.
@@ -202,26 +220,30 @@ def api_camera_timelapse_list(cam_id):
         period = meta.get("period") or (parts[2].split("_")[0] if len(parts) > 2 else "day")
         # Thumbnail: same stem as video but .jpg (written by _write_video)
         thumb = tl_dir / f"{mp4.stem}.jpg"
-        thumb_url = f"/media/{(thumb.relative_to(storage_root)).as_posix()}" if thumb.exists() else None
-        files.append({
-            "event_id": meta.get("event_id") or f"tl_{mp4.stem}",
-            "camera_id": cam_id,
-            "type": "timelapse",
-            "filename": mp4.name,
-            "day": meta.get("window_key", day)[:10],
-            "window_key": meta.get("window_key", day),
-            "profile": meta.get("profile", period),
-            "period": period,
-            "period_s": meta.get("period_s", 0),
-            "target_s": meta.get("target_s", 0),
-            "frame_count": meta.get("frame_count", 0),
-            "url": f"/media/{rel.as_posix()}",
-            "thumb_url": thumb_url,
-            "relpath": rel.as_posix(),
-            "size_mb": meta.get("size_mb") or round(stat.st_size / 1024 / 1024, 1),
-            "mtime": stat.st_mtime,
-            "time": meta.get("time") or day,
-        })
+        thumb_url = (
+            f"/media/{(thumb.relative_to(storage_root)).as_posix()}" if thumb.exists() else None
+        )
+        files.append(
+            {
+                "event_id": meta.get("event_id") or f"tl_{mp4.stem}",
+                "camera_id": cam_id,
+                "type": "timelapse",
+                "filename": mp4.name,
+                "day": meta.get("window_key", day)[:10],
+                "window_key": meta.get("window_key", day),
+                "profile": meta.get("profile", period),
+                "period": period,
+                "period_s": meta.get("period_s", 0),
+                "target_s": meta.get("target_s", 0),
+                "frame_count": meta.get("frame_count", 0),
+                "url": f"/media/{rel.as_posix()}",
+                "thumb_url": thumb_url,
+                "relpath": rel.as_posix(),
+                "size_mb": meta.get("size_mb") or round(stat.st_size / 1024 / 1024, 1),
+                "mtime": stat.st_mtime,
+                "time": meta.get("time") or day,
+            }
+        )
     return jsonify({"ok": True, "files": files})
 
 
@@ -271,18 +293,19 @@ def api_camera_timelapse_rolling(cam_id):
     if not frames_dir.exists():
         return jsonify({"ok": False, "error": "no_frames"}), 404
     cutoff = datetime.now() - timedelta(minutes=minutes)
-    images = sorted([
-        p for p in frames_dir.glob("*.jpg")
-        if p.stat().st_mtime >= cutoff.timestamp()
-    ])
+    images = sorted(
+        [p for p in frames_dir.glob("*.jpg") if p.stat().st_mtime >= cutoff.timestamp()]
+    )
     if len(images) < 2:
         return jsonify({"ok": False, "error": "not_enough_frames", "minutes": minutes}), 404
     target_fps = int(tl_cfg.get("fps", 25))
     target_s = max(5, int(tl_cfg.get("daily_target_seconds", 60)) // 10)
     from ..camera_id import camera_slug
+
     cam_slug = camera_slug(app_state.store, cam_id)
     path = timelapse_builder.build_period(
-        cam_id, day,
+        cam_id,
+        day,
         target_duration_s=target_s,
         target_fps=target_fps,
         period=f"rolling{minutes}min",

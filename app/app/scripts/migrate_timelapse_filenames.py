@@ -34,6 +34,7 @@ Behaviour:
 - NEVER auto-runs at boot — the user runs this manually when they're
   ready to converge old filenames onto the new pattern.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,11 +52,13 @@ class _SettingsView:
     reads — ``settings.data["cameras"]``. Avoids dragging the full
     SettingsStore (with its migration + atomic-write machinery) into
     a read-only migration. Built from a raw settings.json parse."""
+
     def __init__(self, settings_path: Path):
         try:
             self.data = json.loads(settings_path.read_text(encoding="utf-8"))
         except Exception:
             self.data = {}
+
 
 log = logging.getLogger("migration")
 
@@ -97,8 +100,7 @@ def _iter_timelapse_dirs(storage_root: Path):
     # Weather-service phase + event timelapses.
     wx_root = storage_root / "weather"
     if wx_root.exists():
-        phase_dirs = ("sunrise_timelapse", "sunset_timelapse",
-                      "event_timelapse", "sun_timelapse")
+        phase_dirs = ("sunrise_timelapse", "sunset_timelapse", "event_timelapse", "sun_timelapse")
         for cam_dir in sorted(p for p in wx_root.iterdir() if p.is_dir()):
             cam_id = cam_dir.name
             for sub in phase_dirs:
@@ -140,23 +142,25 @@ def _rename_pair(mp4_path: Path, new_stem: str, dry_run: bool) -> int:
     # to investigate.
     for _old, new in candidates:
         if new.exists():
-            log.info("[migration] skip %s: target %s already exists",
-                     mp4_path.name, new.name)
+            log.info("[migration] skip %s: target %s already exists", mp4_path.name, new.name)
             return 0
     for old, new in candidates:
         if dry_run:
-            log.info("[migration] DRY-RUN would rename: %s → %s",
-                     old.relative_to(old.parents[2] if len(old.parents) >= 3 else old.parent),
-                     new.name)
+            log.info(
+                "[migration] DRY-RUN would rename: %s → %s",
+                old.relative_to(old.parents[2] if len(old.parents) >= 3 else old.parent),
+                new.name,
+            )
         else:
             try:
                 old.rename(new)
-                log.info("[migration] renamed: %s → %s",
-                         old.relative_to(old.parents[2] if len(old.parents) >= 3 else old.parent),
-                         new.name)
+                log.info(
+                    "[migration] renamed: %s → %s",
+                    old.relative_to(old.parents[2] if len(old.parents) >= 3 else old.parent),
+                    new.name,
+                )
             except OSError as e:
-                log.warning("[migration] rename failed: %s → %s · %s",
-                            old, new, e)
+                log.warning("[migration] rename failed: %s → %s · %s", old, new, e)
                 continue
         renamed += 1
         # Update internal references inside JSON sidecars whose
@@ -167,8 +171,7 @@ def _rename_pair(mp4_path: Path, new_stem: str, dry_run: bool) -> int:
             try:
                 _patch_manifest_paths(new, old_stem, new_stem)
             except Exception as e:
-                log.warning("[migration] manifest patch failed: %s · %s",
-                            new, e)
+                log.warning("[migration] manifest patch failed: %s · %s", new, e)
     return renamed
 
 
@@ -186,28 +189,39 @@ def _patch_manifest_paths(json_path: Path, old_stem: str, new_stem: str) -> None
     if not isinstance(data, dict):
         return
     changed = False
-    for key in ("filename", "relpath", "clip_path", "thumb_path",
-                "video_relpath", "snapshot_relpath", "thumb_url",
-                "video_url", "event_id"):
+    for key in (
+        "filename",
+        "relpath",
+        "clip_path",
+        "thumb_path",
+        "video_relpath",
+        "snapshot_relpath",
+        "thumb_url",
+        "video_url",
+        "event_id",
+    ):
         val = data.get(key)
         if isinstance(val, str) and old_stem in val:
             data[key] = val.replace(old_stem, new_stem)
             changed = True
     if changed:
-        json_path.write_text(json.dumps(data, ensure_ascii=False),
-                             encoding="utf-8")
+        json_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
 
 
 def run(storage_root: Path, settings, dry_run: bool) -> dict:
     """Walk every timelapse output dir, rename legacy filenames in
     place. Returns a dict of counters for the caller to print."""
-    counters = {"scanned": 0, "renamed_pairs": 0, "renamed_files": 0,
-                "already_slugged": 0, "skipped_existing": 0}
+    counters = {
+        "scanned": 0,
+        "renamed_pairs": 0,
+        "renamed_files": 0,
+        "already_slugged": 0,
+        "skipped_existing": 0,
+    }
     for out_dir, cam_id in _iter_timelapse_dirs(storage_root):
         slug = camera_slug(settings, cam_id)
         if not slug:
-            log.warning("[migration] empty slug for cam=%s — skipping dir %s",
-                        cam_id, out_dir)
+            log.warning("[migration] empty slug for cam=%s — skipping dir %s", cam_id, out_dir)
             continue
         for mp4 in sorted(out_dir.glob("*.mp4")):
             counters["scanned"] += 1
@@ -233,14 +247,18 @@ def _build_argparser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="python -m app.scripts.migrate_timelapse_filenames",
         description="Rename pre-existing timelapse output files to carry "
-                    "a per-camera slug so cross-camera downloads don't "
-                    "collide on the same date stem.",
+        "a per-camera slug so cross-camera downloads don't "
+        "collide on the same date stem.",
     )
-    p.add_argument("--dry-run", action="store_true",
-                   help="Print would-be renames without touching disk.")
-    p.add_argument("--storage-root", type=Path, default=None,
-                   help="Override the storage root path. Defaults to the "
-                        "value resolved by config_loader.")
+    p.add_argument(
+        "--dry-run", action="store_true", help="Print would-be renames without touching disk."
+    )
+    p.add_argument(
+        "--storage-root",
+        type=Path,
+        default=None,
+        help="Override the storage root path. Defaults to the " "value resolved by config_loader.",
+    )
     return p
 
 
@@ -260,14 +278,21 @@ def main(argv=None):
         return 2
     settings_path = storage_root / "settings.json"
     settings = _SettingsView(settings_path) if settings_path.exists() else None
-    log.info("[migration] timelapse-filename slug pass · root=%s · dry_run=%s",
-             storage_root, args.dry_run)
+    log.info(
+        "[migration] timelapse-filename slug pass · root=%s · dry_run=%s",
+        storage_root,
+        args.dry_run,
+    )
     counters = run(storage_root, settings, args.dry_run)
-    log.info("[migration] done: scanned=%d renamed_pairs=%d renamed_files=%d "
-             "already_slugged=%d skipped_existing=%d",
-             counters["scanned"], counters["renamed_pairs"],
-             counters["renamed_files"], counters["already_slugged"],
-             counters["skipped_existing"])
+    log.info(
+        "[migration] done: scanned=%d renamed_pairs=%d renamed_files=%d "
+        "already_slugged=%d skipped_existing=%d",
+        counters["scanned"],
+        counters["renamed_pairs"],
+        counters["renamed_files"],
+        counters["already_slugged"],
+        counters["skipped_existing"],
+    )
     return 0
 
 

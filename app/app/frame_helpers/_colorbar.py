@@ -1,6 +1,7 @@
 """Colorbar / SMPTE test-pattern detector. Carved out of the original
 ``frame_helpers.py`` during the modular refactor; behaviour
 unchanged."""
+
 from __future__ import annotations
 
 import cv2

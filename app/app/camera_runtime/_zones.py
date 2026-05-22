@@ -34,8 +34,8 @@ from ..event_logic import (
 )
 from ._consts import (
     _FFMPEG_AVAILABLE,
-    _PROFILES,
     _PROFILE_PERIOD_DEFAULTS,
+    _PROFILES,
     _SPECIES_TO_ACH_ID,
     _WILDLIFE_BBOX_DONORS,
     _bbox_iou,
@@ -150,7 +150,10 @@ class ZonesMixin:
             src_h = int(poly.get("source_h") or h) if isinstance(poly, dict) else h
             sx = float(w) / max(1, src_w)
             sy = float(h) / max(1, src_h)
-            pts = np.array([[int(p.get('x', 0) * sx), int(p.get('y', 0) * sy)] for p in pts_list], dtype=np.int32)
+            pts = np.array(
+                [[int(p.get('x', 0) * sx), int(p.get('y', 0) * sy)] for p in pts_list],
+                dtype=np.int32,
+            )
             pts[:, 0] = np.clip(pts[:, 0], 0, w - 1)
             pts[:, 1] = np.clip(pts[:, 1], 0, h - 1)
             cv2.fillPoly(mask, [pts], 0)
@@ -165,8 +168,12 @@ class ZonesMixin:
                 pts_list = p.get("points", p) if isinstance(p, dict) else p
                 if isinstance(pts_list, list):
                     total_verts += len(pts_list)
-            log.info("[%s] Loaded %d exclusion masks (%d total vertices)",
-                     self.camera_id, len(cam_masks), total_verts)
+            log.info(
+                "[%s] Loaded %d exclusion masks (%d total vertices)",
+                self.camera_id,
+                len(cam_masks),
+                total_verts,
+            )
 
     def _polys_for_label(self, polys_field: str, label: str | None) -> list:
         """Return the polygons (raw [{x,y},…] lists) that apply to a label.
@@ -191,8 +198,13 @@ class ZonesMixin:
 
     @staticmethod
     def _point_in_poly(
-        cx: int, cy: int, points: list, frame_w: int, frame_h: int,
-        source_w: int = 1280, source_h: int = 720,
+        cx: int,
+        cy: int,
+        points: list,
+        frame_w: int,
+        frame_h: int,
+        source_w: int = 1280,
+        source_h: int = 720,
     ) -> bool:
         """pn834 — polygon points sit in their own source coord space
         (recorded on save as source_w / source_h). Rescale the frame
@@ -204,7 +216,9 @@ class ZonesMixin:
         sx = float(source_w) / max(1, frame_w)
         sy = float(source_h) / max(1, frame_h)
         try:
-            arr = np.array([[int(p.get('x', 0)), int(p.get('y', 0))] for p in points], dtype=np.int32)
+            arr = np.array(
+                [[int(p.get('x', 0)), int(p.get('y', 0))] for p in points], dtype=np.int32
+            )
         except Exception:
             return False
         if len(arr) < 3:
@@ -230,7 +244,9 @@ class ZonesMixin:
         if self._mask_image is not None:
             h_m, w_m = self._mask_image.shape[:2]
             if (h_m, w_m) != (h_f, w_f):
-                mask_resized = cv2.resize(self._mask_image, (w_f, h_f), interpolation=cv2.INTER_NEAREST)
+                mask_resized = cv2.resize(
+                    self._mask_image, (w_f, h_f), interpolation=cv2.INTER_NEAREST
+                )
             else:
                 mask_resized = self._mask_image
         # Pre-collect per-label labeled polygons so we don't re-scan cfg
@@ -243,8 +259,14 @@ class ZonesMixin:
             cx = max(0, min(w_f - 1, (x1 + x2) // 2))
             cy = max(0, min(h_f - 1, (y1 + y2) // 2))
             if mask_resized is not None and mask_resized[cy, cx] == 0:
-                log.debug("[%s] Detection '%s' (%.0f%%) suppressed by global mask at (%d,%d)",
-                          self.camera_id, d.label, d.score * 100, cx, cy)
+                log.debug(
+                    "[%s] Detection '%s' (%.0f%%) suppressed by global mask at (%d,%d)",
+                    self.camera_id,
+                    d.label,
+                    d.score * 100,
+                    cx,
+                    cy,
+                )
                 continue
             if has_labeled:
                 # Walk only labeled masks here — globals were handled in
@@ -259,8 +281,12 @@ class ZonesMixin:
                     src_w = int(m.get("source_w") or 1280)
                     src_h = int(m.get("source_h") or 720)
                     if self._point_in_poly(cx, cy, pts, w_f, h_f, src_w, src_h):
-                        log.debug("[%s] Detection '%s' (%.0f%%) suppressed by label-mask",
-                                  self.camera_id, d.label, d.score * 100)
+                        log.debug(
+                            "[%s] Detection '%s' (%.0f%%) suppressed by label-mask",
+                            self.camera_id,
+                            d.label,
+                            d.score * 100,
+                        )
                         dropped = True
                         break
                 if dropped:
@@ -288,10 +314,7 @@ class ZonesMixin:
         # suppression image. Labeled zones live alongside, evaluated per-
         # detection in _filter_zoned_detections so each label sees its own
         # inclusion area.
-        global_zones = [
-            z for z in cam_zones
-            if not (isinstance(z, dict) and z.get("labels"))
-        ]
+        global_zones = [z for z in cam_zones if not (isinstance(z, dict) and z.get("labels"))]
         if not global_zones:
             # Even if labeled zones exist, motion detection has no label
             # context — so when no global zones are configured the motion
@@ -299,8 +322,11 @@ class ZonesMixin:
             self._zone_image = None
             if log_summary:
                 if cam_zones:
-                    log.info("[%s] inclusion zones: %d label-scoped (motion path unrestricted)",
-                             self.camera_id, len(cam_zones))
+                    log.info(
+                        "[%s] inclusion zones: %d label-scoped (motion path unrestricted)",
+                        self.camera_id,
+                        len(cam_zones),
+                    )
                 else:
                     log.info("[%s] inclusion zones: none (entire frame active)", self.camera_id)
             return
@@ -317,7 +343,10 @@ class ZonesMixin:
             src_h = int(poly.get("source_h") or h) if isinstance(poly, dict) else h
             sx = float(w) / max(1, src_w)
             sy = float(h) / max(1, src_h)
-            pts = np.array([[int(p.get('x', 0) * sx), int(p.get('y', 0) * sy)] for p in pts_list], dtype=np.int32)
+            pts = np.array(
+                [[int(p.get('x', 0) * sx), int(p.get('y', 0) * sy)] for p in pts_list],
+                dtype=np.int32,
+            )
             pts[:, 0] = np.clip(pts[:, 0], 0, w - 1)
             pts[:, 1] = np.clip(pts[:, 1], 0, h - 1)
             cv2.fillPoly(zone, [pts], 255)  # white = active zone
@@ -331,8 +360,12 @@ class ZonesMixin:
                 pts_list = p.get("points", p) if isinstance(p, dict) else p
                 if isinstance(pts_list, list):
                     total_verts += len(pts_list)
-            log.info("[%s] Loaded %d inclusion zones (%d total vertices) — outside zones = ignored",
-                     self.camera_id, len(cam_zones), total_verts)
+            log.info(
+                "[%s] Loaded %d inclusion zones (%d total vertices) — outside zones = ignored",
+                self.camera_id,
+                len(cam_zones),
+                total_verts,
+            )
 
     def _filter_zoned_detections(self, frame, detections: list) -> list:
         """Keep only detections whose bbox-centre lands inside an applicable
@@ -358,7 +391,9 @@ class ZonesMixin:
         if self._zone_image is not None:
             h_z, w_z = self._zone_image.shape[:2]
             if (h_z, w_z) != (h_f, w_f):
-                zone_resized = cv2.resize(self._zone_image, (w_f, h_f), interpolation=cv2.INTER_NEAREST)
+                zone_resized = cv2.resize(
+                    self._zone_image, (w_f, h_f), interpolation=cv2.INTER_NEAREST
+                )
             else:
                 zone_resized = self._zone_image
         # Build the per-label zone list AND a parallel "global zones"
@@ -412,13 +447,18 @@ class ZonesMixin:
                         break
             if matched_zone is not None:
                 d.zone_flags = {
-                    "save_photo":    bool(matched_zone.get("save_photo",    True)),
-                    "save_video":    bool(matched_zone.get("save_video",    True)),
+                    "save_photo": bool(matched_zone.get("save_photo", True)),
+                    "save_video": bool(matched_zone.get("save_video", True)),
                     "send_telegram": bool(matched_zone.get("send_telegram", True)),
                 }
                 kept.append(d)
             else:
-                log.debug("[%s] Detection '%s' (%.0f%%) outside applicable zones at (%d,%d)",
-                          self.camera_id, d.label, d.score * 100, cx, cy)
+                log.debug(
+                    "[%s] Detection '%s' (%.0f%%) outside applicable zones at (%d,%d)",
+                    self.camera_id,
+                    d.label,
+                    d.score * 100,
+                    cx,
+                    cy,
+                )
         return kept
-

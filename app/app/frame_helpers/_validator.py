@@ -6,6 +6,7 @@ This module composes the per-heuristic siblings into one pipeline. The
 reason classification (transient vs. scene) lives here too because
 ``grab_valid_frame`` consumes it to cap retries early on scene-level
 rejects."""
+
 from __future__ import annotations
 
 import logging
@@ -79,19 +80,31 @@ def is_valid_frame(
         return False, f"too_bright(brightness={brightness:.1f})"
 
     # Full-frame pink/magenta H.265 artifact
-    if r > profile.pink_full_r_min and r > g * profile.pink_full_ratio and r > b * profile.pink_full_ratio:
+    if (
+        r > profile.pink_full_r_min
+        and r > g * profile.pink_full_ratio
+        and r > b * profile.pink_full_ratio
+    ):
         return False, f"pink_artifact(r={r:.0f},g={g:.0f},b={b:.0f})"
     # Quadrant-level partial pink check
     qh, qw = h // 2, w // 2
-    for qi, (rs, cs) in enumerate([(slice(0, qh), slice(0, qw)),
-                                    (slice(0, qh), slice(qw, None)),
-                                    (slice(qh, None), slice(0, qw)),
-                                    (slice(qh, None), slice(qw, None))]):
+    for qi, (rs, cs) in enumerate(
+        [
+            (slice(0, qh), slice(0, qw)),
+            (slice(0, qh), slice(qw, None)),
+            (slice(qh, None), slice(0, qw)),
+            (slice(qh, None), slice(qw, None)),
+        ]
+    ):
         sub = img[rs, cs]
         sb = float(sub[:, :, 0].mean())
         sg = float(sub[:, :, 1].mean())
         sr = float(sub[:, :, 2].mean())
-        if sr > profile.pink_quad_r_min and sr > sg * profile.pink_quad_ratio and sr > sb * profile.pink_quad_ratio:
+        if (
+            sr > profile.pink_quad_r_min
+            and sr > sg * profile.pink_quad_ratio
+            and sr > sb * profile.pink_quad_ratio
+        ):
             return False, f"partial_pink_q{qi}(r={sr:.0f},g={sg:.0f},b={sb:.0f})"
 
     # Patterned-magenta detector — counts the *fraction* of pixels in
@@ -102,9 +115,9 @@ def is_valid_frame(
     # locked in magenta. Downscaled first so the cost is bounded.
     if w > _PATTERN_MAGENTA_DOWNSCALE:
         scale = _PATTERN_MAGENTA_DOWNSCALE / float(w)
-        small = cv2.resize(img,
-                           (_PATTERN_MAGENTA_DOWNSCALE, max(1, int(h * scale))),
-                           interpolation=cv2.INTER_AREA)
+        small = cv2.resize(
+            img, (_PATTERN_MAGENTA_DOWNSCALE, max(1, int(h * scale))), interpolation=cv2.INTER_AREA
+        )
     else:
         small = img
     sb_ch = small[:, :, 0].astype("int16")
@@ -114,10 +127,12 @@ def is_valid_frame(
     # margin so dawn/dusk pinks (which lift G almost as high as R/B)
     # don't trigger. Numpy-vectorised — single pass.
     rb_min = np.minimum(sr_ch, sb_ch)
-    mask = ((sr_ch >= _PATTERN_MAGENTA_R_MIN)
-            & (sb_ch >= _PATTERN_MAGENTA_B_MIN)
-            & (sg_ch <= _PATTERN_MAGENTA_GREEN_MAX)
-            & ((rb_min - sg_ch) >= _PATTERN_MAGENTA_DOMINANCE))
+    mask = (
+        (sr_ch >= _PATTERN_MAGENTA_R_MIN)
+        & (sb_ch >= _PATTERN_MAGENTA_B_MIN)
+        & (sg_ch <= _PATTERN_MAGENTA_GREEN_MAX)
+        & ((rb_min - sg_ch) >= _PATTERN_MAGENTA_DOMINANCE)
+    )
     total = mask.size
     if total > 0:
         mfrac = float(mask.sum()) / float(total)
@@ -148,7 +163,9 @@ def is_valid_frame(
     # detector — without it the IR-cut transition during dawn/dusk
     # dominates the reject tally on a sun-timelapse window.
     bs, bs_reason = is_horizontal_anomaly_band(
-        img, timestamp_zone=timestamp_zone, profile=profile,
+        img,
+        timestamp_zone=timestamp_zone,
+        profile=profile,
     )
     if bs:
         return False, bs_reason
@@ -218,6 +235,7 @@ def is_valid_frame(
     luma = (b + g + r) / 3.0
     diff_bg = np.abs(img[:, :, 0].astype(np.int16) - img[:, :, 1]).flatten()
     diff_br = np.abs(img[:, :, 0].astype(np.int16) - img[:, :, 2]).flatten()
+
     def _trimmed_std(arr, drop_frac=0.10):
         if arr.size == 0:
             return 0.0
@@ -228,9 +246,12 @@ def is_valid_frame(
         # — order within the kept slice is undefined but std doesn't care.
         kept = np.partition(arr, cut - 1)[:cut]
         return float(kept.std())
+
     chroma_std = (_trimmed_std(diff_bg) + _trimmed_std(diff_br)) / 2.0
-    if (_GREY_TONED_LUMA_MIN <= luma <= _GREY_TONED_LUMA_MAX
-            and chroma_std < profile.grey_toned_chroma_std_max):
+    if (
+        _GREY_TONED_LUMA_MIN <= luma <= _GREY_TONED_LUMA_MAX
+        and chroma_std < profile.grey_toned_chroma_std_max
+    ):
         return False, (f"grey_toned(luma={luma:.0f},chroma_std={chroma_std:.1f})")
 
     # Test-pattern colorbar
@@ -251,28 +272,41 @@ def is_valid_frame(
 #               scene is just like that. Cap retries at 2 for these so
 #               an empty terrace at midnight doesn't burn the full
 #               6-attempt budget for every slot.
-_TRANSIENT_REASONS: frozenset[str] = frozenset({
-    "grey_uniform", "grey_midband", "colorbar",
-    "pink_artifact", "patterned_magenta",
-    "split_left_dead", "split_right_dead",
-    "split_top_dead", "split_bottom_dead",
-    "grey_toned",
-    "bright_outlier_dark_scene",
-    # H.265 horizontal-band corruption (encoder/decoder hickup) —
-    # the next frame is usually clean, so retrying within the
-    # wall-clock budget genuinely helps. ``horizontal_anomaly_band``
-    # is the location-agnostic head; the legacy ``bottom_strip_*``
-    # heads stay too because the validator still emits them when
-    # the band sits in the bottom 25 % of the frame.
-    "horizontal_anomaly_band",
-    "bottom_strip_white", "bottom_strip_bright",
-    # Whole-frame flat-grey corruption — same encoder/decoder
-    # hickup family, retry within budget can recover.
-    "flat_gray_full_frame",
-})
-_SCENE_REASONS: frozenset[str] = frozenset({
-    "dead_area", "no_detail", "too_dark", "too_bright",
-})
+_TRANSIENT_REASONS: frozenset[str] = frozenset(
+    {
+        "grey_uniform",
+        "grey_midband",
+        "colorbar",
+        "pink_artifact",
+        "patterned_magenta",
+        "split_left_dead",
+        "split_right_dead",
+        "split_top_dead",
+        "split_bottom_dead",
+        "grey_toned",
+        "bright_outlier_dark_scene",
+        # H.265 horizontal-band corruption (encoder/decoder hickup) —
+        # the next frame is usually clean, so retrying within the
+        # wall-clock budget genuinely helps. ``horizontal_anomaly_band``
+        # is the location-agnostic head; the legacy ``bottom_strip_*``
+        # heads stay too because the validator still emits them when
+        # the band sits in the bottom 25 % of the frame.
+        "horizontal_anomaly_band",
+        "bottom_strip_white",
+        "bottom_strip_bright",
+        # Whole-frame flat-grey corruption — same encoder/decoder
+        # hickup family, retry within budget can recover.
+        "flat_gray_full_frame",
+    }
+)
+_SCENE_REASONS: frozenset[str] = frozenset(
+    {
+        "dead_area",
+        "no_detail",
+        "too_dark",
+        "too_bright",
+    }
+)
 
 
 def _classify_reason(reason: str) -> str:
@@ -296,13 +330,16 @@ def _classify_reason(reason: str) -> str:
 
 
 # ── Retry wrapper ────────────────────────────────────────────────────────────
-def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
-                     max_total_seconds: float = 5.0,
-                     on_reject=None,
-                     profile: FrameValidatorProfile = DAY_PROFILE,
-                     *,
-                     timestamp_zone=None,
-                     ) -> tuple[object, int, str]:
+def grab_valid_frame(
+    grab_fn,
+    attempts: int = 6,
+    sleep_s: float = 0.4,
+    max_total_seconds: float = 5.0,
+    on_reject=None,
+    profile: FrameValidatorProfile = DAY_PROFILE,
+    *,
+    timestamp_zone=None,
+) -> tuple[object, int, str]:
     """Call ``grab_fn`` up to ``attempts`` times OR
     ``max_total_seconds`` wall-clock, whichever comes first.
 
@@ -352,9 +389,8 @@ def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
     while attempt < effective_cap:
         if time.monotonic() - t0 >= max_total_seconds:
             last_reason = (
-                (last_reason + "|" if last_reason else "")
-                + f"budget_exceeded({max_total_seconds}s)"
-            )
+                last_reason + "|" if last_reason else ""
+            ) + f"budget_exceeded({max_total_seconds}s)"
             break
         try:
             frame = grab_fn()
@@ -362,8 +398,7 @@ def grab_valid_frame(grab_fn, attempts: int = 6, sleep_s: float = 0.4,
             last_reason = f"grab_exception:{e}"
             frame = None
         if frame is not None:
-            ok, reason = is_valid_frame(frame, profile=profile,
-                                        timestamp_zone=timestamp_zone)
+            ok, reason = is_valid_frame(frame, profile=profile, timestamp_zone=timestamp_zone)
             if ok:
                 return frame, attempt, ""
             last_reason = reason or last_reason or "invalid"

@@ -1,6 +1,7 @@
 """Per-session capture stats. Carved out of the original
 ``frame_helpers.py`` during the modular refactor; behaviour
 unchanged."""
+
 from __future__ import annotations
 
 import json
@@ -31,6 +32,7 @@ class CaptureStats:
     The flush() method is fault-tolerant — write failures degrade to a
     warning rather than crashing the capture loop, because no stats file
     is ever as important as keeping the capture running."""
+
     out_dir: Path
     expected_frames: int = 0
     started_at: str = field(default_factory=lambda: datetime.now().isoformat(timespec="seconds"))
@@ -100,10 +102,14 @@ class CaptureStats:
         if attempt_used > 0:
             self.retry_recoveries += 1
 
-    def record_slot(self, slot: int, outcome: str,
-                    reason: str | None = None,
-                    age_ms: int | None = None,
-                    score: float | None = None):
+    def record_slot(
+        self,
+        slot: int,
+        outcome: str,
+        reason: str | None = None,
+        age_ms: int | None = None,
+        score: float | None = None,
+    ):
         """G2 · push one slot-event onto the per-session ring buffer.
         Lightweight (single dict append) so the call site can stay in
         the hot capture loop without I/O. The pushed shape matches
@@ -116,14 +122,16 @@ class CaptureStats:
         "skipped", "retry_ok"}. The caller picks the bucket; this
         helper just stamps the timestamp and records.
         """
-        self.slot_events.append({
-            "slot":    int(slot),
-            "ts":      float(time.time()),
-            "outcome": str(outcome),
-            "reason":  (str(reason) if reason else None),
-            "age_ms":  (int(age_ms) if age_ms is not None else None),
-            "score":   (float(score) if score is not None else None),
-        })
+        self.slot_events.append(
+            {
+                "slot": int(slot),
+                "ts": float(time.time()),
+                "outcome": str(outcome),
+                "reason": (str(reason) if reason else None),
+                "age_ms": (int(age_ms) if age_ms is not None else None),
+                "score": (float(score) if score is not None else None),
+            }
+        )
 
     def record_same_hash(self, run_len: int):
         """A FRESH grab returned the same SHA1 as the previous fresh
@@ -148,9 +156,7 @@ class CaptureStats:
             key = _normalise_rejection_reason(reason)
             self.rejected_by_reason[key] = self.rejected_by_reason.get(key, 0) + 1
             if _classify_reason(reason) == "scene":
-                self.scene_skips_by_reason[key] = (
-                    self.scene_skips_by_reason.get(key, 0) + 1
-                )
+                self.scene_skips_by_reason[key] = self.scene_skips_by_reason.get(key, 0) + 1
             # Keep the FIRST full reason string per head — the value
             # carries the diagnostic detail (e.g. "(40/40=100%)") that
             # the UI shows alongside the bare key.
@@ -211,10 +217,10 @@ class CaptureStats:
                 # don't have to recompute. fresh+backfilled+skipped is
                 # the "how many slots in the MP4 are real content"
                 # answer the user asks every time they read the panel.
-                "fresh_captures":   self.fresh_captures,
+                "fresh_captures": self.fresh_captures,
                 "backfilled_slots": self.backfilled_slots,
-                "skipped_slots":    self.skipped_slots,
-                "total_written":    self.total_written,
+                "skipped_slots": self.skipped_slots,
+                "total_written": self.total_written,
                 "validator_profile": self.validator_profile,
                 "baseline_brightness": self.baseline_brightness,
                 "phase_drift_min": self.phase_drift_min,
@@ -235,8 +241,10 @@ class CaptureStats:
             log.info(
                 "[capture-stats] %s · captured=%d retries=%d invalid=%d rejected=%s scene_skips=%s",
                 Path(self.out_dir).name,
-                self.captured_frames, self.retry_recoveries,
-                self.invalid_frames, dict(self.rejected_by_reason),
+                self.captured_frames,
+                self.retry_recoveries,
+                self.invalid_frames,
+                dict(self.rejected_by_reason),
                 dict(self.scene_skips_by_reason),
             )
         except Exception:

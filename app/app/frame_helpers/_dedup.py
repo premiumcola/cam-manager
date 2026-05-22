@@ -1,13 +1,13 @@
 """Perceptual hash + near-duplicate detection. Carved out of the
 original ``frame_helpers.py`` during the modular refactor; behaviour
 unchanged."""
+
 from __future__ import annotations
 
 import cv2
 import numpy as np
 
 from ._decode import _decode
-
 
 # ── Perceptual hash + duplicate detection ───────────────────────────────────
 # Active dedup at encode time AND at capture time. The former filters
@@ -43,8 +43,7 @@ def perceptual_hash(img) -> int:
         return 0
     try:
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) if img.ndim == 3 else img
-        small = cv2.resize(gray, (_PHASH_SIZE, _PHASH_SIZE),
-                           interpolation=cv2.INTER_AREA)
+        small = cv2.resize(gray, (_PHASH_SIZE, _PHASH_SIZE), interpolation=cv2.INTER_AREA)
         threshold = float(small.mean())
         bits = (small > threshold).astype(np.uint8).flatten()
     except Exception:
@@ -62,10 +61,13 @@ def hamming_distance(a: int, b: int) -> int:
     return bin(a ^ b).count("1")
 
 
-def is_near_duplicate(prev_phash: int, prev_frame, this_frame,
-                      hamming_max: int = _PHASH_HAMMING_MAX,
-                      mean_abs_diff_max: float = _DEDUP_MEAN_ABS_DIFF_MAX,
-                      ) -> bool:
+def is_near_duplicate(
+    prev_phash: int,
+    prev_frame,
+    this_frame,
+    hamming_max: int = _PHASH_HAMMING_MAX,
+    mean_abs_diff_max: float = _DEDUP_MEAN_ABS_DIFF_MAX,
+) -> bool:
     """True when ``this_frame`` is a near-duplicate of the kept
     reference (``prev_phash`` + ``prev_frame``). Both legs of the
     test must hold:

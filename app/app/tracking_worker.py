@@ -19,6 +19,7 @@ Design:
   `source: "track"` so a future CSRT pass can fill in dense samples
   without breaking compatibility.
 """
+
 from __future__ import annotations
 
 import collections
@@ -40,20 +41,12 @@ from pathlib import Path
 # keeps resolving.
 from .bbox_utils import iou as _iou
 from .tracker_core import (
-    IOU_MATCH_THRESHOLD,
     MISS_GRACE_DEFAULT_SECONDS,
-    SAMPLE_BBOX_DELTA_PX,
     TRACK_FLOOR_SCORE,
-    TRACK_MISS_WINDOWS,
     TRACK_SPAWN_SCORE,
-    Track as _Track,
     TrackerState as _TrackerState,
     associate_detections as _associate_detections,
-    color_for_track as _color_for_track,
-    predicted_bbox as _predicted_bbox,
     resolve_track_thresholds as _resolve_track_thresholds,
-    short_id as _short_id,
-    update_best_top as _update_best_top,
 )
 
 log = logging.getLogger(__name__)
@@ -110,11 +103,11 @@ class TrackingJob:
     camera_id: str
 
 
-
 # ── Per-job pure helpers (R05) ───────────────────────────────────────────
 # Module-level so each step is independently readable + unit-testable.
 # `TrackingWorker._run_one` composes them with the worker's detector +
 # config getters; the helpers themselves never reach back into the worker.
+
 
 def _open_video(video_path: Path, *, precision: str = "standard"):
     """Open the file and read its sampling cadence. Returns
@@ -131,6 +124,7 @@ def _open_video(video_path: Path, *, precision: str = "standard"):
         but halves the gap between samples so tracks reflect motion
         more faithfully. Same algorithm; just sees more samples."""
     import cv2
+
     cap = cv2.VideoCapture(str(video_path))
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
@@ -150,7 +144,7 @@ def _open_video(video_path: Path, *, precision: str = "standard"):
     if precision == "precise":
         sample_interval = max(1, int(round(fps / 2)))  # ~2 Hz
     else:
-        sample_interval = max(1, int(round(fps)))      # ~1 Hz
+        sample_interval = max(1, int(round(fps)))  # ~1 Hz
     return cap, {
         "fps": fps,
         "frame_count": frame_count,
@@ -196,7 +190,6 @@ def _detect_and_filter(detector, frame, allowed, *, floor_score: float):
     return dets
 
 
-
 # K1 · gates for the static-false-positive sweep. A tracklet is
 # DROPPED at payload build when ALL of these hold:
 #   * has at least STATIC_FP_MIN_DETECTS detect samples (so the
@@ -219,8 +212,7 @@ STATIC_FP_DISP_FRAC = 0.5
 
 def _is_static_false_positive(track, spawn_score: float):
     """Return ``(drop: bool, reason: str)`` per the static-FP gates."""
-    det = [s for s in (track.samples or [])
-           if s.get("source") in ("detect", "track")]
+    det = [s for s in (track.samples or []) if s.get("source") in ("detect", "track")]
     if len(det) < STATIC_FP_MIN_DETECTS:
         return False, ""
     scores = sorted(float(s.get("score") or 0.0) for s in det)
@@ -288,8 +280,7 @@ def _t_first_last_detect(track):
     """Return ``(t_first, t_last, bb_first, bb_last)`` for the first
     and LAST detect-source samples, or ``None`` when the track has
     no observed samples."""
-    det = [s for s in (track.samples or [])
-           if s.get("source") in ("detect", "track")]
+    det = [s for s in (track.samples or []) if s.get("source") in ("detect", "track")]
     if not det:
         return None
     return (
@@ -343,18 +334,19 @@ def _can_stitch_sequential(a, b) -> tuple[bool, str]:
     if dist > max_dist:
         return False, f"dist={dist:.0f}>{max_dist:.0f}"
     return True, (
-        f"gap={gap:.1f}s dist={dist:.0f}px max_dim={max_dim} "
-        f"size_ratio={max(sz_w, sz_h):.2f}"
+        f"gap={gap:.1f}s dist={dist:.0f}px max_dim={max_dim} " f"size_ratio={max(sz_w, sz_h):.2f}"
     )
 
 
 def _overlap_iou_sustained(a, b) -> float:
     """Return the MEAN IoU of detect samples that share frame indices
     between tracklets a and b. 0.0 if they don't share any frame."""
-    a_by_f = {int(s["f"]): s["bbox"] for s in (a.samples or [])
-              if s.get("source") in ("detect", "track")}
-    b_by_f = {int(s["f"]): s["bbox"] for s in (b.samples or [])
-              if s.get("source") in ("detect", "track")}
+    a_by_f = {
+        int(s["f"]): s["bbox"] for s in (a.samples or []) if s.get("source") in ("detect", "track")
+    }
+    b_by_f = {
+        int(s["f"]): s["bbox"] for s in (b.samples or []) if s.get("source") in ("detect", "track")
+    }
     shared = a_by_f.keys() & b_by_f.keys()
     if not shared:
         return 0.0
@@ -369,7 +361,7 @@ def _absorb(into, donor) -> None:
     list re-sorted. Aggregate fields refreshed from the unified set.
     ``donor`` is left empty + marked inactive — caller drops it."""
     existing_frames = {int(s.get("f", -1)) for s in (into.samples or [])}
-    for s in (donor.samples or []):
+    for s in donor.samples or []:
         if int(s.get("f", -1)) in existing_frames:
             continue
         into.samples.append(s)
@@ -377,7 +369,7 @@ def _absorb(into, donor) -> None:
     if into.samples:
         into.first_frame = min(into.first_frame, donor.first_frame)
         into.last_frame = max(into.last_frame, donor.last_frame)
-    for s in (into.samples or []):
+    for s in into.samples or []:
         sc = s.get("score")
         if sc is not None and float(sc) > float(into.best_score or 0.0):
             into.best_score = float(sc)
@@ -414,8 +406,7 @@ def _stitch_tracklets_offline(state: _TrackerState) -> int:
         live = [t for t in closed if t.samples]
         if len(live) < 2:
             break
-        live.sort(key=lambda t: _t_first_last_detect(t)[0]
-                  if _t_first_last_detect(t) else 0.0)
+        live.sort(key=lambda t: _t_first_last_detect(t)[0] if _t_first_last_detect(t) else 0.0)
         merged_this_round = 0
         absorbed_set: set = set()
         for j, b in enumerate(live):
@@ -441,7 +432,9 @@ def _stitch_tracklets_offline(state: _TrackerState) -> int:
             if best_a is not None:
                 log.info(
                     "[tracking] stitch tid=%s ← tid=%s · gap=%.1fs (sequential)",
-                    best_a.track_id, b.track_id, best_gap,
+                    best_a.track_id,
+                    b.track_id,
+                    best_gap,
                 )
                 _absorb(best_a, b)
                 absorbed_set.add(id(b))
@@ -468,17 +461,16 @@ def _stitch_tracklets_offline(state: _TrackerState) -> int:
                 # Score-based winner so the canonical track keeps
                 # going. More detect samples → higher; ties broken
                 # toward higher best_score.
-                a_n = sum(1 for s in a.samples
-                          if s.get("source") in ("detect", "track"))
-                b_n = sum(1 for s in b.samples
-                          if s.get("source") in ("detect", "track"))
+                a_n = sum(1 for s in a.samples if s.get("source") in ("detect", "track"))
+                b_n = sum(1 for s in b.samples if s.get("source") in ("detect", "track"))
                 if (b_n, b.best_score or 0.0) > (a_n, a.best_score or 0.0):
                     into, donor = b, a
                 else:
                     into, donor = a, b
                 log.info(
                     "[tracking] stitch tid=%s ← tid=%s · overlap-iou (parallel)",
-                    into.track_id, donor.track_id,
+                    into.track_id,
+                    donor.track_id,
                 )
                 _absorb(into, donor)
                 merged += 1
@@ -502,12 +494,14 @@ def _filter_static_false_positives(state: _TrackerState, spawn_score: float):
     for tr in state.closed:
         drop, reason = _is_static_false_positive(tr, spawn_score)
         if drop:
-            n = sum(1 for s in (tr.samples or [])
-                    if s.get("source") in ("detect", "track"))
+            n = sum(1 for s in (tr.samples or []) if s.get("source") in ("detect", "track"))
             log.info(
                 "[tracking] drop tid=%s n=%d best=%.2f label=%s · %s",
-                tr.track_id, n, float(tr.best_score or 0.0),
-                tr.label, reason,
+                tr.track_id,
+                n,
+                float(tr.best_score or 0.0),
+                tr.label,
+                reason,
             )
             continue
         survivors.append(tr)
@@ -621,7 +615,11 @@ def _prune_ghost_tracks(
             continue
         log.info(
             "[tracking] cam=%s GHOST dropped: tid=%s label=%s best=%.2f < spawn=%.2f",
-            camera_id, tr.track_id, lbl, best, effective,
+            camera_id,
+            tr.track_id,
+            lbl,
+            best,
+            effective,
         )
         dropped += 1
 
@@ -638,12 +636,19 @@ def _prune_ghost_tracks(
 # clips get the cleanup until that ships.
 
 
-def _build_payload(state: _TrackerState, fps: float, frame_count: int,
-                   duration_s: float, allowed, video_path: Path,
-                   storage_root: Path,
-                   *, spawn_score: float = TRACK_SPAWN_SCORE,
-                   floor_score: float = TRACK_FLOOR_SCORE,
-                   grace_s: float = MISS_GRACE_DEFAULT_SECONDS) -> dict:
+def _build_payload(
+    state: _TrackerState,
+    fps: float,
+    frame_count: int,
+    duration_s: float,
+    allowed,
+    video_path: Path,
+    storage_root: Path,
+    *,
+    spawn_score: float = TRACK_SPAWN_SCORE,
+    floor_score: float = TRACK_FLOOR_SCORE,
+    grace_s: float = MISS_GRACE_DEFAULT_SECONDS,
+) -> dict:
     """Assemble the tracks.json payload. The track-serialisation block
     iterates state.closed; the caller is responsible for flushing any
     still-active tracks into closed before this runs.
@@ -676,8 +681,8 @@ def _build_payload(state: _TrackerState, fps: float, frame_count: int,
         # to recover before being closed.
         "gates": {
             "min_confidence": round(float(spawn_score), 3),
-            "raw_floor":      round(float(floor_score), 3),
-            "miss_grace_s":   round(float(grace_s), 2),
+            "raw_floor": round(float(floor_score), 3),
+            "miss_grace_s": round(float(grace_s), 2),
         },
         "tracks": [t.to_dict() for t in state.closed],
         "built_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -696,9 +701,13 @@ class TrackingWorker(threading.Thread):
     writes tracks.json sidecars. Built once at boot via build_worker()
     in this module; access the singleton via `tracking_worker.singleton()`."""
 
-    def __init__(self, *, storage_root: Path,
-                 detection_cfg_getter: Callable[[], dict] | None = None,
-                 cam_cfg_getter: Callable[[str], dict] | None = None):
+    def __init__(
+        self,
+        *,
+        storage_root: Path,
+        detection_cfg_getter: Callable[[], dict] | None = None,
+        cam_cfg_getter: Callable[[str], dict] | None = None,
+    ):
         super().__init__(name="tracking-worker", daemon=True)
         self._q: queue.Queue[TrackingJob | None] = queue.Queue()
         self._stop = threading.Event()
@@ -708,7 +717,7 @@ class TrackingWorker(threading.Thread):
         # Used to pull each job's object_filter so the worker mirrors the
         # camera_runtime/_main_loop label filter exactly.
         self._cam_cfg_getter = cam_cfg_getter or (lambda _cam_id: {})
-        self._detector = None        # built lazily on first job
+        self._detector = None  # built lazily on first job
         self._detector_cfg_id = None  # id() of cfg dict — rebuild on swap
         self._jobs_done = 0
         self._jobs_failed = 0
@@ -717,9 +726,7 @@ class TrackingWorker(threading.Thread):
         # Keyed by event_id; oldest entries fall off when the cap is
         # exceeded. 32 is plenty for the polling UI to find the failure
         # before it ages out.
-        self._recent_failures: collections.OrderedDict[str, dict] = (
-            collections.OrderedDict()
-        )
+        self._recent_failures: collections.OrderedDict[str, dict] = collections.OrderedDict()
         self._recent_failures_cap = 32
         self._failures_lock = threading.Lock()
 
@@ -796,12 +803,12 @@ class TrackingWorker(threading.Thread):
             except Exception as e:
                 self._jobs_failed += 1
                 self._record_failure(job.event_id, str(e) or e.__class__.__name__)
-                log.error("[tracking] event=%s failed: %s",
-                          job.event_id, e, exc_info=True)
+                log.error("[tracking] event=%s failed: %s", job.event_id, e, exc_info=True)
             finally:
                 self._q.task_done()
-        log.info("[tracking] worker stopped (done=%d failed=%d)",
-                 self._jobs_done, self._jobs_failed)
+        log.info(
+            "[tracking] worker stopped (done=%d failed=%d)", self._jobs_done, self._jobs_failed
+        )
 
     # ── Detector lifecycle ───────────────────────────────────────────────
 
@@ -824,6 +831,7 @@ class TrackingWorker(threading.Thread):
         sig = self._detector_signature(cfg)
         if self._detector is None or sig != self._detector_cfg_id:
             from .detectors import CoralObjectDetector
+
             # Strip device hint so make_interpreter doesn't race the
             # camera runtimes for the TPU. The CPU fallback path inside
             # CoralObjectDetector.__init__ kicks in automatically.
@@ -851,10 +859,10 @@ class TrackingWorker(threading.Thread):
 
     def _run_one(self, job: TrackingJob):
         import cv2
+
         t_start = time.time()
         if not job.video_path.exists():
-            log.warning("[tracking] event=%s video missing: %s",
-                        job.event_id, job.video_path)
+            log.warning("[tracking] event=%s video missing: %s", job.event_id, job.video_path)
             return
 
         # Per-camera sampling cadence. "standard" = 1 Hz (historic
@@ -873,15 +881,20 @@ class TrackingWorker(threading.Thread):
 
         cap, meta = _open_video(job.video_path, precision=precision)
         if cap is None:
-            log.warning("[tracking] event=%s unreadable (fps=%.1f frames=%d)",
-                        job.event_id, meta.get("fps", 0.0), meta.get("frame_count", 0))
+            log.warning(
+                "[tracking] event=%s unreadable (fps=%.1f frames=%d)",
+                job.event_id,
+                meta.get("fps", 0.0),
+                meta.get("frame_count", 0),
+            )
             return
 
         try:
             detector = self._ensure_detector()
             allowed = _resolve_object_filter(self._cam_cfg_getter, job.camera_id)
             spawn_score, floor_score, grace_s, iou_thresh = _resolve_track_thresholds(
-                self._cam_cfg_getter, job.camera_id,
+                self._cam_cfg_getter,
+                job.camera_id,
             )
             # The live runtime needs spawn=0.5 to suppress false-trigger
             # notifications. The post-clip worker only writes a
@@ -910,11 +923,14 @@ class TrackingWorker(threading.Thread):
                     frame_idx += sample_interval
                     continue
                 t_s = frame_idx / fps
-                dets = _detect_and_filter(detector, frame, allowed,
-                                          floor_score=floor_score)
+                dets = _detect_and_filter(detector, frame, allowed, floor_score=floor_score)
                 _associate_detections(
-                    state, dets, frame_idx, t_s,
-                    frame_w=frame_w, frame_h=frame_h,
+                    state,
+                    dets,
+                    frame_idx,
+                    t_s,
+                    frame_w=frame_w,
+                    frame_h=frame_h,
                     spawn_score=effective_spawn,
                     iou_threshold=iou_thresh,
                 )
@@ -939,8 +955,7 @@ class TrackingWorker(threading.Thread):
             # gate and survives.
             n_stitched = _stitch_tracklets_offline(state)
             if n_stitched:
-                log.info("[tracking] stitched %d tracklet(s) (offline)",
-                         n_stitched)
+                log.info("[tracking] stitched %d tracklet(s) (offline)", n_stitched)
 
             # K1 · global static-FP sweep on the closed tracklets
             # BEFORE payload build. Catches the chair/pole/lamp/
@@ -962,7 +977,7 @@ class TrackingWorker(threading.Thread):
                 cam_cfg = self._cam_cfg_getter(job.camera_id) if self._cam_cfg_getter else {}
             except Exception:
                 cam_cfg = {}
-            ghost_filter_on = (cam_cfg.get("track_filter_ghosts") is not False)
+            ghost_filter_on = cam_cfg.get("track_filter_ghosts") is not False
             if ghost_filter_on:
                 try:
                     det_cfg = self._cfg_getter() or {}
@@ -977,7 +992,8 @@ class TrackingWorker(threading.Thread):
                 if n_ghosts:
                     log.info(
                         "[tracking] cam=%s pruned %d ghost track(s) from sidecar",
-                        job.camera_id, n_ghosts,
+                        job.camera_id,
+                        n_ghosts,
                     )
 
             # gates.min_confidence reflects the LIVE spawn threshold so
@@ -987,8 +1003,13 @@ class TrackingWorker(threading.Thread):
             # an internal detail; surfacing it would make the gate
             # values misleading.
             payload = _build_payload(
-                state, fps, frame_count, meta["duration_s"],
-                allowed, job.video_path, self._storage_root,
+                state,
+                fps,
+                frame_count,
+                meta["duration_s"],
+                allowed,
+                job.video_path,
+                self._storage_root,
                 spawn_score=spawn_score,
                 floor_score=floor_score,
                 grace_s=grace_s,
@@ -997,11 +1018,17 @@ class TrackingWorker(threading.Thread):
             _write_payload_atomic(tracks_path, payload)
 
             elapsed = time.time() - t_start
-            best_str = (f"best={payload['best_frame']['score']:.2f}"
-                        if payload["best_frame"] else "best=—")
-            log.info("[tracking] event=%s dur=%.1fs tracks=%d samples=%d %s",
-                     job.event_id, elapsed, len(payload["tracks"]),
-                     state.samples_emitted, best_str)
+            best_str = (
+                f"best={payload['best_frame']['score']:.2f}" if payload["best_frame"] else "best=—"
+            )
+            log.info(
+                "[tracking] event=%s dur=%.1fs tracks=%d samples=%d %s",
+                job.event_id,
+                elapsed,
+                len(payload["tracks"]),
+                state.samples_emitted,
+                best_str,
+            )
             self._record_slow_job(job, elapsed, meta["duration_s"])
             # Update the event JSON with the achievement aggregates now
             # that the tracks pass is complete. Best-effort — a failed
@@ -1017,8 +1044,12 @@ class TrackingWorker(threading.Thread):
         Lifted out of `_run_one` so the orchestrator stays linear; the
         threshold logic is unchanged."""
         if duration_s > 0 and elapsed > duration_s * SLOW_JOB_RATIO and elapsed > 5.0:
-            log.warning("[tracking] event=%s SLOW: processing %.1fs for clip %.1fs",
-                        job.event_id, elapsed, duration_s)
+            log.warning(
+                "[tracking] event=%s SLOW: processing %.1fs for clip %.1fs",
+                job.event_id,
+                elapsed,
+                duration_s,
+            )
 
     def _update_event_achievement(self, job: TrackingJob, payload: dict) -> None:
         """Merge tracks-derived stats (tracks_by_class, peak_score_by_class,
@@ -1039,8 +1070,7 @@ class TrackingWorker(threading.Thread):
             if not ev:
                 return
         except Exception as e:
-            log.info("[tracking] event=%s achievement read skipped: %s",
-                     job.event_id, e)
+            log.info("[tracking] event=%s achievement read skipped: %s", job.event_id, e)
             return
         tracks = payload.get("tracks", []) or []
         tracks_by_class: dict[str, int] = {}
@@ -1098,30 +1128,29 @@ class TrackingWorker(threading.Thread):
                 if in_win >= n:
                     confirmed = True
                     break
-            confirm_hits.append({
-                "track_id": tr.get("track_id"),
-                "label": lbl,
-                "hit_count": hit_count,
-                "span_seconds": span_seconds,
-                "confirmed": confirmed,
-            })
+            confirm_hits.append(
+                {
+                    "track_id": tr.get("track_id"),
+                    "label": lbl,
+                    "hit_count": hit_count,
+                    "span_seconds": span_seconds,
+                    "confirmed": confirmed,
+                }
+            )
         ach = dict(ev.get("achievement") or {})
         if tracks_by_class:
             ach["tracks_by_class"] = tracks_by_class
         # Round peaks to 4 decimals so the JSON stays compact and the
         # frontend can compare against per-class thresholds cleanly.
         if peak_score_by_class:
-            ach["peak_score_by_class"] = {
-                k: round(v, 4) for k, v in peak_score_by_class.items()
-            }
+            ach["peak_score_by_class"] = {k: round(v, 4) for k, v in peak_score_by_class.items()}
         if confirm_hits:
             ach["confirm_hits_by_track"] = confirm_hits
         ev["achievement"] = ach
         try:
             store.update_event(job.camera_id, job.event_id, ev)
         except Exception as e:
-            log.info("[tracking] event=%s achievement write skipped: %s",
-                     job.event_id, e)
+            log.info("[tracking] event=%s achievement write skipped: %s", job.event_id, e)
 
 
 def _safe_relpath(p: Path, root: Path) -> str:
@@ -1139,9 +1168,12 @@ _worker: TrackingWorker | None = None
 _worker_lock = threading.Lock()
 
 
-def build_worker(*, storage_root: Path,
-                 detection_cfg_getter: Callable[[], dict] | None = None,
-                 cam_cfg_getter: Callable[[str], dict] | None = None) -> TrackingWorker:
+def build_worker(
+    *,
+    storage_root: Path,
+    detection_cfg_getter: Callable[[], dict] | None = None,
+    cam_cfg_getter: Callable[[str], dict] | None = None,
+) -> TrackingWorker:
     """Construct and start the singleton. Idempotent — second call
     returns the existing instance even if different getters are provided
     (both are captured on first build)."""
@@ -1149,9 +1181,11 @@ def build_worker(*, storage_root: Path,
     with _worker_lock:
         if _worker is not None and _worker.is_alive():
             return _worker
-        _worker = TrackingWorker(storage_root=storage_root,
-                                 detection_cfg_getter=detection_cfg_getter,
-                                 cam_cfg_getter=cam_cfg_getter)
+        _worker = TrackingWorker(
+            storage_root=storage_root,
+            detection_cfg_getter=detection_cfg_getter,
+            cam_cfg_getter=cam_cfg_getter,
+        )
         _worker.start()
         return _worker
 

@@ -34,8 +34,8 @@ from ..event_logic import (
 )
 from ._consts import (
     _FFMPEG_AVAILABLE,
-    _PROFILES,
     _PROFILE_PERIOD_DEFAULTS,
+    _PROFILES,
     _SPECIES_TO_ACH_ID,
     _WILDLIFE_BBOX_DONORS,
     _bbox_iou,
@@ -63,27 +63,43 @@ class RecordingMixin:
         caller can fall back to mp4v.
         """
         import subprocess as _sp
+
         if not frames:
             return False
         h, w = frames[0].shape[:2]
         fps_c = max(5.0, min(30.0, float(fps)))
         cmd = [
-            'ffmpeg', '-y',
-            '-f', 'rawvideo', '-vcodec', 'rawvideo',
-            '-pix_fmt', 'bgr24', '-s', f'{w}x{h}', '-r', str(fps_c),
-            '-i', 'pipe:0',
-            '-vcodec', 'libx264', '-preset', 'fast', '-crf', '23',
-            '-pix_fmt', 'yuv420p',
-            '-movflags', '+faststart',
-            str(out_path)
+            'ffmpeg',
+            '-y',
+            '-f',
+            'rawvideo',
+            '-vcodec',
+            'rawvideo',
+            '-pix_fmt',
+            'bgr24',
+            '-s',
+            f'{w}x{h}',
+            '-r',
+            str(fps_c),
+            '-i',
+            'pipe:0',
+            '-vcodec',
+            'libx264',
+            '-preset',
+            'fast',
+            '-crf',
+            '23',
+            '-pix_fmt',
+            'yuv420p',
+            '-movflags',
+            '+faststart',
+            str(out_path),
         ]
         try:
-            proc = _sp.Popen(cmd, stdin=_sp.PIPE,
-                             stdout=_sp.PIPE, stderr=_sp.PIPE)
+            proc = _sp.Popen(cmd, stdin=_sp.PIPE, stdout=_sp.PIPE, stderr=_sp.PIPE)
             last_good = frames[0]
             for f in frames:
-                if self._is_frame_valid(f) and \
-                   not self._is_frame_too_different(f, last_good):
+                if self._is_frame_valid(f) and not self._is_frame_too_different(f, last_good):
                     proc.stdin.write(f.tobytes())
                     last_good = f
                 else:
@@ -91,21 +107,23 @@ class RecordingMixin:
             proc.stdin.close()
             _, stderr = proc.communicate(timeout=120)
             if proc.returncode != 0:
-                log.error('[%s] ffmpeg encode failed: %s',
-                          self.camera_id,
-                          stderr.decode(errors='replace')[-800:])
+                log.error(
+                    '[%s] ffmpeg encode failed: %s',
+                    self.camera_id,
+                    stderr.decode(errors='replace')[-800:],
+                )
                 return False
             return True
         except FileNotFoundError:
-            log.warning('[%s] ffmpeg not found — falling back to mp4v',
-                        self.camera_id)
+            log.warning('[%s] ffmpeg not found — falling back to mp4v', self.camera_id)
             return False
         except Exception as e:
             log.error('[%s] ffmpeg pipe error: %s', self.camera_id, e)
             return False
 
-    def _write_recording_event_stub(self, event_id: str, meta: dict,
-                                    start_time: datetime, status: str = "recording"):
+    def _write_recording_event_stub(
+        self, event_id: str, meta: dict, start_time: datetime, status: str = "recording"
+    ):
         """Write the event JSON for a clip whose encode is still in flight.
         Video fields are null; the frontend shows a 'recording'/'processing' state."""
         event = {
@@ -144,7 +162,9 @@ class RecordingMixin:
         """Launch an ffmpeg subprocess that stream-copies the RTSP feed to disk.
         Returns True on success, False to let the caller fall back to OpenCV."""
         storage_root = Path(self.global_cfg["storage"]["root"])
-        day_dir = storage_root / "motion_detection" / self.camera_id / start_time.strftime("%Y-%m-%d")
+        day_dir = (
+            storage_root / "motion_detection" / self.camera_id / start_time.strftime("%Y-%m-%d")
+        )
         day_dir.mkdir(parents=True, exist_ok=True)
         event_id = start_time.strftime("%Y%m%d-%H%M%S-%f")
         raw_path = day_dir / f"{event_id}.raw.mp4"
@@ -152,10 +172,16 @@ class RecordingMixin:
         if not rtsp_url:
             return False
         cmd = [
-            'ffmpeg', '-y', '-rtsp_transport', 'tcp',
-            '-i', rtsp_url,
-            '-c', 'copy',
-            '-movflags', '+frag_keyframe+empty_moov',
+            'ffmpeg',
+            '-y',
+            '-rtsp_transport',
+            'tcp',
+            '-i',
+            rtsp_url,
+            '-c',
+            'copy',
+            '-movflags',
+            '+frag_keyframe+empty_moov',
             str(raw_path),
         ]
         try:
@@ -166,8 +192,11 @@ class RecordingMixin:
                 stderr=_subprocess.PIPE,
             )
         except FileNotFoundError:
-            log.warning("[%s] ffmpeg not found — using OpenCV frame buffer "
-                        "(playback speed may be incorrect)", self.camera_id)
+            log.warning(
+                "[%s] ffmpeg not found — using OpenCV frame buffer "
+                "(playback speed may be incorrect)",
+                self.camera_id,
+            )
             return False
         except Exception as e:
             log.error("[%s] ffmpeg spawn failed: %s", self.camera_id, e)
@@ -217,8 +246,11 @@ class RecordingMixin:
                     proc.kill()
         except Exception as e:
             log.warning("[%s] ffmpeg stop error: %s", self.camera_id, e)
-        log.info("[%s] Recording stopped (%s), queuing re-encode", self.camera_id,
-                 raw_path.name if raw_path else "?")
+        log.info(
+            "[%s] Recording stopped (%s), queuing re-encode",
+            self.camera_id,
+            raw_path.name if raw_path else "?",
+        )
         if raw_path is None or event_id is None or meta is None or start_time is None:
             return
         # Update status → processing so the UI shows the intermediate state
@@ -234,8 +266,9 @@ class RecordingMixin:
             daemon=True,
         ).start()
 
-    def _reencode_motion_clip(self, raw_path: Path, event_id: str, meta: dict,
-                              start_time: datetime):
+    def _reencode_motion_clip(
+        self, raw_path: Path, event_id: str, meta: dict, start_time: datetime
+    ):
         """Background: transcode raw stream-copy → browser-friendly H.264.
         On success: delete the raw file, set video_url/snapshot/thumb/status=ready.
         On failure: keep raw as fallback, set encode_error on the event."""
@@ -251,12 +284,24 @@ class RecordingMixin:
         encode_error = None
         try:
             if not raw_path.exists() or raw_path.stat().st_size < 1024:
-                raise RuntimeError(f"raw clip missing/empty ({raw_path.stat().st_size if raw_path.exists() else 0} bytes)")
+                raise RuntimeError(
+                    f"raw clip missing/empty ({raw_path.stat().st_size if raw_path.exists() else 0} bytes)"
+                )
             cmd = [
-                'ffmpeg', '-y', '-i', str(raw_path),
-                '-vcodec', 'libx264', '-preset', 'fast', '-crf', '22',
-                '-pix_fmt', 'yuv420p',
-                '-movflags', '+faststart',
+                'ffmpeg',
+                '-y',
+                '-i',
+                str(raw_path),
+                '-vcodec',
+                'libx264',
+                '-preset',
+                'fast',
+                '-crf',
+                '22',
+                '-pix_fmt',
+                'yuv420p',
+                '-movflags',
+                '+faststart',
                 '-an',
                 str(vid_path),
             ]
@@ -272,22 +317,35 @@ class RecordingMixin:
             duration_s = round(fc / cfps, 2) if cfps > 0 else 0.0
             file_size_bytes = vid_path.stat().st_size
             rel = vid_path.relative_to(storage_root)
-            video_url = f"{public_base}/media/{rel.as_posix()}" if public_base else f"/media/{rel.as_posix()}"
+            video_url = (
+                f"{public_base}/media/{rel.as_posix()}"
+                if public_base
+                else f"/media/{rel.as_posix()}"
+            )
             video_relpath = rel.as_posix()
             # Delete raw on success
             try:
                 raw_path.unlink()
             except Exception:
                 pass
-            log.info("[%s] Re-encode complete: %s (%.1fs %dKB)",
-                     self.camera_id, vid_path.name, duration_s, file_size_bytes // 1024)
+            log.info(
+                "[%s] Re-encode complete: %s (%.1fs %dKB)",
+                self.camera_id,
+                vid_path.name,
+                duration_s,
+                file_size_bytes // 1024,
+            )
         except Exception as e:
             log.error("[%s] Re-encode failed: %s", self.camera_id, e)
             encode_error = str(e)
             # Fallback: raw may still be playable — expose it if so
             if raw_path.exists() and raw_path.stat().st_size > 1024:
                 rel = raw_path.relative_to(storage_root)
-                video_url = f"{public_base}/media/{rel.as_posix()}" if public_base else f"/media/{rel.as_posix()}"
+                video_url = (
+                    f"{public_base}/media/{rel.as_posix()}"
+                    if public_base
+                    else f"/media/{rel.as_posix()}"
+                )
                 video_relpath = rel.as_posix()
                 file_size_bytes = raw_path.stat().st_size
 
@@ -311,7 +369,11 @@ class RecordingMixin:
                         frame_th = cv2.resize(frame_th, (640, int(frame_th.shape[0] * scale)))
                     if cv2.imwrite(str(thumb_path), frame_th, [int(cv2.IMWRITE_JPEG_QUALITY), 75]):
                         thumb_rel = thumb_path.relative_to(storage_root).as_posix()
-                        thumb_url = f"{public_base}/media/{thumb_rel}" if public_base else f"/media/{thumb_rel}"
+                        thumb_url = (
+                            f"{public_base}/media/{thumb_rel}"
+                            if public_base
+                            else f"/media/{thumb_rel}"
+                        )
             except Exception as _te:
                 log.debug("[%s] motion thumb (post-encode) failed: %s", self.camera_id, _te)
 
@@ -335,13 +397,16 @@ class RecordingMixin:
         # MQTT + Telegram (best-effort, only when we actually produced a video)
         if video_url and self.mqtt and self.cfg.get("mqtt_enabled", True):
             try:
-                self.mqtt.publish(f"events/{self.camera_id}", {
-                    "event_id": event_id,
-                    "labels": meta["labels"],
-                    "time": start_time.isoformat(timespec="seconds"),
-                    "video_url": video_url,
-                    "snapshot_url": thumb_url,
-                })
+                self.mqtt.publish(
+                    f"events/{self.camera_id}",
+                    {
+                        "event_id": event_id,
+                        "labels": meta["labels"],
+                        "time": start_time.isoformat(timespec="seconds"),
+                        "video_url": video_url,
+                        "snapshot_url": thumb_url,
+                    },
+                )
             except Exception:
                 pass
 
@@ -363,8 +428,9 @@ class RecordingMixin:
         # — it produced a second bubble per detection with a different button
         # layout and confused users. Removed.
 
-    def _enqueue_tracks_for_clip(self, event_id: str, video_path: Path,
-                                 snapshot_path: Path | None) -> None:
+    def _enqueue_tracks_for_clip(
+        self, event_id: str, video_path: Path, snapshot_path: Path | None
+    ) -> None:
         """Hand the freshly-finalized clip to the post-clip tracking worker so
         the next Mediathek open finds a populated <video>.tracks.json sidecar.
 
@@ -377,15 +443,18 @@ class RecordingMixin:
             return
         try:
             from ..tracking_worker import TrackingJob, singleton as _tw_singleton
+
             worker = _tw_singleton()
             if worker is None:
                 return
-            worker.enqueue(TrackingJob(
-                event_id=event_id,
-                video_path=video_path,
-                snapshot_path=snapshot_path,
-                camera_id=self.camera_id,
-            ))
+            worker.enqueue(
+                TrackingJob(
+                    event_id=event_id,
+                    video_path=video_path,
+                    snapshot_path=snapshot_path,
+                    camera_id=self.camera_id,
+                )
+            )
         except Exception as _te:
             log.debug("[%s] tracking enqueue failed: %s", self.camera_id, _te)
 
@@ -401,24 +470,20 @@ class RecordingMixin:
         cw_global = (self.cfg.get("confirmation_window") or {}).get("global") or {}
         obj_filter = self.cfg.get("object_filter") or []
         return {
-            "conf_thresh_general":
-                float(self.cfg.get("detection_min_score") or 0.0),
-            "conf_thresh_per_class":
-                dict(self.cfg.get("label_thresholds") or {}),
+            "conf_thresh_general": float(self.cfg.get("detection_min_score") or 0.0),
+            "conf_thresh_per_class": dict(self.cfg.get("label_thresholds") or {}),
             # null when the filter is empty — distinguishes "no filter
             # configured" from "filter has zero allowed classes" on
             # the frontend without a sentinel value.
-            "object_filter":
-                list(obj_filter) if obj_filter else None,
-            "confirm_n":          int(cw_global.get("n", 3)),
-            "confirm_seconds":    int(cw_global.get("seconds", 5)),
+            "object_filter": list(obj_filter) if obj_filter else None,
+            "confirm_n": int(cw_global.get("n", 3)),
+            "confirm_seconds": int(cw_global.get("seconds", 5)),
             "sample_interval_ms": int(self.cfg.get("frame_interval_ms") or 350),
             # Raw 0..1 float (same units as the schema). The frontend
             # multiplies by 100 for display so the rest of the API
             # surface — settings.json, /api/cameras — keeps the same
             # representation it has used since the wizard shipped.
-            "motion_pretrigger_sensitivity":
-                float(self.cfg.get("motion_sensitivity") or 0.5),
+            "motion_pretrigger_sensitivity": float(self.cfg.get("motion_sensitivity") or 0.5),
             # Pre-roll window — only the OpenCV-fallback recording path
             # uses an actual in-memory pre-buffer (3.0 s, hard-coded in
             # _main_loop's pre_cutoff). The ffmpeg stream-copy path
@@ -427,8 +492,7 @@ class RecordingMixin:
             # path; the ffmpeg re-encode path overrides this field
             # back to 0 inside _reencode_motion_clip's event update.
             "pre_motion_seconds": 3,
-            "post_motion_seconds":
-                int(self.cfg.get("post_motion_tail_s") or 0),
+            "post_motion_seconds": int(self.cfg.get("post_motion_tail_s") or 0),
         }
 
     def _build_achievement_snapshot(self) -> dict:
@@ -460,9 +524,7 @@ class RecordingMixin:
             if det_mode == "cpu":
                 ach["inference_status"] = "cpu_emergency"
             elif det_mode == "coral":
-                ach["inference_status"] = (
-                    "elevated" if avg is not None and avg >= 50.0 else "ok"
-                )
+                ach["inference_status"] = "elevated" if avg is not None and avg >= 50.0 else "ok"
             # "motion_only" / "off" → no inference, omit the field.
         except Exception:
             pass
@@ -488,7 +550,9 @@ class RecordingMixin:
         encode_error: str | None = None
         fps_clamped = max(5.0, min(30.0, float(fps)))
         try:
-            day_dir = storage_root / "motion_detection" / self.camera_id / start_time.strftime("%Y-%m-%d")
+            day_dir = (
+                storage_root / "motion_detection" / self.camera_id / start_time.strftime("%Y-%m-%d")
+            )
             day_dir.mkdir(parents=True, exist_ok=True)
             vid_path = day_dir / f"{event_id}.mp4"
             ok = self._write_clip_ffmpeg(frames, fps, vid_path)
@@ -497,13 +561,14 @@ class RecordingMixin:
                 log.warning("[%s] H.264 encode unavailable, writing mp4v fallback", self.camera_id)
                 encode_error = encode_error or "ffmpeg h264 encode failed — mp4v fallback"
                 h, w = frames[0].shape[:2]
-                writer = cv2.VideoWriter(str(vid_path),
-                    cv2.VideoWriter_fourcc(*'mp4v'), fps_clamped, (w, h))
+                writer = cv2.VideoWriter(
+                    str(vid_path), cv2.VideoWriter_fourcc(*'mp4v'), fps_clamped, (w, h)
+                )
                 last_good = frames[0]
                 for f in frames:
-                    if self._is_frame_valid(f) and \
-                       not self._is_frame_too_different(f, last_good):
-                        writer.write(f); last_good = f
+                    if self._is_frame_valid(f) and not self._is_frame_too_different(f, last_good):
+                        writer.write(f)
+                        last_good = f
                     else:
                         writer.write(last_good)
                 writer.release()
@@ -511,7 +576,8 @@ class RecordingMixin:
             # Verify output: must exist, have size, and be a readable video with real duration
             if not vid_path.exists() or vid_path.stat().st_size < 1024:
                 raise RuntimeError(
-                    f"clip empty/missing ({vid_path.stat().st_size if vid_path.exists() else 0} bytes)")
+                    f"clip empty/missing ({vid_path.stat().st_size if vid_path.exists() else 0} bytes)"
+                )
             check = cv2.VideoCapture(str(vid_path))
             fc = int(check.get(cv2.CAP_PROP_FRAME_COUNT))
             cfps = check.get(cv2.CAP_PROP_FPS) or fps_clamped
@@ -523,7 +589,11 @@ class RecordingMixin:
             duration_s = round(dur, 2)
             file_size_bytes = vid_path.stat().st_size
             rel = vid_path.relative_to(storage_root)
-            video_url = f"{public_base}/media/{rel.as_posix()}" if public_base else f"/media/{rel.as_posix()}"
+            video_url = (
+                f"{public_base}/media/{rel.as_posix()}"
+                if public_base
+                else f"/media/{rel.as_posix()}"
+            )
             video_relpath = rel.as_posix()
             # Extract a representative thumbnail frame (~1/3 into the clip) and
             # downscale to max 640px wide. The motion card + lightbox both use
@@ -544,9 +614,15 @@ class RecordingMixin:
                     cv2.imwrite(str(thumb_path), frame_th, [int(cv2.IMWRITE_JPEG_QUALITY), 75])
             except Exception as _te:
                 log.debug("[%s] motion thumb failed: %s", self.camera_id, _te)
-            log.info("[%s] Motion clip saved: %s (%d frames %.1fs @ %.1ffps %dKB)",
-                     self.camera_id, vid_path.name, len(frames), dur, fps_clamped,
-                     file_size_bytes // 1024)
+            log.info(
+                "[%s] Motion clip saved: %s (%d frames %.1fs @ %.1ffps %dKB)",
+                self.camera_id,
+                vid_path.name,
+                len(frames),
+                dur,
+                fps_clamped,
+                file_size_bytes // 1024,
+            )
         except Exception as e:
             log.error("[%s] Motion clip save error: %s", self.camera_id, e)
             if encode_error is None:
@@ -567,13 +643,27 @@ class RecordingMixin:
                         duration_s = round(dur, 2)
                         file_size_bytes = size_bytes
                         rel = vid_path.relative_to(storage_root)
-                        video_url = f"{public_base}/media/{rel.as_posix()}" if public_base else f"/media/{rel.as_posix()}"
+                        video_url = (
+                            f"{public_base}/media/{rel.as_posix()}"
+                            if public_base
+                            else f"/media/{rel.as_posix()}"
+                        )
                         video_relpath = rel.as_posix()
-                        log.warning("[%s] Motion clip recovered via fallback: %s (%d frames %.2fs, encode_error=%s)",
-                                    self.camera_id, vid_path.name, fc, dur, encode_error)
+                        log.warning(
+                            "[%s] Motion clip recovered via fallback: %s (%d frames %.2fs, encode_error=%s)",
+                            self.camera_id,
+                            vid_path.name,
+                            fc,
+                            dur,
+                            encode_error,
+                        )
                     else:
-                        log.error("[%s] Fallback: clip unreadable (frames=%d dur=%.2fs) — removing",
-                                  self.camera_id, fc, dur)
+                        log.error(
+                            "[%s] Fallback: clip unreadable (frames=%d dur=%.2fs) — removing",
+                            self.camera_id,
+                            fc,
+                            dur,
+                        )
                         vid_path.unlink()
                 else:
                     vid_path.unlink()
@@ -590,7 +680,9 @@ class RecordingMixin:
         try:
             if 'thumb_path' in locals() and thumb_path.exists():
                 thumb_rel = thumb_path.relative_to(storage_root).as_posix()
-                thumb_url = f"{public_base}/media/{thumb_rel}" if public_base else f"/media/{thumb_rel}"
+                thumb_url = (
+                    f"{public_base}/media/{thumb_rel}" if public_base else f"/media/{thumb_rel}"
+                )
         except Exception:
             pass
 
@@ -644,6 +736,7 @@ class RecordingMixin:
         # because list_events is indexed and we cap at limit=10.
         try:
             from .. import app_state as _app_state
+
             fs = getattr(_app_state, "first_since_detector", None)
             if fs is not None:
                 marker = fs.evaluate(event)
@@ -677,10 +770,15 @@ class RecordingMixin:
             newly_unlocked = self._try_unlock_achievement(bird_species, bird_species)
             if newly_unlocked and self.notifier:
                 try:
-                    ach_msg = (f"🌿 Neue Sichtung entdeckt: {bird_species}!\n"
-                               f"📷 Kamera: {self.cfg.get('name', self.camera_id)}")
-                    threading.Thread(target=self.notifier.send_alert_sync,
-                                     kwargs={"caption": ach_msg}, daemon=True).start()
+                    ach_msg = (
+                        f"🌿 Neue Sichtung entdeckt: {bird_species}!\n"
+                        f"📷 Kamera: {self.cfg.get('name', self.camera_id)}"
+                    )
+                    threading.Thread(
+                        target=self.notifier.send_alert_sync,
+                        kwargs={"caption": ach_msg},
+                        daemon=True,
+                    ).start()
                 except Exception:
                     pass
 
@@ -692,6 +790,7 @@ class RecordingMixin:
         # quest-eval bug never poisons the recording pipeline.
         try:
             from ..quests import reevaluate_and_save
+
             threading.Thread(target=reevaluate_and_save, daemon=True).start()
         except Exception as _qe:
             log.debug("[%s] quest re-eval skipped: %s", self.camera_id, _qe)
@@ -704,6 +803,7 @@ class RecordingMixin:
         # isn't wired (e.g. older configs).
         try:
             from .. import app_state as _app_state
+
             svc = getattr(_app_state, "bird_dossiers", None)
             if svc is not None:
                 seen_latin: set[str] = set()
@@ -736,14 +836,17 @@ class RecordingMixin:
             "telegram_enabled=%s send_telegram_meta=%s alarm_level=%s",
             self.camera_id,
             ",".join(sorted(set(meta.get("labels", [])))),
-            notify, self.cfg.get("armed", True),
+            notify,
+            self.cfg.get("armed", True),
             self.cfg.get("telegram_enabled", True),
             meta.get("send_telegram", True),
             meta.get("alarm_level"),
         )
         if notify and self.cfg.get("telegram_enabled", True) and self.notifier:
             try:
-                snap_path = (Path(self.global_cfg["storage"]["root"]) / thumb_rel) if thumb_rel else None
+                snap_path = (
+                    (Path(self.global_cfg["storage"]["root"]) / thumb_rel) if thumb_rel else None
+                )
                 if hasattr(self.notifier, "send_event_alert"):
                     self.notifier.send_event_alert(
                         meta=meta,
@@ -756,9 +859,11 @@ class RecordingMixin:
                     # produce alerts.
                     labels = meta["labels"]
                     level = meta.get("alarm_level")
-                    caption = (f"{'🚨' if level == 'alarm' else 'ℹ️'} "
-                               f"{', '.join(sorted(set(labels)))} · "
-                               f"{self.cfg.get('name', self.camera_id)}")
+                    caption = (
+                        f"{'🚨' if level == 'alarm' else 'ℹ️'} "
+                        f"{', '.join(sorted(set(labels)))} · "
+                        f"{self.cfg.get('name', self.camera_id)}"
+                    )
                     self.notifier.send_alert_sync(
                         caption=caption,
                         jpeg_bytes=meta.get("thumb_bytes"),
@@ -768,7 +873,8 @@ class RecordingMixin:
                     )
                 log.info(
                     "[trigger][cam:%s] alert handed off to notifier (event_id=%s)",
-                    self.camera_id, meta.get("event_id"),
+                    self.camera_id,
+                    meta.get("event_id"),
                 )
             except Exception as e:
                 log.warning("[%s] telegram event push failed: %s", self.camera_id, e)
@@ -793,26 +899,38 @@ class RecordingMixin:
         ts = datetime.now().strftime("%Y%m%d-%H%M%S")
         out_path = out_dir / f"adhoc-{ts}-{seconds}s.mp4"
         cmd = [
-            "ffmpeg", "-y",
-            "-rtsp_transport", "tcp",
-            "-i", rtsp,
-            "-t", str(int(seconds)),
-            "-c", "copy",
-            "-movflags", "+faststart",
+            "ffmpeg",
+            "-y",
+            "-rtsp_transport",
+            "tcp",
+            "-i",
+            rtsp,
+            "-t",
+            str(int(seconds)),
+            "-c",
+            "copy",
+            "-movflags",
+            "+faststart",
             str(out_path),
         ]
         try:
             # Generous timeout: allow seconds + 5s startup + 5s flush.
             proc = _subprocess.run(cmd, capture_output=True, timeout=int(seconds) + 10)
             if proc.returncode != 0 or not out_path.exists() or out_path.stat().st_size < 1024:
-                log.warning("[%s] adhoc clip ffmpeg rc=%s stderr=%s",
-                            self.camera_id, proc.returncode,
-                            proc.stderr.decode("utf-8", "replace")[-300:])
+                log.warning(
+                    "[%s] adhoc clip ffmpeg rc=%s stderr=%s",
+                    self.camera_id,
+                    proc.returncode,
+                    proc.stderr.decode("utf-8", "replace")[-300:],
+                )
                 return None
-            log.info("[%s] adhoc clip recorded: %s (%d bytes)",
-                     self.camera_id, out_path.name, out_path.stat().st_size)
+            log.info(
+                "[%s] adhoc clip recorded: %s (%d bytes)",
+                self.camera_id,
+                out_path.name,
+                out_path.stat().st_size,
+            )
             return str(out_path)
         except Exception as e:
             log.warning("[%s] adhoc clip failed: %s", self.camera_id, e)
             return None
-

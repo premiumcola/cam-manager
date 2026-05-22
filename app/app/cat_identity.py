@@ -47,7 +47,9 @@ class IdentityRegistry:
     def get_profile(self, name: str):
         return next((p for p in self.data.get("profiles", []) if p.get("name") == name), None)
 
-    def set_profile_flags(self, name: str, *, whitelisted: bool | None = None, notes: str | None = None):
+    def set_profile_flags(
+        self, name: str, *, whitelisted: bool | None = None, notes: str | None = None
+    ):
         p = self.get_profile(name)
         if not p:
             return False
@@ -86,7 +88,9 @@ class IdentityRegistry:
         m = self.match_details(crop)
         return m.get("name") if m else None
 
-    def register_crop(self, name: str, crop: np.ndarray, *, whitelisted: bool = False, notes: str = ""):
+    def register_crop(
+        self, name: str, crop: np.ndarray, *, whitelisted: bool = False, notes: str = ""
+    ):
         h = dhash_bgr(crop)
         if not h:
             return False

@@ -7,6 +7,7 @@ sidecars are the source of truth; events without one are simply
 skipped (they fall into the coverage metric so the operator notices
 when the tracking worker has fallen behind).
 """
+
 from __future__ import annotations
 
 import json
@@ -43,8 +44,7 @@ def _event_start_dt(time_str: str) -> datetime | None:
         return None
     try:
         # Strip trailing Z if any, fromisoformat handles HH:MM:SS+offset.
-        return datetime.fromisoformat(time_str.replace("Z", "+00:00")) \
-            .replace(tzinfo=None)
+        return datetime.fromisoformat(time_str.replace("Z", "+00:00")).replace(tzinfo=None)
     except (ValueError, TypeError):
         return None
 
@@ -107,8 +107,7 @@ def api_detection_cloud():
     limit = request.args.get("limit", type=int) or _DEFAULT_LIMIT
     limit = max(1, min(_MAX_LIMIT, limit))
 
-    start_iso = (datetime.now() - timedelta(hours=hours)) \
-        .isoformat(timespec="seconds")
+    start_iso = (datetime.now() - timedelta(hours=hours)).isoformat(timespec="seconds")
 
     cameras_cfg = settings.data.get("cameras", []) or []
     cam_ids = [c["id"] for c in cameras_cfg if c.get("id")]
@@ -125,8 +124,7 @@ def api_detection_cloud():
         # media_only=True mirrors timeline / mediathek; events without a
         # clip can't have a sidecar, so they don't even count toward
         # coverage. limit=5000 matches the timeline route's ceiling.
-        events = store.list_events(cid, start=start_iso,
-                                   limit=5000, media_only=True)
+        events = store.list_events(cid, start=start_iso, limit=5000, media_only=True)
         for ev in events:
             video_rel = ev.get("video_relpath")
             if not video_rel:
@@ -198,18 +196,19 @@ def api_detection_cloud():
                     except (TypeError, ValueError):
                         t_off_f = 0.0
                     sample_dt = ev_start + timedelta(seconds=t_off_f)
-                    frac_area = _bbox_frac_area(sample.get("bbox") or {},
-                                                assumed_w, assumed_h)
-                    points.append({
-                        "event_id": ev_id,
-                        "camera_id": cid,
-                        "sample_key": f"{ev_id}_{frame_idx}",
-                        "time": sample_dt.isoformat(timespec="seconds"),
-                        "label": label,
-                        "score": round(score_f, 4),
-                        "bbox_frac_area": frac_area,
-                        "snapshot_url": snapshot_url,
-                    })
+                    frac_area = _bbox_frac_area(sample.get("bbox") or {}, assumed_w, assumed_h)
+                    points.append(
+                        {
+                            "event_id": ev_id,
+                            "camera_id": cid,
+                            "sample_key": f"{ev_id}_{frame_idx}",
+                            "time": sample_dt.isoformat(timespec="seconds"),
+                            "label": label,
+                            "score": round(score_f, 4),
+                            "bbox_frac_area": frac_area,
+                            "snapshot_url": snapshot_url,
+                        }
+                    )
                     if oldest_dt is None or sample_dt < oldest_dt:
                         oldest_dt = sample_dt
                     if newest_dt is None or sample_dt > newest_dt:

@@ -5,6 +5,7 @@ CameraRuntime is decomposed via mixins; the public class lives here so
 Method definitions live in _lifecycle / _capture / _zones / _motion /
 _recording / _timelapse / _status / _main_loop. Only __init__ stays here.
 """
+
 from __future__ import annotations
 
 import threading
@@ -16,12 +17,12 @@ from pathlib import Path
 import cv2
 
 from ..detection_confirmer import DetectionConfirmer
-from ..tracker_core import LiveTracker, resolve_track_thresholds
 from ..detectors import (
     BirdSpeciesClassifier,
     CoralObjectDetector,
     WildlifeClassifier,
 )
+from ..tracker_core import LiveTracker, resolve_track_thresholds
 from ._capture import CaptureMixin
 from ._consts import log  # noqa: F401  (kept for parity with original module log binding)
 from ._lifecycle import LifecycleMixin
@@ -66,7 +67,9 @@ class WeatherPrebuffer:
         """Encode one BGR frame to JPEG and append to the ring buffer.
         Also fans out to any in-progress post-roll sessions."""
         try:
-            ok, buf = cv2.imencode('.jpg', bgr_frame, [int(cv2.IMWRITE_JPEG_QUALITY), self._quality])
+            ok, buf = cv2.imencode(
+                '.jpg', bgr_frame, [int(cv2.IMWRITE_JPEG_QUALITY), self._quality]
+            )
             if not ok:
                 return
             jpg = buf.tobytes()
@@ -120,7 +123,17 @@ class CameraRuntime(
     StatusMixin,
     MainLoopMixin,
 ):
-    def __init__(self, camera_id: str, config_getter, global_cfg: dict, store, notifier, mqtt=None, cat_registry=None, person_registry=None):
+    def __init__(
+        self,
+        camera_id: str,
+        config_getter,
+        global_cfg: dict,
+        store,
+        notifier,
+        mqtt=None,
+        cat_registry=None,
+        person_registry=None,
+    ):
         self.camera_id = camera_id
         self.config_getter = config_getter
         self.global_cfg = global_cfg
@@ -130,8 +143,8 @@ class CameraRuntime(
         self.cat_registry = cat_registry
         self.person_registry = person_registry
         # ── Shared frame buffers (all protected by self.lock) ────────────────
-        self.frame = None           # latest raw frame from main stream (main loop only writes)
-        self.preview = None         # latest annotated frame (main loop only writes)
+        self.frame = None  # latest raw frame from main stream (main loop only writes)
+        self.preview = None  # latest annotated frame (main loop only writes)
         self._preview_frame = None  # latest clean sub-stream frame (preview loop only writes)
         # ── Threading ────────────────────────────────────────────────────────
         self.running = False
@@ -142,8 +155,8 @@ class CameraRuntime(
         self.last_event_at = datetime.min
         self.last_error = None
         self.event_counter_today = 0
-        self.capture = None         # main RTSP capture — ONLY accessed by _loop
-        self.preview_cap = None     # sub-stream capture — ONLY accessed by _preview_loop
+        self.capture = None  # main RTSP capture — ONLY accessed by _loop
+        self.preview_cap = None  # sub-stream capture — ONLY accessed by _preview_loop
         self.connect_time = None
         self.prev_gray = None
         self._error_streak = 0
@@ -152,19 +165,21 @@ class CameraRuntime(
         # current average from inference_avg_ms property below.
         self._inference_times_ms: deque = deque(maxlen=30)
         # Video recording state (ring pre-buffer + session tracking)
-        self._pre_buffer: deque = deque(maxlen=300)  # (frame, epoch_float) pairs; time-filtered to 3s on use
+        self._pre_buffer: deque = deque(
+            maxlen=300
+        )  # (frame, epoch_float) pairs; time-filtered to 3s on use
         self._recording: bool = False
-        self._rec_frames: list = []                  # OpenCV fallback only
+        self._rec_frames: list = []  # OpenCV fallback only
         self._rec_start_time: datetime | None = None
         self._last_motion_ts: datetime | None = None  # last frame with confirmed motion
-        self._rec_event_meta: dict | None = None      # metadata captured at session start
-        self._rec_corrupt_frames: int = 0             # invalid frames rejected during current clip
+        self._rec_event_meta: dict | None = None  # metadata captured at session start
+        self._rec_corrupt_frames: int = 0  # invalid frames rejected during current clip
         # ffmpeg stream-copy recording state (preferred path)
-        self._ffmpeg_proc = None                      # running Popen, or None
-        self._ffmpeg_out_path: Path | None = None     # raw stream-copy file
+        self._ffmpeg_proc = None  # running Popen, or None
+        self._ffmpeg_out_path: Path | None = None  # raw stream-copy file
         self._ffmpeg_start_time: datetime | None = None
-        self._rec_event_id: str | None = None         # event_id of the currently-recording clip
-        self._prev_good_frame = None                  # last accepted frame (MAD reference)
+        self._rec_event_id: str | None = None  # event_id of the currently-recording clip
+        self._prev_good_frame = None  # last accepted frame (MAD reference)
         # Main-stream FPS measurement (rolling 5s window)
         self._main_fps: float = 0.0
         self._main_fps_frames: int = 0
@@ -180,7 +195,8 @@ class CameraRuntime(
         # unconfigured camera reads the module defaults. State lives
         # the whole session so a track ID survives short low-conf dips.
         _t_spawn, _t_floor, _t_grace, _t_iou = resolve_track_thresholds(
-            lambda _cid: self.cfg, self.camera_id,
+            lambda _cid: self.cfg,
+            self.camera_id,
         )
         self._tracker = LiveTracker(
             self.camera_id,
@@ -190,9 +206,14 @@ class CameraRuntime(
             iou_threshold=_t_iou,
         )
         from ._consts import log as _log
+
         _log.info(
             "[%s] live tracker: spawn=%.2f floor=%.2f grace=%.1fs iou=%.2f",
-            self.camera_id, _t_spawn, _t_floor, _t_grace, _t_iou,
+            self.camera_id,
+            _t_spawn,
+            _t_floor,
+            _t_grace,
+            _t_iou,
         )
         self.bird_classifier = BirdSpeciesClassifier(proc.get("bird_species", {}))
         # Second-stage wildlife classifier — maps ImageNet top-1 to our
@@ -225,10 +246,10 @@ class CameraRuntime(
         self._ach_path = Path(self.global_cfg["storage"]["root"]) / "achievements.json"
         self._motion_confirm: deque = deque(maxlen=3)  # multi-frame confirmation (normal threshold)
         self._motion_confirm_wl: deque = deque(maxlen=3)  # wildlife low-threshold confirmation
-        self._tl_thread = None   # legacy single timelapse thread
+        self._tl_thread = None  # legacy single timelapse thread
         self._tl_threads: dict = {}  # profile_name → Thread
         # ── Connection health / diagnostics ──────────────────────────────────
-        self.frame_ts: float = 0.0          # epoch of last frame written to self.frame
+        self.frame_ts: float = 0.0  # epoch of last frame written to self.frame
         # Exponential moving average of the wall-clock interval between
         # two successive frame_ts writes (milliseconds). 0.0 until the
         # second frame lands. Drives the decoder-backlog heuristic in
@@ -240,7 +261,7 @@ class CameraRuntime(
         # (i.e. across a reconnect) so the EMA doesn't capture the
         # pre-reconnect gap as a "fast burst".
         self._frame_interval_ema_ms: float = 0.0
-        self._reconnect_count: int = 0      # how many times capture was reopened
+        self._reconnect_count: int = 0  # how many times capture was reopened
         # Sliding-window log of reconnect timestamps. We never bound the
         # capacity hard because the prune-on-read step keeps only entries
         # < 86400 s old, and the increment-on-reconnect path is rare
@@ -262,7 +283,7 @@ class CameraRuntime(
         self._rtsp_first_frame_logged: bool = False
         self._last_rtsp_success_ts: float = 0.0
         self._open_attempt_count: int = 0
-        self._stale_incidents: int = 0      # how often timelapse saw a stale frame buffer
+        self._stale_incidents: int = 0  # how often timelapse saw a stale frame buffer
         # Camera-wide mirror of the highest-active profile's stale streak
         # — used by /api/camera/<id>/status for the diagnostic dashboard.
         # The authoritative per-profile counter lives as a local inside
@@ -272,10 +293,10 @@ class CameraRuntime(
         self._stale_streak: int = 0
         self._force_reconnect: bool = False  # timelapse sets True to request RTSP reopen from _loop
         # ── Preview stream metrics ────────────────────────────────────────────
-        self._preview_fps: float = 0.0          # measured sub-stream FPS (rolling 5s window)
-        self._preview_fps_frames: int = 0        # frame counter for FPS window
+        self._preview_fps: float = 0.0  # measured sub-stream FPS (rolling 5s window)
+        self._preview_fps_frames: int = 0  # frame counter for FPS window
         self._preview_fps_window_start: float = time.time()
-        self._preview_resolution: str = ""      # "WxH" of last received preview frame
+        self._preview_resolution: str = ""  # "WxH" of last received preview frame
         # ── Wetter-Sichtungen prebuffer ───────────────────────────────────────
         # WeatherPrebuffer is created lazily by the WeatherService when a cam
         # opts in (cameras[i].weather.enabled=True). Until then it stays None

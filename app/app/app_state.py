@@ -20,6 +20,7 @@ Nothing here imports from `server.py`. Future blueprints import
 `app_state` only — never the other way around — which is the
 invariant that prevents circular imports as the split progresses.
 """
+
 from __future__ import annotations
 
 from collections.abc import Callable

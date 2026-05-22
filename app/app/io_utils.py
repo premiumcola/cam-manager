@@ -6,6 +6,7 @@ co-existing (``bird_dossiers._atomic_write_json`` and
 ``weather_service._consts._atomic_write_json``); future call sites
 land here so we don't grow a third.
 """
+
 from __future__ import annotations
 
 import json
@@ -16,7 +17,9 @@ from typing import Any
 
 
 def atomic_write_json(
-    path: Path, payload: Any, *,
+    path: Path,
+    payload: Any,
+    *,
     indent: int = 2,
     fsync: bool = False,
 ) -> None:

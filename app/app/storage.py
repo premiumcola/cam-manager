@@ -31,8 +31,9 @@ class EventStore:
                 # Best-effort one-time migration. Falling through is
                 # fine — the mkdir() below ensures the canonical dir
                 # exists regardless. Breadcrumb for the DEBUG channel.
-                log.debug("[storage] legacy events/ → motion_detection/ rename skipped",
-                          exc_info=True)
+                log.debug(
+                    "[storage] legacy events/ → motion_detection/ rename skipped", exc_info=True
+                )
         self.events_dir.mkdir(parents=True, exist_ok=True)
 
     def _cam_dir(self, camera_id: str) -> Path:
@@ -101,16 +102,20 @@ class EventStore:
             try:
                 m.unlink()
             except Exception:
-                log.debug("[storage] unlink %s failed (best-effort)",
-                          m, exc_info=True)
+                log.debug("[storage] unlink %s failed (best-effort)", m, exc_info=True)
         return bool(matches)
 
-    def _filter_events(self, camera_id: str, label: str | None = None,
-                       labels: list | None = None,
-                       start: str | None = None, end: str | None = None,
-                       media_only: bool = False,
-                       type: str | None = None,
-                       bird_species: str | None = None):
+    def _filter_events(
+        self,
+        camera_id: str,
+        label: str | None = None,
+        labels: list | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        media_only: bool = False,
+        type: str | None = None,
+        bird_species: str | None = None,
+    ):
         """Filter events for a camera. `labels` (list) takes precedence over `label` (str).
         Multi-label filter uses OR logic: event matches if any of its labels is in the filter set.
         media_only=True: skip metadata-only events (no snapshot/video file) — used by the viewer.
@@ -135,8 +140,12 @@ class EventStore:
                 log.warning("[storage] malformed event JSON %s: %s", file, e)
                 continue
             if media_only:
-                has_media = (obj.get("snapshot_relpath") or obj.get("snapshot_url") or
-                             obj.get("video_relpath") or obj.get("video_url"))
+                has_media = (
+                    obj.get("snapshot_relpath")
+                    or obj.get("snapshot_url")
+                    or obj.get("video_relpath")
+                    or obj.get("video_url")
+                )
                 if not has_media:
                     continue
             t = obj.get("time", "")
@@ -158,29 +167,62 @@ class EventStore:
         items.sort(key=lambda x: x.get("time", ""), reverse=True)
         return items
 
-    def list_events(self, camera_id: str, label: str | None = None,
-                    labels: list | None = None,
-                    start: str | None = None, end: str | None = None,
-                    limit: int = 24, offset: int = 0,
-                    media_only: bool = False,
-                    type: str | None = None,
-                    bird_species: str | None = None):
-        items = self._filter_events(camera_id, label=label, labels=labels,
-                                    start=start, end=end, media_only=media_only, type=type,
-                                    bird_species=bird_species)
-        return items[offset:offset + limit]
+    def list_events(
+        self,
+        camera_id: str,
+        label: str | None = None,
+        labels: list | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        limit: int = 24,
+        offset: int = 0,
+        media_only: bool = False,
+        type: str | None = None,
+        bird_species: str | None = None,
+    ):
+        items = self._filter_events(
+            camera_id,
+            label=label,
+            labels=labels,
+            start=start,
+            end=end,
+            media_only=media_only,
+            type=type,
+            bird_species=bird_species,
+        )
+        return items[offset : offset + limit]
 
-    def count_events(self, camera_id: str, label: str | None = None,
-                     labels: list | None = None,
-                     start: str | None = None, end: str | None = None,
-                     media_only: bool = False,
-                     bird_species: str | None = None) -> int:
-        return len(self._filter_events(camera_id, label=label, labels=labels,
-                                       start=start, end=end, media_only=media_only,
-                                       bird_species=bird_species))
+    def count_events(
+        self,
+        camera_id: str,
+        label: str | None = None,
+        labels: list | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        media_only: bool = False,
+        bird_species: str | None = None,
+    ) -> int:
+        return len(
+            self._filter_events(
+                camera_id,
+                label=label,
+                labels=labels,
+                start=start,
+                end=end,
+                media_only=media_only,
+                bird_species=bird_species,
+            )
+        )
 
-    def stats_range(self, camera_id: str, label: str | None = None, start: str | None = None, end: str | None = None):
+    def stats_range(
+        self,
+        camera_id: str,
+        label: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+    ):
         from collections import Counter, defaultdict
+
         events = self.list_events(camera_id, label=label, start=start, end=end, limit=5000)
         by_day = defaultdict(Counter)
         by_hour = Counter()
@@ -207,30 +249,59 @@ class EventStore:
             if e.get("video_url"):
                 video_count += 1
         colors = {
-            "motion": "#36a2ff", "person": "#ff6b6b", "cat": "#9b8cff", "dog": "#7c2d12", "bird": "#62d26f",
-            "squirrel": "#7c4a1f", "fox": "#ff7a1a", "hedgehog": "#a67c52", "marten": "#7c5cff", "car": "#00c2ff", "other": "#64748b"
+            "motion": "#36a2ff",
+            "person": "#ff6b6b",
+            "cat": "#9b8cff",
+            "dog": "#7c2d12",
+            "bird": "#62d26f",
+            "squirrel": "#7c4a1f",
+            "fox": "#ff7a1a",
+            "hedgehog": "#a67c52",
+            "marten": "#7c5cff",
+            "car": "#00c2ff",
+            "other": "#64748b",
         }
         day_items = []
         for day in sorted(by_day.keys()):
             segs = []
             total = 0
             for lab, count in by_day[day].most_common():
-                segs.append({"label": lab, "label_de": lab, "count": count, "color": colors.get(lab, colors['other'])})
+                segs.append(
+                    {
+                        "label": lab,
+                        "label_de": lab,
+                        "count": count,
+                        "color": colors.get(lab, colors['other']),
+                    }
+                )
                 total += count
             day_items.append({"day": day, "total": total, "segments": segs})
         return {
             "total_events": len(events),
             "photos": photo_count,
             "videos": video_count,
-            "top_objects": [{"label": lab, "label_de": lab, "count": cnt, "color": colors.get(lab, colors['other'])} for lab, cnt in top.most_common(8)],
-            "top_bird_species": [{"label": lab, "count": cnt} for lab, cnt in species_top.most_common(8)],
-            "top_cat_names": [{"label": lab, "count": cnt} for lab, cnt in cat_names.most_common(8)],
+            "top_objects": [
+                {
+                    "label": lab,
+                    "label_de": lab,
+                    "count": cnt,
+                    "color": colors.get(lab, colors['other']),
+                }
+                for lab, cnt in top.most_common(8)
+            ],
+            "top_bird_species": [
+                {"label": lab, "count": cnt} for lab, cnt in species_top.most_common(8)
+            ],
+            "top_cat_names": [
+                {"label": lab, "count": cnt} for lab, cnt in cat_names.most_common(8)
+            ],
             "by_day": day_items,
             "by_hour": [{"hour": h, "count": by_hour[h]} for h in sorted(by_hour.keys())],
         }
 
     def aggregate_summary(self, days: int = 1):
         from collections import Counter
+
         start = (datetime.now() - timedelta(days=days)).isoformat(timespec="seconds")
         per_camera = {}
         top = Counter()
@@ -273,8 +344,7 @@ class EventStore:
                 # Falling through with event=None still deletes the
                 # JSON; sidecars (snapshot/video/tracks) just won't get
                 # cleaned because we couldn't read their relpaths.
-                log.warning("[storage] malformed event JSON during delete %s: %s",
-                            json_path, e)
+                log.warning("[storage] malformed event JSON during delete %s: %s", json_path, e)
             json_path.unlink(missing_ok=True)
         snap_deleted = False
         if event and event.get("snapshot_relpath"):
@@ -300,8 +370,7 @@ class EventStore:
                     tp.unlink()
                     tracks_deleted = True
                 except Exception:
-                    log.debug("[storage] tracks sidecar unlink %s failed",
-                              tp, exc_info=True)
+                    log.debug("[storage] tracks sidecar unlink %s failed", tp, exc_info=True)
             # `<event_id>.best.jpg` is the Telegram-only "best frame"
             # cache (bbox burnt on) — recreated by the next push if
             # tracks.json is rebuilt, but pointless to keep around
@@ -310,10 +379,13 @@ class EventStore:
                 try:
                     bp.unlink()
                 except Exception:
-                    log.debug("[storage] best.jpg unlink %s failed",
-                              bp, exc_info=True)
-        return {"json_deleted": event is not None, "snap_deleted": snap_deleted,
-                "vid_deleted": vid_deleted, "tracks_deleted": tracks_deleted}
+                    log.debug("[storage] best.jpg unlink %s failed", bp, exc_info=True)
+        return {
+            "json_deleted": event is not None,
+            "snap_deleted": snap_deleted,
+            "vid_deleted": vid_deleted,
+            "tracks_deleted": tracks_deleted,
+        }
 
     def purge_orphans(self) -> int:
         """Delete event JSON files whose media file no longer exists. Returns count removed."""
@@ -371,6 +443,7 @@ class EventStore:
         Covers both flat files directly in cam_dir/ and files in any depth of subdirectories.
         Returns count of newly registered events."""
         import logging as _log
+
         log = _log.getLogger(__name__)
         scanned = 0
         for cam_id in camera_ids:
@@ -414,7 +487,9 @@ class EventStore:
                 }
                 if is_video:
                     event["video_relpath"] = rel.as_posix()
-                    event["video_url"] = f"{base}/media/{rel.as_posix()}" if base else f"/media/{rel.as_posix()}"
+                    event["video_url"] = (
+                        f"{base}/media/{rel.as_posix()}" if base else f"/media/{rel.as_posix()}"
+                    )
                     event["snapshot_relpath"] = None
                     event["snapshot_url"] = None
                     # Try to grab a thumbnail so the freshly-registered card has a preview
@@ -422,6 +497,7 @@ class EventStore:
                     if not thumb.exists():
                         try:
                             import cv2 as _cv2
+
                             cap = _cv2.VideoCapture(str(media_file))
                             try:
                                 total = int(cap.get(_cv2.CAP_PROP_FRAME_COUNT))
@@ -430,20 +506,33 @@ class EventStore:
                                 ok_t, frame_t = cap.read()
                             finally:
                                 cap.release()
-                            if ok_t and frame_t is not None and _cv2.imwrite(
-                                    str(thumb), frame_t, [int(_cv2.IMWRITE_JPEG_QUALITY), 85]):
+                            if (
+                                ok_t
+                                and frame_t is not None
+                                and _cv2.imwrite(
+                                    str(thumb), frame_t, [int(_cv2.IMWRITE_JPEG_QUALITY), 85]
+                                )
+                            ):
                                 thumb_rel = thumb.relative_to(self.root).as_posix()
                                 event["snapshot_relpath"] = thumb_rel
-                                event["snapshot_url"] = f"{base}/media/{thumb_rel}" if base else f"/media/{thumb_rel}"
+                                event["snapshot_url"] = (
+                                    f"{base}/media/{thumb_rel}" if base else f"/media/{thumb_rel}"
+                                )
                         except Exception as _e:
-                            log.debug("[MediaScan] thumb extract failed for %s: %s", media_file.name, _e)
+                            log.debug(
+                                "[MediaScan] thumb extract failed for %s: %s", media_file.name, _e
+                            )
                     elif thumb.exists():
                         thumb_rel = thumb.relative_to(self.root).as_posix()
                         event["snapshot_relpath"] = thumb_rel
-                        event["snapshot_url"] = f"{base}/media/{thumb_rel}" if base else f"/media/{thumb_rel}"
+                        event["snapshot_url"] = (
+                            f"{base}/media/{thumb_rel}" if base else f"/media/{thumb_rel}"
+                        )
                 else:
                     event["snapshot_relpath"] = rel.as_posix()
-                    event["snapshot_url"] = f"{base}/media/{rel.as_posix()}" if base else f"/media/{rel.as_posix()}"
+                    event["snapshot_url"] = (
+                        f"{base}/media/{rel.as_posix()}" if base else f"/media/{rel.as_posix()}"
+                    )
                     event["video_url"] = None
                 self.add_event(cam_id, event)
                 existing_ids.add(event_id)
@@ -456,6 +545,7 @@ class EventStore:
 
     def cleanup_old(self, retention_days: int) -> int:
         import logging as _log
+
         log = _log.getLogger(__name__)
         cutoff = datetime.now() - timedelta(days=retention_days)
         removed = 0
@@ -466,14 +556,22 @@ class EventStore:
             "[storage] autoclean: retention=%dd cutoff=%s | "
             "eligible: motion snapshots + event JSON (motion_detection/) | "
             "protected: timelapse videos (timelapse/) — separate storage, never touched by autoclean",
-            retention_days, cutoff.strftime("%Y-%m-%d")
+            retention_days,
+            cutoff.strftime("%Y-%m-%d"),
         )
         for p in self.events_dir.rglob("*"):
             if p.is_file() and datetime.fromtimestamp(p.stat().st_mtime) < cutoff:
                 p.unlink(missing_ok=True)
                 removed += 1
         if removed:
-            log.info("[storage] removed %d files (motion events + snapshots older than %dd)", removed, retention_days)
+            log.info(
+                "[storage] removed %d files (motion events + snapshots older than %dd)",
+                removed,
+                retention_days,
+            )
         else:
-            log.info("[storage] nothing removed (all motion_detection/ files within %dd retention)", retention_days)
+            log.info(
+                "[storage] nothing removed (all motion_detection/ files within %dd retention)",
+                retention_days,
+            )
         return removed

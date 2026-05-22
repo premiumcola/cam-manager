@@ -42,6 +42,11 @@ from ..telegram_helpers import (
     truncate_caption,
 )
 from ._consts import (
+    _MUTE_DEFAULT_S,
+    _MUTE_EXTEND_S,
+    _NOTIFY_COOLDOWN_DEFAULTS,
+    _PHOTO_LIMIT_BYTES,
+    _VIDEO_LIMIT_BYTES,
     ACTION_CAMS,
     ACTION_CLIP,
     ACTION_LIVE,
@@ -52,11 +57,6 @@ from ._consts import (
     BOT_COMMANDS,
     PERSISTENT_KB_KEY,
     PERSISTENT_KEYBOARD,
-    _MUTE_DEFAULT_S,
-    _MUTE_EXTEND_S,
-    _NOTIFY_COOLDOWN_DEFAULTS,
-    _PHOTO_LIMIT_BYTES,
-    _VIDEO_LIMIT_BYTES,
     _parse_hhmm,
     log,
 )
@@ -92,6 +92,7 @@ class LifecycleMixin:
         if not base:
             return ""
         from urllib.parse import quote
+
         return f"{base}/#/event/{quote(str(event_id), safe='')}"
 
     def _sighting_deep_link_url(self, sighting_id: str | None) -> str:
@@ -101,6 +102,7 @@ class LifecycleMixin:
         if not base:
             return ""
         from urllib.parse import quote
+
         return f"{base}/#/sighting/{quote(str(sighting_id), safe='')}"
 
     def _recap_deep_link_url(self, recap_id: str | None) -> str:
@@ -110,6 +112,7 @@ class LifecycleMixin:
         if not base:
             return ""
         from urllib.parse import quote
+
         return f"{base}/#/recap/{quote(str(recap_id), safe='')}"
 
     def _storage_root(self) -> Path:
@@ -166,6 +169,7 @@ class LifecycleMixin:
             # Scheduler
             try:
                 from apscheduler.schedulers.background import BackgroundScheduler
+
                 self._scheduler = BackgroundScheduler(daemon=True)
                 self._scheduler.start()
                 log.info("[tg] Scheduler started")
@@ -210,9 +214,7 @@ class LifecycleMixin:
             # _stale_poll_thread and refuses to spawn a second polling
             # loop while it's alive.
             self._stale_poll_thread = (
-                self._poll_thread
-                if self._poll_thread and self._poll_thread.is_alive()
-                else None
+                self._poll_thread if self._poll_thread and self._poll_thread.is_alive() else None
             )
             if self._stale_poll_thread is not None:
                 self._stale_since = time.time()
@@ -351,8 +353,9 @@ class LifecycleMixin:
             # complete in the "/" picker.
             try:
                 await app.bot.set_my_commands(BOT_COMMANDS)
-                log.info("[tg] Bot commands registered: %s",
-                         ", ".join(c.command for c in BOT_COMMANDS))
+                log.info(
+                    "[tg] Bot commands registered: %s", ", ".join(c.command for c in BOT_COMMANDS)
+                )
             except Exception as e:
                 log.warning("[tg] set_my_commands failed: %s", e)
             await self._polling_stop_event.wait()
@@ -402,27 +405,40 @@ class LifecycleMixin:
         if not self._scheduler:
             return
         from apscheduler.triggers.cron import CronTrigger
+
         self._scheduler.add_job(
-            callback, CronTrigger(hour=hh, minute=mm),
-            id=key, replace_existing=True, max_instances=1, coalesce=True,
+            callback,
+            CronTrigger(hour=hh, minute=mm),
+            id=key,
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
         )
 
     def schedule_interval(self, seconds: int, key: str, callback):
         if not self._scheduler:
             return
         from apscheduler.triggers.interval import IntervalTrigger
+
         self._scheduler.add_job(
-            callback, IntervalTrigger(seconds=int(seconds)),
-            id=key, replace_existing=True, max_instances=1, coalesce=True,
+            callback,
+            IntervalTrigger(seconds=int(seconds)),
+            id=key,
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
         )
 
     def schedule_at(self, when_dt: datetime, key: str, callback):
         if not self._scheduler:
             return
         from apscheduler.triggers.date import DateTrigger
+
         self._scheduler.add_job(
-            callback, DateTrigger(run_date=when_dt),
-            id=key, replace_existing=True,
+            callback,
+            DateTrigger(run_date=when_dt),
+            id=key,
+            replace_existing=True,
         )
 
     def cancel_all_jobs(self):
@@ -465,11 +481,13 @@ class LifecycleMixin:
     # ── Action log helper ─────────────────────────────────────────────────
     def log_action(self, action: str, camera_id: str | None = None, extra: dict | None = None):
         if self.settings_store:
-            self.settings_store.log_action({
-                "time": datetime.now().isoformat(timespec="seconds"),
-                "action": action,
-                "camera_id": camera_id,
-                "extra": extra or {},
-            })
+            self.settings_store.log_action(
+                {
+                    "time": datetime.now().isoformat(timespec="seconds"),
+                    "action": action,
+                    "camera_id": camera_id,
+                    "extra": extra or {},
+                }
+            )
 
     # ── Send API ──────────────────────────────────────────────────────────

@@ -34,8 +34,8 @@ from ..event_logic import (
 )
 from ._consts import (
     _FFMPEG_AVAILABLE,
-    _PROFILES,
     _PROFILE_PERIOD_DEFAULTS,
+    _PROFILES,
     _SPECIES_TO_ACH_ID,
     _WILDLIFE_BBOX_DONORS,
     _bbox_iou,
@@ -75,6 +75,7 @@ class CaptureMixin:
             raise RuntimeError(f"Kamera {self.camera_id}: keine Quelle gesetzt")
         if self.cfg.get("rtsp_url"):
             import os
+
             rtsp_url = self.cfg["rtsp_url"]
 
             # ── Main stream: motion detection + event snapshots ──────────────
@@ -119,7 +120,9 @@ class CaptureMixin:
                         old = self.preview_cap
                         if pcap.isOpened():
                             self.preview_cap = pcap
-                            log_cam.info("[%s] Sub-stream opened for preview: %s", self.camera_id, sub_url)
+                            log_cam.info(
+                                "[%s] Sub-stream opened for preview: %s", self.camera_id, sub_url
+                            )
                         else:
                             pcap.release()
                             self.preview_cap = None
@@ -200,7 +203,9 @@ class CaptureMixin:
                         b2 = float(frame2[:, :, 0].mean())
                         if not (r2 > b2 * 2.5 and r2 > 150):
                             return frame2
-                raise RuntimeError(f"Kamera {self.camera_id}: Frame nach Pink-Discard fehlgeschlagen")
+                raise RuntimeError(
+                    f"Kamera {self.camera_id}: Frame nach Pink-Discard fehlgeschlagen"
+                )
             return frame
         url = self.cfg.get("snapshot_url")
         auth = None
@@ -237,8 +242,8 @@ class CaptureMixin:
             return False
         # Reject frames where >40% of pixels are R≈G≈B (uniform gray/white)
         uniform = np.sum(
-            (np.abs(r_ch.astype(np.int16) - g_ch.astype(np.int16)) < 10) &
-            (np.abs(r_ch.astype(np.int16) - b_ch.astype(np.int16)) < 10)
+            (np.abs(r_ch.astype(np.int16) - g_ch.astype(np.int16)) < 10)
+            & (np.abs(r_ch.astype(np.int16) - b_ch.astype(np.int16)) < 10)
         )
         if uniform > 0.4 * h * w:
             return False
@@ -247,13 +252,15 @@ class CaptureMixin:
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         hh, hw = h // 2, w // 2
         for qy, qx in [(0, 0), (0, hw), (hh, 0), (hh, hw)]:
-            q = hsv[qy:qy + hh, qx:qx + hw]
+            q = hsv[qy : qy + hh, qx : qx + hw]
             q_h, q_s, q_v = q[:, :, 0], q[:, :, 1], q[:, :, 2]
             vivid = (q_s > 178) & (q_v > 127)
             pink = vivid & (q_h >= 135) & (q_h <= 165)
             qpix = hh * hw
             if qpix > 0 and float(np.sum(pink)) / qpix > 0.60:
-                log.debug("[%s] Corrupt quadrant (pink/magenta >60%%), frame rejected", self.camera_id)
+                log.debug(
+                    "[%s] Corrupt quadrant (pink/magenta >60%%), frame rejected", self.camera_id
+                )
                 return False
         # JPEG block-artifact check: if >50% of sampled 8×8 blocks have near-zero
         # variance the image is a solid-fill decode artifact, not a real scene.
@@ -262,13 +269,17 @@ class CaptureMixin:
         total_blocks = 0
         for by in range(0, h - bs, bs * 3):
             for bx in range(0, w - bs, bs * 3):
-                blk = gray[by:by + bs, bx:bx + bs]
+                blk = gray[by : by + bs, bx : bx + bs]
                 if float(np.var(blk)) < 2.0:
                     low_var += 1
                 total_blocks += 1
         if total_blocks > 0 and low_var > total_blocks * 0.50:
-            log.debug("[%s] Block-artifact frame rejected (%d/%d uniform blocks)",
-                      self.camera_id, low_var, total_blocks)
+            log.debug(
+                "[%s] Block-artifact frame rejected (%d/%d uniform blocks)",
+                self.camera_id,
+                low_var,
+                total_blocks,
+            )
             return False
         return True
 
@@ -288,5 +299,5 @@ class CaptureMixin:
         test-detection route can call the same heuristic without
         instantiating the runtime class."""
         from ..frame_helpers import has_corrupt_strip as _has
-        return _has(frame, strip_height=strip_height)
 
+        return _has(frame, strip_height=strip_height)

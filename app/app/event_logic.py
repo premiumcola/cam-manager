@@ -15,7 +15,7 @@ def _window_keys(schedule: dict) -> tuple[str, str]:
     here so a hand-edited config that still uses start/end keeps working
     long enough to fall through the migration path on next save."""
     s = schedule.get("from") if "from" in schedule else schedule.get("start", "22:00")
-    e = schedule.get("to")   if "to"   in schedule else schedule.get("end",   "06:00")
+    e = schedule.get("to") if "to" in schedule else schedule.get("end", "06:00")
     return s, e
 
 
@@ -97,7 +97,9 @@ def is_schedule_window_active(schedule: dict, now: datetime | None = None) -> bo
     return is_in_schedule(schedule, now)
 
 
-def choose_alarm_level(profile, labels: list[str], hard_active: bool, whitelisted: bool) -> tuple[str, bool]:
+def choose_alarm_level(
+    profile, labels: list[str], hard_active: bool, whitelisted: bool
+) -> tuple[str, bool]:
     """Decide (alarm_level, notify) for an event.
 
     `hard_active` (NEW) — True when the per-camera schedule's "hard"
@@ -120,7 +122,10 @@ def choose_alarm_level(profile, labels: list[str], hard_active: bool, whiteliste
         return "alarm", True
     if any(x in labels for x in ["person", "car"]) and profile == "hard":
         return "alarm", True
-    if any(x in labels for x in ["person", "car", "cat", "bird", "dog", "squirrel"]) and profile == "medium":
+    if (
+        any(x in labels for x in ["person", "car", "cat", "bird", "dog", "squirrel"])
+        and profile == "medium"
+    ):
         return "info", True
     if any(x in labels for x in ["cat", "bird", "dog", "squirrel"]) and profile == "info":
         return "info", True
@@ -135,29 +140,42 @@ def choose_alarm_level(profile, labels: list[str], hard_active: bool, whiteliste
 # ── Smoke tests (run with `python -m app.event_logic`) ─────────────────────
 if __name__ == "__main__":
     from datetime import datetime as _dt
+
     def _at(hh, mm):
         return _dt.now().replace(hour=hh, minute=mm, second=0, microsecond=0)
 
     # Case A: from < to (08:00 → 18:00)
-    sch = {"enabled": True, "from": "08:00", "to": "18:00",
-           "actions": {"record": True, "telegram": True, "hard": True}}
+    sch = {
+        "enabled": True,
+        "from": "08:00",
+        "to": "18:00",
+        "actions": {"record": True, "telegram": True, "hard": True},
+    }
     assert is_in_schedule(sch, _at(7, 59)) is False
-    assert is_in_schedule(sch, _at(8,  0)) is True
+    assert is_in_schedule(sch, _at(8, 0)) is True
     assert is_in_schedule(sch, _at(17, 59)) is True
-    assert is_in_schedule(sch, _at(18,  0)) is False
+    assert is_in_schedule(sch, _at(18, 0)) is False
 
     # Case B: from > to (21:00 → 06:00, midnight wrap)
-    sch = {"enabled": True, "from": "21:00", "to": "06:00",
-           "actions": {"record": True, "telegram": True, "hard": True}}
+    sch = {
+        "enabled": True,
+        "from": "21:00",
+        "to": "06:00",
+        "actions": {"record": True, "telegram": True, "hard": True},
+    }
     assert is_in_schedule(sch, _at(20, 59)) is False
-    assert is_in_schedule(sch, _at(21,  0)) is True
-    assert is_in_schedule(sch, _at(0,   0)) is True
-    assert is_in_schedule(sch, _at(5,  59)) is True
-    assert is_in_schedule(sch, _at(6,   0)) is False
+    assert is_in_schedule(sch, _at(21, 0)) is True
+    assert is_in_schedule(sch, _at(0, 0)) is True
+    assert is_in_schedule(sch, _at(5, 59)) is True
+    assert is_in_schedule(sch, _at(6, 0)) is False
 
     # Case C: from == to (treated as always-on)
-    sch = {"enabled": True, "from": "12:00", "to": "12:00",
-           "actions": {"record": True, "telegram": True, "hard": True}}
+    sch = {
+        "enabled": True,
+        "from": "12:00",
+        "to": "12:00",
+        "actions": {"record": True, "telegram": True, "hard": True},
+    }
     assert is_in_schedule(sch, _at(0, 0)) is True
     assert is_in_schedule(sch, _at(23, 59)) is True
 
@@ -169,11 +187,15 @@ if __name__ == "__main__":
     assert schedule_action_active(sch, "telegram", _at(3, 0)) is True
 
     # Action gate respects per-action toggle
-    sch = {"enabled": True, "from": "21:00", "to": "06:00",
-           "actions": {"record": True, "telegram": False, "hard": True}}
-    assert schedule_action_active(sch, "record",   _at(22, 0)) is True
+    sch = {
+        "enabled": True,
+        "from": "21:00",
+        "to": "06:00",
+        "actions": {"record": True, "telegram": False, "hard": True},
+    }
+    assert schedule_action_active(sch, "record", _at(22, 0)) is True
     assert schedule_action_active(sch, "telegram", _at(22, 0)) is False
-    assert schedule_action_active(sch, "hard",     _at(22, 0)) is True
+    assert schedule_action_active(sch, "hard", _at(22, 0)) is True
     # Outside window: actions never fire (record/telegram fall back to off)
-    assert schedule_action_active(sch, "record",   _at(12, 0)) is False
+    assert schedule_action_active(sch, "record", _at(12, 0)) is False
     log.info("[selftest] event_logic OK")

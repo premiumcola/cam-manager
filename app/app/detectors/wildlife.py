@@ -5,6 +5,7 @@ Carved out of `_legacy_classes.py` during R02.3. With this commit the
 legacy single-file home is gone — every detector class now lives in
 its own module.
 """
+
 from __future__ import annotations
 
 import logging
@@ -63,7 +64,9 @@ class WildlifeClassifier:
                 log.warning(
                     "Wildlife classifier: configured %s=%s does not exist; "
                     "leaving config as-is. Discovered alternative was %s.",
-                    k, self.cfg[k], v,
+                    k,
+                    self.cfg[k],
+                    v,
                 )
         self.labels = load_label_map(self.cfg.get("labels_path"))
         self.min_score = float(self.cfg.get("min_score", 0.35))
@@ -107,6 +110,7 @@ class WildlifeClassifier:
         try:
             from pycoral.adapters import classify, common  # type: ignore
             from pycoral.utils.edgetpu import make_interpreter  # type: ignore
+
             self.common = common
             self.classify = classify
             self.interpreter = make_interpreter(model_path, device=self.cfg.get("device"))
@@ -114,7 +118,9 @@ class WildlifeClassifier:
             self.available = True
             self.mode = "coral"
             self.reason = "ok"
-            log.info("Wildlife classifier (Coral) aktiv: %s — %d labels", model_path, len(self.labels))
+            log.info(
+                "Wildlife classifier (Coral) aktiv: %s — %d labels", model_path, len(self.labels)
+            )
             self._load_inat_backend()
             return
         except Exception as e:
@@ -131,6 +137,7 @@ class WildlifeClassifier:
         for try_path in filter(None, [cpu_model, model_path]):
             try:
                 import tflite_runtime.interpreter as tflite  # type: ignore
+
                 interp = tflite.Interpreter(model_path=try_path)
                 interp.allocate_tensors()
                 self.interpreter = interp
@@ -138,13 +145,17 @@ class WildlifeClassifier:
                 self.available = True
                 self.mode = "cpu"
                 self.reason = f"cpu_fallback (coral: {coral_error})" if coral_error else "ok"
-                log.info("Wildlife classifier (CPU) aktiv: %s — %d labels", try_path, len(self.labels))
+                log.info(
+                    "Wildlife classifier (CPU) aktiv: %s — %d labels", try_path, len(self.labels)
+                )
                 self._load_inat_backend()
                 return
             except Exception as e2:
                 log.warning("Wildlife classifier CPU fehlgeschlagen für %s: %s", try_path, e2)
 
-        self.reason = f"classifier unavailable: {coral_error}" if coral_error else "classifier unavailable"
+        self.reason = (
+            f"classifier unavailable: {coral_error}" if coral_error else "classifier unavailable"
+        )
         log.warning("Wildlife classifier nicht verfügbar")
 
     def _load_inat_backend(self) -> None:
@@ -165,27 +176,39 @@ class WildlifeClassifier:
         try:
             from pycoral.adapters import classify, common  # type: ignore
             from pycoral.utils.edgetpu import make_interpreter  # type: ignore
+
             self._inat_common = common
             self._inat_classify = classify
             self._inat_interpreter = make_interpreter(model_path, device=cfg.get("device"))
             self._inat_interpreter.allocate_tensors()
-            log.info("Wildlife · iNat-Backend (Coral) aktiv: %s — %d labels", model_path, len(self._inat_labels))
+            log.info(
+                "Wildlife · iNat-Backend (Coral) aktiv: %s — %d labels",
+                model_path,
+                len(self._inat_labels),
+            )
             return
         except Exception:
             pass
         # Tier 2: tflite-runtime
         try:
             import tflite_runtime.interpreter as tflite  # type: ignore
+
             cpu_path = cfg.get("cpu_model_path") or model_path
             self._inat_interpreter = tflite.Interpreter(model_path=cpu_path)
             self._inat_interpreter.allocate_tensors()
             self._inat_cpu_mode = True
-            log.info("Wildlife · iNat-Backend (CPU) aktiv: %s — %d labels", cpu_path, len(self._inat_labels))
+            log.info(
+                "Wildlife · iNat-Backend (CPU) aktiv: %s — %d labels",
+                cpu_path,
+                len(self._inat_labels),
+            )
         except Exception as e:
             log.info("Wildlife · iNat-Backend nicht geladen: %s", e)
             self._inat_interpreter = None
 
-    def classify_crop(self, crop: np.ndarray, min_score: float | None = None) -> tuple[str | None, str | None, float | None]:
+    def classify_crop(
+        self, crop: np.ndarray, min_score: float | None = None
+    ) -> tuple[str | None, str | None, float | None]:
         """Return (category, raw_label, score).
 
         category ∈ {"fox", "squirrel", "hedgehog", None}. None means
@@ -236,8 +259,14 @@ class WildlifeClassifier:
         if likely_a and sciuridae_b:
             avg_score = (float(likely_a[1]) + float(sciuridae_b[1])) / 2.0
             combined = f"{likely_a[0]} + {sciuridae_b[0]}"
-            log.debug("[wildlife] cross-validated squirrel: mobilenet=%s (%.2f) iNat=%s (%.2f) → %.2f",
-                      likely_a[0], likely_a[1], sciuridae_b[0], sciuridae_b[1], avg_score)
+            log.debug(
+                "[wildlife] cross-validated squirrel: mobilenet=%s (%.2f) iNat=%s (%.2f) → %.2f",
+                likely_a[0],
+                likely_a[1],
+                sciuridae_b[0],
+                sciuridae_b[1],
+                avg_score,
+            )
             return "squirrel", combined, avg_score
         # Step 5: nothing matched — return MobileNet's top-1 for UI diagnostics
         # provided it cleared half the threshold. Hides totally junk noise.
@@ -263,7 +292,8 @@ class WildlifeClassifier:
         self.common.set_input(self.interpreter, resized)
         self.interpreter.invoke()
         cls = self.classify.get_classes(
-            self.interpreter, top_k=3,
+            self.interpreter,
+            top_k=3,
             score_threshold=max(0.05, self.min_score * 0.5),
         )
         return [(self.labels.get(int(c.id), str(c.id)), float(c.score)) for c in cls]
@@ -364,8 +394,8 @@ class WildlifeClassifier:
         self._inat_common.set_input(self._inat_interpreter, resized)
         self._inat_interpreter.invoke()
         classes = self._inat_classify.get_classes(
-            self._inat_interpreter, top_k=3, score_threshold=floor,
+            self._inat_interpreter,
+            top_k=3,
+            score_threshold=floor,
         )
         return [(self._inat_labels.get(int(c.id), str(c.id)), float(c.score)) for c in classes]
-
-

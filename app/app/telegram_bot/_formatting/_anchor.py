@@ -42,6 +42,11 @@ from ...telegram_helpers import (
     truncate_caption,
 )
 from .._consts import (
+    _MUTE_DEFAULT_S,
+    _MUTE_EXTEND_S,
+    _NOTIFY_COOLDOWN_DEFAULTS,
+    _PHOTO_LIMIT_BYTES,
+    _VIDEO_LIMIT_BYTES,
     ACTION_CAMS,
     ACTION_CLIP,
     ACTION_LIVE,
@@ -52,11 +57,6 @@ from .._consts import (
     BOT_COMMANDS,
     PERSISTENT_KB_KEY,
     PERSISTENT_KEYBOARD,
-    _MUTE_DEFAULT_S,
-    _MUTE_EXTEND_S,
-    _NOTIFY_COOLDOWN_DEFAULTS,
-    _PHOTO_LIMIT_BYTES,
-    _VIDEO_LIMIT_BYTES,
     _parse_hhmm,
     log,
 )
@@ -104,9 +104,9 @@ class _AnchorMixin:
         if not self.settings_store:
             return
         try:
-            self.settings_store.runtime_set(ANCHOR_KEY,
-                                            {"chat_id": int(chat_id),
-                                             "message_id": int(message_id)})
+            self.settings_store.runtime_set(
+                ANCHOR_KEY, {"chat_id": int(chat_id), "message_id": int(message_id)}
+            )
         except Exception as e:
             log.warning("[tg] anchor save failed: %s", e)
 
@@ -134,25 +134,22 @@ class _AnchorMixin:
         arrive with buttons attached on the first API call."""
         if not self.settings_store:
             return False
-        already = self.settings_store.runtime_get_subkey(
-            PERSISTENT_KB_KEY, str(chat_id))
+        already = self.settings_store.runtime_get_subkey(PERSISTENT_KB_KEY, str(chat_id))
         if already:
             return True
         try:
             await bot.send_message(
-                chat_id=chat_id, text="🏠",
+                chat_id=chat_id,
+                text="🏠",
                 reply_markup=PERSISTENT_KEYBOARD,
             )
-            self.settings_store.runtime_set_subkey(
-                PERSISTENT_KB_KEY, str(chat_id), True)
+            self.settings_store.runtime_set_subkey(PERSISTENT_KB_KEY, str(chat_id), True)
             return True
         except Exception as e:
-            log.warning("[tg] persistent-kb attach failed for chat=%s: %s",
-                        chat_id, e)
+            log.warning("[tg] persistent-kb attach failed for chat=%s: %s", chat_id, e)
             return False
 
-    async def _anchor_send_or_edit(self, bot, chat_id: int,
-                                   view: tuple[str, InlineKeyboardMarkup]):
+    async def _anchor_send_or_edit(self, bot, chat_id: int, view: tuple[str, InlineKeyboardMarkup]):
         """Edit the persisted anchor in chat_id; on failure (anchor
         deleted, expired, or owned by a different chat) send a fresh one
         and persist its id.
@@ -170,18 +167,22 @@ class _AnchorMixin:
         if anchor and anchor[0] == int(chat_id):
             try:
                 await bot.edit_message_text(
-                    chat_id=chat_id, message_id=anchor[1],
-                    text=text, reply_markup=inline_markup, parse_mode="HTML",
+                    chat_id=chat_id,
+                    message_id=anchor[1],
+                    text=text,
+                    reply_markup=inline_markup,
+                    parse_mode="HTML",
                 )
                 return anchor[1]
             except Exception as e:
-                log.info("[tg] anchor stale for chat=%s (%s) — sending fresh",
-                         chat_id, e)
+                log.info("[tg] anchor stale for chat=%s (%s) — sending fresh", chat_id, e)
                 self._drop_anchor()
         kb_ready = await self._ensure_persistent_kb(bot, chat_id)
         if kb_ready or self.settings_store:
             msg = await bot.send_message(
-                chat_id=chat_id, text=text, parse_mode="HTML",
+                chat_id=chat_id,
+                text=text,
+                parse_mode="HTML",
                 reply_markup=inline_markup,
             )
         else:
@@ -190,12 +191,15 @@ class _AnchorMixin:
             # the persistent keyboard. This branch is theoretical in
             # production (settings_store is always wired up).
             msg = await bot.send_message(
-                chat_id=chat_id, text=text, parse_mode="HTML",
+                chat_id=chat_id,
+                text=text,
+                parse_mode="HTML",
                 reply_markup=PERSISTENT_KEYBOARD,
             )
             try:
                 await bot.edit_message_reply_markup(
-                    chat_id=chat_id, message_id=msg.message_id,
+                    chat_id=chat_id,
+                    message_id=msg.message_id,
                     reply_markup=inline_markup,
                 )
             except Exception as e:

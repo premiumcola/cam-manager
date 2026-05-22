@@ -6,6 +6,7 @@ inside their route bodies; lifting the inner generator into a helper
 would force its closure over the runtime/settings reference and break
 the streaming semantics.
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,9 +27,7 @@ _FFMPEG_AVAILABLE = _shutil_check.which('ffmpeg') is not None
 _log = logging.getLogger(__name__)
 
 
-_SAFE_HLS_SEGMENT_CHARS = set(
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_."
-)
+_SAFE_HLS_SEGMENT_CHARS = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.")
 
 
 def _safe_segment_name(name: str) -> bool:
@@ -81,6 +80,7 @@ def api_camera_stream(cam_id):
     if not rt:
         return ("not running", 404)
     rt.add_viewer()
+
     def gen():
         _interval = 1.0 / 25  # 25 fps cap — avoids busy-spin against shared frame buffer
         try:
@@ -94,6 +94,7 @@ def api_camera_stream(cam_id):
                     _time.sleep(gap)
         finally:
             rt.remove_viewer()
+
     return Response(gen(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 
@@ -115,16 +116,23 @@ def api_camera_stream_hd(cam_id):
 
     if _FFMPEG_AVAILABLE and rtsp_url:
         import subprocess
+
         if rt:
             rt.add_viewer()
 
         def gen_ffmpeg():
             cmd = [
-                'ffmpeg', '-rtsp_transport', 'tcp',
-                '-i', rtsp_url,
-                '-vf', 'fps=15',
-                '-q:v', '4',
-                '-f', 'mjpeg',
+                'ffmpeg',
+                '-rtsp_transport',
+                'tcp',
+                '-i',
+                rtsp_url,
+                '-vf',
+                'fps=15',
+                '-q:v',
+                '4',
+                '-f',
+                'mjpeg',
                 '-an',
                 'pipe:1',
             ]
@@ -153,16 +161,13 @@ def api_camera_stream_hd(cam_id):
                             if start > 0:
                                 buf = buf[start:]
                             break
-                        jpeg = buf[start:end + 2]
-                        buf = buf[end + 2:]
-                        yield (b'--frame\r\n'
-                               b'Content-Type: image/jpeg\r\n\r\n'
-                               + jpeg + b'\r\n')
+                        jpeg = buf[start : end + 2]
+                        buf = buf[end + 2 :]
+                        yield (b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + jpeg + b'\r\n')
             except GeneratorExit:
                 pass
             except Exception as e:
-                logging.getLogger(__name__).warning(
-                    "[%s] HD ffmpeg stream error: %s", cam_id, e)
+                logging.getLogger(__name__).warning("[%s] HD ffmpeg stream error: %s", cam_id, e)
             finally:
                 if proc is not None:
                     try:
@@ -173,8 +178,7 @@ def api_camera_stream_hd(cam_id):
                 if rt:
                     rt.remove_viewer()
 
-        return Response(gen_ffmpeg(),
-                        mimetype='multipart/x-mixed-replace; boundary=frame')
+        return Response(gen_ffmpeg(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
     # ── Fallback: OpenCV-based re-encode from the runtime preview buffer ────
     if not rt:
@@ -187,13 +191,17 @@ def api_camera_stream_hd(cam_id):
             while True:
                 t0 = _time.monotonic()
                 with rt.lock:
-                    frame = rt.preview.copy() if rt.preview is not None else (
-                        rt.frame.copy() if rt.frame is not None else None
+                    frame = (
+                        rt.preview.copy()
+                        if rt.preview is not None
+                        else (rt.frame.copy() if rt.frame is not None else None)
                     )
                 if frame is not None:
                     ok, buf = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
                     if ok:
-                        yield (b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
+                        yield (
+                            b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n'
+                        )
                 gap = _interval - (_time.monotonic() - t0)
                 if gap > 0:
                     _time.sleep(gap)
