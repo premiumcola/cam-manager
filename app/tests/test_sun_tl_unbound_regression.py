@@ -52,6 +52,7 @@ def test_run_sun_capture_inner_does_not_raise(tmp_path, monkeypatch):
             self.runtimes = {"cam1": StubRT()}
             self.cfg = {"cameras": [{"id": "cam1", "name": "Cam One"}]}
             self.server_cfg = {"location": {"lat": 50, "lon": 8}}
+            self.settings_store = None
 
         # Methods normally provided by the other WeatherService mixins.
         def _cam_name(self, cam_id):

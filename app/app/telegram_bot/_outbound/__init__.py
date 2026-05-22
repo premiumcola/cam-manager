@@ -283,7 +283,7 @@ class OutboundMixin:
             video_path = self._storage_root() / video_rel
             if not video_path.exists():
                 return None
-            from ..tracking_worker import tracks_path_for
+            from ...tracking_worker import tracks_path_for
 
             tracks_path = tracks_path_for(video_path)
             # Up to 2 s wait — most clips finish tracking in well under
@@ -377,7 +377,7 @@ class OutboundMixin:
                 if frame is None:
                     log.warning("[tg] best-frame: imdecode failed for %s", event_id)
                     return None
-                from ..detectors import Detection, draw_detections
+                from ...detectors import Detection, draw_detections
 
                 best_f = int(best.get("f") or 0)
                 synth_dets = []
@@ -541,7 +541,7 @@ class OutboundMixin:
         # haven't been migrated yet (the boot-time
         # _migrate_alerting_schedules in settings_store catches them on
         # next start).
-        from ..event_logic import is_schedule_window_active, schedule_action_active as _sched_act
+        from ...event_logic import is_schedule_window_active, schedule_action_active as _sched_act
 
         sch_notify = cam_cfg.get("schedule_notify")
         if isinstance(sch_notify, dict) and sch_notify:

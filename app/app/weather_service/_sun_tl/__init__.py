@@ -449,7 +449,7 @@ class SunTimelapseMixin:
         """
         from urllib.parse import urlparse
 
-        from .. import reolink_api
+        from ... import reolink_api
 
         cam = next((c for c in self._cfg_cameras() if c.get("id") == cam_id), None)
         if cam is None:
@@ -539,7 +539,7 @@ class SunTimelapseMixin:
         pcfg: dict,
         test_session: _SunTLTestSession | None = None,
     ):
-        from ..frame_helpers import (
+        from ...frame_helpers import (
             DAY_PROFILE,
             NIGHT_PROFILE,
             TWILIGHT_PROFILE,
@@ -659,7 +659,7 @@ class SunTimelapseMixin:
         # downloads them into a shared folder. The slug is derived
         # via ``camera_slug`` so it tracks the camera's display
         # name when the user renames the camera.
-        from ..camera_id import camera_slug
+        from ...camera_id import camera_slug
 
         cam_slug = camera_slug(self.settings_store, cam_id)
         if test_session is not None:
@@ -1132,7 +1132,7 @@ class SunTimelapseMixin:
                         # no_detail / too_dark / too_bright) become
                         # "skipped" so the heatmap visually separates
                         # them from transient validator failures.
-                        from ..frame_helpers._validator import _classify_reason as _cls_reason
+                        from ...frame_helpers._validator import _classify_reason as _cls_reason
 
                         _bucket = (
                             "skipped" if _cls_reason(last_reason or "") == "scene" else "rejected"
@@ -1417,7 +1417,7 @@ class SunTimelapseMixin:
         # JPEG-on-disk → ffmpeg pipeline as the regular timelapse builder
         # so we don't fork the encoder.
         try:
-            from ..timelapse import TimelapseBuilder
+            from ...timelapse import TimelapseBuilder
 
             tb = TimelapseBuilder(self._sightings_dir().parent.parent)
             # Re-glob the scratch directory rather than trusting the
@@ -1821,8 +1821,8 @@ class SunTimelapseMixin:
         G2 · ``since`` (epoch seconds) filters the slot_events ring so
         a polling client can ask for the delta only. Default 0.0
         returns the full list."""
-        from ..frame_helpers import read_capture_stats
-        from ..timelapse_qa import read_qa_sidecar
+        from ...frame_helpers import read_capture_stats
+        from ...timelapse_qa import read_qa_sidecar
 
         with _test_session_lock:
             session = _active_test_session

@@ -68,7 +68,7 @@ class _WetterMixin:
     def _wetter_tile_view(self) -> tuple[str, InlineKeyboardMarkup]:
         """⛅ Wetter — live snapshot from WeatherService.status() with
         threshold-aware status icons + sun position + active-event list."""
-        from .. import server as _srv
+        from ... import server as _srv
 
         wsvc = getattr(_srv, "weather_service", None)
         now = datetime.now()

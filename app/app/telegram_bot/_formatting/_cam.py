@@ -219,7 +219,7 @@ class _CamMixin:
         user having to leave the chat. Returns True iff the runtime is
         live afterwards."""
         try:
-            from .. import server as _srv
+            from ... import server as _srv
 
             _srv.restart_single_camera(cam_id)
         except Exception as e:

@@ -440,7 +440,7 @@ class RecordingMixin:
         if not video_path or not video_path.exists():
             return
         try:
-            from ..tracking_worker import TrackingJob, singleton as _tw_singleton
+            from ...tracking_worker import TrackingJob, singleton as _tw_singleton
 
             worker = _tw_singleton()
             if worker is None:
@@ -731,7 +731,7 @@ class RecordingMixin:
         # the prior event of the same class via EventStore; cheap
         # because list_events is indexed and we cap at limit=10.
         try:
-            from .. import app_state as _app_state
+            from ... import app_state as _app_state
 
             fs = getattr(_app_state, "first_since_detector", None)
             if fs is not None:
@@ -785,7 +785,7 @@ class RecordingMixin:
         # in sync without waiting up to an hour. Wrapped tightly so a
         # quest-eval bug never poisons the recording pipeline.
         try:
-            from ..quests import reevaluate_and_save
+            from ...quests import reevaluate_and_save
 
             threading.Thread(target=reevaluate_and_save, daemon=True).start()
         except Exception as _qe:
@@ -798,7 +798,7 @@ class RecordingMixin:
         # app_state so the runtime keeps working when the service
         # isn't wired (e.g. older configs).
         try:
-            from .. import app_state as _app_state
+            from ... import app_state as _app_state
 
             svc = getattr(_app_state, "bird_dossiers", None)
             if svc is not None:
