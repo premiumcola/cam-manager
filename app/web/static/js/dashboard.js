@@ -16,7 +16,7 @@
 import { state } from './core/state.js';
 import { byId, esc } from './core/dom.js';
 import { j } from './core/api.js';
-import { getCameraIcon, getCameraColor, OBJ_LABEL } from './core/icons.js';
+import { getCameraIcon, getCameraColor, OBJ_LABEL, DASHBOARD_SVG } from './core/icons.js';
 import { isIOS } from './core/ios-video.js';
 import { openLiveViewIosNative } from './chrome/live-view.js';
 
@@ -743,34 +743,15 @@ function _chromeClassSvg(cls){
 }
 
 
-// tw284 — currentColor chrome icons for the bottom-right cluster.
-// Settings cog glyph for the bottom-right cluster. Uses
-// stroke="currentColor" so the parent .cv-chrome-btn's color tints it
-// (white in default chrome state). Telegram + MQTT now render as
-// dot-and-label pills (see _channelPill) so their dedicated SVGs were
-// retired in B2.
-const _CHROME_COG_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
-// E5 · Simulation glyph — dashed circle + filled play triangle reads
-// as a test/run loop, replacing the earlier eye glyph that conflated
-// with surveillance/monitoring iconography.
-const _CHROME_SIM_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="7.5" stroke-dasharray="2.5 2.5"/><path d="M 10 8 L 16 12 L 10 16 Z" fill="currentColor" stroke="none"/></svg>`;
-// Expand icon — two diagonal arrows ↗ + ↙ pointing AWAY from centre.
-// Path template (origin-centred, see E1 spec) translated into a
-// 0 0 24 24 viewBox by adding 12 to every coord.
-const _CHROME_EXPAND_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4 L20 4 L20 9"/><path d="M20 4 L12 12"/><path d="M9 20 L4 20 L4 15"/><path d="M4 20 L12 12"/></svg>`;
-// Minimize icon — mirror of expand. Arrows ↘ + ↖ point TOWARD the
-// centre with their arrowheads near (12,12) instead of at the
-// outer corners.
-const _CHROME_MINIMIZE_SVG = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 12 L20 12 L20 17"/><path d="M20 12 L12 4"/><path d="M9 12 L4 12 L4 7"/><path d="M4 12 L12 20"/></svg>`;
-// E3 · Paper-plane glyph for the Telegram cluster — currentColor so
-// the .cv-tg-cluster's `color: var(--tg-fg)` tints it through.
-// Stroke-only so the data-bg palette flip carries the colour into
-// both light + dark snapshot modes.
-const _CHROME_TG_SVG = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 L11 13"/><path d="M22 2 L15 22 L11 13 L2 9 Z"/></svg>`;
-// E3 · Antenna-broadcast glyph for the MQTT cluster — five concentric
-// arcs emanating from a centre dot. Reads distinctly from the
-// Telegram paper-plane at the same 22 × 22 chrome size.
-const _CHROME_MQTT_SVG = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><path d="M8.5 8.5 a 5 5 0 0 0 0 7"/><path d="M15.5 8.5 a 5 5 0 0 1 0 7"/><path d="M5.6 5.6 a 9 9 0 0 0 0 12.8"/><path d="M18.4 5.6 a 9 9 0 0 1 0 12.8"/></svg>`;
+// P32 · chrome SVGs moved to core/icons.js · DASHBOARD_SVG. The
+// `_CHROME_*_SVG` aliases below stay so callsites read the same way
+// without a search-replace pass; future PRs can inline them.
+const _CHROME_COG_SVG = DASHBOARD_SVG.cog;
+const _CHROME_SIM_SVG = DASHBOARD_SVG.sim;
+const _CHROME_EXPAND_SVG = DASHBOARD_SVG.expand;
+const _CHROME_MINIMIZE_SVG = DASHBOARD_SVG.minimize;
+const _CHROME_TG_SVG = DASHBOARD_SVG.telegram;
+const _CHROME_MQTT_SVG = DASHBOARD_SVG.mqtt;
 
 // Derive the state-dot colour for a notification channel pill.
 //   "on"    → currently armed AND in schedule window         → green dot
