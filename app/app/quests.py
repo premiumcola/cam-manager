@@ -527,7 +527,7 @@ def archive_closed_quests(achievements_data: dict,
                 "[quests] archived %s (%d/%s) reason=%s window=%s..%s",
                 qid, progress, q.get("target"), reason,
                 (q.get("window") or {}).get("from"),
-                window_to,
+                (q.get("window") or {}).get("to"),
             )
         else:
             log.debug("[quests] dropped %s (progress=0, reason=%s)", qid, reason)
