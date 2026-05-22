@@ -56,6 +56,23 @@ def api_trash_restore(event_id):
     return jsonify({"ok": False, "error": "not in trash"}), 404
 
 
+@bp.post('/api/trash/<event_id>/delete-now')
+def api_trash_delete_now(event_id):
+    """Hard-delete one entry NOW, bypassing the grace period. Used by
+    the Papierkorb UI's per-row "Endgültig löschen" button."""
+    for item in _trash.list_trashed():
+        if item.get("event_id") == event_id:
+            cam_id = item.get("cam_id")
+            if not cam_id:
+                return jsonify({"ok": False, "error": "cam_id missing in trash entry"}), 500
+            ok = _trash.hard_delete_one(cam_id, event_id)
+            if ok:
+                _log.info("[trash] hard-deleted %s/%s", cam_id, event_id)
+                return jsonify({"ok": True, "cam_id": cam_id, "event_id": event_id})
+            return jsonify({"ok": False, "error": "delete failed"}), 500
+    return jsonify({"ok": False, "error": "not in trash"}), 404
+
+
 @bp.post('/api/trash/empty')
 def api_trash_empty():
     """Hard-delete every trash entry now. Returns the count

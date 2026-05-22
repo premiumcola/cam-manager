@@ -244,6 +244,29 @@ def restore(cam_id: str, event_id: str) -> bool:
     return moved_back > 0
 
 
+def hard_delete_one(cam_id: str, event_id: str) -> bool:
+    """Hard-delete a single trash entry NOW (skip the grace period).
+    Used by the Papierkorb UI's per-row "Endgültig löschen" button so
+    the operator doesn't have to empty the whole trash to remove a
+    single mistake. Returns True iff the entry existed and was wiped."""
+    ev_dir = _trash_root() / cam_id / event_id
+    if not ev_dir.exists():
+        return False
+    try:
+        shutil.rmtree(ev_dir)
+    except Exception as e:
+        log.warning("[trash] hard_delete_one %s/%s failed: %s", cam_id, event_id, e)
+        return False
+    # Tidy empty parent dirs.
+    cam_dir = ev_dir.parent
+    try:
+        if cam_dir.exists() and not any(cam_dir.iterdir()):
+            cam_dir.rmdir()
+    except OSError:
+        pass
+    return True
+
+
 def empty() -> int:
     """Hard-delete every entry currently in the trash. Returns the
     number of event dirs removed."""
