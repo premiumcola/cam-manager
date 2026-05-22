@@ -125,7 +125,7 @@ def build_css(*, log: logging.Logger | None = None) -> bool:
     if log:
         msg = "[css] rebuilt app.css from %d partials"
         if missing:
-            msg += " (missing: %s)" % ", ".join(missing)
+            msg += f" (missing: {', '.join(missing)})"
         log.info(msg, found)
     return True
 

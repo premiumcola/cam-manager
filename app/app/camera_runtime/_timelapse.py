@@ -114,7 +114,7 @@ class TimelapseMixin:
         import json as _json
         import shutil
 
-        from ..timelapse import TimelapseBuilder as _TLB
+        from ..timelapse import TimelapseBuilder as _TimelapseBuilder
 
         storage_root = Path(self.global_cfg["storage"]["root"])
         frames_dir = storage_root / "timelapse_frames" / self.camera_id / profile_name / window_key
@@ -157,7 +157,7 @@ class TimelapseMixin:
         out_dir = storage_root / "timelapse" / self.camera_id
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        builder = _TLB(storage_root)
+        builder = _TimelapseBuilder(storage_root)
         # Pass a per-camera slug so cross-camera downloads of the
         # same window/profile/target don't collide on the user's
         # disk. Derived from the camera's display name with the

@@ -225,7 +225,7 @@ def discover_hosts(
     scanned_ips: set[str] = set()
     last_emit = 0.0
     with ThreadPoolExecutor(max_workers=300) as ex:
-        for result, args in zip(ex.map(probe_one, tasks), tasks):
+        for result, args in zip(ex.map(probe_one, tasks), tasks, strict=False):
             ip, _port = args
             scanned_ips.add(ip)
             if result:

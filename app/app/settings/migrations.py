@@ -147,15 +147,7 @@ def migrate_schedules(data: dict) -> bool:
             "Schedule-Migration: %s → %s (%s → enabled=%s %s-%s actions=%s)",
             cam.get("id", "?"),
             src,
-            "rec=%s/%s/%s ale=%s/%s/%s"
-            % (
-                rec_enabled,
-                rec_start,
-                rec_end,
-                ale_enabled,
-                ale_start,
-                ale_end,
-            ),
+            f"rec={rec_enabled}/{rec_start}/{rec_end} " f"ale={ale_enabled}/{ale_start}/{ale_end}",
             new_sched["enabled"],
             new_sched["from"],
             new_sched["to"],

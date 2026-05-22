@@ -494,7 +494,9 @@ def predicted_bbox(track: Track, frame_idx: int) -> tuple[int, int, int, int]:
     # velocity. If the subject barely moved across the window, do
     # NOT extrapolate; the next detection should match against the
     # last-observed position. Compute mean speed = mean(sqrt(dx² + dy²)).
-    mean_speed = sum((d * d + e * e) ** 0.5 for d, e in zip(dxs, dys)) / max(1, len(dxs))
+    mean_speed = sum((d * d + e * e) ** 0.5 for d, e in zip(dxs, dys, strict=False)) / max(
+        1, len(dxs)
+    )
     min_dim = max(1.0, float(min(bw, bh)))
     if mean_speed < STATIONARY_SPEED_FRAC * min_dim:
         return (int(bb_last["x1"]), int(bb_last["y1"]), int(bb_last["x2"]), int(bb_last["y2"]))

@@ -121,7 +121,7 @@ def scan(weather_root: Path) -> dict:
                 elif f.suffix == ".json":
                     counts["index_rows"] += 1
                     json_files[f.stem] = f
-            for stem, jf in json_files.items():
+            for _stem, jf in json_files.items():
                 try:
                     m = json.loads(jf.read_text(encoding="utf-8"))
                 except Exception:
@@ -140,7 +140,7 @@ def scan(weather_root: Path) -> dict:
                     alt = _resolve_via_glob(guess)
                     if alt is not None and alt.exists():
                         counts["needs_tolerant"] += 1
-            for stem, mp4 in mp4_files.items():
+            for stem, _mp4 in mp4_files.items():
                 if stem not in json_files:
                     counts["orphan_mp4"] += 1
         out[cam_id] = counts
