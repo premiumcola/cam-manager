@@ -55,9 +55,13 @@ def _coerce(val, target_type, field_name: str):
     try:
         return target_type(val)
     except (TypeError, ValueError):
+        # `from None` — the coercion-failure message is the only
+        # interesting info here; the underlying TypeError trace is
+        # noise that doesn't help the API caller diagnose what they
+        # sent (validators always raise at the boundary).
         raise ValueError(
-            f"Field {field_name}: expected {target_type.__name__}, " f"got {type(val).__name__}"
-        )
+            f"Field {field_name}: expected {target_type.__name__}, got {type(val).__name__}"
+        ) from None
 
 
 def validate_and_coerce(data: dict, schema: dict) -> dict:
