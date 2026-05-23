@@ -784,15 +784,17 @@ async function _tick() {
       { method: 'POST', signal: controller.signal },
     );
     _tickState.lastStatus = r.status;
-    // B31 · late-tick guard. The session can be replaced or nulled
-    // by a concurrent stopLive / cam switch between fetch-issue and
-    // fetch-resolve. The original code silently dropped the result;
-    // we count it instead so a STUCK-looking tick row + a non-zero
-    // ticks_dropped_late field tells the user "responses ARE
-    // arriving, they're just landing too late for the current
-    // session" — a very different fix from "loop isn't running".
+    // B31 / B31' · late-tick guard. The session can be replaced
+    // or nulled by a concurrent stopLive / cam switch between
+    // fetch-issue and fetch-resolve. We count the drop and stash
+    // the reason ("session_null" when nothing is mounted now,
+    // "cam_mismatch" when a different cam was opened in between)
+    // so a STUCK-looking TICK row + dropped=N + drop_reason tells
+    // the user "responses ARE arriving, they're just landing too
+    // late" — a very different fix from "loop isn't running".
     if (_session !== session) {
       _tickState.ticksDroppedLate = (_tickState.ticksDroppedLate || 0) + 1;
+      _tickState.lastDropReason = _session === null ? 'session_null' : 'cam_mismatch';
       return;
     }
     let data = null;
