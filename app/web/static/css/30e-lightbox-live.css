@@ -106,45 +106,6 @@
 }
 .mv-ld-timeline {
   flex-shrink: 0;
-  position: relative;
-}
-/* F34 · uniform row height across both swimlane columns so label N
-   pixel-aligns with event-row N. The legacy swimlane lets each
-   strip / badge size to its content, producing the 0.5–1 row drift
-   the user reported. Scoped to .mv-livedetect-stack so recorded
-   clips keep their organic sizing. */
-.mv-livedetect-stack .lb-time-stack {
-  --mv-ld-row-h: 48px;
-}
-.mv-livedetect-stack .lb-time-stack .lbtt-badge,
-.mv-livedetect-stack .lb-time-stack .lbtt-empty-side {
-  height: var(--mv-ld-row-h);
-  min-height: var(--mv-ld-row-h);
-  max-height: var(--mv-ld-row-h);
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-}
-.mv-livedetect-stack .lb-time-stack .lbtt-strip,
-.mv-livedetect-stack .lb-time-stack .lbtt-empty {
-  height: var(--mv-ld-row-h);
-  min-height: var(--mv-ld-row-h);
-  max-height: var(--mv-ld-row-h);
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  position: relative;
-}
-/* The LIVE play-line cursor must span every row of the swimlane
-   regardless of how many tracks render. Top:0 → bottom:0 with the
-   inset:auto-derived shape from the legacy rule preserved. */
-.mv-livedetect-stack .lb-time-stack .lb-play-cursor {
-  top: 0;
-  bottom: 0;
-  height: auto;
-}
-.mv-livedetect-stack .lb-time-stack .lb-play-line {
-  height: 100%;
 }
 .mv-ld-detail {
   /* All debug / trace / log surfaces stack here in DOM order:

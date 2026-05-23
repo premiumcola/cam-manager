@@ -326,16 +326,6 @@ export function closeLiveDetect() {
   // outside the toggle row; remove it on session teardown.
   const suppressedHint = byId('mvLiveSuppressedHint');
   if (suppressedHint) suppressedHint.remove();
-  // F12/F34 · restore the bottom-stack to its original parent (next
-  // to the media wrap inside #lightboxInner) BEFORE the slot scaffold
-  // is torn down — otherwise the bottom-stack would get garbage-
-  // collected with the stack. The original-position snapshot was
-  // taken in _setupLiveChrome.
-  const bsParent = session?._bsOriginalParent;
-  const bs = byId('lightboxBottomStack');
-  if (bs && bsParent && bs.parentElement !== bsParent) {
-    bsParent.insertBefore(bs, session?._bsOriginalNext || null);
-  }
   // F12 · tear down the slot scaffold and return the persistent
   // media elements (<img id="lightboxImg">, <video id="lightboxVideo">)
   // to the wrap so recorded-clip mode reuses them unchanged.
@@ -489,19 +479,6 @@ function _setupLiveChrome(camId, cameraName) {
   _ensureTrailsOverlay();
   _ensureZoneMaskOverlay();
   _mountOverlayToggles();
-  // F12/F34 · move the bottom-stack (the swimlane host) into the
-  // timeline slot. Store its original parent + next sibling so
-  // closeLiveDetect can restore the DOM exactly — recorded clips
-  // depend on the bottom-stack being a child of #lightboxInner.
-  const bs = byId('lightboxBottomStack');
-  const tlSlot = _slot('timeline');
-  if (bs && tlSlot && bs.parentElement !== tlSlot) {
-    if (_session) {
-      _session._bsOriginalParent = bs.parentElement;
-      _session._bsOriginalNext = bs.nextSibling;
-    }
-    tlSlot.appendChild(bs);
-  }
   // F12/F23 · paint the live-detect titlebar slot. The legacy
   // #lightboxTopBar is hidden via .lb-live-detect; this new slot
   // is safe-area-aware and stays inside the stack so DOM order
