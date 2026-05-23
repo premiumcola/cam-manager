@@ -391,6 +391,14 @@
   font-style: italic;
   color: rgba(226, 232, 240, 0.45);
 }
+/* B23' · muted-warning variant for the "Letzter Tick: <code> · <msg>"
+   live-mode banner. Same italic + size as the regular empty state,
+   but tinted amber so the user immediately reads it as "the loop is
+   running but the backend just refused" — different fix than a
+   stuck loop. */
+.mv-fafold-empty--warn {
+  color: #fcd34d;
+}
 @media (max-width: 480px) {
   .mv-fafold-header {
     min-height: 44px;

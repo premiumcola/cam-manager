@@ -803,7 +803,24 @@ async function _tick() {
     }
     if (data?.ok) {
       _tickState.lastRespAt = Date.now();
+      _tickState.lastTickError = null;
+      // B23' · a successful tick clears any error banner the fold
+      // may have been showing. _renderFrame's _appendTrace path
+      // will repopulate the trace lines anyway, but the explicit
+      // clear protects against an empty-trace ok=true response.
+      _session?.fold?.setLastError?.(null);
       _renderFrame(data);
+    } else {
+      // B23' · ok=false response. Stash the code+message for the
+      // fold's "Letzter Tick" banner. data may be null if the
+      // body wasn't JSON; we still know the HTTP status and can
+      // surface that. Status code goes first so screenshots are
+      // greppable, message second when available.
+      const code = data?.code || (r ? r.status : '?');
+      const msg = data?.error || data?.message || '';
+      const text = msg ? `${code} · ${msg}` : String(code);
+      _tickState.lastTickError = text;
+      _session?.fold?.setLastError?.(text);
     }
   } catch (err) {
     if (err?.name === 'AbortError') {
@@ -811,6 +828,9 @@ async function _tick() {
       return;
     }
     _tickState.lastStatus = 'neterr';
+    const text = `neterr · ${(err && (err.message || String(err))) || 'unknown'}`;
+    _tickState.lastTickError = text;
+    _session?.fold?.setLastError?.(text);
   }
   _scheduleNext(session, performance.now() - cycleStart);
 }

@@ -57,6 +57,18 @@ function _renderLines(lines, opts = {}) {
     // live source, just empty for now. As soon as the first tick
     // delivers data the setLines() call below paints the real trace.
     if (opts.live) {
+      // B23' · if the latest tick errored (ok=false / 503 / netcode)
+      // show that error in muted-warning colour rather than the
+      // generic "Warte …" line. Tells the user the loop IS running,
+      // it's the backend that's refusing — different fix than a
+      // stuck loop.
+      if (opts.lastError) {
+        const esc = String(opts.lastError)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;');
+        return `<div class="mv-fafold-empty mv-fafold-empty--warn">Letzter Tick: ${esc}</div>`;
+      }
       return `<div class="mv-fafold-empty">Warte auf ersten Tick …</div>`;
     }
     return `<div class="mv-fafold-empty">Kein Server-Trace gespeichert für diese Aufnahme — Trace ist nur im Live-Test verfügbar.</div>`;
@@ -78,7 +90,15 @@ export function renderFineAnalysisFold(host, lines, opts = {}) {
   // copy reads "Warte auf ersten Tick …" instead of the recorded-
   // clip "Kein Server-Trace gespeichert" string. Capture the flag in
   // the closure so subsequent setLines() calls keep the same shape.
+  // B23' · also remember the last error so a tick that returned ok=
+  // false replaces the empty state with "Letzter Tick: <code> · …"
+  // without losing the live mode.
   const live = !!opts.live;
+  let lastError = null;
+  let lastLines = lines;
+  const repaint = () => {
+    if (body) body.innerHTML = _renderLines(lastLines, { live, lastError });
+  };
   host.innerHTML = `
     <div class="mv-fafold-root" data-open="${open0 ? '1' : '0'}"${live ? ' data-mode="live"' : ''}>
       <button type="button" class="mv-fafold-header" aria-expanded="${open0 ? 'true' : 'false'}">
@@ -103,7 +123,24 @@ export function renderFineAnalysisFold(host, lines, opts = {}) {
   }
   return {
     setLines(newLines) {
-      if (body) body.innerHTML = _renderLines(newLines, { live });
+      lastLines = newLines;
+      // A successful tick clears the previous error so the trace is
+      // shown unconditionally. setLastError(null) on its own does
+      // the same; calling both makes the contract explicit.
+      lastError = null;
+      repaint();
+    },
+    setLastError(text) {
+      // B23' · live-detect mode only — recorded clips have no live
+      // tick loop, so the recorded empty state stays unchanged. The
+      // tick path calls this with `${code} · ${msg}` on every
+      // ok=false response and null after a successful one.
+      lastError = text || null;
+      // Don't blow away an existing trace just because the next
+      // tick errored — only paint the warn line when we have no
+      // lines yet (the lastLines guard inside _renderLines handles
+      // the "show trace if available, else error" branch).
+      repaint();
     },
   };
 }
