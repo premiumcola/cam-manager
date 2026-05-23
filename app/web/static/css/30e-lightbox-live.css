@@ -14,10 +14,80 @@
   background: #080510;
 }
 .mv-ld-titlebar {
+  /* F23 · safe-area-aware live-detect title row. Reuses the existing
+     env(safe-area-inset-*) pattern from 30a-lightbox-frame.css so
+     the camera name never overlaps the iOS status bar / Dynamic
+     Island and the close-X never overlaps the battery icon.
+     Total height on a Dynamic-Island iPhone, portrait: ~54 px
+     status-bar inset + 22 px content + 6 px gap below ≈ 82 px. On
+     a non-notch device the safe-area term collapses to 8 px → 36 px
+     total. */
   display: flex;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
+  padding-top: max(8px, env(safe-area-inset-top, 0px));
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+  padding-bottom: 6px;
+  background: transparent;
+  color: #e2e8f0;
+}
+.mv-ld-titlebar-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #f1f5f9;
+}
+.mv-ld-titlebar-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(134, 239, 172, 0.85);
+  letter-spacing: 0.02em;
+}
+.mv-ld-titlebar-livedot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.55);
+}
+.mv-ld-titlebar-close {
+  /* 44 × 44 px transparent hit area with an 18 px glyph centred
+     inside — matches the iOS HIG touch target floor while keeping
+     the visible chrome small. Aligned right; never overlaps the
+     env(safe-area-inset-right) zone because the wrapper's
+     padding-right reserves that space. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.78);
+  cursor: pointer;
+  border-radius: 50%;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s;
+}
+.mv-ld-titlebar-close:hover {
+  color: #fff;
 }
 .mv-ld-video {
   /* The persistent #lightboxImg / #lightboxVideo elements live here
