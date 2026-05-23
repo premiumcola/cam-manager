@@ -904,6 +904,12 @@ const _diagState = {
   zonemask: null,
   media: null,
   posFail: null,
+  // A4 · sticky "SVG sized but child collapsed" diagnostic. Separate
+  // from posFail because the two failure modes look identical on
+  // screen (no bbox visible) but need different fixes — posFail
+  // means the SVG layout never happened, paintFail means the
+  // children rendered but landed off-canvas or with 0×0 geometry.
+  paintFail: null,
 };
 
 function _debugDiagOn() {
@@ -929,6 +935,7 @@ function _setDebugDiag(on) {
     _diagState.zonemask = null;
     _diagState.media = null;
     _diagState.posFail = null;
+    _diagState.paintFail = null;
   } else {
     // Render now if we have any state from the in-progress render
     // cycle; otherwise the next overlay-render tick will paint it.
@@ -982,6 +989,9 @@ function _renderDiagStrip() {
   if (_diagState.posFail) {
     rows.push(_renderDiagStripLine('position-fail', _diagState.posFail));
   }
+  if (_diagState.paintFail) {
+    rows.push(_renderDiagStripLine('paint-fail', _diagState.paintFail));
+  }
   strip.innerHTML = rows.join('');
 }
 
@@ -989,6 +999,8 @@ function _updateDiagStrip(kind, fields, opts = {}) {
   if (!_debugDiagOn()) return;
   if (kind === 'position-fail') {
     _diagState.posFail = fields;
+  } else if (kind === 'paint-fail') {
+    _diagState.paintFail = fields;
   } else if (kind in _diagState) {
     _diagState[kind] = { fields, opts };
   }
@@ -1195,6 +1207,33 @@ function _renderBboxOverlay() {
     .join('');
   _updateVerdictLegend(_hasSuppressed && renderDets.length > 0);
   _renderEmptyHint(renderDets.length === 0);
+  // A4 · paint-fail check. The SVG itself has size > 0 (we'd have
+  // hit the position-fail branch above otherwise), but the painted
+  // children might still collapse to 0×0 — happens when the bbox
+  // coords land outside the viewBox or when stroke-only rects had
+  // their geometry attrs clobbered. Differentiates "SVG sized
+  // correctly but children collapsed" from "SVG never got
+  // dimensions" — same visual failure, different fix.
+  if (renderDets.length > 0) {
+    const firstG = svg.firstElementChild;
+    const childRect = firstG ? firstG.getBoundingClientRect() : null;
+    if (childRect && childRect.width === 0 && childRect.height === 0) {
+      const first = renderDets[0];
+      const fs = _session.lastFrameSize || { w: 0, h: 0 };
+      _updateDiagStrip('paint-fail', {
+        childRect: '0×0',
+        parentRect: `${Math.round(rect.width)}×${Math.round(rect.height)}`,
+        viewBox: `${fs.w}×${fs.h}`,
+        bboxRaw: `[${(first.bbox || []).join(',')}]`,
+      });
+    } else if (_diagState.paintFail) {
+      _diagState.paintFail = null;
+      _renderDiagStrip();
+    }
+  } else if (_diagState.paintFail) {
+    _diagState.paintFail = null;
+    _renderDiagStrip();
+  }
   // Click handler — toggle detail-pill selection.
   svg.style.pointerEvents = 'auto';
   svg.querySelectorAll('[data-label]').forEach((g) => {
