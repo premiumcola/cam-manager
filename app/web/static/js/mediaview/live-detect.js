@@ -1238,11 +1238,20 @@ function _refreshMediaRow() {
     const r = el.getBoundingClientRect();
     return `${Math.round(r.width)}×${Math.round(r.height)}@${Math.round(r.left)},${Math.round(r.top)}`;
   };
+  // B19 · include the branch _positionSvgOverImage last took so a
+  // screenshot tells us instantly whether the SVG was sized off the
+  // img-rect, video-rect, or one of the wrap fallbacks. videoReady
+  // surfaces the readyState gate the new validity check uses.
+  const videoReady = videoEl
+    ? `rs=${videoEl.readyState || 0} vW=${videoEl.videoWidth || 0}`
+    : 'n/a';
   _diagState.media = {
     fields: {
       wrap: _box(wrap),
       img: imgEl ? `${_box(imgEl)} disp=${window.getComputedStyle(imgEl).display}` : 'n/a',
       video: videoEl ? `${_box(videoEl)} disp=${window.getComputedStyle(videoEl).display}` : 'n/a',
+      videoReady,
+      branch: _lastMediaBranch || '—',
     },
     opts: {},
   };
@@ -1467,26 +1476,34 @@ function _positionSvgOverImage(svg) {
   // uses `<video>` (iOS + desktop hls.js); MJPEG fallback uses
   // `<img>`. Both honour object-fit:contain so the SVG must align
   // to whichever element actually carries the pixels.
+  //
+  // B19 · video validity tightened. Old check was
+  //   display !== 'none' && videoWidth > 0
+  // which still picked a stale <video> after a cam-switch — display
+  // was '' (initial), videoWidth was 0 transiently, the `>0` test
+  // failed AND the function fell through to imgEl. But sometimes
+  // videoWidth had a leftover non-zero from a previous open; the new
+  // readyState>=2 (HAVE_CURRENT_DATA) gate rejects that.
   const videoEl = byId('lightboxVideo');
   const imgEl = byId('lightboxImg');
   const wrap = byId('lightboxMediaWrap');
   if (!wrap) return;
-  const usingVideo = videoEl && videoEl.style.display !== 'none' && videoEl.videoWidth > 0;
-  const mediaEl = usingVideo ? videoEl : imgEl && imgEl.style.display !== 'none' ? imgEl : null;
-  if (!mediaEl) return;
+  const videoValid =
+    !!videoEl &&
+    videoEl.style.display !== 'none' &&
+    videoEl.videoWidth > 0 &&
+    (videoEl.readyState || 0) >= 2;
+  const imgValid = !!imgEl && imgEl.style.display !== 'none';
+  const mediaEl = videoValid ? videoEl : imgValid ? imgEl : null;
+  if (!mediaEl) {
+    _setMediaBranch('no-media');
+    return;
+  }
   const wrapBox = wrap.getBoundingClientRect();
   const imgBox = mediaEl.getBoundingClientRect();
   if (wrapBox.width <= 0) return;
-  // H2.c · MJPEG fallback. Some Safari builds expose naturalWidth=0
-  // for MJPEG streams even after the first frame paints, which makes
-  // fittedRect return {0,0,0,0} and the SVG ends up zero-sized.
-  // When the imgBox itself is non-zero we trust fittedRect; when it
-  // IS zero (image not laid out yet, or naturalWidth-less MJPEG), we
-  // fall back to the WRAP's bounds AND let the SVG's
-  // preserveAspectRatio:meet do the letterboxing internally against
-  // _session.lastFrameSize. Polygons + bboxes still land on the
-  // right pixels because the viewBox carries the source coord space.
   let dx, dy, w, h;
+  let branch;
   if (imgBox.width > 0 && imgBox.height > 0) {
     const fit = fittedRect(mediaEl);
     // fit is relative to the img's content box; the img's content
@@ -1495,22 +1512,41 @@ function _positionSvgOverImage(svg) {
     dy = imgBox.top - wrapBox.top + fit.y;
     w = fit.w;
     h = fit.h;
-    // fittedRect itself can return 0×0 when the image is sized but
-    // naturalWidth/Height is 0 (the MJPEG case). Fall through to
-    // wrap-bounds if either dimension is zero.
+    branch = mediaEl === videoEl ? 'video-rect' : 'img-rect';
     if (w <= 0 || h <= 0) {
-      dx = 0;
-      dy = 0;
-      w = wrapBox.width;
-      h = wrapBox.height;
+      // fittedRect returned 0×0 (image laid out but naturalWidth=0,
+      // the MJPEG case on Safari). Fall through to aspect-fallback
+      // below — DO NOT cover the full wrap height: the wrap also
+      // contains the toggle pills row, and covering the full wrap
+      // pushes the SVG below the image by exactly the toggle-row
+      // height. That's the y=242 offset the screenshot showed.
+      dx = null;
     }
-  } else {
-    // Image hasn't laid out yet. Cover the wrap; preserveAspectRatio
-    // inside the SVG handles letterboxing against the viewBox.
+  }
+  if (dx == null) {
+    // B19 · aspect-correct fallback. The wrap may be TALLER than
+    // the visible image (toggle pills stacked below it). The image
+    // itself is letterboxed inside its own slot via object-fit:
+    // contain, but we don't know that slot's height directly. We DO
+    // know the source aspect (fs.w / fs.h), so we compute the SVG
+    // height as wrap.width * fs.h / fs.w, pin to top:0, and let the
+    // SVG's preserveAspectRatio:meet finish the letterbox math.
+    const fs = _session?.lastFrameSize;
     dx = 0;
     dy = 0;
     w = wrapBox.width;
-    h = wrapBox.height;
+    if (fs && fs.w > 0 && fs.h > 0) {
+      h = (wrapBox.width * fs.h) / fs.w;
+      branch = 'wrap-fallback-aspect';
+    } else {
+      // No frame size known yet — first tick hasn't returned.
+      // Cover the full wrap (legacy behaviour) so the SVG is at
+      // least visible somewhere. Surface this as a distinct branch
+      // so the user sees it on the media row and knows the fix is
+      // "wait for the first tick".
+      h = wrapBox.height;
+      branch = 'wrap-fallback-full';
+    }
   }
   svg.style.left = `${dx}px`;
   svg.style.top = `${dy}px`;
@@ -1519,6 +1555,16 @@ function _positionSvgOverImage(svg) {
   svg.style.right = 'auto';
   svg.style.bottom = 'auto';
   svg.style.inset = 'auto';
+  _setMediaBranch(branch);
+}
+
+// B19 · stash the branch that _positionSvgOverImage took so the
+// media debug row from A1 can surface it. Stored as a module-level
+// scratch field on _diagState.media so the next _refreshMediaRow()
+// pickup includes it without an extra plumbing arg.
+let _lastMediaBranch = null;
+function _setMediaBranch(branch) {
+  _lastMediaBranch = branch;
 }
 
 // Per-label trail cap — newest N centroids drawn behind the bbox.
