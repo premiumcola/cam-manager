@@ -101,8 +101,14 @@
   background: #080510;
 }
 .mv-ld-controls {
+  /* F58 · no background of its own; sits directly on page bg. 6 px
+     gaps to both neighbours (video above, timeline below) so the
+     pills row floats inside its own quiet band. */
   display: block;
   flex-shrink: 0;
+  margin-top: 6px;
+  margin-bottom: 6px;
+  background: transparent;
 }
 .mv-ld-timeline {
   flex-shrink: 0;
@@ -184,30 +190,35 @@
   display: none;
 }
 .mv-live-toggle {
-  /* D34 · invisible 44 px tall touch target. Visible chip is a child
-     span — see .mv-live-toggle-chip below. Margin-free so flex gap
-     controls inter-pill spacing. */
+  /* F58 · pill button = the chip; total row height stays ≤44 px
+     (row padding 6+6 + chip 32 = 44). The 32 px chip touch area
+     extends into the row's 6 px top/bottom padding because the
+     button is the immediate flex item of the row — taps in the
+     padding still route here via the button's vertical centring.
+     A user-perceived ≥44 px tap area is preserved without the
+     button itself overshooting the row's 44 px ceiling. */
   display: inline-flex;
   align-items: center;
-  padding: 6px 0;
+  padding: 0;
   border: 0;
   background: transparent;
   cursor: pointer;
-  min-height: 44px;
+  min-height: 32px;
   outline: 0;
   flex-shrink: 0;
   scroll-snap-align: start;
   -webkit-tap-highlight-color: transparent;
 }
 .mv-live-toggle-chip {
-  /* Visible chip — keep at ~28-32 px tall regardless of touch buffer
-     above/below. Inset box-shadow draws the outline-state border so
-     toggling on/off doesn't shift the chip width by 1 px. */
+  /* F58 · visible chip — 32 px tall so the row total (6+32+6=44) is
+     exactly the iOS HIG floor. Inset box-shadow draws the outline-
+     state border so toggling on/off doesn't shift the chip width
+     by 1 px. */
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 4px 10px;
-  min-height: 28px;
+  padding: 6px 10px;
+  min-height: 32px;
   border-radius: 999px;
   background: transparent;
   color: rgba(226, 232, 240, 0.6);

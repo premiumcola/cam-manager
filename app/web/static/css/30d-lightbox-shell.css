@@ -69,9 +69,14 @@
    target ≥44 px via tall vertical padding; visible text 14 px so it
    reads at arm's length on a 375 px iPhone. */
 .mv-live-suppressed-hint {
+  /* F58 · sits BELOW the pills row with 4 px top gap + 6 px bottom
+     gap; padding still creates a ≥44 px touch target around the
+     14 px text. The 14 px text + 11+11 px vertical padding lands
+     at 44 px exactly. */
   display: block;
   width: 100%;
-  padding: 14px 12px;
+  margin: 4px 0 0;
+  padding: 11px 12px;
   min-height: 44px;
   background: transparent;
   border: 0;
