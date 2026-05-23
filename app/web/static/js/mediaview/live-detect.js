@@ -77,6 +77,10 @@ let _selectedLabel = null; // for detail-pill pin
 
 export function openLiveDetect({ camId, cameraName }) {
   if (!camId) return;
+  // B12 · capture whether a prior session was mounted BEFORE
+  // closeLiveDetect nulls it. Surfaced on the tick row as
+  // torn_down_prev so a back-to-back cam switch is visible.
+  const tornDownPrev = !!_session;
   closeLiveDetect();
   _session = {
     camId,
@@ -100,8 +104,9 @@ export function openLiveDetect({ camId, cameraName }) {
   _diagState.posFail = null;
   _diagState.paintFail = null;
   _diagState.tick = null;
-  // B7 · reset tick lifecycle state. Keep startedAt fresh on every
-  // open so the strip's started_at field matches the user's last
+  _diagState.mountFail = null;
+  // B7/B12 · reset tick lifecycle state. Keep startedAt fresh on
+  // every open so the strip's started_at matches the user's last
   // action — not some half-finished prior session.
   _tickState.lastTickAt = 0;
   _tickState.lastRespAt = 0;
@@ -110,11 +115,37 @@ export function openLiveDetect({ camId, cameraName }) {
   _tickState.startedAt = Date.now();
   _tickState.startedWithCamId = camId;
   _tickState.ticksDroppedLate = 0;
+  _tickState.tornDownPrev = tornDownPrev;
   _setupLiveChrome(camId, cameraName);
   _mountPanels();
-  _tick();
+  // B12 · wrap the first _tick() call so a thrown exception (camId
+  // resolution, fetch availability, an _ensureXyzOverlay early
+  // return that propagated) lands on a visible mount-fail row
+  // instead of stranding the user in a half-mounted state.
+  try {
+    _tick();
+  } catch (err) {
+    _diagState.mountFail = {
+      reason: `tick threw: ${(err && (err.message || String(err))) || 'unknown'}`,
+    };
+    _renderDiagStrip();
+  }
   _startHoldRefresh();
   document.body.style.overflow = 'hidden';
+  // B12 · 250 ms watchdog. If _tick never reached _scheduleNext (no
+  // tickHandle written), the loop didn't actually start — the
+  // try/catch above caught only synchronous throws; an async swallow
+  // (a fetch that resolved into _session-mismatch and dropped the
+  // schedule) would otherwise still slip past. The watchdog fires
+  // ONCE and writes a mount-fail row that says "no first-tick
+  // scheduled".
+  setTimeout(() => {
+    if (!_session) return;
+    if (_session.tickHandle) return;
+    if (_diagState.mountFail) return; // already flagged a sync throw
+    _diagState.mountFail = { reason: 'no first-tick scheduled within 250 ms' };
+    _renderDiagStrip();
+  }, 250);
 }
 
 export function closeLiveDetect() {
@@ -945,6 +976,10 @@ const _diagState = {
   // means the SVG layout never happened, paintFail means the
   // children rendered but landed off-canvas or with 0×0 geometry.
   paintFail: null,
+  // B12 · sticky "tick loop never started" diagnostic. Written by
+  // openLiveDetect's try/catch (synchronous throw) or its 250 ms
+  // watchdog (no first-tick scheduled). Cleared on next mount.
+  mountFail: null,
 };
 
 // B7 · raw tick-loop state. Owned by the tick lifecycle, read by the
@@ -983,6 +1018,8 @@ function _setDebugDiag(on) {
     _diagState.media = null;
     _diagState.posFail = null;
     _diagState.paintFail = null;
+    _diagState.mountFail = null;
+    _diagState.tick = null;
   } else {
     // Render now if we have any state from the in-progress render
     // cycle; otherwise the next overlay-render tick will paint it.
@@ -1038,6 +1075,9 @@ function _renderDiagStrip() {
     _renderDiagStripLine('zonemask', _diagState.zonemask?.fields, _diagState.zonemask?.opts || {}),
     _renderDiagStripLine('media', _diagState.media?.fields, _diagState.media?.opts || {}),
   ].filter(Boolean);
+  if (_diagState.mountFail) {
+    rows.push(_renderDiagStripLine('mount-fail', _diagState.mountFail));
+  }
   if (_diagState.posFail) {
     rows.push(_renderDiagStripLine('position-fail', _diagState.posFail));
   }
