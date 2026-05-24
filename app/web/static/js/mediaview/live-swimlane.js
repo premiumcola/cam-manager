@@ -44,8 +44,13 @@ export function renderLiveSwimlane(host, opts = {}) {
   }
   for (let i = 0; i < lanes.length; i++) {
     const lane = lanes[i];
+    // SIMU-FIX-04b · SIMU-03g refactored the swimlane into a single
+    // CSS grid, removing the `.mv-ld-swim-row` wrapper. The bar-sync
+    // query was never updated to match the new structure → no cell
+    // was ever found → no bars were ever appended. Query the event
+    // cell directly by its lane-idx data attribute.
     const cell = host.querySelector(
-      `.mv-ld-swim-row[data-lane-idx="${i}"] .mv-ld-swim-cell-events`,
+      `.mv-ld-swim-cell-events[data-lane-idx="${i}"]`,
     );
     if (cell) _syncBars(cell, lane, windowMs);
   }
