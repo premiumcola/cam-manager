@@ -12,12 +12,15 @@ from __future__ import annotations
 
 import contextlib
 import json as _json
+import logging
 import shutil as _shutil
 import time as _time
 from datetime import datetime
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request
+
+log = logging.getLogger(__name__)
 
 from .. import app_state
 from ..camera_runtime import CameraRuntime
@@ -745,3 +748,118 @@ def api_camera_arm(cam_id):
     if mqtt is not None:
         mqtt.publish(f"camera/{cam_id}/armed", {"armed": cam["armed"]}, retain=True)
     return jsonify({"ok": True, "camera": cam})
+
+
+# SIMU-05g · partial-update endpoint for the Debug-tab clusters.
+# Accepts ONLY the detection-tuning subset of camera fields and
+# pushes them straight into the live LiveTracker (no restart) plus
+# persists via upsert_camera. Returns the EFFECTIVE threshold set
+# after the merge so the frontend can confirm what's now active.
+_TUNING_FLOAT_FIELDS = {
+    "track_iou_match_threshold": (0.0, 0.95),
+    "track_miss_grace_seconds": (1.0, 30.0),
+    "track_continue_min_score": (0.0, 0.95),
+    "track_spawn_min_score": (0.0, 0.95),
+}
+
+
+@bp.patch('/api/cameras/<cam_id>/detection-tuning')
+def api_camera_detection_tuning(cam_id):
+    settings = app_state.settings
+    runtimes = app_state.runtimes
+    cam = settings.get_camera(cam_id)
+    if not cam:
+        return jsonify({"ok": False, "error": "camera not found"}), 404
+    payload = request.get_json(force=True, silent=True) or {}
+    if not isinstance(payload, dict):
+        return jsonify({"ok": False, "error": "payload must be an object"}), 400
+    # Validate the float-range fields. Reject out-of-range with 400
+    # so the frontend's slider never ships a value the backend would
+    # silently clamp.
+    for field, (lo, hi) in _TUNING_FLOAT_FIELDS.items():
+        if field not in payload:
+            continue
+        try:
+            val = float(payload[field])
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "error": f"{field}: must be a number"}), 400
+        if val < lo or val > hi:
+            return (
+                jsonify({"ok": False, "error": f"{field}: out of range [{lo},{hi}]"}),
+                400,
+            )
+        cam[field] = round(val, 4)
+    # Enforce the floor ≤ spawn invariant the tracker assumes.
+    spawn_v = float(cam.get("track_spawn_min_score") or 0.0)
+    floor_v = float(cam.get("track_continue_min_score") or 0.0)
+    if spawn_v > 0 and floor_v > spawn_v:
+        cam["track_continue_min_score"] = round(spawn_v, 4)
+    # label_thresholds is a per-class map (label → float). Range-
+    # validate per entry; we accept any string key (the tracker
+    # already ignores classes not in object_filter or Coral output).
+    if "label_thresholds" in payload:
+        lt = payload.get("label_thresholds") or {}
+        if not isinstance(lt, dict):
+            return jsonify({"ok": False, "error": "label_thresholds: must be object"}), 400
+        cleaned: dict[str, float] = {}
+        for k, v in lt.items():
+            try:
+                fv = float(v)
+            except (TypeError, ValueError):
+                return jsonify({"ok": False, "error": f"label_thresholds[{k}]: must be number"}), 400
+            if fv < 0.0 or fv > 0.95:
+                return (
+                    jsonify({"ok": False, "error": f"label_thresholds[{k}]: out of range"}),
+                    400,
+                )
+            cleaned[str(k)] = round(fv, 4)
+        cam["label_thresholds"] = cleaned
+    if "object_filter" in payload:
+        of = payload.get("object_filter") or []
+        if not isinstance(of, list):
+            return jsonify({"ok": False, "error": "object_filter: must be list"}), 400
+        cam["object_filter"] = [str(c) for c in of]
+    if "excluded_classes" in payload:
+        ec = payload.get("excluded_classes") or []
+        if not isinstance(ec, list):
+            return jsonify({"ok": False, "error": "excluded_classes: must be list"}), 400
+        cam["excluded_classes"] = sorted({str(c) for c in ec})
+    try:
+        settings.upsert_camera(cam)
+    except ValueError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 422
+    # Live-apply to the running tracker — no restart needed. LiveTracker
+    # carries its own threshold cache; resolve_track_thresholds reads
+    # from cfg on every call, so the per-tick threshold reads pick up
+    # the new label_thresholds immediately. Configure() pushes the
+    # tracker-level thresholds (spawn/floor/grace/iou) in one shot.
+    runtime = runtimes.get(cam_id)
+    if runtime is not None and hasattr(runtime, "_tracker"):
+        try:
+            from ..tracker_core import resolve_track_thresholds
+
+            spawn, floor, grace, iou = resolve_track_thresholds(
+                lambda _cid: cam, cam_id
+            )
+            runtime._tracker.configure(
+                spawn_default=spawn,
+                floor=floor,
+                grace_seconds=grace,
+                iou_threshold=iou,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.warning("[detection-tuning] %s live-apply failed: %s", cam_id, exc)
+    return jsonify(
+        {
+            "ok": True,
+            "effective": {
+                "track_iou_match_threshold": cam.get("track_iou_match_threshold"),
+                "track_miss_grace_seconds": cam.get("track_miss_grace_seconds"),
+                "track_continue_min_score": cam.get("track_continue_min_score"),
+                "track_spawn_min_score": cam.get("track_spawn_min_score"),
+                "label_thresholds": cam.get("label_thresholds") or {},
+                "object_filter": cam.get("object_filter") or [],
+                "excluded_classes": cam.get("excluded_classes") or [],
+            },
+        }
+    )
