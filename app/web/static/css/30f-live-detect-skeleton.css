@@ -110,6 +110,21 @@
   padding-left: 12px;
   padding-right: 12px;
   min-height: 32px;
+  transition:
+    padding-top 180ms ease-out,
+    padding-bottom 180ms ease-out,
+    min-height 180ms ease-out;
+}
+
+/* SIMU-01c · collapsed title — content height drops from ~32 px to
+   ~20 px; cam name + "● Live" hide, the muted "<Cam> · Live" line
+   takes their place. The video below tracks the new title bottom
+   edge automatically (zone-video flex-shrink:0 + container ordering),
+   no JS-driven layout sync needed. */
+.mv-ld-zone-title[data-collapsed='1'] {
+  min-height: 20px;
+  padding-top: 4px;
+  padding-bottom: 3px;
 }
 
 .mv-ld-title-cam {
@@ -124,8 +139,27 @@
   line-height: 1.2;
 }
 
+.mv-ld-zone-title[data-collapsed='1'] .mv-ld-title-cam,
+.mv-ld-zone-title[data-collapsed='1'] .mv-ld-title-live {
+  display: none;
+}
+
 .mv-ld-title-collapsed-line {
   display: none;
+  font-size: 9px;
+  color: var(--muted);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.mv-ld-zone-title[data-collapsed='1'] .mv-ld-title-collapsed-line {
+  display: block;
 }
 
 .mv-ld-title-live {
@@ -182,6 +216,17 @@
 
 .mv-ld-close-btn {
   color: var(--text);
+}
+
+/* SIMU-01c · chevron rotation. The glyph points DOWN by default
+   (expanded); flipped 180° when the wrapping zone is collapsed.
+   180 ms ease-out matches the height transition below. */
+.mv-ld-chevron-glyph {
+  transition: transform 180ms ease-out;
+}
+
+.mv-ld-iconbtn[data-collapsed='1'] .mv-ld-chevron-glyph {
+  transform: rotate(180deg);
 }
 
 /* ── zone-video ──────────────────────────────────────────────────────── */
@@ -253,6 +298,20 @@
 .mv-ld-timeline-body {
   overflow: hidden;
   flex: 0 0 auto;
+  /* SIMU-01c · 180 ms ease-out collapse. max-height ceiling far above
+     any realistic swimlane render so the expanded state never clips
+     content; on collapse, max-height drops to 0 and opacity fades in
+     the first 80 ms. */
+  max-height: 500px;
+  opacity: 1;
+  transition:
+    max-height 180ms ease-out,
+    opacity 80ms ease-out;
+}
+
+.mv-ld-zone-timeline[data-collapsed='1'] .mv-ld-timeline-body {
+  max-height: 0;
+  opacity: 0;
 }
 
 /* ── zone-tabs ───────────────────────────────────────────────────────── */

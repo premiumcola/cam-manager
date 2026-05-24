@@ -77,6 +77,17 @@ function _iconClose() {
   );
 }
 
+// Down-chevron. CSS rotates 180° when data-collapsed="1" on the
+// wrapping zone, so the icon points UP when the zone is collapsed.
+function _iconChevron() {
+  return (
+    '<svg class="mv-ld-chevron-glyph" width="14" height="14" ' +
+    'viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" ' +
+    'aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>'
+  );
+}
+
 const TABS = [
   { id: 'detections', label: 'Detections', icon: _iconDetections },
   { id: 'trace', label: 'Trace', icon: _iconTrace },
@@ -84,6 +95,9 @@ const TABS = [
 ];
 
 const LS_ACTIVE_TAB = 'tam.ld.activetab';
+const LS_TITLE_COLLAPSED = 'tam.ld.title.collapsed';
+const LS_TIMELINE_COLLAPSED = 'tam.ld.timeline.collapsed';
+const LS_LAST_CAMERA = 'tam.ld.lastcamera';
 const DEFAULT_TAB = 'detections';
 
 let _activeTab = DEFAULT_TAB;
@@ -115,7 +129,7 @@ export function panelEl(tabId) {
   return byId(PANEL_PREFIX + tabId) || null;
 }
 
-export function mountLdSkeleton({ camId: _camId, cameraName } = {}) {
+export function mountLdSkeleton({ camId, cameraName } = {}) {
   const wrap = byId('lightboxMediaWrap');
   if (!wrap) return;
   // Idempotency — second mount just refreshes the title text.
@@ -169,12 +183,30 @@ export function mountLdSkeleton({ camId: _camId, cameraName } = {}) {
     settings.hidden = false;
     byId(PANEL_PREFIX + 'detections').appendChild(settings);
   }
-  // Title chrome — name + ● Live + close X.
+  // Title chrome — name + ● Live + chevron + close X.
   zoneTitle.appendChild(_buildTitleBar(cameraName));
+  // SIMU-01c · seed collapsed states from localStorage. Same camera
+  // within the session → restore last-known state; new camera → reset
+  // both zones to expanded so the user gets a fresh layout instead of
+  // inheriting some other camera's preference.
+  _applyInitialCollapsedStates(camId);
   // Restore active tab from localStorage, default to "detections".
   const remembered = _lsGet(LS_ACTIVE_TAB);
   const initialTab = TABS.find((t) => t.id === remembered) ? remembered : DEFAULT_TAB;
   setActiveTab(initialTab);
+}
+
+function _applyInitialCollapsedStates(camId) {
+  const lastCam = _lsGet(LS_LAST_CAMERA);
+  const sameCam = !!camId && lastCam === camId;
+  if (!sameCam) {
+    _applyTitleCollapsed(false);
+    _applyTimelineCollapsed(false);
+    if (camId) _lsSet(LS_LAST_CAMERA, camId);
+    return;
+  }
+  _applyTitleCollapsed(_lsGet(LS_TITLE_COLLAPSED) === '1');
+  _applyTimelineCollapsed(_lsGet(LS_TIMELINE_COLLAPSED) === '1');
 }
 
 export function unmountLdSkeleton() {
@@ -223,7 +255,13 @@ function _buildTitleBar(camName) {
     '<span class="mv-ld-title-cam" data-mv-ld-title-cam></span>' +
     '<span class="mv-ld-title-live" data-mv-ld-title-live>Live</span>' +
     '<span class="mv-ld-title-collapsed-line" data-mv-ld-title-collapsed></span>' +
+    `<button type="button" class="mv-ld-iconbtn mv-ld-title-chevron" aria-label="Titel ein-/ausblenden">${_iconChevron()}</button>` +
     `<button type="button" class="mv-ld-iconbtn mv-ld-close-btn" aria-label="Schließen">${_iconClose()}</button>`;
+  titleEl.querySelector('.mv-ld-title-chevron')?.addEventListener('click', () => {
+    const next = !_isTitleCollapsed();
+    _applyTitleCollapsed(next);
+    _lsSet(LS_TITLE_COLLAPSED, next ? '1' : '0');
+  });
   titleEl.querySelector('.mv-ld-close-btn')?.addEventListener('click', () => {
     if (typeof window.closeLightbox === 'function') {
       window.closeLightbox();
@@ -252,8 +290,41 @@ function _buildTimelineHeader() {
   const head = document.createElement('div');
   head.className = 'mv-ld-timeline-head';
   head.innerHTML =
-    '<span class="mv-ld-timeline-head-label" data-mv-ld-timeline-label>Timeline · letzte 60 s</span>';
+    '<span class="mv-ld-timeline-head-label" data-mv-ld-timeline-label>Timeline · letzte 60 s</span>' +
+    `<button type="button" class="mv-ld-iconbtn mv-ld-timeline-chevron" aria-label="Timeline ein-/ausblenden">${_iconChevron()}</button>`;
+  head.querySelector('.mv-ld-timeline-chevron')?.addEventListener('click', () => {
+    const next = !_isTimelineCollapsed();
+    _applyTimelineCollapsed(next);
+    _lsSet(LS_TIMELINE_COLLAPSED, next ? '1' : '0');
+  });
   return head;
+}
+
+// Collapsed-state accessors. The data-collapsed attribute on the
+// zone is the single source of truth; localStorage just seeds it on
+// mount + remembers user clicks.
+function _isTitleCollapsed() {
+  return byId(ZONE_IDS.title)?.dataset.collapsed === '1';
+}
+
+function _isTimelineCollapsed() {
+  return byId(ZONE_IDS.timeline)?.dataset.collapsed === '1';
+}
+
+function _applyTitleCollapsed(v) {
+  const zone = byId(ZONE_IDS.title);
+  if (!zone) return;
+  zone.dataset.collapsed = v ? '1' : '0';
+  const chev = zone.querySelector('.mv-ld-title-chevron');
+  if (chev) chev.dataset.collapsed = v ? '1' : '0';
+}
+
+function _applyTimelineCollapsed(v) {
+  const zone = byId(ZONE_IDS.timeline);
+  if (!zone) return;
+  zone.dataset.collapsed = v ? '1' : '0';
+  const chev = zone.querySelector('.mv-ld-timeline-chevron');
+  if (chev) chev.dataset.collapsed = v ? '1' : '0';
 }
 
 function _buildTabBar() {
