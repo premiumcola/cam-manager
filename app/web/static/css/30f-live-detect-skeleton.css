@@ -11,10 +11,17 @@
    so the recorded-clip lightbox is untouched. */
 
 /* ── Override lb-fs-video sticky/scroll model under lb-live-detect ──── */
+/* SIMU-FIX-01c · explicit height + overflow lock at every level of
+   the modal chain so iOS Safari can't introduce a viewport scrollbar
+   when the address bar collapses. Each ancestor of zone-detail is
+   pinned to 100dvh with overflow:hidden; zone-detail is the SOLE
+   surface that may scroll. */
 #lightboxModal.lb-live-detect {
   /* fw384 placed scroll on #lightboxInner; the 5-zone layout moves
      scroll into zone-detail, so the outer pieces lock down. */
   overflow: hidden !important;
+  height: 100dvh !important;
+  max-height: 100dvh !important;
 }
 
 #lightboxModal.lb-live-detect #lightboxInner {

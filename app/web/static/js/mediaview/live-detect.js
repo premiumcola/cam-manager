@@ -197,7 +197,22 @@ export function openLiveDetect({ camId, cameraName }) {
   _diagState.mount = { ...mountRecord, _err: !!mountErr };
   _renderDiagStrip();
   _startHoldRefresh();
+  // SIMU-FIX-01c · lock both <html> and <body> overflow + height
+  // for the lifetime of the live-detect session so the viewport
+  // itself never scrolls — only zone-detail does. Previous values
+  // are saved on _session so closeLiveDetect can restore them
+  // verbatim (a recorded-clip lightbox might rely on body overflow:
+  // scroll, for example). Explicit height:100dvh on both belt-and-
+  // suspenders against iOS Safari's address-bar-collapse viewport
+  // changes leaving body taller than the new viewport.
+  _session.prevBodyOverflow = document.body.style.overflow;
+  _session.prevHtmlOverflow = document.documentElement.style.overflow;
+  _session.prevBodyHeight = document.body.style.height;
+  _session.prevHtmlHeight = document.documentElement.style.height;
   document.body.style.overflow = 'hidden';
+  document.documentElement.style.overflow = 'hidden';
+  document.body.style.height = '100dvh';
+  document.documentElement.style.height = '100dvh';
   // B12' · 250 ms watchdog. ONE-SHOT — fires once, then cleared.
   // Two outcomes: tickHandle present → mark first_tick_scheduled
   // true (success path); tickHandle still null → promote MOUNT row
@@ -246,6 +261,22 @@ export function closeLiveDetect() {
   }
   if (session.tickHandle) clearTimeout(session.tickHandle);
   if (session.holdHandle) clearInterval(session.holdHandle);
+  // SIMU-FIX-01c · restore the pre-mount overflow + height values
+  // on body and <html> so a subsequent recorded-clip open behaves
+  // normally. Empty string clears the inline style, letting the
+  // page stylesheet take over.
+  if (typeof session.prevBodyOverflow === 'string') {
+    document.body.style.overflow = session.prevBodyOverflow;
+  }
+  if (typeof session.prevHtmlOverflow === 'string') {
+    document.documentElement.style.overflow = session.prevHtmlOverflow;
+  }
+  if (typeof session.prevBodyHeight === 'string') {
+    document.body.style.height = session.prevBodyHeight;
+  }
+  if (typeof session.prevHtmlHeight === 'string') {
+    document.documentElement.style.height = session.prevHtmlHeight;
+  }
   const modal = byId('lightboxModal');
   if (modal) modal.classList.remove('lb-live-detect');
   // Restore prev/next chevrons so a subsequent recorded-clip open
