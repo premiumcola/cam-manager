@@ -1184,3 +1184,273 @@
 .mv-ld-debug-warn-red .mv-ld-debug-v-bright {
   color: #fda4af;
 }
+
+/* SIMU-05b · Cluster blocks. Each cluster is a self-contained card
+   with a coloured header (red for warning clusters 1-3, green for
+   the healthy performance cluster 4). The body holds sliders +
+   evidence + action buttons. */
+.mv-ld-cluster {
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 14px;
+  background: rgba(8, 18, 12, 0.4);
+  border-left: 3px solid var(--mv-ld-divider, #1a3020);
+}
+
+.mv-ld-cluster-warn {
+  border-left-color: #c4504a;
+  background: linear-gradient(180deg, rgba(42, 24, 24, 0.4) 0%, rgba(26, 14, 14, 0.4) 100%);
+}
+
+.mv-ld-cluster-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, #2a1818 0%, #1a0e0e 100%);
+}
+
+.mv-ld-cluster-head-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mv-ld-cluster-head-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fda4af;
+  line-height: 1.3;
+}
+
+.mv-ld-cluster-head-sub {
+  font-size: 10px;
+  color: #c4a4a4;
+  margin-top: 2px;
+}
+
+.mv-ld-cluster-head-hint {
+  font-size: 10px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.mv-ld-cluster-head-hint[data-hint-tone='warn'] {
+  color: #ffcd6e;
+}
+
+.mv-ld-cluster-head-hint[data-hint-tone='ok'] {
+  color: #6ee7b7;
+}
+
+.mv-ld-cluster-head-hint[data-hint-tone='mute'] {
+  color: var(--mv-ld-muted, #5a7a68);
+}
+
+.mv-ld-cluster-body {
+  padding: 12px;
+}
+
+/* Slider component — matrix-green track + knob, with a 44 px
+   transparent touch buffer around the visible knob via padding. */
+.mv-ld-slider {
+  padding: 8px 0 12px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mv-ld-slider + .mv-ld-slider {
+  border-top: 1px solid var(--mv-ld-divider, #1a3020);
+}
+
+.mv-ld-slider-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.mv-ld-slider-label {
+  font-size: 11px;
+  color: var(--mv-ld-mono, #82c79a);
+  font-weight: 600;
+}
+
+.mv-ld-slider-value {
+  font-size: 11px;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.mv-ld-slider-track {
+  position: relative;
+  height: 3px;
+  background: #1a3a28;
+  border-radius: 2px;
+  margin: 12px 8px;
+  touch-action: pan-y;
+}
+
+.mv-ld-slider-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: #4ade80;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.mv-ld-slider-knob {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #4ade80;
+  box-shadow: 0 0 0 1.5px #0a1812;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+}
+
+.mv-ld-slider-knob::before {
+  content: '';
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.mv-ld-slider-knob:active {
+  cursor: grabbing;
+  background: #6ee7b7;
+}
+
+.mv-ld-slider-bounds {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 8px;
+  font-size: 9px;
+  color: var(--mv-ld-muted, #5a7a68);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  margin-bottom: 6px;
+}
+
+.mv-ld-slider-desc {
+  font-size: 10px;
+  color: var(--mv-ld-muted, #5a7a68);
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+
+.mv-ld-slider-hint {
+  font-size: 10px;
+  color: var(--mv-ld-mono, #82c79a);
+  line-height: 1.4;
+}
+
+/* Cluster evidence boxes — green-tinted when clean, red-tinted when
+   the cluster has active findings. Contents come from the response's
+   cluster_evidence object (wired in SIMU-05h). */
+.mv-ld-evidence {
+  border-radius: 5px;
+  padding: 10px;
+  margin: 12px 0 14px;
+  border: 1px solid;
+}
+
+.mv-ld-evidence-ok {
+  background: #1f3a28;
+  border-color: #4ade80;
+  color: #6ee7b7;
+}
+
+.mv-ld-evidence-warn {
+  background: #1a0e0e;
+  border-color: #5b1f1f;
+  color: #ffd6a4;
+}
+
+.mv-ld-evidence-line {
+  font-size: 9px;
+  font-style: italic;
+  color: #ffd6a4;
+  margin-bottom: 4px;
+}
+
+.mv-ld-evidence-ok .mv-ld-evidence-line {
+  color: #6ee7b7;
+}
+
+.mv-ld-evidence-mono {
+  font-size: 9px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--mv-ld-text, #b6d4be);
+}
+
+.mv-ld-evidence-diagnose {
+  font-size: 9px;
+  color: #fda4af;
+  margin-top: 4px;
+}
+
+/* Cluster action button row */
+.mv-ld-cluster-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.mv-ld-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mv-ld-text, #b6d4be);
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid var(--mv-ld-mono, #82c79a);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  outline: 0;
+  min-width: 120px;
+  white-space: nowrap;
+}
+
+@media (hover: hover) {
+  .mv-ld-action-btn:hover {
+    background: rgba(130, 199, 154, 0.1);
+    color: #ffffff;
+  }
+}
+
+.mv-ld-action-save {
+  border-color: #4ade80;
+  color: #4ade80;
+}
+
+.mv-ld-action-recommend {
+  border-color: #6ec1ff;
+  color: #6ec1ff;
+  min-width: 160px;
+}
+
+.mv-ld-save-status {
+  font-size: 10px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--mv-ld-muted, #5a7a68);
+}
+
+.mv-ld-save-status[data-save-state='ok'] {
+  color: #6ee7b7;
+}
+
+.mv-ld-save-status[data-save-state='error'] {
+  color: #fda4af;
+}
