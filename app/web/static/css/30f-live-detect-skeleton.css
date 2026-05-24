@@ -1694,3 +1694,39 @@
   flex-direction: column;
   gap: 4px;
 }
+
+/* SIMU-05f · Cluster 5 (events log). Neutral cluster header (no
+   warn/ok tint); body holds a tight stack of mono lines. The
+   coloured tag (SPAWN/CONT/DEATH/RE-ID) is rendered inline at full
+   saturation per the readability rule. */
+.mv-ld-cluster-head-neutral {
+  background: linear-gradient(180deg, rgba(8, 18, 12, 0.6) 0%, rgba(4, 12, 8, 0.6) 100%);
+}
+
+.mv-ld-events-log {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+}
+
+.mv-ld-event-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 2px 0;
+  line-height: 1.4;
+}
+
+.mv-ld-event-tag {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+  min-width: 44px;
+}
+
+.mv-ld-event-body {
+  color: var(--mv-ld-text, #b6d4be);
+  word-break: break-word;
+}

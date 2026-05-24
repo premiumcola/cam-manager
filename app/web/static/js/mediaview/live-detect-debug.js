@@ -109,6 +109,7 @@ export function renderDebugPanel(host, ctx = {}) {
     _renderCluster2(ctx, cam) +
     _renderCluster3(ctx, cam) +
     _renderCluster4(ctx) +
+    _renderCluster5(ctx) +
     '</div>';
   host.dataset.mvLdDebugFp = fp;
   _wireCluster1(host, cam, ctx);
@@ -130,6 +131,8 @@ function _refreshDynamic(host, ctx, cam) {
   if (ev2) ev2.outerHTML = _renderCluster2Evidence(ctx, cam);
   const c4 = host.querySelector('[data-cluster-id="4"]');
   if (c4) c4.outerHTML = _renderCluster4(ctx);
+  const c5 = host.querySelector('[data-cluster-id="5"]');
+  if (c5) c5.outerHTML = _renderCluster5(ctx);
 }
 
 // Per-class default thresholds — keep aligned with the project's
@@ -799,4 +802,74 @@ function _perfRow(label, value, target, ok) {
       <span class="mv-ld-perf-value">${esc(value)}</span>
       <span class="mv-ld-perf-target">(${esc(target)} ${mark})</span>
     </div>`;
+}
+
+// SIMU-05f · Cluster 5 · Tracker events log. Read-only chronological
+// log of SPAWN/CONT/DEATH/RE-ID events. Pulls from cluster_evidence
+// when present (SIMU-05h); falls back to the decision_trace stream
+// the response already carries.
+const _EVENT_KIND_COLORS = {
+  spawn: '#6ee7b7',
+  cont: '#b6d4be',
+  death: '#fda4af',
+  reid: '#ffcd6e',
+};
+
+function _renderCluster5(ctx) {
+  const ev = ctx.fullData?.cluster_evidence?.cluster5;
+  const events = ev && Array.isArray(ev.events_60s) ? ev.events_60s : null;
+  const traceLines = Array.isArray(ctx.fullData?.decision_trace) ? ctx.fullData.decision_trace : [];
+  const lines = events
+    ? events.map(_renderEventLine).join('')
+    : _renderFromTrace(traceLines);
+  return `
+    <div class="mv-ld-cluster" data-cluster-id="5">
+      <div class="mv-ld-cluster-head mv-ld-cluster-head-neutral">
+        <div class="mv-ld-cluster-head-text">
+          <div class="mv-ld-cluster-head-title">▶ TRACKER-EREIGNISSE LETZTE 60 s</div>
+          <div class="mv-ld-cluster-head-sub">Pure Beobachtung · keine Steuerung</div>
+        </div>
+      </div>
+      <div class="mv-ld-cluster-body">
+        <div class="mv-ld-events-log">
+          ${lines || '<div class="mv-ld-empty-row">Noch keine Track-Ereignisse in den letzten 60 s</div>'}
+        </div>
+      </div>
+    </div>`;
+}
+
+function _renderEventLine(e) {
+  if (!e) return '';
+  const kind = String(e.kind || 'cont').toLowerCase();
+  const color = _EVENT_KIND_COLORS[kind] || '#b6d4be';
+  const tag = kind === 'cont' ? 'CONT.' : kind.toUpperCase();
+  const tn = Number.isFinite(e.track_num) ? `#${e.track_num}` : '#?';
+  const lbl = e.label || '';
+  const tAgo = Number.isFinite(e.t_ago_seconds) ? `t=-${Math.round(e.t_ago_seconds)}s` : '';
+  const extra = e.extra || '';
+  const body = [tn, lbl, extra, tAgo].filter(Boolean).join(' · ');
+  return `<div class="mv-ld-event-line">
+    <span class="mv-ld-event-tag" style="color:${color}">${tag}</span>
+    <span class="mv-ld-event-body">${esc(body)}</span>
+  </div>`;
+}
+
+function _renderFromTrace(traceLines) {
+  if (!traceLines.length) return '';
+  return traceLines
+    .slice(-60)
+    .map((line) => {
+      const text = String(line || '');
+      let kind = 'cont';
+      if (text.indexOf('PASS') !== -1) kind = 'spawn';
+      else if (text.indexOf('REJECTED') !== -1 || text.indexOf('grace') !== -1) kind = 'death';
+      else if (text.indexOf('re-id') !== -1 || text.indexOf('RE-ID') !== -1) kind = 'reid';
+      const color = _EVENT_KIND_COLORS[kind];
+      const tag = kind === 'cont' ? 'CONT.' : kind.toUpperCase();
+      return `<div class="mv-ld-event-line">
+        <span class="mv-ld-event-tag" style="color:${color}">${tag}</span>
+        <span class="mv-ld-event-body">${esc(text)}</span>
+      </div>`;
+    })
+    .join('');
 }
