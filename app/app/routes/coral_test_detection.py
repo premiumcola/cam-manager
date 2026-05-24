@@ -13,6 +13,7 @@ routes/__init__.py so the URL space is byte-identical to pre-split.
 
 from __future__ import annotations
 
+import collections
 import logging
 import time as _time
 
@@ -26,6 +27,10 @@ from ..tracker_core import (
     compute_miss_grace_samples,
     resolve_track_thresholds,
 )
+
+# SIMU-05h · cluster-evidence ring-buffer window. Events older than
+# this are pruned on every test-detection call.
+_EVIDENCE_WINDOW_S = 60.0
 
 bp = Blueprint("coral_test_detection", __name__)
 log = logging.getLogger(__name__)
@@ -71,6 +76,21 @@ def _get_test_tracker(cam_id: str, cam_cfg: dict) -> dict:
         "display_nums": {},
         "next_num": 0,
         "last_call_ts": now,
+        # SIMU-05h · ring-buffer of (wall_ts, kind, track_num, label,
+        # score, iou, extra). maxlen large enough for ~3 tick/s × 60 s
+        # × 4 event-kinds = 720 entries with room to spare.
+        "events": collections.deque(maxlen=1024),
+        # Per-class detection counts within the 60-s window. Each
+        # entry is (wall_ts, label, verdict) so prune-by-time is
+        # straightforward.
+        "class_log": collections.deque(maxlen=2048),
+        # Tracker-state mirror for DEATH detection — track_id → last
+        # wall-time we saw it in matches.
+        "last_seen_ts": {},
+        # Cumulative drops over the test-tracker's lifetime; surfaced
+        # in cluster 4. Set on each tick from the live runtime when
+        # available, otherwise stays 0.
+        "drops_session": 0,
     }
     _TEST_TRACKERS[cam_id] = entry
     return entry
@@ -343,14 +363,70 @@ def api_test_detection(cam_id: str):
         log.warning("[test-detection] %s tracker step failed: %s", cam_id, exc)
         matches = []
     di_to_num: dict[int, int] = {}
+    wall_now = _time.time()
+    prev_seen = tt.get("last_seen_ts") or {}
+    new_seen: dict[str, float] = {}
+    events_buf = tt.get("events") or collections.deque(maxlen=1024)
     for di, tr in matches:
         tid = tr.track_id
         num = display_nums.get(tid)
-        if num is None:
+        is_new = num is None
+        if is_new:
             tt["next_num"] = int(tt.get("next_num") or 0) + 1
             num = tt["next_num"]
             display_nums[tid] = num
         di_to_num[di] = num
+        new_seen[tid] = wall_now
+        # SIMU-05h · emit SPAWN on first match, CONT on subsequent.
+        ev_kind = "spawn" if is_new else "cont"
+        try:
+            score_v = float(raw[di].score)
+        except Exception:
+            score_v = 0.0
+        events_buf.append(
+            (
+                wall_now,
+                ev_kind,
+                num,
+                getattr(raw[di], "label", ""),
+                round(score_v, 4),
+                None,
+                "",
+            )
+        )
+    # DEATH detection: any previously-seen track that didn't match
+    # this tick AND has been silent past the grace window emits a
+    # DEATH event. Mirror the runtime tracker's logic: grace is in
+    # seconds, derived from compute_miss_grace_samples * cycle_time.
+    grace_ms = float(tracker.grace_seconds) * 1000.0
+    for tid_prev, prev_ts in prev_seen.items():
+        if tid_prev in new_seen:
+            continue
+        if (wall_now - prev_ts) * 1000.0 < grace_ms:
+            # still within grace — carry forward so a brief gap
+            # doesn't fire false DEATHs.
+            new_seen[tid_prev] = prev_ts
+            continue
+        # already past grace — emit DEATH once and drop from the seen
+        # map so we don't re-fire on every subsequent tick.
+        num_prev = display_nums.get(tid_prev)
+        if num_prev is not None:
+            label_prev = ""
+            # Look up the closed track in tracker.state for its label
+            # (best-effort — the closed list may have been pruned).
+            for closed in getattr(tracker.state, "closed", []) or []:
+                if getattr(closed, "track_id", None) == tid_prev:
+                    label_prev = getattr(closed, "label", "") or ""
+                    break
+            events_buf.append(
+                (wall_now, "death", num_prev, label_prev, None, None, "grace expired"),
+            )
+    tt["last_seen_ts"] = new_seen
+    tt["events"] = events_buf
+    # SIMU-05h · log per-class verdict counts. The loop building `out`
+    # below writes the verdict per detection; record raw + verdict here
+    # so the 60-s window can aggregate without re-walking `out`.
+    class_log = tt.get("class_log") or collections.deque(maxlen=2048)
     out = []
     for di, d in enumerate(raw):
         cls_thresh = float(per_class.get(d.label, global_floor))
@@ -374,6 +450,8 @@ def api_test_detection(cam_id: str):
                 "track_num": di_to_num.get(di),
             }
         )
+        class_log.append((wall_now, d.label, verdict))
+    tt["class_log"] = class_log
     out.sort(key=lambda r: r["score"], reverse=True)
     # ``?no_snapshot=1`` — Simulieren v2 (kr493): frontend drives the
     # video via the continuous MJPEG stream and only needs the bbox
@@ -662,6 +740,10 @@ def api_test_detection(cam_id: str):
         "snapshot_frame_size": {"w": int(snap_w), "h": int(snap_h)},
         "bbox_space": "source" if snap_scale == 1.0 else "snapshot",
     }
+    # SIMU-05h · build the cluster-evidence object from the
+    # ring-buffer state. Prunes events outside the 60-s window and
+    # computes per-cluster aggregates inline.
+    cluster_evidence = _build_cluster_evidence(tt, cam, obj_filter, ema_ms)
     return jsonify(
         {
             "ok": True,
@@ -673,5 +755,109 @@ def api_test_detection(cam_id: str):
             "diag": diag,
             "frame_interval_avg_ms": int(round(ema_ms)) if ema_ms > 0 else 0,
             "decoder_backlog_suspected": bool(backlog),
+            "cluster_evidence": cluster_evidence,
         }
     )
+
+
+def _build_cluster_evidence(tt: dict, cam: dict, obj_filter: set, ema_ms: float) -> dict:
+    """Aggregate the per-cam ring buffer into the cluster_evidence
+    structure the Debug-tab frontend consumes.
+
+    Prunes events older than ``_EVIDENCE_WINDOW_S`` on every call
+    so memory stays bounded. Each cluster gets its own dict; the
+    frontend can choose to render the corresponding section or
+    skip it if data is empty.
+    """
+    now = _time.time()
+    cutoff = now - _EVIDENCE_WINDOW_S
+    # ── Prune ────────────────────────────────────────────────
+    events = tt.get("events")
+    if events is not None:
+        while events and events[0][0] < cutoff:
+            events.popleft()
+    class_log = tt.get("class_log")
+    if class_log is not None:
+        while class_log and class_log[0][0] < cutoff:
+            class_log.popleft()
+    # ── Cluster 1 · track continuity ─────────────────────────
+    deaths_60s = 0
+    spawns_60s = 0
+    reid_successes_60s = 0
+    reid_attempts: list[dict] = []
+    for ev in events or []:
+        _ts, kind, *_ = ev
+        if kind == "spawn":
+            spawns_60s += 1
+        elif kind == "death":
+            deaths_60s += 1
+        elif kind == "reid":
+            reid_successes_60s += 1
+    cluster1 = {
+        "deaths_60s": deaths_60s,
+        "spawns_60s": spawns_60s,
+        "reid_attempts_60s": reid_attempts,
+        "reid_successes_60s": reid_successes_60s,
+    }
+    # ── Cluster 2 · per-class counts ─────────────────────────
+    per_class: dict[str, dict] = {}
+    for _ts, lbl, verdict in class_log or []:
+        bucket = per_class.setdefault(lbl, {"raw": 0, "pass": 0, "below": 0})
+        bucket["raw"] += 1
+        if verdict == "pass":
+            bucket["pass"] += 1
+        elif verdict == "belowthresh":
+            bucket["below"] += 1
+    missing = []
+    if obj_filter:
+        for lbl in obj_filter:
+            if lbl not in per_class:
+                missing.append(lbl)
+    cluster2 = {
+        "per_class_60s_counts": per_class,
+        "missing_classes_60s": sorted(missing),
+    }
+    # ── Cluster 3 · off-filter counts ────────────────────────
+    off_filter: dict[str, int] = {}
+    for _ts, lbl, verdict in class_log or []:
+        if verdict == "filtered":
+            off_filter[lbl] = off_filter.get(lbl, 0) + 1
+    cluster3 = {"off_filter_60s_counts": off_filter}
+    # ── Cluster 4 · performance EMAs ─────────────────────────
+    runtime = app_state.runtimes.get(cam.get("id", ""))
+    sub_fps = 0.0
+    main_fps = 0.0
+    if runtime is not None:
+        sub_fps = float(getattr(runtime, "_sub_fps", 0.0) or 0.0)
+        main_fps = float(getattr(runtime, "_main_fps", 0.0) or 0.0)
+    cluster4 = {
+        "tick_cycle_ema_ms": int(round(ema_ms)) if ema_ms > 0 else 0,
+        "dropped_ticks_session": int(tt.get("drops_session") or 0),
+        "sub_fps": round(sub_fps, 1),
+        "main_fps": round(main_fps, 1),
+    }
+    # ── Cluster 5 · raw event log ────────────────────────────
+    events_list = []
+    for ev in events or []:
+        ts, kind, tn, lbl, sc, iou, extra = ev
+        events_list.append(
+            {
+                "kind": kind,
+                "track_num": tn,
+                "label": lbl,
+                "score": sc,
+                "iou": iou,
+                "t_ago_seconds": round(now - ts, 1),
+                "extra": extra,
+            }
+        )
+    # Newest first so the frontend log renders top-to-bottom.
+    events_list.reverse()
+    cluster5 = {"events_60s": events_list}
+    return {
+        "cluster1": cluster1,
+        "cluster2": cluster2,
+        "cluster3": cluster3,
+        "cluster4": cluster4,
+        "cluster5": cluster5,
+    }
