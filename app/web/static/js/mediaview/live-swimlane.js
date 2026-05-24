@@ -13,13 +13,14 @@
 //
 // Caller contract:
 //   renderLiveSwimlane(host, {
-//     camId,
-//     detBuffer,            // [{ms, label, score, bbox, verdict, track_num}]
-//     windowMs,             // sliding window length (typically 60_000)
-//     objectFilter,         // Set<string> | null — null = no filter
+//     camId, detBuffer, windowMs, objectFilter,
 //   })
-// The renderer is idempotent — calling repeatedly with a fresh
-// detBuffer paints the latest snapshot. CSS handles transitions.
+//
+// SIMU-03e · the renderer does TARGETED bar updates between ticks
+// (existing bar's `left` is updated, CSS transitions over 500 ms)
+// so the strip flows leftward smoothly instead of jumping in
+// discrete tick-sized steps. Lane structure rebuilds only when the
+// set of lanes changes (a new class appears, andere lane toggles).
 
 import { esc } from '../core/dom.js';
 import { OBJ_LABEL, OBJ_SVG, colors } from '../core/icons.js';
@@ -32,28 +33,39 @@ export function renderLiveSwimlane(host, opts = {}) {
   const detBuffer = Array.isArray(opts.detBuffer) ? opts.detBuffer : [];
   const windowMs = Number(opts.windowMs) || 60_000;
   const objectFilter = opts.objectFilter instanceof Set ? opts.objectFilter : null;
+  const lanes = _computeLanes(detBuffer, windowMs, objectFilter);
+  // Lane-structure fingerprint — rebuild only when lane membership
+  // changes so bar elements survive across ticks (CSS `left`
+  // transition then animates the leftward flow).
+  const fp = lanes.map((l) => l.id).join('|');
+  if (host.dataset.mvLdFp !== fp) {
+    host.innerHTML = _buildStructure(lanes);
+    host.dataset.mvLdFp = fp;
+  }
+  for (let i = 0; i < lanes.length; i++) {
+    const lane = lanes[i];
+    const cell = host.querySelector(
+      `.mv-ld-swim-row[data-lane-idx="${i}"] .mv-ld-swim-cell-events`,
+    );
+    if (cell) _syncBars(cell, lane, windowMs);
+  }
+}
+
+function _computeLanes(detBuffer, windowMs, objectFilter) {
   const now = Date.now();
   const cutoff = now - windowMs;
-  // Bucket per label, plus a separate "andere" bucket for off-filter
-  // detections. Same detection enters at most one bucket.
   const byLabel = new Map();
   const andereByClass = new Map();
-  let andereTotal = 0;
   for (const e of detBuffer) {
     if (!e || e.ms < cutoff) continue;
     if (objectFilter && !objectFilter.has(e.label)) {
       andereByClass.set(e.label, (andereByClass.get(e.label) || 0) + 1);
-      andereTotal += 1;
       _bucket(byLabel, _ANDERE_ID, e);
       continue;
     }
     _bucket(byLabel, e.label, e);
   }
   const labels = _sortedLabels(byLabel.keys());
-  // The "andere" lane always renders LAST. If the filter is null,
-  // andereByClass is empty and the lane is rendered but empty (the
-  // spec asks for a predictable layout). If there is no filter at
-  // all (objectFilter null), the "andere" lane is omitted.
   const lanes = [];
   for (const lbl of labels) {
     if (lbl === _ANDERE_ID) continue;
@@ -65,10 +77,9 @@ export function renderLiveSwimlane(host, opts = {}) {
       label: 'andere',
       samples: byLabel.get(_ANDERE_ID) || [],
       andereByClass,
-      andereTotal,
     });
   }
-  host.innerHTML = _buildHtml(lanes, { windowMs, now });
+  return lanes;
 }
 
 function _bucket(map, key, entry) {
@@ -76,9 +87,6 @@ function _bucket(map, key, entry) {
   map.get(key).push(entry);
 }
 
-// OBJ_LABEL insertion order is the project's canonical lane sort.
-// Anything outside that list (rare unknown labels, the synthetic
-// "__andere__" key) appends at the end.
 function _sortedLabels(iter) {
   const arr = Array.from(iter);
   arr.sort((a, b) => {
@@ -94,10 +102,8 @@ function _sortedLabels(iter) {
   return arr;
 }
 
-function _buildHtml(lanes, { windowMs }) {
-  const laneRows = lanes
-    .map((lane, idx) => _renderLane(lane, idx, windowMs))
-    .join('');
+function _buildStructure(lanes) {
+  const laneRows = lanes.map((lane, idx) => _renderLaneShell(lane, idx)).join('');
   const axisLabels = ['60 s', '45 s', '30 s', '15 s', 'jetzt'];
   const axisHtml = axisLabels
     .map(
@@ -105,9 +111,6 @@ function _buildHtml(lanes, { windowMs }) {
         `<span class="mv-ld-axis-tick" style="left:calc(${(i * 100) / (axisLabels.length - 1)}% - ${i === 0 ? 0 : i === axisLabels.length - 1 ? 24 : 12}px)">${esc(txt)}</span>`,
     )
     .join('');
-  // SIMU-03d · the LIVE marker is a stacked pill-on-top-of-line
-  // anchored to the right edge of the event column. Lives inside
-  // .mv-ld-swim-rows so its 100 % height spans every lane.
   const liveMarker =
     '<div class="mv-ld-swim-live" aria-hidden="true">' +
     '<span class="mv-ld-swim-pill"><span class="mv-ld-swim-pill-dot"></span><span class="mv-ld-swim-pill-lbl">LIVE</span></span>' +
@@ -120,26 +123,17 @@ function _buildHtml(lanes, { windowMs }) {
     </div>`;
 }
 
-function _renderLane(lane, idx, windowMs) {
+function _renderLaneShell(lane, idx) {
   const isAndere = lane.id === _ANDERE_ID;
-  const c = isAndere ? '#3d4654' : colors[lane.label] || colors.unknown;
   const labelCell = _renderLaneLabel(lane, isAndere);
-  const bars = lane.samples
-    .map((s) => _renderBar(s, windowMs, c, isAndere))
-    .join('');
   const dataAttr = isAndere ? ' data-andere="1"' : '';
   return `
     <div class="mv-ld-swim-row" data-label="${esc(lane.label)}" data-lane-idx="${idx}"${dataAttr}>
       <div class="mv-ld-swim-cell mv-ld-swim-cell-label">${labelCell}</div>
-      <div class="mv-ld-swim-cell mv-ld-swim-cell-events">${bars}</div>
+      <div class="mv-ld-swim-cell mv-ld-swim-cell-events"></div>
     </div>`;
 }
 
-// SIMU-03c · icon-only lane labels. The 36 px fixed-width column
-// keeps every lane's event row pinned to the same x-origin
-// regardless of class. The "andere" lane uses a three-dots glyph;
-// the N count surfaces via the long-press tooltip (SIMU-03b spec),
-// not in the visible column.
 function _renderLaneLabel(lane, isAndere) {
   if (isAndere) {
     const n = lane.andereByClass ? lane.andereByClass.size : 0;
@@ -171,22 +165,51 @@ function _andereTooltip(byClass) {
   return `andere · ${parts.join(' · ')}`;
 }
 
-function _renderBar(sample, windowMs, color, isAndere) {
-  const ageMs = Date.now() - sample.ms;
-  if (ageMs < 0 || ageMs > windowMs) return '';
-  // X-coordinate from the RIGHT edge — ageMs=0 sits at the right
-  // edge, ageMs=windowMs at the left. Width is a fixed visual bar
-  // (the actual time-span of a single detection sample is the tick
-  // cadence, ~500 ms; reading that as a uniform bar matches the
-  // user's mental model better than a 5 px sliver).
-  const pct = 100 - (ageMs / windowMs) * 100;
+// SIMU-03e · sync bars within an event cell. Existing bars (matched
+// by `data-bar-key`) get their `left` updated — CSS `transition:
+// left 500ms linear` on the bar class animates the leftward flow.
+// New bars (no match) are appended at their initial `left` (no
+// transition). Orphan bars (existed but no longer in the sample
+// list) are removed.
+function _syncBars(cell, lane, windowMs) {
+  const now = Date.now();
+  const isAndere = lane.id === _ANDERE_ID;
+  const c = isAndere ? '#3d4654' : colors[lane.label] || colors.unknown;
+  const existing = new Map();
+  cell.querySelectorAll('.mv-ld-swim-bar').forEach((el) => {
+    const key = el.dataset.barKey;
+    if (key) existing.set(key, el);
+  });
+  const used = new Set();
+  // SIMU-03f track-num badge geometry — 14 × 6 px, dark text on the
+  // bar's class colour. Only rendered at the bar's LEFT end (spawn
+  // point); CSS keeps the badge fixed at the bar's left edge even
+  // as the bar slides leftward.
   const barWidth = isAndere ? 6 : 10;
-  const tn = Number.isFinite(sample.track_num) ? sample.track_num : null;
-  const dataAttrs = tn != null ? ` data-track-num="${tn}"` : '';
-  return (
-    `<span class="mv-ld-swim-bar${isAndere ? ' mv-ld-swim-bar-andere' : ''}" ` +
-    `style="left:calc(${pct.toFixed(2)}% - ${barWidth}px);width:${barWidth}px;background:${color}"` +
-    dataAttrs +
-    '></span>'
-  );
+  for (const s of lane.samples) {
+    const ageMs = now - s.ms;
+    if (ageMs < 0 || ageMs > windowMs) continue;
+    const key = `${s.ms}:${s.label}`;
+    used.add(key);
+    const pct = 100 - (ageMs / windowMs) * 100;
+    const leftCss = `calc(${pct.toFixed(2)}% - ${barWidth}px)`;
+    let el = existing.get(key);
+    if (el) {
+      el.style.left = leftCss;
+    } else {
+      el = document.createElement('span');
+      el.className = isAndere ? 'mv-ld-swim-bar mv-ld-swim-bar-andere' : 'mv-ld-swim-bar';
+      el.dataset.barKey = key;
+      el.style.left = leftCss;
+      el.style.width = `${barWidth}px`;
+      if (!isAndere) el.style.background = c;
+      if (Number.isFinite(s.track_num) && s.track_num > 0) {
+        el.dataset.trackNum = String(s.track_num);
+      }
+      cell.appendChild(el);
+    }
+  }
+  for (const [key, el] of existing) {
+    if (!used.has(key)) el.remove();
+  }
 }

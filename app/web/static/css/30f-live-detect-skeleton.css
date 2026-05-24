@@ -577,6 +577,12 @@
   margin-right: 0;
 }
 
+/* SIMU-03e · the bar flows leftward as time passes. The renderer
+   targets EXISTING elements (matched by data-bar-key) on each tick
+   and updates only their `left` property — CSS animates the change
+   over 500 ms linear so the strip looks continuous instead of
+   jumping in tick-sized steps. New bars enter at their target
+   position without transition (no "from" state to animate). */
 .mv-ld-swim-bar {
   position: absolute;
   top: 50%;
@@ -584,6 +590,7 @@
   height: 8px;
   border-radius: 2px;
   pointer-events: none;
+  transition: left 500ms linear;
 }
 
 .mv-ld-swim-bar-andere {
