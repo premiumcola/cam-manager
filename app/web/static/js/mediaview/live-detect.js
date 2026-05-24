@@ -734,7 +734,19 @@ function _mountOverlayToggles() {
   // and #lightboxBottomStack inside #lightboxInner. With the 5-zone
   // layout those are no longer siblings; route the row into zone-video
   // so it sits as a floating control strip over the bottom of the
-  // video. SIMU-02 will replace this with proper floating pills.
+  // video. SIMU-02a · the row IS the floating-pills container — its
+  // visibility tracks the zone-video[data-overlay-visible='1']
+  // attribute set by SIMU-02c's tap handler.
+  //
+  // SIMU-FIX-02b · _setupVideoChrome runs BEFORE mountLdSkeleton and
+  // calls mountWeatherToggleBar which creates `#mvLiveToggles` as a
+  // child of `#lightboxInner`. Without an explicit move, the row
+  // ends up outside zone-video and the CSS selector
+  // `.mv-ld-zone-video[data-overlay-visible='1'] > #mvLiveToggles`
+  // never matches → pills stay hidden. `host.appendChild(row)` on
+  // every mount also MOVES an already-parented element, so this
+  // guarantees the row lives inside zone-video regardless of who
+  // created it first.
   const host = zoneEl('video') || byId('lightboxInner');
   if (!host) return;
   let row = byId('mvLiveToggles');
@@ -742,8 +754,8 @@ function _mountOverlayToggles() {
     row = document.createElement('div');
     row.id = 'mvLiveToggles';
     row.className = 'mv-live-toggles';
-    host.appendChild(row);
   }
+  if (row.parentNode !== host) host.appendChild(row);
   // ``title`` carries the desktop-native tooltip fallback for
   // platforms where the custom hover bubble doesn't engage (the
   // browser will show its own bubble after ~700 ms). Touch devices
