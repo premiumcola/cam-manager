@@ -449,32 +449,36 @@
   background: var(--bg, #080510);
 }
 
-.mv-ld-swim-rows {
-  display: flex;
-  flex-direction: column;
+/* SIMU-03g · the swimlane is ONE CSS grid. Label column fixed at
+   36 px, event column elastic, grid-auto-rows fixed at 22 px. Per
+   lane both cells carry the same explicit grid-row, which pins
+   label N to event row N regardless of class. The LIVE marker uses
+   grid-row: 1 / -1 so it spans the full row range in column 2. */
+.mv-ld-swim-grid {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  grid-auto-rows: 22px;
+  grid-row-gap: 0;
   width: 100%;
   position: relative;
 }
 
-.mv-ld-swim-row {
-  display: grid;
-  grid-template-columns: 36px 1fr;
-  align-items: center;
-  min-height: 22px;
+.mv-ld-swim-cell-events {
   background: #0c121a;
 }
 
-/* SIMU-03d · lane hairlines between adjacent rows. The 1 px line
-   (≤ 0.5 px on retina via box-shadow) reads as a quiet divider; the
-   colour #1a2230 sits one tick brighter than the row background so
-   the line registers without screaming. Hairline lives on the event
-   cell so it doesn't cut through the label column. */
-.mv-ld-swim-row + .mv-ld-swim-row .mv-ld-swim-cell-events {
-  box-shadow: inset 0 0.5px 0 #1a2230;
+.mv-ld-swim-cell-events[data-andere='1'] {
+  background: #0a0e15;
 }
 
-.mv-ld-swim-row[data-andere='1'] {
-  background: #0a0e15;
+/* SIMU-03d · lane hairlines between adjacent event rows. The 0.5 px
+   line via box-shadow renders crisply on retina and falls back to
+   1 px elsewhere; the colour #1a2230 sits one tick brighter than
+   the row background so the line registers without screaming.
+   Skipped on the topmost event row (lane-idx 0) — there's nothing
+   above it to separate from. */
+.mv-ld-swim-cell-events:not([data-lane-idx='0']) {
+  box-shadow: inset 0 0.5px 0 #1a2230;
 }
 
 .mv-ld-swim-cell {
@@ -482,6 +486,7 @@
   align-items: center;
   height: 100%;
   min-height: 22px;
+  position: relative;
 }
 
 .mv-ld-swim-cell-label {
@@ -491,7 +496,6 @@
 }
 
 .mv-ld-swim-cell-events {
-  position: relative;
   overflow: hidden;
 }
 
@@ -522,21 +526,24 @@
 }
 
 /* SIMU-03d · LIVE marker stacked above a vertical green line that
-   runs through every lane. Anchored to the right edge of the event
-   column; the pill (36 × 12 px) is the cap, the 1.5 px line is the
-   body. Both share the right-edge anchor so they read as one
+   runs through every lane. With the new single-grid layout
+   (SIMU-03g), the marker is a grid item that spans every row of
+   column 2 — visually anchored to the right edge via right:0 inside
+   its grid cell. The pill (36 × 12 px) is the cap, the 1.5 px line
+   is the body. Both share the right-edge anchor so they read as one
    continuous "now" indicator. */
 .mv-ld-swim-live {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 0;
-  width: 36px;
+  grid-column: 2;
+  grid-row: 1 / -1;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   pointer-events: none;
   z-index: 5;
+  justify-self: end;
+  width: 36px;
+  height: 100%;
 }
 
 .mv-ld-swim-pill {

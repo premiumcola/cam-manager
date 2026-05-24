@@ -102,8 +102,18 @@ function _sortedLabels(iter) {
   return arr;
 }
 
+// SIMU-03g · single CSS-grid layout for the entire swimlane. The
+// container is `display: grid; grid-template-columns: 36px 1fr;
+// grid-auto-rows: 22px`. Per lane we emit BOTH the label cell and
+// the event cell in a single pass with the SAME `grid-row`, which
+// is the spec's guarantee against label ↔ event drift. The LIVE
+// pill + vertical line span the full row range via grid-row: 1/-1
+// and live in column 2 (right of the label band).
 function _buildStructure(lanes) {
-  const laneRows = lanes.map((lane, idx) => _renderLaneShell(lane, idx)).join('');
+  const cells = [];
+  for (let i = 0; i < lanes.length; i++) {
+    cells.push(_renderLaneCells(lanes[i], i, i + 1));
+  }
   const axisLabels = ['60 s', '45 s', '30 s', '15 s', 'jetzt'];
   const axisHtml = axisLabels
     .map(
@@ -118,20 +128,21 @@ function _buildStructure(lanes) {
     '</div>';
   return `
     <div class="mv-ld-swim" data-lane-count="${lanes.length}">
-      <div class="mv-ld-swim-rows">${laneRows}${liveMarker}</div>
+      <div class="mv-ld-swim-grid" data-rows="${lanes.length}">${cells.join('')}${liveMarker}</div>
       <div class="mv-ld-swim-axis"><div class="mv-ld-swim-axis-track">${axisHtml}</div></div>
     </div>`;
 }
 
-function _renderLaneShell(lane, idx) {
+function _renderLaneCells(lane, idx, gridRow) {
   const isAndere = lane.id === _ANDERE_ID;
   const labelCell = _renderLaneLabel(lane, isAndere);
-  const dataAttr = isAndere ? ' data-andere="1"' : '';
-  return `
-    <div class="mv-ld-swim-row" data-label="${esc(lane.label)}" data-lane-idx="${idx}"${dataAttr}>
-      <div class="mv-ld-swim-cell mv-ld-swim-cell-label">${labelCell}</div>
-      <div class="mv-ld-swim-cell mv-ld-swim-cell-events"></div>
-    </div>`;
+  const andereAttr = isAndere ? ' data-andere="1"' : '';
+  // Wrapped in a fragment-style pair so the renderer signals the
+  // label and the event row together — same grid-row stamp on both.
+  return (
+    `<div class="mv-ld-swim-cell mv-ld-swim-cell-label" data-lane-idx="${idx}" data-label="${esc(lane.label)}"${andereAttr} style="grid-row:${gridRow};grid-column:1">${labelCell}</div>` +
+    `<div class="mv-ld-swim-cell mv-ld-swim-cell-events" data-lane-idx="${idx}" data-label="${esc(lane.label)}"${andereAttr} style="grid-row:${gridRow};grid-column:2"></div>`
+  );
 }
 
 function _renderLaneLabel(lane, isAndere) {
