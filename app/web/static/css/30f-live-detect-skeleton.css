@@ -436,6 +436,131 @@
   line-height: 1;
 }
 
+/* ─── SIMU-03 · Live-Detect swimlane ───────────────────────────────── */
+/* Renders into #lightboxBottomStack (its existing host). Replaces the
+   recorded swimlane chrome on every live tick — built lean, no
+   scrubber, no play cursor; the live window is always "now -60 s →
+   now". CSS grid keeps icon column + event column aligned per row. */
+.mv-ld-swim {
+  display: block;
+  position: relative;
+  width: 100%;
+  padding: 4px 0 0;
+  background: var(--bg, #080510);
+}
+
+.mv-ld-swim-rows {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.mv-ld-swim-row {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  min-height: 22px;
+  background: #0c121a;
+}
+
+.mv-ld-swim-row[data-andere='1'] {
+  background: #0a0e15;
+}
+
+.mv-ld-swim-cell {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  min-height: 22px;
+}
+
+.mv-ld-swim-cell-label {
+  justify-content: center;
+  gap: 4px;
+  background: var(--bg, #080510);
+}
+
+.mv-ld-swim-cell-events {
+  position: relative;
+  overflow: hidden;
+}
+
+.mv-ld-swim-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--text);
+}
+
+.mv-ld-swim-icon-fallback {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #4a6477;
+  display: inline-block;
+}
+
+.mv-ld-swim-andere-count {
+  font-size: 9px;
+  color: rgba(226, 232, 240, 0.55);
+  font-weight: 600;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.mv-ld-swim-bar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 8px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.mv-ld-swim-bar-andere {
+  height: 6px;
+  background: repeating-linear-gradient(
+    45deg,
+    #3d4654 0,
+    #3d4654 2px,
+    transparent 2px,
+    transparent 4px
+  ) !important;
+  box-shadow: inset 0 0 0 0.5px #3d4654;
+}
+
+.mv-ld-swim-axis {
+  position: relative;
+  height: 14px;
+  padding: 0;
+  margin-top: 2px;
+  display: grid;
+  grid-template-columns: 36px 1fr;
+}
+
+.mv-ld-swim-axis::before {
+  /* fills the label column gap so the axis track aligns with the
+     event column on the right. */
+  content: '';
+}
+
+.mv-ld-swim-axis-track {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.mv-ld-axis-tick {
+  position: absolute;
+  top: 2px;
+  font-size: 9px;
+  color: rgba(226, 232, 240, 0.35);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 /* ── zone-timeline ───────────────────────────────────────────────────── */
 .mv-ld-zone-timeline {
   background: var(--bg, #080510);

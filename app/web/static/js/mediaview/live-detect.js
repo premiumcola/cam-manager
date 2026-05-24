@@ -27,11 +27,19 @@ import { renderFineAnalysisFold } from './fine-analysis-fold.js';
 import { normalizePolygon } from '../core/polygon-source.js';
 import { renderZoneLayerForMediaEl } from './canvas/zone-layer.js';
 import { fittedRect } from '../core/video-fit.js';
-import { lbRenderTrackTimeline } from '../mediathek/bbox-overlay/index.js';
+// SIMU-03 · lbRenderTrackTimeline is fired indirectly by
+// _setupVideoChrome on mount (it paints recorded chrome into
+// #lightboxBottomStack before our renderer takes over). Imported
+// only for the type/back-compat hint; no direct call site remains
+// after SIMU-03b — the live-swimlane.js renderer replaces it on
+// every tick.
+import { lbRenderTrackTimeline as _lbRenderTrackTimeline } from '../mediathek/bbox-overlay/index.js';
+void _lbRenderTrackTimeline;
 import { _setupVideoChrome } from '../lightbox.js';
 import { tryAttachHls } from '../core/hls-attach.js';
 import { buildTrailSvg } from './canvas/trail-layer.js';
 import { mountLdSkeleton, unmountLdSkeleton, zoneEl } from './live-detect-skeleton.js';
+import { renderLiveSwimlane } from './live-swimlane.js';
 
 // C73 · cadence floors. The original 1 Hz floor was set against the
 // main-stream cost budget (2560×1440 frame copy + JPEG encode +
@@ -429,6 +437,10 @@ function _setupLiveChrome(camId, cameraName) {
   // positions converge. Without this paint-before-tick the user
   // sees a 1 s window of no zone visuals after opening Simulieren.
   _renderZoneMaskOverlay();
+  // SIMU-03b · paint an empty live-swimlane immediately so the
+  // recorded chrome that _setupVideoChrome briefly drops into
+  // #lightboxBottomStack is replaced before the first tick lands.
+  _renderLiveSwimlane();
 }
 
 // MJPEG fallback — used when HLS isn't supported (rare desktop
@@ -2177,7 +2189,23 @@ function _renderLiveSwimlane() {
       samples,
     });
   }
-  const liveItem = {
+  // SIMU-03b · the live-specific swimlane renderer takes over from
+  // the recorded lbRenderTrackTimeline. Same #lightboxBottomStack
+  // host; cleaner layout, "Andere" lane for off-filter detections,
+  // and the SIMU-03c-g progression (icon labels, LIVE marker,
+  // scrolling, track-#N badges, CSS grid) builds on top.
+  const stackHost = byId('lightboxBottomStack');
+  if (stackHost) {
+    renderLiveSwimlane(stackHost, {
+      camId: _session.camId,
+      detBuffer: _detBuffer,
+      windowMs: _LIVE_WINDOW_MS,
+      objectFilter: objFilter,
+    });
+  }
+  // The synthetic liveItem is still surfaced for any callers that
+  // index off _session.lastTracks (e.g. SIMU-04+ panel renderers).
+  _session.lastTracksItem = {
     type: 'live-detect',
     event_id: `live-${_session.camId}`,
     camera_id: _session.camId,
@@ -2187,7 +2215,6 @@ function _renderLiveSwimlane() {
       duration_s: _LIVE_WINDOW_MS / 1000,
     },
   };
-  lbRenderTrackTimeline(liveItem);
   _pinScrubberRight();
 }
 
