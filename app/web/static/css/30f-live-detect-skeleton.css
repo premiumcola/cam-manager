@@ -1607,3 +1607,90 @@
   font-weight: 700;
   margin-left: 2px;
 }
+
+/* SIMU-05e · Cluster 4 (Performance). Green-tinted header when all
+   metrics are in target, amber gradient otherwise. The metric grid
+   uses mono throughout; ✓ / ✗ markers indicate per-row health. */
+.mv-ld-cluster-ok {
+  border-left-color: #4ade80;
+  background: linear-gradient(180deg, rgba(26, 40, 24, 0.4) 0%, rgba(14, 24, 14, 0.4) 100%);
+}
+
+.mv-ld-cluster-head-ok {
+  background: linear-gradient(180deg, #1a2818 0%, #0e180e 100%);
+}
+
+.mv-ld-cluster-head-ok .mv-ld-cluster-head-title {
+  color: #6ee7b7;
+}
+
+.mv-ld-cluster-head-ok .mv-ld-cluster-head-sub {
+  color: #a4c4a4;
+}
+
+.mv-ld-cluster-head-warn {
+  background: linear-gradient(180deg, #2a2418 0%, #1a160e 100%);
+}
+
+.mv-ld-cluster-head-warn .mv-ld-cluster-head-title {
+  color: #ffcd6e;
+}
+
+.mv-ld-cluster-head-warn .mv-ld-cluster-head-sub {
+  color: #c4b08a;
+}
+
+.mv-ld-perf-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mv-ld-perf-row {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  align-items: baseline;
+  gap: 12px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.mv-ld-perf-label {
+  color: var(--mv-ld-mono, #82c79a);
+  font-weight: 600;
+}
+
+.mv-ld-perf-value {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.mv-ld-perf-target {
+  font-size: 10px;
+  color: var(--mv-ld-muted, #5a7a68);
+}
+
+.mv-ld-perf-ok .mv-ld-perf-target {
+  color: #6ee7b7;
+}
+
+.mv-ld-perf-bad .mv-ld-perf-target {
+  color: #fda4af;
+}
+
+.mv-ld-perf-bad .mv-ld-perf-value {
+  color: #ffcd6e;
+}
+
+.mv-ld-perf-diagnose {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 5px;
+  background: rgba(42, 36, 24, 0.5);
+  border: 1px solid rgba(255, 205, 110, 0.4);
+  font-size: 10px;
+  color: #ffcd6e;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

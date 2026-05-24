@@ -108,6 +108,7 @@ export function renderDebugPanel(host, ctx = {}) {
     _renderCluster1(ctx, cam) +
     _renderCluster2(ctx, cam) +
     _renderCluster3(ctx, cam) +
+    _renderCluster4(ctx) +
     '</div>';
   host.dataset.mvLdDebugFp = fp;
   _wireCluster1(host, cam, ctx);
@@ -127,6 +128,8 @@ function _refreshDynamic(host, ctx, cam) {
   if (ev1) ev1.outerHTML = _renderCluster1Evidence(ctx, cam);
   const ev2 = host.querySelector('[data-cluster-evidence="2"]');
   if (ev2) ev2.outerHTML = _renderCluster2Evidence(ctx, cam);
+  const c4 = host.querySelector('[data-cluster-id="4"]');
+  if (c4) c4.outerHTML = _renderCluster4(ctx);
 }
 
 // Per-class default thresholds — keep aligned with the project's
@@ -705,4 +708,95 @@ function _wireCluster3(host, cam, ctx) {
       const url = `/#cam-edit?cam=${encodeURIComponent(camId)}&tab=zonen`;
       window.location.href = url;
     });
+}
+
+// SIMU-05e · Cluster 4 · Performance. Read-only metrics block; the
+// header tints green when all values are in target, amber/red when
+// any threshold is crossed. Auto-diagnose surfaces specific repair
+// hints below the metrics when something is off.
+const _PERF_TARGETS = {
+  tickCycle: 500,
+  inference: 200,
+  frameAge: 100,
+  subFps: 5,
+};
+
+function _renderCluster4(ctx) {
+  const t = ctx.tickState || {};
+  const diag = ctx.fullData?.diag || {};
+  const ev = ctx.fullData?.cluster_evidence?.cluster4 || {};
+  const tickCycle = Number.isFinite(ctx.cycleEmaMs)
+    ? Math.round(ctx.cycleEmaMs)
+    : Number.isFinite(t.lastCycleMs)
+      ? Math.round(t.lastCycleMs)
+      : null;
+  const inference = Number(diag.inference_ms) > 0 ? Math.round(Number(diag.inference_ms)) : null;
+  const frameAge = Number(diag.frame_age_ms) >= 0 ? Math.round(Number(diag.frame_age_ms)) : null;
+  const drops = Number(t.ticksDroppedLate || 0);
+  const subFps = Number(ev.sub_fps) >= 0 ? Number(ev.sub_fps).toFixed(0) : '—';
+  const mainFps = Number(ev.main_fps) >= 0 ? Number(ev.main_fps).toFixed(0) : '—';
+  const frameSrc = ctx.session?.lastFrameSrc || diag.frame_src;
+  const issues = [];
+  const okTick = tickCycle == null || tickCycle <= _PERF_TARGETS.tickCycle;
+  if (!okTick) issues.push('tick');
+  const okInfer = inference == null || inference <= _PERF_TARGETS.inference;
+  if (!okInfer) issues.push('inference');
+  const okFrame = frameAge == null || frameAge <= _PERF_TARGETS.frameAge;
+  if (!okFrame) issues.push('frame');
+  const okDrops = drops === 0;
+  if (!okDrops) issues.push('drops');
+  const okSub = Number(ev.sub_fps || 0) >= _PERF_TARGETS.subFps || !ev.sub_fps;
+  if (!okSub) issues.push('sub');
+  const healthy = issues.length === 0;
+  const hint = healthy
+    ? { tone: 'ok', text: '✓ Alle Werte im grünen Bereich' }
+    : { tone: 'warn', text: `⚠ ${issues.length} Werte über Schwelle` };
+  const diagnoseLines = [];
+  if (!okTick && frameSrc === 'main_fallback') {
+    diagnoseLines.push('Sub-Stream wieder herstellen — main-fallback ist aktiv');
+  }
+  if (!okInfer && frameSrc === 'sub') {
+    diagnoseLines.push('TPU prüfen — Inference auf sub sollte unter 150 ms liegen');
+  }
+  if (!okDrops) {
+    diagnoseLines.push(`Tick-Loop hat ${drops} Ticks während laufender Fetch verworfen — Backend-Last prüfen`);
+  }
+  if (!okSub) {
+    diagnoseLines.push('Sub-Stream liefert sehr wenig — Reolink Sub-Stream-Konfiguration prüfen');
+  }
+  const diagnoseHtml = diagnoseLines.length
+    ? `<div class="mv-ld-perf-diagnose">${diagnoseLines.map((l) => `<div>${esc(l)}</div>`).join('')}</div>`
+    : '';
+  return `
+    <div class="mv-ld-cluster ${healthy ? 'mv-ld-cluster-ok' : 'mv-ld-cluster-warn'}" data-cluster-id="4">
+      <div class="mv-ld-cluster-head mv-ld-cluster-head-${healthy ? 'ok' : 'warn'}">
+        <div class="mv-ld-cluster-head-text">
+          <div class="mv-ld-cluster-head-title">▼ Cluster 4 · Performance / Hänger</div>
+          <div class="mv-ld-cluster-head-sub">${healthy ? 'aktuell unauffällig · Detection läuft flüssig' : '⚠ Tick-Cycle oder Inference über Schwelle'}</div>
+        </div>
+        <div class="mv-ld-cluster-head-hint" data-hint-tone="${hint.tone}">${esc(hint.text)}</div>
+      </div>
+      <div class="mv-ld-cluster-body">
+        <div class="mv-ld-perf-grid">
+          ${_perfRow('Tick-Cycle', tickCycle == null ? '—' : `${tickCycle} ms`, `Ziel < ${_PERF_TARGETS.tickCycle} ms`, okTick)}
+          ${_perfRow('Inference', inference == null ? '—' : `${inference} ms`, `Ziel < ${_PERF_TARGETS.inference} ms`, okInfer)}
+          ${_perfRow('Frame-Age', frameAge == null ? '—' : `${frameAge} ms`, `Ziel < ${_PERF_TARGETS.frameAge} ms`, okFrame)}
+          ${_perfRow('Dropped Ticks', String(drops), 'Ziel = 0', okDrops)}
+          ${_perfRow('Sub-Stream', `${subFps} fps`, 'verfügbar', okSub)}
+          ${_perfRow('Main-Stream', `${mainFps} fps`, 'parallel · ungenutzt für Detection', true)}
+        </div>
+        ${diagnoseHtml}
+      </div>
+    </div>`;
+}
+
+function _perfRow(label, value, target, ok) {
+  const cls = ok ? 'mv-ld-perf-ok' : 'mv-ld-perf-bad';
+  const mark = ok ? '✓' : '✗';
+  return `
+    <div class="mv-ld-perf-row ${cls}">
+      <span class="mv-ld-perf-label">${esc(label)}</span>
+      <span class="mv-ld-perf-value">${esc(value)}</span>
+      <span class="mv-ld-perf-target">(${esc(target)} ${mark})</span>
+    </div>`;
 }
