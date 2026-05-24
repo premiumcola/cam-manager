@@ -1150,10 +1150,16 @@ function _renderFrame(data) {
   _renderBboxOverlay();
   _renderTrailsOverlay();
   _renderZoneMaskOverlay();
+  // SIMU-FIX-05d · append trace lines BEFORE rendering the
+  // Detections tab — its Track-Ereignisse section reads from
+  // `_traceLines` and was previously seeing the PREVIOUS tick's
+  // trace (empty on the very first tick → "Noch keine Track-
+  // Ereignisse" while the Trace tab simultaneously showed SPAWN
+  // events from the same response).
+  _appendTrace(data.decision_trace || []);
   _renderDetectionsPanel(data);
   _renderLiveSwimlane();
   _renderDiagPanel(data.diag || null);
-  _appendTrace(data.decision_trace || []);
   _renderDebugTab(data);
 }
 
