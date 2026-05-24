@@ -104,7 +104,55 @@ let _detBuffer = []; // [{ms, label, score, bbox, verdict}, …]
 // every time they enter the modal. Mirrors the same defaults in the
 // shared overlay-toggles.js _TOGGLES dict so the two callsites stay
 // consistent.
-let _overlays = { bboxes: true, trails: true, zones: false, masks: false };
+//
+// SIMU-FIX-03 · the four toggle booleans drive every overlay's
+// render condition. The render code reads ONLY _overlays[key]; it
+// never gates on whether the pill-bar element is currently visible.
+// Persistence lives in localStorage under tam.ld.overlays so a user
+// who turns Trails off keeps it off across re-opens.
+const _OVERLAYS_LS_KEY = 'tam.ld.overlays';
+const _OVERLAYS_DEFAULT = Object.freeze({
+  bboxes: true,
+  trails: true,
+  zones: false,
+  masks: false,
+});
+
+function _loadOverlayPrefs() {
+  try {
+    const raw = localStorage.getItem(_OVERLAYS_LS_KEY);
+    if (!raw) return { ..._OVERLAYS_DEFAULT };
+    const parsed = JSON.parse(raw);
+    if (
+      !parsed ||
+      typeof parsed !== 'object' ||
+      typeof parsed.bboxes !== 'boolean' ||
+      typeof parsed.trails !== 'boolean' ||
+      typeof parsed.zones !== 'boolean' ||
+      typeof parsed.masks !== 'boolean'
+    ) {
+      return { ..._OVERLAYS_DEFAULT };
+    }
+    return {
+      bboxes: !!parsed.bboxes,
+      trails: !!parsed.trails,
+      zones: !!parsed.zones,
+      masks: !!parsed.masks,
+    };
+  } catch {
+    return { ..._OVERLAYS_DEFAULT };
+  }
+}
+
+function _saveOverlayPrefs() {
+  try {
+    localStorage.setItem(_OVERLAYS_LS_KEY, JSON.stringify(_overlays));
+  } catch {
+    /* private-mode / quota — silent */
+  }
+}
+
+let _overlays = _loadOverlayPrefs();
 let _selectedLabel = null; // for detail-pill pin
 
 export function openLiveDetect({ camId, cameraName }) {
@@ -127,7 +175,12 @@ export function openLiveDetect({ camId, cameraName }) {
   _traceLines = [];
   _detBuffer = [];
   _selectedLabel = null;
-  _overlays = { bboxes: true, trails: true, zones: false, masks: false };
+  // SIMU-FIX-03 · seed overlays from the user's persisted preference
+  // (localStorage tam.ld.overlays). First-time users get the defaults
+  // from _OVERLAYS_DEFAULT — Bboxes ON, Trails ON, Zonen OFF, Masken
+  // OFF — so a person walking into frame draws a #1 badge + bounding
+  // rect on the live video without requiring any tap.
+  _overlays = _loadOverlayPrefs();
   // H2.a · reset the diag-strip state per session so the previous
   // open's last-known SVG dims don't bleed into the new one.
   _diagState.bbox = null;
@@ -789,6 +842,11 @@ function _mountOverlayToggles() {
       if (_DEBUG_TOGGLE) {
         console.warn(`[sim-toggle] ${id} → ${_overlays[id] ? 'ON' : 'OFF'}`);
       }
+      // SIMU-FIX-03c · persist the new boolean immediately so the
+      // user's preference survives a session close + re-open. No
+      // debounce — these are rare events (a user toggling Bboxes
+      // off and on a few times per session at most).
+      _saveOverlayPrefs();
       _hideToggleTip();
       _renderBboxOverlay();
       _renderTrailsOverlay();
