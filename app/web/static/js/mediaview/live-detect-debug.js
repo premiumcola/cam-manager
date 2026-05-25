@@ -1060,13 +1060,9 @@ function _buildFrontendStateBlock(ctx) {
       return '?';
     }
   })();
-  const titleCollapsed = (() => {
-    try {
-      return localStorage.getItem('tam.ld.title.collapsed') === '1';
-    } catch {
-      return false;
-    }
-  })();
+  // POLISH-01f · title_collapsed dropped from the snapshot — the
+  // title is permanently compact (SIMU-FIX-04c), there's no collapse
+  // state to report. Timeline collapse is still a real toggle.
   const timelineCollapsed = (() => {
     try {
       return localStorage.getItem('tam.ld.timeline.collapsed') === '1';
@@ -1085,7 +1081,6 @@ function _buildFrontendStateBlock(ctx) {
     ovStyle ? `svg.zIndex:          ${ovStyle.zIndex} · display=${ovStyle.display}` : null,
     `overlays:            ${overlaysState}`,
     `active_tab:          ${activeTab}`,
-    `title_collapsed:     ${titleCollapsed}`,
     `timeline_collapsed:  ${timelineCollapsed}`,
     `viewport:            ${window.innerWidth}×${window.innerHeight} dpr=${window.devicePixelRatio}`,
     `timestamp_frontend:  ${new Date().toISOString()}`,

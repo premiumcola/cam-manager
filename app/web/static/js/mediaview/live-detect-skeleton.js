@@ -426,23 +426,13 @@ function _buildTimelineHeader() {
 }
 
 // Collapsed-state accessors. The data-collapsed attribute on the
-// zone is the single source of truth; localStorage just seeds it on
-// mount + remembers user clicks.
-// SIMU-FIX-04c · title is permanently compact; only the timeline
-// retains a collapse state. _isTitleCollapsed/_applyTitleCollapsed
-// stay as no-op stubs so the fullscreen-toggle code paths below
-// (which historically toggled BOTH) still compile cleanly; they
-// just don't change anything visible.
-function _isTitleCollapsed() {
-  return false;
-}
-
+// timeline zone is the single source of truth; localStorage seeds
+// it on mount + remembers user clicks.
+// POLISH-01f · the title-collapse stubs (_isTitleCollapsed /
+// _applyTitleCollapsed) were removed — the title is permanently
+// compact (SIMU-FIX-04c) and nothing flips its state anymore.
 function _isTimelineCollapsed() {
   return byId(ZONE_IDS.timeline)?.dataset.collapsed === '1';
-}
-
-function _applyTitleCollapsed(_v) {
-  /* no-op — title is permanently compact (SIMU-FIX-04c) */
 }
 
 function _applyTimelineCollapsed(v) {
@@ -467,14 +457,15 @@ function _buildTabBar() {
     btn.addEventListener('click', () => setActiveTab(t.id));
     bar.appendChild(btn);
   }
-  // SIMU-01d · expand-to-fullscreen button at the right edge. Toggles
-  // BOTH title and timeline collapsed, snapshotting their prior values
-  // for restore on the next tap.
+  // SIMU-01d · expand-to-fullscreen button at the right edge.
+  // POLISH-01f · since the title is permanently compact (SIMU-FIX-
+  // 04c), this now toggles ONLY the timeline collapse — the title
+  // has no collapse state left to flip.
   const fsBtn = document.createElement('button');
   fsBtn.type = 'button';
   fsBtn.className = 'mv-ld-iconbtn mv-ld-fs-btn';
   fsBtn.dataset.active = '0';
-  fsBtn.setAttribute('aria-label', 'Tab-Inhalt maximieren');
+  fsBtn.setAttribute('aria-label', 'Timeline ausblenden');
   fsBtn.innerHTML = _iconExpand();
   fsBtn.addEventListener('click', _toggleFullscreen);
   root.appendChild(bar);
@@ -486,24 +477,19 @@ function _toggleFullscreen() {
   const btn = byId(CONTAINER_ID)?.querySelector('.mv-ld-fs-btn');
   if (!btn) return;
   if (!_fullscreen) {
-    _fsRestore = {
-      title: _isTitleCollapsed(),
-      timeline: _isTimelineCollapsed(),
-    };
-    _applyTitleCollapsed(true);
+    _fsRestore = { timeline: _isTimelineCollapsed() };
     _applyTimelineCollapsed(true);
     _fullscreen = true;
     btn.dataset.active = '1';
     btn.innerHTML = _iconCollapseBack();
-    btn.setAttribute('aria-label', 'Tab-Inhalt verkleinern');
+    btn.setAttribute('aria-label', 'Timeline einblenden');
   } else {
-    _applyTitleCollapsed(!!_fsRestore?.title);
     _applyTimelineCollapsed(!!_fsRestore?.timeline);
     _fsRestore = null;
     _fullscreen = false;
     btn.dataset.active = '0';
     btn.innerHTML = _iconExpand();
-    btn.setAttribute('aria-label', 'Tab-Inhalt maximieren');
+    btn.setAttribute('aria-label', 'Timeline ausblenden');
   }
 }
 
