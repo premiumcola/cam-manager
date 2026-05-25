@@ -681,15 +681,28 @@
   margin-left: auto;
   align-self: center;
 }
+/* POLISH-01d · the Min-Konfidenz slider was removed; only Zeitraum
+   remains, so the two-column grid collapses to a single full-width
+   column (no more half-empty right cell that read as a boxed
+   control). */
 .stat-dc-sliders {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 .stat-dc-slider {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+/* POLISH-01d · bare slider — explicitly no card fill / border /
+   padding so the Zeitraum control sits inline on the page
+   background, not inside a box. */
+.stat-dc-slider-bare {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
 }
 .stat-dc-slider-lbl {
   font-size: 11px;

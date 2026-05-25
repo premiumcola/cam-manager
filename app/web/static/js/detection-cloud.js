@@ -187,11 +187,7 @@ function _renderShell() {
     </div>
     <div class="stat-dc-toolbar">
       <div class="stat-dc-sliders">
-        <label class="stat-dc-slider">
-          <span class="stat-dc-slider-lbl">Min. Konfidenz <b id="dcMinScoreLbl">0 %</b></span>
-          <input type="range" id="dcMinScore" min="0" max="100" step="1" value="0" aria-label="Mindest-Konfidenz">
-        </label>
-        <label class="stat-dc-slider">
+        <label class="stat-dc-slider stat-dc-slider-bare">
           <span class="stat-dc-slider-lbl">Zeitraum <b id="dcHoursLbl">letzte 12 h</b></span>
           <input type="range" id="dcHours" min="1" max="720" step="1" value="12" aria-label="Zeitraum">
         </label>
@@ -701,27 +697,11 @@ function _wireHandlers() {
     _renderChart();
   });
 
-  // Min-score slider — only triggers a re-fetch when *lowered* so a
-  // higher floor stays purely client-side (cheap).
-  const minEl = byId('dcMinScore');
-  const minLbl = byId('dcMinScoreLbl');
-  let lastMin = _dc.filter.minScore;
-  minEl?.addEventListener('input', (e) => {
-    const v = parseInt(e.target.value, 10) / 100;
-    _dc.filter.minScore = v;
-    if (minLbl) minLbl.textContent = Math.round(v * 100) + ' %';
-    _renderChart();
-  });
-  minEl?.addEventListener('change', (e) => {
-    const v = parseInt(e.target.value, 10) / 100;
-    if (v < lastMin) {
-      // Lowered → server may have more points now within reach.
-      lastMin = v;
-      _fetchAndRender(true);
-    } else {
-      lastMin = v;
-    }
-  });
+  // POLISH-01d · the Min-Konfidenz slider was removed — it always
+  // sat at 0 % (no effective filter). _dc.filter.minScore stays at
+  // its 0.0 default so the chart floor-line logic + the min_score
+  // URL param keep working (the param resolves to 0.00 = no floor,
+  // functionally identical to omitting it).
 
   // Hours slider — always re-fetches (window changed).
   const hoursEl = byId('dcHours');
