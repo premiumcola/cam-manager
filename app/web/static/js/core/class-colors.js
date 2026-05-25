@@ -13,7 +13,7 @@
 export const CLASS_COLORS = {
   person: '#facc15',
   cat: '#fb923c',
-  dog: '#a855f7',
+  dog: '#3b82f6',
   bird: '#62d26f',
   squirrel: '#c8651a',
   fox: '#ff7a1a',
