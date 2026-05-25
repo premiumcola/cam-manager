@@ -1853,3 +1853,85 @@
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+
+/* ── Q2-3 · Trace tab · per-tick decision-trace stream ───────────────── */
+/* The dedicated Trace tab (#mvLdPanel-trace) renders the last ~20 server
+   ticks newest-first on a monospace surface, one block per tick with a
+   faint divider between blocks. Each line is tinted by its [bracket]
+   prefix so the pipeline reads at a glance. */
+.mv-ld-trace {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.5;
+  padding: 8px 10px 16px;
+}
+
+.mv-ld-trace-empty {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--mv-ld-muted, #5a7a68);
+  font-style: italic;
+  padding: 20px 12px;
+  text-align: center;
+}
+
+/* One block per tick. Faint divider above every block except the first
+   (newest) so consecutive ticks read as distinct cycles. */
+.mv-ld-trace-tick {
+  padding: 8px 0;
+}
+
+.mv-ld-trace-tick + .mv-ld-trace-tick {
+  border-top: 1px solid rgba(74, 222, 128, 0.14);
+}
+
+.mv-ld-trace-tick-head {
+  font-size: 9px;
+  color: var(--mv-ld-muted, #5a7a68);
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.mv-ld-trace-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--mv-ld-text, #b6d4be);
+  padding: 1px 0;
+}
+
+/* Per-[bracket]-prefix accents — subtle but distinct. Purple is
+   deliberately avoided (reserved for Timeline across the app). */
+.mv-ld-trace-line[data-prefix='cap'] {
+  color: #7da9c7;
+}
+.mv-ld-trace-line[data-prefix='coral'] {
+  color: #6ec1ff;
+}
+.mv-ld-trace-line[data-prefix='det'] {
+  color: #82c79a;
+}
+.mv-ld-trace-line[data-prefix='verdict'] {
+  color: #ffcd6e;
+}
+.mv-ld-trace-line[data-prefix='matrix'] {
+  color: #e7a6cf;
+}
+.mv-ld-trace-line[data-prefix='armed'] {
+  color: #6ee7b7;
+}
+.mv-ld-trace-line[data-prefix='tg'] {
+  color: #9db4ff;
+}
+.mv-ld-trace-line[data-prefix='sched'] {
+  color: #d3bd93;
+}
+.mv-ld-trace-line[data-prefix='cool'] {
+  color: #8fd0d6;
+}
+.mv-ld-trace-line[data-prefix='final'] {
+  color: #ffffff;
+  font-weight: 700;
+}
+.mv-ld-trace-line[data-prefix='info'] {
+  color: var(--mv-ld-muted, #5a7a68);
+}

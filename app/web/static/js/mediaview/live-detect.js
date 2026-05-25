@@ -47,6 +47,7 @@ import {
   onTabChange,
 } from './live-detect-skeleton.js';
 import { renderLiveSwimlane } from './live-swimlane.js';
+import { renderLiveTrace, tracePrefix } from './live-trace.js';
 import {
   renderDebugPanel,
   startSnapshotPrefetch,
@@ -76,6 +77,10 @@ let _holdMsActive = NaN;
 // age out of the visible strip.
 const _LIVE_WINDOW_MS = 60_000;
 const _TRACE_CAP = 80;
+// Q2-3 · the Trace tab groups the raw decision-trace BY TICK (one
+// backend response = one block, newest on top). Keep the last 20 ticks
+// — enough scroll-back to compare a few cycles without unbounded growth.
+const _TRACE_TICK_CAP = 20;
 // gp384 — hold-time for bbox fade-out after the live tick goes
 // empty. Each live bbox lingers for this long after its last sight,
 // fading from full opacity down to zero. Without hold-time the
@@ -108,6 +113,7 @@ const _DEBUG_TOGGLE = false;
 let _session = null;
 let _hlsHandle = null;
 let _traceLines = [];
+let _traceTicks = []; // [{ts, lines:[…]}, …] — per-tick groups for the Trace tab
 let _detBuffer = []; // [{ms, label, score, bbox, verdict}, …]
 // C1 · sim modal opens with detection layers ON, surveillance layers
 // OFF — the operator wants to see what Coral is finding, not have
@@ -184,6 +190,7 @@ export function openLiveDetect({ camId, cameraName }) {
     holdHandle: null,
   };
   _traceLines = [];
+  _traceTicks = [];
   _detBuffer = [];
   _selectedLabel = null;
   // SIMU-FIX-03 · seed overlays from the user's persisted preference
@@ -301,6 +308,7 @@ export function closeLiveDetect() {
   const session = _session;
   _session = null;
   _traceLines = [];
+  _traceTicks = [];
   _detBuffer = [];
   _selectedLabel = null;
   if (_hlsHandle) {
@@ -1198,6 +1206,9 @@ if (typeof onTabChange === 'function') {
     } else {
       stopSnapshotPrefetch();
     }
+    // Q2-3 · repaint the Trace tab on switch-in so it shows the
+    // buffered ticks immediately rather than waiting for the next tick.
+    if (id === 'trace') _renderTraceTab();
   });
 }
 
@@ -2495,17 +2506,41 @@ function _renderDetailPill() {
 }
 
 function _appendTrace(lines) {
-  if (!Array.isArray(lines) || !_session?.fold) return;
+  if (!Array.isArray(lines) || !_session) return;
   for (const line of lines) {
     _traceLines.push({ kind: _classifyTrace(line), text: line });
   }
   while (_traceLines.length > _TRACE_CAP) _traceLines.shift();
-  const body = document.querySelector('#lightboxSettings .mv-fafold-body');
-  const wasAtBottom = body ? body.scrollHeight - body.scrollTop - body.clientHeight < 24 : true;
-  _session.fold.setLines(_traceLines);
-  if (body && wasAtBottom) {
-    body.scrollTop = body.scrollHeight;
+  // Detections-tab fold (flat running log + diag header).
+  if (_session.fold) {
+    const body = document.querySelector('#lightboxSettings .mv-fafold-body');
+    const wasAtBottom = body ? body.scrollHeight - body.scrollTop - body.clientHeight < 24 : true;
+    _session.fold.setLines(_traceLines);
+    if (body && wasAtBottom) {
+      body.scrollTop = body.scrollHeight;
+    }
   }
+  // Q2-3 · record this tick as a group for the Trace tab's per-tick
+  // view. Each _appendTrace call is exactly one backend tick's
+  // decision_trace, so one push == one block, newest-on-top in the tab.
+  if (lines.length) {
+    _traceTicks.push({
+      ts: Date.now(),
+      lines: lines.map((l) => ({ prefix: tracePrefix(l), text: l })),
+    });
+    while (_traceTicks.length > _TRACE_TICK_CAP) _traceTicks.shift();
+  }
+  _renderTraceTab();
+}
+
+// Q2-3 · paint the per-tick trace into the Trace tab panel
+// (#mvLdPanel-trace) — the panel the skeleton created but nothing ever
+// rendered into. Gated on the tab being active (cheap no-op otherwise);
+// the onTabChange bridge repaints on switch-in so it's never stale.
+function _renderTraceTab() {
+  if (typeof getActiveTab === 'function' && getActiveTab() !== 'trace') return;
+  const host = panelEl('trace');
+  if (host) renderLiveTrace(host, _traceTicks);
 }
 
 function _classifyTrace(line) {
