@@ -488,6 +488,27 @@
   cursor: help;
 }
 
+/* POLISH-01b · Andere-lane counter pill. Replaces the per-detection
+   grey dashed bars (which flooded the lane). Sits at the right edge
+   of the event cell, clearing the 36 px LIVE-marker column. Muted
+   so it reads as a quiet status, not an alert. title-attr surfaces
+   the top-3 class breakdown via long-press / hover. */
+.mv-ld-andere-counter {
+  position: absolute;
+  right: 42px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #1a1f28;
+  color: #7a8896;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 5px;
+  white-space: nowrap;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  cursor: help;
+  letter-spacing: 0.02em;
+}
+
 /* SIMU-03d · LIVE marker stacked above a vertical green line that
    runs through every lane. With the new single-grid layout
    (SIMU-03g), the marker is a grid item that spans every row of

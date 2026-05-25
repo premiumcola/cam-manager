@@ -52,8 +52,37 @@ export function renderLiveSwimlane(host, opts = {}) {
     const cell = host.querySelector(
       `.mv-ld-swim-cell-events[data-lane-idx="${i}"]`,
     );
-    if (cell) _syncBars(cell, lane, windowMs);
+    if (!cell) continue;
+    // POLISH-01b · the Andere lane is a STATUS COUNTER, not a
+    // visualisation. Render a single "Andere · N" pill instead of a
+    // bar per off-filter detection (which flooded the lane with grey
+    // dashed hash-noise + meaningless track-num badges on a TV-heavy
+    // room). Per-class lanes keep their flowing bars.
+    if (lane.id === _ANDERE_ID) {
+      _renderAndereCounter(cell, lane);
+    } else {
+      _syncBars(cell, lane, windowMs);
+    }
   }
+}
+
+// POLISH-01b · render the Andere lane's counter pill. N = total
+// off-filter detections in the 60 s window. The pill carries a
+// title attr with the top-3 class breakdown (browser-native
+// long-press tooltip on iOS, hover on desktop) so the user can see
+// WHAT was filtered without the lane screaming.
+function _renderAndereCounter(cell, lane) {
+  const byClass = lane.andereByClass || new Map();
+  let total = 0;
+  for (const n of byClass.values()) total += n;
+  const top = Array.from(byClass.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([cls, n]) => `${cls} ${n}×`)
+    .join(' · ');
+  const title = total > 0 ? top : 'keine off-filter Detektionen';
+  cell.innerHTML =
+    `<span class="mv-ld-andere-counter" title="${esc(title)}">andere · ${total}</span>`;
 }
 
 function _computeLanes(detBuffer, windowMs, objectFilter) {
