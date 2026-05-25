@@ -241,9 +241,11 @@ body.sidebar-locked {
   .media-pagination {
     gap: 8px;
   }
-  .page-pill {
-    width: 40px;
-    height: 40px;
+  /* POLISH-01a · visible chip 36 px on mobile, button keeps 44 px
+     touch target from the base rule. */
+  .page-pill-chip {
+    width: 36px;
+    height: 36px;
     font-size: 14px;
   }
 

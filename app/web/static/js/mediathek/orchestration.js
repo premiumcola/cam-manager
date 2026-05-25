@@ -654,10 +654,12 @@ export function renderMediaPagination() {
     pg.innerHTML = '';
     return;
   }
+  // POLISH-01a · the ‹ / › buttons carry a 44 px touch target but a
+  // smaller visible chip (.page-pill-chip) so the row reads thinner.
   pg.innerHTML =
-    `<button class="page-pill" ${cur === 0 ? 'disabled' : ''} onclick="_goToPage(${cur - 1})">‹</button>` +
+    `<button class="page-pill" ${cur === 0 ? 'disabled' : ''} onclick="_goToPage(${cur - 1})" aria-label="Vorherige Seite"><span class="page-pill-chip">‹</span></button>` +
     `<span class="page-label">Seite ${cur + 1} von ${total}</span>` +
-    `<button class="page-pill" ${cur >= total - 1 ? 'disabled' : ''} onclick="_goToPage(${cur + 1})">›</button>`;
+    `<button class="page-pill" ${cur >= total - 1 ? 'disabled' : ''} onclick="_goToPage(${cur + 1})" aria-label="Nächste Seite"><span class="page-pill-chip">›</span></button>`;
 }
 
 let _processingPoll = null;
