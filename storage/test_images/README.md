@@ -28,7 +28,7 @@ licenses (CC-BY, CC-BY-SA, public domain). Original attribution lives at
 Run the bundled downloader inside the container:
 
 ```bash
-docker exec tam-spy python3 /app/storage/test_images/_download.py
+docker exec squirreling-sightings python3 /app/storage/test_images/_download.py
 ```
 
 The script uses the MediaWiki API with `iiurlwidth=640` to fetch already-resized

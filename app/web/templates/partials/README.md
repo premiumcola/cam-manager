@@ -25,7 +25,7 @@ past whichever panel you weren't editing. With partials:
 | `icons.html` | The shared SVG `<symbol>` sprite (used by every section's `<use>` references) |
 | `wizard.html` | First-run setup wizard modal (`#wizard`) |
 | `sidenav.html` | Desktop sidebar nav (`<aside class="sidebar">`) |
-| `hero.html` | Top hero panel with TAM-spy lockup + build-info |
+| `hero.html` | Top hero panel with Squirreling · Sightings lockup + build-info |
 | `dashboard.html` | `<section id="dashboard">` — Live Feed grid |
 | `cam_edit.html` | `<section id="cameras">` — the long camera-edit form (Verbindung / Erkennung / Alerting / Zonen / Timelapse tabs) |
 | `statistik.html` | `<section id="statistik">` |
@@ -69,7 +69,7 @@ explicit `with foo=bar` argument passing).
 1. Create the file under `partials/`.
 2. Add an `{% include 'partials/<name>.html' %}` line in `index.html` at
    the right structural position.
-3. Restart the Flask container (`docker restart tam-spy`) — Flask caches
+3. Restart the Flask container (`docker restart squirreling-sightings`) — Flask caches
    templates at process start, so partials don't hot-reload like static
    assets do.
 4. Update the table above.

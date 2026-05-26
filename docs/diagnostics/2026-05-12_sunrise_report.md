@@ -1,6 +1,6 @@
 <!--
 Example diag-CLI output produced by:
-    docker exec tam-spy python -m app.scripts.diag_timelapse \
+    docker exec squirreling-sightings python -m app.scripts.diag_timelapse \
         reolink_rlc811a_squirreltownnutbar_183 --date all
 
 The 2026-05-12 sunrise fixtures the prompt referenced are not yet on

@@ -1,6 +1,6 @@
 # app · Container-Code
 
-App-Container für TAM-spy. Flask-Server, Camera-Runtime, Detektoren,
+App-Container für Squirreling · Sightings. Flask-Server, Camera-Runtime, Detektoren,
 Telegram-Bot, MQTT, Wetter, Persistenz. Alles läuft im selben Python-Prozess
 mit Daemon-Threads pro Kamera.
 

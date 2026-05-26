@@ -1,6 +1,6 @@
 # Coral TPU + Classifier-Cascade
 
-TAM-spy klassifiziert in drei Stufen. Stufe 1 läuft auf jedem Frame, der
+Squirreling · Sightings klassifiziert in drei Stufen. Stufe 1 läuft auf jedem Frame, der
 durchs Motion-Gate kommt; Stufen 2 und 3 nur, wenn das Label aus Stufe 1
 sie auslöst.
 

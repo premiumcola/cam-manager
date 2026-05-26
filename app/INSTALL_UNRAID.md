@@ -1,11 +1,11 @@
-# Unraid Installation für TAM-spy
+# Unraid Installation für Squirreling · Sightings
 
 ## Bind-Mounts
 
-Standard-Layout unter `/mnt/user/appdata/tam-spy/`:
+Standard-Layout unter `/mnt/user/appdata/squirreling-sightings/`:
 
 ```
-/mnt/user/appdata/tam-spy/
+/mnt/user/appdata/squirreling-sightings/
   config/    → /app/config    (config.yaml — Read-only Base)
   storage/   → /app/storage   (settings.json + Events + Timelapse + Wetter)
   models/    → /app/models    (.tflite — gitignored)
@@ -17,15 +17,15 @@ diesen Ordner ausrichten (z. B. Unraid CA Backup), nicht auf `config/`.
 ## Build & Run
 
 ```bash
-docker build -t tam-spy -f docker/Dockerfile .
+docker build -t squirreling-sightings -f docker/Dockerfile .
 
-docker run -d --name tam-spy --restart unless-stopped \
+docker run -d --name squirreling-sightings --restart unless-stopped \
   -p 8099:8099 -e TZ=Europe/Berlin \
-  -v /mnt/user/appdata/tam-spy/config:/app/config \
-  -v /mnt/user/appdata/tam-spy/storage:/app/storage \
-  -v /mnt/user/appdata/tam-spy/models:/app/models \
+  -v /mnt/user/appdata/squirreling-sightings/config:/app/config \
+  -v /mnt/user/appdata/squirreling-sightings/storage:/app/storage \
+  -v /mnt/user/appdata/squirreling-sightings/models:/app/models \
   --device /dev/bus/usb \
-  tam-spy
+  squirreling-sightings
 ```
 
 Web-UI: `http://<UNRAID-IP>:8099`. Beim ersten Start öffnet sich der
@@ -70,11 +70,11 @@ Damit "Im Browser öffnen"-Buttons in der Telegram-Bubble funktionieren,
 muss die Unraid-Box von außerhalb erreichbar sein. Empfohlene Wege:
 
 - **Tailscale** (kein Port-Forward nötig): `tailscale up` im Container-
-  Host, MagicDNS aktivieren, in den TAM-spy-Settings unter
+  Host, MagicDNS aktivieren, in den Squirreling · Sightings-Settings unter
   **Server → public_base_url** den Tailscale-Hostnamen eintragen
   (z. B. `http://unraid.tailnet-XXXX.ts.net:8099`).
 - **Reverse-Proxy** (Caddy / NGINX Proxy Manager) auf einer öffentlichen
-  Domain mit TLS — `public_base_url` zeigt auf `https://tam-spy.example.org`.
+  Domain mit TLS — `public_base_url` zeigt auf `https://squirreling-sightings.example.org`.
 
 Ohne `public_base_url` fallen die Buttons still aus; Push-Alerts und
 Inline-Confirm-Buttons funktionieren weiter.

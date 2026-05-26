@@ -13,7 +13,7 @@ Everything else below.
 
 ## Project Overview
 
-TAM-spy is a self-hosted IP camera monitoring system: motion detection,
+Squirreling · Sightings is a self-hosted IP camera monitoring system: motion detection,
 Coral-TPU object recognition, bird/wildlife classifier cascade, Telegram
 alerts, MQTT/Home Assistant bridge, and a web dashboard. Deployed via
 Docker on Unraid or any Linux host.
@@ -33,7 +33,7 @@ Docker on Unraid or any Linux host.
   change and the git step separate:
 
   ```powershell
-  Set-Location D:\CLAUDE_code\tam-spy
+  Set-Location D:\CLAUDE_code\Squirreling-Sightings
   git add .
   git commit -m "fix: short description"
   git push origin main
@@ -115,7 +115,7 @@ they're green (or any failure is explicitly justified):
 
     # Container boot — no traceback
     docker compose up --build -d
-    docker logs tam-spy --tail 50
+    docker logs squirreling-sightings --tail 50
 
 Completion summary format:
 
@@ -311,16 +311,16 @@ In docs use only RFC placeholders — `192.0.2.x`,
 
 **Otherwise (Python, JS, CSS, HTML) — restart only:**
 ```bash
-docker restart tam-spy
-docker logs tam-spy --tail 30
+docker restart squirreling-sightings
+docker logs squirreling-sightings --tail 30
 ```
 `web/` and `app/` are volume-mounted — no rebuild required.
 
 **Full rebuild (only when Dockerfile / requirements.txt change):**
 ```powershell
-Set-Location D:\CLAUDE_code\tam-spy
+Set-Location D:\CLAUDE_code\Squirreling-Sightings
 docker compose up --build -d
-docker logs tam-spy --tail 50
+docker logs squirreling-sightings --tail 50
 ```
 
 **Prune after every full rebuild:**
@@ -331,7 +331,7 @@ docker image prune -f
 **Coral variant (optional):**
 ```bash
 cd app
-docker build -t tam-spy-coral -f docker/Dockerfile.coral .
+docker build -t squirreling-sightings-coral -f docker/Dockerfile.coral .
 ```
 The standard image auto-detects the TPU — the Coral variant is only
 needed when a tier-1 pin to EdgeTPU is required.

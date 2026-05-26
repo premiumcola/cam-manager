@@ -280,7 +280,7 @@ manuell), und optional Telegram-Bot-Token.
 Volume-mounts für `app/`, `web/`, `storage/`, `models/` plus
 `--device /dev/bus/usb` für den Coral-Stick sind in `docker-compose.yml`
 voreingestellt. Volume-mounted Code reloadt sich nach
-`docker restart tam-spy` — ein full rebuild ist nur bei Änderungen
+`docker restart squirreling-sightings` — ein full rebuild ist nur bei Änderungen
 an `Dockerfile` oder `requirements.txt` nötig.
 
 ---
@@ -315,7 +315,7 @@ Model · astral · Open-Meteo · Reolink RTSP + ONVIF Discovery.
 
 ## 🤝 Mitwirken
 
-Pull Requests willkommen. Issues bitte mit Logs (`docker logs tam-spy
+Pull Requests willkommen. Issues bitte mit Logs (`docker logs squirreling-sightings
 --tail 200` oder Logs-Tab), exaktem Reolink-Modell + Firmware, und
 Reproschritten.
 
