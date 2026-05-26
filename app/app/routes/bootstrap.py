@@ -671,7 +671,7 @@ def api_settings_export():
     return Response(
         text,
         mimetype=mimetype,
-        headers={"Content-Disposition": f"attachment; filename=tam-spy-settings.{fmt}"},
+        headers={"Content-Disposition": f"attachment; filename=squirreling-sightings-settings.{fmt}"},
     )
 
 

@@ -1,4 +1,4 @@
-// ─── tam-spy service worker ────────────────────────────────────────────
+// ─── Squirreling · Sightings service worker ────────────────────────────────────────────
 // App-shell strategy. Caches the HTML/CSS/icons that paint the chrome so
 // a brief WLAN drop doesn't blank the screen, but never caches API,
 // /media, or MJPEG streams — those are live data and a stale response
@@ -12,7 +12,7 @@
 // handler deletes the old one. iOS-home-screen PWAs pick up the new
 // shell on next cold open — no need to re-add the app.
 
-const CACHE_PREFIX = 'tam-spy-shell-';
+const CACHE_PREFIX = 'squirreling-shell-';
 const SHELL_ASSETS = [
   '/',
   '/static/app.css',

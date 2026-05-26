@@ -61,7 +61,7 @@ def api_telegram_test():
             {"ok": False, "error": " · ".join(reasons) or "Telegram nicht konfiguriert"}
         ), 400
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    msg = f"TAM-spy Test ✓ Verbindung funktioniert! {ts}"
+    msg = f"Squirreling · Sightings Test ✓ Verbindung funktioniert! {ts}"
     try:
         # Route through the persistent send-loop instead of asyncio.run(),
         # which would create+tear-down a new loop on every call and trip

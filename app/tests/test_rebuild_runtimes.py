@@ -125,7 +125,7 @@ def _stub_sys_modules():
     _mq_inst = MagicMock()
     sys.modules["app.mqtt_service"].MQTTService.return_value = _mq_inst
 
-    # Ensure D:\…\tam-spy\app is on sys.path so `import app.server` resolves
+    # Ensure D:\…\Squirreling-Sightings\app is on sys.path so `import app.server` resolves
     _pkg_root = str(Path(__file__).parent.parent)
     if _pkg_root not in sys.path:
         sys.path.insert(0, _pkg_root)

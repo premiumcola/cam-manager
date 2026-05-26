@@ -263,7 +263,7 @@ class TimelapseBuilder:
         a JSON viewer. Best-effort — write errors are swallowed."""
         diag_path = out_path.with_suffix(out_path.suffix + ".encode-diag.txt")
         lines = [
-            "TAM-spy timelapse · encode validation failed",
+            "Squirreling · Sightings timelapse · encode validation failed",
             f"  output       : {out_path.name}",
             f"  reason       : {reason}",
             "  encode args  :",

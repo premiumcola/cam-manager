@@ -1,4 +1,4 @@
-"""Centralised logging setup for tam-spy.
+"""Centralised logging setup for Squirreling · Sightings.
 
 server.py imports ``setup_logging`` and ``log_buffer`` from this module —
 nothing else does any direct logging configuration. Console output goes to

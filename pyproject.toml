@@ -1,4 +1,4 @@
-# Linter foundation for the TAM-spy backend (stage: pre-CSS-split).
+# Linter foundation for the Squirreling · Sightings backend (stage: pre-CSS-split).
 # ruff replaces flake8 + isort + pyupgrade + black formatting in one
 # binary. mypy starts in permissive mode — its job here is to catch
 # obvious None.foo() errors during refactors, not to enforce strict

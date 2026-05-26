@@ -103,7 +103,7 @@ def _fetch_github_commit_count():
         global _BUILD_INFO
         try:
             url = 'https://api.github.com/repos/premiumcola/cam-manager/commits?per_page=1'
-            req = _ur.Request(url, headers={'User-Agent': 'tam-spy'})
+            req = _ur.Request(url, headers={'User-Agent': 'squirreling-sightings'})
             with _ur.urlopen(req, timeout=8) as r:
                 link = r.headers.get('Link', '') or ''
                 m = _re.search(r'page=(\d+)>; rel="last"', link)

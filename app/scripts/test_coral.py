@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-TAM-spy Coral TPU Test-Script
+Squirreling · Sightings Coral TPU Test-Script
 ==============================
 Prüft ob Google Coral USB erkannt wird, lädt das konfigurierte Modell
 und schickt ein Test-Bild durch die Inferenz-Pipeline.
 
 Ausführung:
   # Im Container:
-  docker exec -it tam-spy python /app/scripts/test_coral.py
+  docker exec -it squirreling-sightings python /app/scripts/test_coral.py
 
   # Lokal (aus app/ Verzeichnis):
   python scripts/test_coral.py
@@ -319,14 +319,14 @@ def print_model_download_instructions(model_path: str):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="TAM-spy Coral TPU Test")
+    parser = argparse.ArgumentParser(description="Squirreling · Sightings Coral TPU Test")
     parser.add_argument("--model",  default=DEFAULT_MODEL,  help="Pfad zum .tflite Modell")
     parser.add_argument("--labels", default=DEFAULT_LABELS, help="Pfad zur Labels-Datei")
     parser.add_argument("--skip-coral", action="store_true", help="Coral-Test überspringen, nur CPU testen")
     args = parser.parse_args()
 
     print(f"\n{BOLD}{'='*60}{RESET}")
-    print(f"{BOLD}  TAM-spy Coral TPU Diagnose{RESET}")
+    print(f"{BOLD}  Squirreling · Sightings Coral TPU Diagnose{RESET}")
     print(f"{BOLD}{'='*60}{RESET}")
     print(f"  Modell:  {args.model}")
     print(f"  Labels:  {args.labels}")

@@ -19,8 +19,8 @@ weather_service uses to trigger an automatic rescan.
 
 Usage::
 
-    docker exec tam-spy python -m app.scripts.diag_weather_index
-    docker exec tam-spy python -m app.scripts.diag_weather_index --json
+    docker exec squirreling-sightings python -m app.scripts.diag_weather_index
+    docker exec squirreling-sightings python -m app.scripts.diag_weather_index --json
 """
 
 from __future__ import annotations

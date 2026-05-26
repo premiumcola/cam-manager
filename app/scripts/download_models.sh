@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# TAM-spy › Coral model downloader
+# Squirreling · Sightings › Coral model downloader
 # Fetches the standard COCO SSD MobileNet v2 model (Edge TPU + CPU variants)
 # and the matching labels file, placing them where config.yaml.example expects.
 #
@@ -56,7 +56,7 @@ download() {
   echo "         → $dst ($(du -h "$dst" | cut -f1))"
 }
 
-echo "== TAM-spy Coral model downloader =="
+echo "== Squirreling · Sightings Coral model downloader =="
 echo "  models:  $MODELS_DIR"
 echo "  config:  $CONFIG_DIR"
 echo
@@ -92,4 +92,4 @@ download "https://raw.githubusercontent.com/google-coral/test_data/master/$WL_LA
 
 echo
 echo "Done. Restart the container for detectors.py to pick up the models:"
-echo "  docker restart tam-spy"
+echo "  docker restart squirreling-sightings"

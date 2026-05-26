@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 540" preserveAspectRatio="xMidYMid meet" role="img" aria-label="TAM-spy app module map: Flask server in the centre, four spokes — Camera Pipeline, Services, Persistence, Infrastructure — each holding the Python modules under app/app/.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 540" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Squirreling · Sightings app module map: Flask server in the centre, four spokes — Camera Pipeline, Services, Persistence, Infrastructure — each holding the Python modules under app/app/.">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#0a0f1a"/>
@@ -17,7 +17,7 @@
   <rect width="1200" height="540" fill="url(#bg)"/>
 
   <!-- Title -->
-  <text x="600" y="38" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" font-weight="800" fill="#edf4fb" text-anchor="middle">TAM-spy · Module Map</text>
+  <text x="600" y="38" font-family="ui-sans-serif, system-ui, sans-serif" font-size="20" font-weight="800" fill="#edf4fb" text-anchor="middle">Squirreling · Sightings · Module Map</text>
   <text x="600" y="58" font-family="ui-sans-serif, system-ui, sans-serif" font-size="12" fill="#7faec9" text-anchor="middle">app/app/ · 22 Module · Flask-Server koordiniert vier Spokes</text>
 
   <!-- Hub: Flask app -->

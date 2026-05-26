@@ -6,8 +6,8 @@ into a chat / GitHub issue. No mp4 re-decoding — the sidecars carry
 the playback measurements already.
 
 Usage:
-    docker exec tam-spy python -m app.scripts.diag_timelapse <camera_id>
-    docker exec tam-spy python -m app.scripts.diag_timelapse <cam>
+    docker exec squirreling-sightings python -m app.scripts.diag_timelapse <camera_id>
+    docker exec squirreling-sightings python -m app.scripts.diag_timelapse <cam>
         --date 2026-05-12 [--profile sunrise] [--last 5]
 
 Output (excerpt):

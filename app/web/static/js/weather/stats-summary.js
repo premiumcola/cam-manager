@@ -27,7 +27,7 @@ function _wsCurrentValue(key) {
 
 // Field-detail copy shown beneath the chart when a legend chip is isolated.
 // Three short German blocks per field: relevance for animal observation
-// (TAM-spy's domain), weather correlation, seasonal pattern. Source of truth
+// (Squirreling · Sightings's domain), weather correlation, seasonal pattern. Source of truth
 // for the explainer card.
 const WEATHER_STATS_EXPLAINERS = {
   precipitation: {

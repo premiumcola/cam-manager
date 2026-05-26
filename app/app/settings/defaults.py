@@ -174,7 +174,7 @@ def build_defaults(base_config: dict) -> dict:
     cams = [default_camera(cam) for cam in base_config.get("cameras", [])]
     return {
         "app": {
-            "name": base_config.get("app", {}).get("name", "TAM-spy"),
+            "name": base_config.get("app", {}).get("name", "Squirreling · Sightings"),
             "tagline": base_config.get("app", {}).get(
                 "tagline", "Analyse · Sicherheit · Tierbeobachtung"
             ),

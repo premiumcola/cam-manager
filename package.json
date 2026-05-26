@@ -1,8 +1,8 @@
 {
-  "name": "tam-spy-frontend-tooling",
+  "name": "squirreling-sightings-frontend-tooling",
   "private": true,
   "type": "module",
-  "description": "Lint + format tooling for the TAM-spy frontend. The runtime app loads JS modules directly via index.html — there's no bundler. This package only exists for the lint/format pipeline.",
+  "description": "Lint + format tooling for the Squirreling · Sightings frontend. The runtime app loads JS modules directly via index.html — there's no bundler. This package only exists for the lint/format pipeline.",
   "scripts": {
     "lint": "eslint app/web/static/js",
     "lint:fix": "eslint app/web/static/js --fix",

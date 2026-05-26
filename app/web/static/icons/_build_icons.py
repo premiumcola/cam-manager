@@ -1,4 +1,4 @@
-"""PWA icon + iOS-splash builder for TAM-spy.
+"""PWA icon + iOS-splash builder for Squirreling · Sightings.
 
 Source: ``app/web/static/img/logos/logo-squirrel-dark.svg`` — the
 standalone squirrel mark. The previous master was the acorn-cam
@@ -14,8 +14,8 @@ apple-touch-startup-image splash variants.
 
 Usage inside the container::
 
-    docker exec tam-spy pip install cairosvg     # transient one-shot
-    docker exec tam-spy python /app/web/static/icons/_build_icons.py
+    docker exec squirreling-sightings pip install cairosvg     # transient one-shot
+    docker exec squirreling-sightings python /app/web/static/icons/_build_icons.py
 
 The PNG outputs are committed to git, so future rebuilds don't need
 cairosvg unless the master SVG changes. The corresponding splash

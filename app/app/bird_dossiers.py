@@ -53,7 +53,7 @@ _WIKI_SUMMARY_URL_DE = "https://de.wikipedia.org/api/rest_v1/page/summary/{latin
 _WIKI_SUMMARY_URL_EN = "https://en.wikipedia.org/api/rest_v1/page/summary/{latin}"
 
 _HTTP_TIMEOUT = 5.0
-_USER_AGENT = "tam-spy bird-dossier-builder (https://github.com/premiumcola/cam-manager)"
+_USER_AGENT = "squirreling-sightings bird-dossier-builder (https://github.com/premiumcola/cam-manager)"
 
 # ── Rate-limit lock ────────────────────────────────────────────────────────
 # The spec mandates ≤1 outgoing request/sec to Wikipedia + Xeno-canto.

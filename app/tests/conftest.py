@@ -43,7 +43,7 @@ def settings_store(tmp_storage_root: Path):
     from app.settings_store import SettingsStore
 
     base_config = {
-        "app": {"name": "TAM-spy"},
+        "app": {"name": "Squirreling · Sightings"},
         "storage": {"root": str(tmp_storage_root)},
         "cameras": [],
         "telegram": {},

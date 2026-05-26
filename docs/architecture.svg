@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" preserveAspectRatio="xMidYMid meet" role="img" aria-label="TAM-spy architecture: cameras stream RTSP into the frame pipeline (motion → Coral → species classifier), state lands in storage, and outputs go to the web UI, Telegram bot, and MQTT/Home Assistant.">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Squirreling · Sightings architecture: cameras stream RTSP into the frame pipeline (motion → Coral → species classifier), state lands in storage, and outputs go to the web UI, Telegram bot, and MQTT/Home Assistant.">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#0d141d"/>
@@ -20,7 +20,7 @@
   <rect width="1200" height="640" fill="url(#bg)"/>
 
   <!-- Title -->
-  <text x="600" y="44" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="700" fill="#edf4fb" text-anchor="middle">TAM-spy · Data Flow</text>
+  <text x="600" y="44" font-family="ui-sans-serif, system-ui, sans-serif" font-size="22" font-weight="700" fill="#edf4fb" text-anchor="middle">Squirreling · Sightings · Data Flow</text>
   <text x="600" y="68" font-family="ui-sans-serif, system-ui, sans-serif" font-size="13" fill="#7faec9" text-anchor="middle">RTSP in · processed locally · alerts and dashboards out</text>
 
   <!-- Left column: Cameras -->
@@ -41,7 +41,7 @@
     </g>
   </g>
 
-  <!-- Center: TAM-spy box (3 layers) -->
+  <!-- Center: Squirreling · Sightings box (3 layers) -->
   <g>
     <rect x="320" y="100" width="560" height="440" rx="16" fill="url(#centerGrad)" stroke="#2a3a52" stroke-width="2"/>
     <text x="600" y="130" font-family="ui-sans-serif, system-ui, sans-serif" font-size="14" font-weight="800" fill="#f472b6" text-anchor="middle" letter-spacing="3">TAM-SPY</text>

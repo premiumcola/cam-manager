@@ -3,7 +3,7 @@ Download a curated set of freely-licensed test images from Wikimedia Commons
 into storage/test_images/<folder>/ for /api/coral/test-batch.
 
 Usage (inside container):
-    docker exec tam-spy python3 /app/storage/test_images/_download.py
+    docker exec squirreling-sightings python3 /app/storage/test_images/_download.py
 
 Each entry below names a folder, a filename prefix, the number of images to
 fetch, and an ordered list of Commons categories / search queries to pull
@@ -34,7 +34,7 @@ import urllib.request
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent
-HEADERS = {"User-Agent": "tam-spy-test-images/2.0 (+https://github.com/premiumcola/cam-manager)"}
+HEADERS = {"User-Agent": "squirreling-sightings-test-images/2.0 (+https://github.com/premiumcola/cam-manager)"}
 
 THUMB_WIDTH = 640
 

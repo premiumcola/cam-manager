@@ -39,7 +39,7 @@ def _make_store(tmp_path: Path) -> SettingsStore:
     storage = tmp_path / "storage"
     storage.mkdir()
     base_config = {
-        "app":    {"name": "TAM-spy"},
+        "app":    {"name": "Squirreling · Sightings"},
         "server": {
             "host": "0.0.0.0",
             "port": 8099,

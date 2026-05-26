@@ -191,16 +191,16 @@ function _wireTrackingPresets(formEl) {
 }
 
 export function renderShell() {
-  // Hero title is now a static "TAM-spy" lockup with the squirrel-on-
+  // Hero title is now a static "Squirreling · Sightings" lockup with the squirrel-on-
   // hyphen ornament — no longer driven by config.app.{name,tagline,
   // subtitle}. Side-nav app-name still hydrates if present so users
   // who renamed the app via Settings keep their custom label there.
   const _sideAppName = byId('sideAppName');
-  if (_sideAppName) _sideAppName.textContent = state.config.app.name || 'TAM-spy';
+  if (_sideAppName) _sideAppName.textContent = state.config.app.name || 'Squirreling · Sightings';
   // Null-guard the legacy hero IDs so a config still containing
   // tagline/subtitle doesn't crash renderShell — they just no-op.
   const nameEl = byId('appName');
-  if (nameEl) nameEl.textContent = state.config.app.name || 'TAM-spy';
+  if (nameEl) nameEl.textContent = state.config.app.name || 'Squirreling · Sightings';
   const tagEl = byId('appTagline');
   if (tagEl) tagEl.textContent = state.config.app.tagline || 'Motion · Objekte · Timelapse';
   const subEl = byId('appSubtitle');

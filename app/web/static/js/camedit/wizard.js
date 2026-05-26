@@ -35,7 +35,7 @@ async function finishWizard() {
   const camId = byId('wiz_cam_id').value.trim();
   const payload = {
     app: {
-      name: byId('wiz_app_name').value || 'TAM-spy',
+      name: byId('wiz_app_name').value || 'Squirreling · Sightings',
       tagline: byId('wiz_tagline').value || '',
       logo: byId('wiz_logo').value || '🐈‍⬛',
     },

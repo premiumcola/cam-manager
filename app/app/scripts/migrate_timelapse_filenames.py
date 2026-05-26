@@ -12,8 +12,8 @@ stem. This script walks the existing output tree and renames legacy
 files in-place to the same pattern.
 
 Usage:
-    docker exec tam-spy python -m app.scripts.migrate_timelapse_filenames --dry-run
-    docker exec tam-spy python -m app.scripts.migrate_timelapse_filenames
+    docker exec squirreling-sightings python -m app.scripts.migrate_timelapse_filenames --dry-run
+    docker exec squirreling-sightings python -m app.scripts.migrate_timelapse_filenames
 
 Behaviour:
 - Walks every camera's timelapse output dir under storage/:

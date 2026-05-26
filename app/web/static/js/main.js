@@ -1,4 +1,4 @@
-// ─── TAM-spy frontend module entry ─────────────────────────────────────────
+// ─── Squirreling · Sightings frontend module entry ─────────────────────────────────────────
 // Boot shell. After Stage 25 D the legacy.js monolith is gone; main.js
 // is the single explicit module entry that:
 //   1. Imports every domain module so its DOM wiring runs at boot.
@@ -89,7 +89,7 @@ bindConfirmModal();
 bindMergeModal();
 
 // Legacy hero squirrel ASCII-injector — the hero now uses a static
-// inline SVG ornament on the hyphen of "TAM-spy", so the random
+// inline SVG ornament in the "Squirreling · Sightings" wordmark, so the random
 // SQUIRREL_CHARS pick is no longer wired. Kept null-safe in case a
 // stale template still has the #heroSquirrel element.
 (() => {

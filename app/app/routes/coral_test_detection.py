@@ -1044,7 +1044,7 @@ def _build_debug_markdown(**ctx) -> str:
 
     cam = ctx["cam"]
     parts = [
-        "# TAM-spy Live-Detect Debug Snapshot",
+        "# Squirreling · Sightings Live-Detect Debug Snapshot",
         f"Camera: {cam.get('name') or cam.get('id')} (id: {ctx['cam_id']})",
         f"Timestamp: {ctx['now_iso']}",
         "App-Version: (build hash from /api/system)",

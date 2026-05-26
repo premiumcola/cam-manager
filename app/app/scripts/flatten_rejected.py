@@ -17,8 +17,8 @@ tree is a no-op.
 
 Usage::
 
-    docker exec tam-spy python -m app.scripts.flatten_rejected <run_dir>
-    docker exec tam-spy python -m app.scripts.flatten_rejected <run_dir> --dry-run
+    docker exec squirreling-sightings python -m app.scripts.flatten_rejected <run_dir>
+    docker exec squirreling-sightings python -m app.scripts.flatten_rejected <run_dir> --dry-run
 
 ``<run_dir>`` may be either the run directory (containing ``_rejected/``)
 or the ``_rejected/`` directory itself — both are accepted so the user
