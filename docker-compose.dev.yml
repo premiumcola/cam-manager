@@ -14,7 +14,7 @@
 # host can set its own non-shared overrides (e.g. devices: !override
 # [] on Windows-Docker hosts that lack /dev/bus/usb).
 services:
-  tam-spy:
+  squirreling-sightings:
     # CSS partials rebuild app.css at container boot, so CSS changes
     # still need a docker restart. Python/JS/HTML edits are picked up
     # on the next request — Flask serves static assets without an

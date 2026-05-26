@@ -1,9 +1,9 @@
 services:
-  tam-spy:
+  squirreling-sightings:
     build:
       context: ..
       dockerfile: docker/Dockerfile.coral
-    container_name: tam-spy
+    container_name: squirreling-sightings
     restart: unless-stopped
     ports:
       - "8099:8099"

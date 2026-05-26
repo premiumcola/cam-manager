@@ -1,16 +1,16 @@
 services:
-  tam-spy:
+  squirreling-sightings:
     build:
       context: ./app
       dockerfile: docker/Dockerfile
       cache_from:
-        - tam-spy:latest
+        - squirreling-sightings:latest
       args:
         BUILD_COMMIT: ${BUILD_COMMIT:-dev}
         BUILD_DATE: ${BUILD_DATE:-unknown}
         BUILD_COUNT: ${BUILD_COUNT:-0}
-    image: tam-spy
-    container_name: tam-spy
+    image: squirreling-sightings
+    container_name: squirreling-sightings
     restart: unless-stopped
     ports:
       - "8099:8099"
@@ -50,14 +50,14 @@ services:
       - FLAP_DIAG=${FLAP_DIAG:-}
 
   # Coral TPU variant — uncomment and use instead of above if you have a Coral USB TPU
-  # tam-spy-coral:
+  # squirreling-sightings-coral:
   #   build:
   #     context: ./app
   #     dockerfile: docker/Dockerfile.coral
   #     cache_from:
-  #       - tam-spy-coral:latest
-  #   image: tam-spy-coral
-  #   container_name: tam-spy
+  #       - squirreling-sightings-coral:latest
+  #   image: squirreling-sightings-coral
+  #   container_name: squirreling-sightings
   #   restart: unless-stopped
   #   ports:
   #     - "8099:8099"
