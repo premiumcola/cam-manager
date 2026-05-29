@@ -53,6 +53,10 @@ def default_camera(cam: dict | None = None) -> dict:
         # at 1.0) so wildlife stays more sensitive than normal motion
         # without forcing the user to set both sliders.
         "wildlife_motion_sensitivity": cam.get("wildlife_motion_sensitivity", 0.0),
+        # D3 · small-animal ROI/tiling controls (see schema.py). `roi_mode`
+        # is distinct from the runtime status field `detection_mode`.
+        "roi_mode": cam.get("roi_mode", "off"),
+        "roi_min_net_disp_frac": cam.get("roi_min_net_disp_frac", 0.0),
         # wildlife_min_score lives in the track_* group below — the
         # earlier duplicate entry here was a leftover from the first
         # pass. Both produced the same float-or-zero result, so the

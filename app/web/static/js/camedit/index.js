@@ -43,6 +43,7 @@ import {
   _bindErkPerClassToggle,
   _renderErkPerClassConfirm,
   _bindErkConfirmPerClassToggle,
+  _bindDetectionRoiControls,
   _renderCamObjectPills,
   getCamObjectFilterState,
   setCamObjectFilterState,
@@ -565,6 +566,7 @@ function editCamera(camId) {
     _bindErkPerClassToggle();
     _renderErkPerClassConfirm(byId('cameraForm'), c);
     _bindErkConfirmPerClassToggle();
+    _bindDetectionRoiControls(byId('cameraForm'), c);
     setWhitelistState(c.whitelist_names || []);
     _updateWhitelistHidden();
     shapeState.camera = camId;

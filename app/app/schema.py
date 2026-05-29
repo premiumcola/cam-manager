@@ -39,7 +39,7 @@ def _coerce(val, target_type, field_name: str):
     # list/dict cannot be safely coerced from scalar values
     if target_type in (list, dict):
         raise ValueError(
-            f"Field {field_name}: expected {target_type.__name__}, " f"got {type(val).__name__}"
+            f"Field {field_name}: expected {target_type.__name__}, got {type(val).__name__}"
         )
     # bool needs special handling: bool("false") is True in Python
     if target_type is bool:
@@ -126,7 +126,18 @@ CAMERA_SCHEMA: dict = {
     "wildlife_min_score": (float, 0.0),
     "motion_enabled": (bool, True),
     "detection_trigger": (str, "motion_and_objects"),
-    "post_motion_tail_s": (float, 0.0),  # 0 = use global default
+    "post_motion_tail_s": (float, 0.0),
+    # D3 · small-animal ROI/tiling re-detection mode (off|roi|2x2|3x3). The
+    # D2 production pipeline runs this pass on the HD frame only when the
+    # full-frame detect found nothing AND the D1 motion-blob tracker saw a
+    # coherent moving subject. "off" = legacy full-frame-only behaviour.
+    # NB: distinct from the runtime status field `detection_mode`
+    # (coral/cpu/motion_only) — this is `roi_mode` to avoid clobbering it.
+    "roi_mode": (str, "off"),
+    # D3 · min net displacement (fraction of frame width) a motion blob must
+    # travel for the D1 tracker to treat it as a coherent subject (vs in-place
+    # wind shimmer) and escalate to the ROI pass. 0.0 = module default (0.04).
+    "roi_min_net_disp_frac": (float, 0.0),  # 0 = use global default
     "detection_min_score": (float, 0.0),
     "alarm_profile": (str, ""),
     # Per-class severity matrix — one of "off" / "info" / "alarm" per

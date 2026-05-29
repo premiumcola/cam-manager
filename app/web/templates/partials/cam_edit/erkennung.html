@@ -367,4 +367,60 @@
     </div>
   </div>
 
+  <!-- D3 · Kleintier-Erkennung (ROI / Tiling). Re-detects small/distant
+       animals the full-frame pass misses, gated by coherent motion (D1/D2).
+       roi_mode is backed by the hidden input below; the segmented buttons
+       write it (distinct from the runtime status field detection_mode). -->
+  <div class="erk-section" id="erkRoiSection">
+    <div class="cam-field-label">Kleintier-Erkennung (ROI / Tiling)</div>
+    <input type="hidden" name="roi_mode" id="erkDetModeInput" value="off" />
+    <div class="erk-seg" role="group" aria-label="Erkennungsmodus" id="erkDetModeSeg">
+      <button type="button" class="erk-seg-btn" data-mode="off">Aus</button>
+      <button type="button" class="erk-seg-btn" data-mode="roi">Motion-ROI</button>
+      <button type="button" class="erk-seg-btn" data-mode="2x2">2×2</button>
+      <button type="button" class="erk-seg-btn" data-mode="3x3">3×3</button>
+    </div>
+    <div class="erk-roi-hint">
+      Läuft nur, wenn die Vollbild-Erkennung nichts findet und eine zusammenhängende
+      Bewegung erkannt wurde — fängt kleine/entfernte Tiere (Hund zuverlässig, Katze
+      als „Tier erkannt"). Kostet nur in diesem Fall extra Rechenzeit.
+    </div>
+    <div class="erk-card">
+      <div class="row">
+        <input
+          type="range"
+          name="wildlife_motion_sensitivity"
+          id="erkWlSens"
+          min="0"
+          max="3"
+          step="0.1"
+          value="0"
+        />
+        <span class="val" id="erkWlSensVal">auto</span>
+      </div>
+      <span class="lbl"
+        >Wildtier-Empfindlichkeit · niedrigere Bewegungsschwelle für kleine Tiere
+        (0 = auto)</span
+      >
+    </div>
+    <div class="erk-card">
+      <div class="row">
+        <input
+          type="range"
+          name="roi_min_net_disp_frac"
+          id="erkRoiNet"
+          min="0"
+          max="0.2"
+          step="0.01"
+          value="0"
+        />
+        <span class="val" id="erkRoiNetVal">auto (4 %)</span>
+      </div>
+      <span class="lbl"
+        >Min. Bewegungs-Strecke zum Auslösen · trennt laufendes Tier von Wind-Flackern
+        (0 = Standard 4 %)</span
+      >
+    </div>
+  </div>
+
 </div>

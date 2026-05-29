@@ -107,6 +107,61 @@ export function _initErkSliders(form) {
   }
 }
 
+// D3 · render + wire the small-animal ROI/tiling controls — the roi-mode
+// segmented control (writes the hidden #roi_mode input the save collector
+// reads) and the two D1 tuning sliders — from the camera config. Idempotent:
+// re-opening cam-edit re-seeds without stacking handlers. (roi_mode is
+// distinct from the runtime status field detection_mode.)
+export function _bindDetectionRoiControls(form, cam) {
+  const seg = byId('erkDetModeSeg');
+  const hidden = byId('erkDetModeInput');
+  if (seg && hidden) {
+    const mode = (cam?.roi_mode || 'off').toLowerCase();
+    hidden.value = ['off', 'roi', '2x2', '3x3'].includes(mode) ? mode : 'off';
+    const paint = () => {
+      seg.querySelectorAll('.erk-seg-btn').forEach((b) => {
+        const on = b.dataset.mode === hidden.value;
+        b.classList.toggle('is-active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+    };
+    paint();
+    if (!seg.dataset.wired) {
+      seg.dataset.wired = '1';
+      seg.addEventListener('click', (e) => {
+        const btn = e.target.closest('.erk-seg-btn');
+        if (!btn) return;
+        hidden.value = btn.dataset.mode;
+        paint();
+      });
+    }
+  }
+  // Wildlife-low sensitivity (0 = auto).
+  const wl = byId('erkWlSens');
+  const wlv = byId('erkWlSensVal');
+  if (wl && wlv) {
+    wl.value = Number(cam?.wildlife_motion_sensitivity || 0);
+    const upd = () => {
+      const v = parseFloat(wl.value || 0);
+      wlv.textContent = v <= 0 ? 'auto' : v.toFixed(1) + '×';
+    };
+    wl.oninput = upd;
+    upd();
+  }
+  // Min net displacement to escalate (0 = module default 4 %).
+  const net = byId('erkRoiNet');
+  const netv = byId('erkRoiNetVal');
+  if (net && netv) {
+    net.value = Number(cam?.roi_min_net_disp_frac || 0);
+    const upd = () => {
+      const v = parseFloat(net.value || 0);
+      netv.textContent = v <= 0 ? 'auto (4 %)' : Math.round(v * 100) + ' %';
+    };
+    net.oninput = upd;
+    upd();
+  }
+}
+
 // Erkennung-tab status strip — slim row with a coloured dot, an inline
 // Coral state label, the per-frame inference latency, and the seconds-
 // since-last-good-frame as a relative time. Mutates the static markup

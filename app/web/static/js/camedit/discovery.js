@@ -732,6 +732,15 @@ byId('cameraForm').onsubmit = async (e) => {
     // sees the same source if needed.
     alarm_profile: f['alarm_profile']?.value || existingCam?.alarm_profile || 'soft',
     detection_min_score: parseFloat(f['detection_min_score']?.value || 0),
+    // D3 · small-animal ROI/tiling controls (persisted per camera). The
+    // segmented control writes the hidden #roi_mode input; the
+    // min-net-displacement slider is roi_min_net_disp_frac. Fall back to the
+    // stored value so a save from a tab that didn't render them is a no-op.
+    // (roi_mode is distinct from the runtime status field detection_mode.)
+    roi_mode: f['roi_mode']?.value || existingCam?.roi_mode || 'off',
+    roi_min_net_disp_frac: parseFloat(
+      f['roi_min_net_disp_frac']?.value ?? existingCam?.roi_min_net_disp_frac ?? 0,
+    ),
     label_thresholds: _collectLabelThresholds(e.target),
     // Per-camera tracker overrides — 0 means "use the module default"
     // from tracker_core.py. Spawn/floor land as scores (0..1); grace is
