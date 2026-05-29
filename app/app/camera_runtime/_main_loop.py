@@ -21,6 +21,7 @@ import requests
 
 from ..detection_confirmer import DetectionConfirmer
 from ..detection_tiling import tiled_detect
+from ..motion_samples import record_sample as record_motion_sample
 from ..detectors import (
     BirdSpeciesClassifier,
     CoralObjectDetector,
@@ -310,6 +311,17 @@ class MainLoopMixin:
                             _coherent_blob.straightness,
                             ",".join(sorted({d.label for d in roi_dets})),
                         )
+                    # E1 · persist a labeled motion sample (kept ≈ animal,
+                    # empty ≈ wind/noise) for offline threshold calibration.
+                    record_motion_sample(
+                        self.global_cfg.get("storage", {}).get("root"),
+                        self.camera_id,
+                        _coherent_blob,
+                        bool(roi_dets),
+                        det_mode,
+                        time.time(),
+                        proc_frame.shape[1],
+                    )
                     detections = roi_dets
                 # ── Two-tier tracker ────────────────────────────────────
                 # Classifies each surviving detection into confirmed
