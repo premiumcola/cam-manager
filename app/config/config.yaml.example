@@ -41,6 +41,10 @@ processing:
   detection:
     mode: coral
     model_path: /app/models/coco_ssd_mobilenet_v2_coco_quant_postprocess_edgetpu.tflite
+    # CPU tier uses efficientdet_lite0 (320×320, 25 detections) — markedly
+    # better on small/distant subjects than SSD MobileNet v2 (B-experiment:
+    # dog 0.29 vs 0.00 full-frame). Matches the Coral model_path family.
+    cpu_model_path: /app/models/efficientdet_lite0.tflite
     labels_path: /app/config/coco_labels.example.txt
     min_score: 0.55
     device: usb
