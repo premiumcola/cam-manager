@@ -532,6 +532,10 @@ _install_shutdown_hooks()
 from . import migrations as _migrations
 
 _migrations.migrate_timelapse_events(storage_root=storage_root, settings=settings)
+# Tidy loose root-level <event_id>.json (+ .tracks.json) into their date
+# subfolders so the camera root stops collecting clutter. Reads use
+# rglob, so this is purely cosmetic for the on-disk layout.
+_migrations.relocate_root_event_jsons(storage_root=storage_root)
 _migrations.generate_missing_thumbnails(storage_root=storage_root)
 _migrations.migrate_timelapse_to_eventstore(
     storage_root=storage_root,

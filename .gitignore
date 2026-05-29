@@ -96,3 +96,6 @@ app/web/static/app.css
 
 # Local scratch archives — never the repo's source of truth
 *.zip
+
+# Local detection-tuning diagnostics (frames, sweep scripts, reports)
+storage/_diag/

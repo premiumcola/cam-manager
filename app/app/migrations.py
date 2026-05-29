@@ -19,6 +19,8 @@ from pathlib import Path
 
 import cv2 as _cv2
 
+from .storage import event_date_subdir
+
 log = logging.getLogger(__name__)
 
 
@@ -207,6 +209,71 @@ def check_tracks_schema_version(*, storage_root: Path) -> None:
                 log.debug("[tracking] schema=%d (%d sidecars current)", TRACKS_SCHEMA, current)
         except Exception as e:
             log.warning("[tracking] schema scan failed: %s", e)
+
+    threading.Thread(target=_do, daemon=True).start()
+
+
+def _relocate_root_event_jsons_sync(storage_root: Path) -> int:
+    """Synchronous worker for :func:`relocate_root_event_jsons` — returns
+    the number of files moved. Factored out so the boot wrapper can run
+    it in a daemon thread while the test suite drives it deterministically."""
+    events_root = storage_root / "motion_detection"
+    if not events_root.exists():
+        return 0
+    moved = 0
+    for cam_dir in events_root.iterdir():
+        if not cam_dir.is_dir():
+            continue
+        # Non-recursive: only files sitting directly in the camera root.
+        # Anything already inside a date subdir is skipped.
+        for jf in list(cam_dir.glob("*.json")):
+            name = jf.name
+            if name.startswith("tl_"):
+                continue  # timelapse — migrate_timelapse_events owns these
+            if name.endswith(".tracks.json"):
+                event_id = name[: -len(".tracks.json")]
+            else:
+                event_id = jf.stem
+            subdir = event_date_subdir(event_id)
+            if subdir is None:
+                continue  # unparseable id — leave in place
+            target_dir = cam_dir / subdir
+            target = target_dir / name
+            if target.exists():
+                continue  # already relocated / clash — never overwrite
+            try:
+                target_dir.mkdir(parents=True, exist_ok=True)
+                _shutil.move(str(jf), str(target))
+                moved += 1
+            except Exception as e:
+                log.warning("[migration] relocate %s failed: %s", name, e)
+    return moved
+
+
+def relocate_root_event_jsons(*, storage_root: Path) -> None:
+    """One-time, idempotent: move loose ``<event_id>.json`` (and the
+    matching ``<event_id>.tracks.json`` sidecar) that sit directly in a
+    camera root under ``storage/motion_detection/<cam>/`` into the date
+    subfolder derived from ``event_id[:8]`` (``YYYYMMDD`` -> ``YYYY-MM-DD``),
+    co-locating them with their mp4/jpg media.
+
+    Leaves untouched: files whose id isn't an 8-digit date prefix
+    (custom/legacy ids), and ``tl_*.json`` timelapse entries (owned by
+    :func:`migrate_timelapse_events`). Skips a move when the target
+    already exists (no overwrite). Safe to re-run — the non-recursive
+    glob only sees still-loose files, so once everything is relocated it
+    finds nothing and logs nothing."""
+
+    def _do():
+        try:
+            moved = _relocate_root_event_jsons_sync(storage_root)
+            if moved:
+                log.info(
+                    "[migration] relocated %d root-level event JSON(s) into date subfolders",
+                    moved,
+                )
+        except Exception as e:
+            log.warning("[migration] event-JSON relocation failed: %s", e)
 
     threading.Thread(target=_do, daemon=True).start()
 

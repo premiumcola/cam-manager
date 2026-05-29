@@ -18,6 +18,22 @@ def _atomic_write_text(path: Path, text: str) -> None:
     os.replace(str(tmp), str(path))
 
 
+def event_date_subdir(event_id: str) -> str | None:
+    """Derive the ``YYYY-MM-DD`` date-folder name from an event_id whose
+    first 8 chars are ``YYYYMMDD`` (the standard
+    ``%Y%m%d-%H%M%S-%f`` id format).
+
+    Returns ``None`` for custom / legacy ids that don't start with 8
+    digits, so callers fall back to the camera-root location and nothing
+    breaks. This is the same date folder the mp4/jpg already use, so the
+    event JSON ends up co-located with its media instead of littering
+    the camera root."""
+    head = event_id[:8]
+    if len(head) == 8 and head.isdigit():
+        return f"{head[:4]}-{head[4:6]}-{head[6:8]}"
+    return None
+
+
 class EventStore:
     def __init__(self, root: str):
         self.root = Path(root)
@@ -45,7 +61,19 @@ class EventStore:
         payload = dict(payload)
         event_id = payload.get("event_id") or datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         payload["event_id"] = event_id
-        path = self._cam_dir(camera_id) / f"{event_id}.json"
+        # Co-locate the event JSON with its media in the date subfolder
+        # (motion_detection/<cam>/<YYYY-MM-DD>/<event_id>.json) instead
+        # of littering the camera root. Falls back to the camera root for
+        # custom/legacy ids whose first 8 chars aren't YYYYMMDD. Reads all
+        # use rglob(), so both locations resolve during the transition.
+        cam_dir = self._cam_dir(camera_id)
+        subdir = event_date_subdir(event_id)
+        if subdir is not None:
+            target_dir = cam_dir / subdir
+            target_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            target_dir = cam_dir
+        path = target_dir / f"{event_id}.json"
         _atomic_write_text(path, json.dumps(payload, ensure_ascii=False, indent=2))
         return path
 
