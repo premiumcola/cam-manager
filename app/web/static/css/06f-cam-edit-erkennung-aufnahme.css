@@ -216,6 +216,11 @@
    chevron to the right. */
 .cam-item-head-right .cam-tab-recovery-btn {
   margin-left: 0;
+  /* Breathing room before the expand chevron (which keeps its own
+     2px margin-left) → ~10px combined gap. Set here, not on the
+     chevron, so collapsed rows without a Reconnect button are
+     visually unchanged. */
+  margin-right: 8px;
   height: 30px;
   min-height: 30px;
   padding: 0 10px;
