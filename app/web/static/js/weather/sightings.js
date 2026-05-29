@@ -81,30 +81,31 @@ function renderWeatherSightings() {
 function _renderWeatherFilterPills() {
   const bar = byId('weatherFilterBar');
   if (!bar) return;
-  // Sort by count desc, with ties by spec order. Counts==0 → empty/disabled
-  // (mirrors the Mediathek pill recipe so the visual language is identical).
+  // Render a filter pill ONLY for weather types that actually have events;
+  // zero-count types are skipped entirely so the bar collapses to a single
+  // row. Sort the survivors by count desc, ties by spec order.
   const types = Object.keys(WEATHER_TYPES);
   const counts = state.weather.counts || {};
-  const sorted = types.slice().sort((a, b) => {
-    const d = (counts[b] || 0) - (counts[a] || 0);
-    return d || types.indexOf(a) - types.indexOf(b);
-  });
+  const sorted = types
+    .filter((t) => (counts[t] || 0) > 0)
+    .sort((a, b) => {
+      const d = (counts[b] || 0) - (counts[a] || 0);
+      return d || types.indexOf(a) - types.indexOf(b);
+    });
   const sel = state.weather.filter instanceof Set ? state.weather.filter : new Set();
   let html = sorted
     .map((t) => {
       const meta = WEATHER_TYPES[t];
       const cnt = counts[t] || 0;
-      const empty = cnt === 0;
       const active = sel.has(t);
-      const cls = `media-pill cat-filter-btn${active ? ' active' : ''}${empty ? ' media-pill--empty' : ''}`;
-      const cntChip =
-        cnt > 0 ? `<span class="mp-count" style="pointer-events:none">${cnt}</span>` : '';
+      const cls = `media-pill cat-filter-btn${active ? ' active' : ''}`;
+      const cntChip = `<span class="mp-count" style="pointer-events:none">${cnt}</span>`;
       // Visible text: short `de` label. Tooltip + accessible name: full
       // `de_full` (falls back to `de` when not set) so screen readers and
       // hover tooltips keep the long form even when the chip itself is
       // truncated for space.
       const fullLbl = meta.de_full || meta.de;
-      return `<button type="button" class="${cls}" data-type="weather" data-val="${esc(t)}" title="${esc(fullLbl)}" aria-label="${esc(fullLbl)}${cnt > 0 ? `, ${cnt} Ereignisse` : ''}" style="--cb:${meta.color}"${empty ? ' tabindex="-1" aria-disabled="true"' : ''}><span class="cfb-icon" style="pointer-events:none;color:${meta.color}">${meta.icon}</span><span style="pointer-events:none">${esc(meta.de)}</span>${cntChip}</button>`;
+      return `<button type="button" class="${cls}" data-type="weather" data-val="${esc(t)}" title="${esc(fullLbl)}" aria-label="${esc(fullLbl)}, ${cnt} Ereignisse" style="--cb:${meta.color}"><span class="cfb-icon" style="pointer-events:none;color:${meta.color}">${meta.icon}</span><span style="pointer-events:none">${esc(meta.de)}</span>${cntChip}</button>`;
     })
     .join('');
   if (sel.size === 0) {
@@ -112,7 +113,6 @@ function _renderWeatherFilterPills() {
   }
   bar.innerHTML = html;
   bar.querySelectorAll('.media-pill').forEach((p) => {
-    if (p.classList.contains('media-pill--empty')) return;
     if (p.classList.contains('media-pill--status')) return;
     p.addEventListener('click', () => {
       const val = p.dataset.val;
