@@ -28,6 +28,19 @@ from ..tracker_core import (
     compute_miss_grace_samples,
     resolve_track_thresholds,
 )
+from ._sim_tiling import (
+    VALID_MODES,
+    motion_bbox,
+    prep_gray,
+    sahi_trace_line,
+    tiled_detect,
+)
+
+# C3 · per-camera cached previous grayscale frame for the sim's Motion-ROI
+# mode. SIM-LOCAL only — the production motion gate (camera_runtime/_motion)
+# keeps its own state and is untouched. Keyed by cam_id; bounded by the
+# small number of cameras.
+_SIM_PREV_GRAY: dict[str, object] = {}
 
 # SIMU-05h · cluster-evidence ring-buffer window. Events older than
 # this are pruned on every test-detection call.
@@ -188,6 +201,19 @@ def api_test_detection(cam_id: str):
     if rt is None:
         return jsonify({"error": "Kamera-Runtime nicht aktiv (deaktiviert?)"}), 503
 
+    # C2/C3 · ephemeral, query-driven sim controls (NOT persisted here):
+    #   stream = main | sub  — which RTSP stream the sim inspects. Default
+    #            MAIN so the sim mirrors the production alarm pipeline (which
+    #            runs on the main stream) instead of the smaller 640×360 sub.
+    #   mode   = off | roi | 2x2 | 3x3 — SAHI-style tiling / motion-ROI pass
+    #            layered on the full-frame detect (see _sim_tiling).
+    stream_pref = (request.args.get("stream") or "main").strip().lower()
+    if stream_pref not in ("main", "sub"):
+        stream_pref = "main"
+    det_mode = (request.args.get("mode") or "off").strip().lower()
+    if det_mode not in VALID_MODES:
+        det_mode = "off"
+
     # ── Fresh + decoder-strip frame contract ──────────────────────────
     # Poll up to 2.5 s for a frame whose timestamp is NEWER than this
     # request AND passes the cheap ``has_corrupt_strip`` H.264 chroma-
@@ -233,65 +259,71 @@ def api_test_detection(cam_id: str):
     # spam on a Reolink in IR-cut transition).
     last_validator_reason: str = ""
     active_profile = None
-    # C41 · "frame_src" identifies which stream the served frame came
-    # from. The sub-stream tier (640×360, H.264) is preferred because
-    # Coral SSD-MobileNet resizes its input to 300×300 internally; the
-    # extra resolution of the main stream costs cycles without any
-    # detection-quality gain for the subjects we care about. We fall
-    # back to the main stream only when the sub path is unavailable
-    # for the entire 2.5 s wait deadline. frame_src is also surfaced
-    # in diag so the operator can confirm the path live in the UI.
+    # C41/C2 · "frame_src" identifies which stream the served frame came
+    # from. The preference now defaults to the MAIN stream (stream_pref)
+    # so the sim mirrors the production alarm pipeline (2560×1440) instead
+    # of the smaller 640×360 sub; the operator flips it via the Sub/Main
+    # toggle. The non-preferred stream is used only as a fallback when the
+    # preferred one is unavailable for the whole 2.5 s wait. The corrupt-
+    # strip check applies to MAIN only (the sub is a clean H.264 preview).
     frame_src_used = ""
+    order = ("main", "sub") if stream_pref == "main" else ("sub", "main")
     while _time.monotonic() < deadline:
-        # Tier 1 · sub-stream (preferred). _preview_loop writes a clean
-        # H.264 frame here; the corrupt-strip check is skipped because
-        # that artefact is a main-stream-only failure mode.
-        with rt.lock:
-            sub_candidate = rt._preview_frame.copy() if rt._preview_frame is not None else None
-            sub_candidate_ts = float(getattr(rt, "_preview_frame_ts", 0.0) or 0.0)
-        if sub_candidate is not None:
-            if sub_candidate_ts >= request_started_at - 1.0:
-                frame = sub_candidate
-                frame_ts_accepted = sub_candidate_ts
-                last_candidate_ts = max(last_candidate_ts, sub_candidate_ts)
+        picked = False
+        for which in order:
+            if which == "sub":
+                with rt.lock:
+                    cand = rt._preview_frame.copy() if rt._preview_frame is not None else None
+                    cand_ts = float(getattr(rt, "_preview_frame_ts", 0.0) or 0.0)
+                if cand is None:
+                    continue
                 saw_frame = True
+                last_candidate_ts = max(last_candidate_ts, cand_ts)
+                if cand_ts < request_started_at - 1.0:
+                    if final_outcome != "corrupt":
+                        final_outcome = "stale"
+                    continue
+                frame = cand
+                frame_ts_accepted = cand_ts
                 saw_fresh_candidate = True
-                active_profile = pick_profile_from_baseline([sub_candidate])
+                active_profile = pick_profile_from_baseline([cand])
                 frame_src_used = "sub"
                 final_outcome = "ok"
+                picked = True
                 break
-        # Tier 2 · main-stream fallback. Same shape as the original
-        # wait loop: poll rt.frame, gate on freshness + has_corrupt_strip,
-        # accept on first survivor.
-        with rt.lock:
-            candidate = rt.frame.copy() if rt.frame is not None else None
-            candidate_ts = float(getattr(rt, "frame_ts", 0.0) or 0.0)
+            # main — freshness + has_corrupt_strip gated. 1 s grace (same as
+            # sub) so a normally-cadenced main frame (~350 ms) qualifies on
+            # the first poll; without it the looser sub bar would always win
+            # even when main is the preferred stream. A genuinely stalled
+            # main (>1 s old) still falls through to the other stream.
+            with rt.lock:
+                cand = rt.frame.copy() if rt.frame is not None else None
+                cand_ts = float(getattr(rt, "frame_ts", 0.0) or 0.0)
+            if cand is None:
+                continue
+            saw_frame = True
+            last_candidate_ts = max(last_candidate_ts, cand_ts)
+            if cand_ts < request_started_at - 1.0:
+                if final_outcome != "corrupt":
+                    final_outcome = "stale"
+                continue
+            saw_fresh_candidate = True
+            active_profile = pick_profile_from_baseline([cand])
+            if has_corrupt_strip(cand):
+                final_outcome = "corrupt"
+                last_validator_reason = "has_corrupt_strip"
+                log.info("[test-detection] %s rejected candidate · strip=True", cam_id)
+                continue
+            frame = cand
+            frame_ts_accepted = cand_ts
+            frame_src_used = "main"
+            final_outcome = "ok"
+            picked = True
+            break
         retries += 1
-        if candidate is None:
-            _time.sleep(0.05)
-            continue
-        saw_frame = True
-        last_candidate_ts = max(last_candidate_ts, candidate_ts)
-        if candidate_ts < request_started_at:
-            final_outcome = "stale"
-            _time.sleep(0.05)
-            continue
-        saw_fresh_candidate = True
-        active_profile = pick_profile_from_baseline([candidate])
-        if has_corrupt_strip(candidate):
-            final_outcome = "corrupt"
-            last_validator_reason = "has_corrupt_strip"
-            log.info(
-                "[test-detection] %s rejected candidate · strip=True",
-                cam_id,
-            )
-            _time.sleep(0.05)
-            continue
-        frame = candidate
-        frame_ts_accepted = candidate_ts
-        frame_src_used = "main_fallback"
-        final_outcome = "ok"
-        break
+        if picked:
+            break
+        _time.sleep(0.05)
 
     waited_s = _time.time() - request_started_at
     if frame is None:
@@ -343,25 +375,22 @@ def api_test_detection(cam_id: str):
             }
         ), 503
     frame_age_ms = int((_time.time() - frame_ts_accepted) * 1000)
-    # C41 · frame_src is now either "sub" (preferred path, written by
-    # _preview_loop into rt._preview_frame) or "main_fallback" (the
-    # rt.frame path, only when sub was unavailable for the entire
-    # 2.5 s wait). Both branches set frame_src_used above; we derive
-    # the human label here for the existing log line. A WARNING fires
-    # ONCE per 60 s per camera on fallback so a sub-stream-less cam
-    # doesn't spam the log.
+    # C41/C2 · frame_src is "main" or "sub" — the stream the served frame
+    # came from. A WARNING fires ONCE per 60 s per camera only when the
+    # operator's PREFERRED stream was unavailable and we served the other
+    # one, so a sub-less (or briefly-stalled) cam doesn't spam the log.
     src_h_raw, src_w_raw = frame.shape[:2]
-    if frame_src_used == "sub":
-        frame_src_label = f"sub {src_w_raw}×{src_h_raw}"
-    else:
-        frame_src_label = f"main_fallback {src_w_raw}×{src_h_raw}"
+    frame_src_label = f"{frame_src_used} {src_w_raw}×{src_h_raw}"
+    if frame_src_used != stream_pref:
         now_ts = _time.time()
         last_warn = _FALLBACK_WARN_TS.get(cam_id, 0.0)
         if now_ts - last_warn > 60.0:
             _FALLBACK_WARN_TS[cam_id] = now_ts
             log.warning(
-                "[test-detection] cam=%s sub-stream unavailable, falling back to main-stream",
+                "[test-detection] cam=%s preferred stream '%s' unavailable, served '%s'",
                 cam_id,
+                stream_pref,
+                frame_src_used,
             )
     detector = getattr(rt, "detector", None)
     if not detector or not getattr(detector, "available", False):
@@ -379,9 +408,27 @@ def api_test_detection(cam_id: str):
             frame_src_label,
         )
         return jsonify({"error": "Coral nicht verfügbar (motion-only?)"}), 503
+    # C3 · Motion-ROI needs a motion bbox. Compute it SIM-locally from this
+    # cam's previously-served sim frame (cached below) — NOT from the
+    # production motion gate. Only the 'roi' mode pays this cost.
+    sim_motion_box = None
+    if det_mode == "roi":
+        try:
+            gray_now = prep_gray(frame)
+            sim_motion_box = motion_bbox(
+                _SIM_PREV_GRAY.get(cam_id), gray_now, float(src_w_raw * src_h_raw)
+            )
+            _SIM_PREV_GRAY[cam_id] = gray_now
+        except Exception:  # noqa: BLE001 — ROI is best-effort, never fatal
+            sim_motion_box = None
     inference_t0 = _time.monotonic()
     try:
-        raw = detector.detect_frame_raw(frame, threshold=0.20)
+        # C3 · hybrid full-frame + tiling/ROI pass (mode='off' → full only).
+        # raw threshold 0.20 stays so near-miss hits still surface for the
+        # operator; per-class thresholds are applied afterwards for verdicts.
+        raw, sahi_diag = tiled_detect(
+            detector, frame, det_mode, threshold=0.20, motion_box=sim_motion_box
+        )
     except Exception as e:
         log.warning("[test-detection] %s inference failed: %s", cam_id, e)
         return jsonify({"error": f"Inference fehlgeschlagen: {e}"}), 500
@@ -602,6 +649,11 @@ def api_test_detection(cam_id: str):
         f"[coral] object_filter: {sorted(obj_filter) if obj_filter else '(none — all classes accepted)'}"
     )
     trace.append(f"[coral] raw detections: {len(raw)}")
+    # C3 · SAHI/tiling diagnostic (M4). Only present when a tiling/ROI mode
+    # is active; surfaces in the sim's decision-trace block verbatim.
+    _sahi_line = sahi_trace_line(sahi_diag)
+    if _sahi_line:
+        trace.append(_sahi_line)
     for d in out:
         pct = int(round(d["score"] * 100))
         if d["verdict"] == "pass":
@@ -640,7 +692,7 @@ def api_test_detection(cam_id: str):
             active_now = f"(eval failed: {e})"
         trace.append(
             f"[schedule_notify] enabled={bool(sch_notify.get('enabled', False))} "
-            f"window={sch_notify.get('from','?')}→{sch_notify.get('to','?')} · active_now={active_now}"
+            f"window={sch_notify.get('from', '?')}→{sch_notify.get('to', '?')} · active_now={active_now}"
         )
     else:
         trace.append("[schedule_notify] (none — falling back to legacy schedule)")
@@ -754,7 +806,12 @@ def api_test_detection(cam_id: str):
     # the sub stream is even a path forward.
     sub_stream_available = bool(getattr(rt, "_preview_frame", None) is not None)
     diag = {
-        "frame_src": frame_src_used or "main_fallback",
+        "frame_src": frame_src_used or "main",
+        # C2/C3 · echo the active sim controls so the UI can label which
+        # stream + detection mode produced this tick.
+        "stream_pref": stream_pref,
+        "det_mode": det_mode,
+        "sahi": sahi_diag,
         "sub_stream_available": sub_stream_available,
         "frame_size": {"w": int(src_w_raw), "h": int(src_h_raw)},
         "frame_age_ms": int(frame_age_ms),
@@ -1153,18 +1210,23 @@ def _build_debug_markdown(**ctx) -> str:
         det_lines.append("u.Schw:  (keine)")
     if ctx["top_off"]:
         det_lines.append(
-            "gefiltert (last 60s, top 5): "
-            + ", ".join(f"{lbl} {n}×" for lbl, n in ctx["top_off"])
+            "gefiltert (last 60s, top 5): " + ", ".join(f"{lbl} {n}×" for lbl, n in ctx["top_off"])
         )
     else:
         det_lines.append("gefiltert (last 60s): (keine)")
     detections_md = "```\n" + "\n".join(det_lines) + "\n```"
     # Detection-source audit
-    src_md = "```\n" + "\n".join([
-        f"frame_src: {ctx['mode']}",
-        f"sub_stream_fps: {c4.get('sub_fps', 0)} · main_stream_fps: {c4.get('main_fps', 0)}",
-        "camera_runtime/_main_loop frame_src: main (alarm pipeline)",
-    ]) + "\n```"
+    src_md = (
+        "```\n"
+        + "\n".join(
+            [
+                f"frame_src: {ctx['mode']}",
+                f"sub_stream_fps: {c4.get('sub_fps', 0)} · main_stream_fps: {c4.get('main_fps', 0)}",
+                "camera_runtime/_main_loop frame_src: main (alarm pipeline)",
+            ]
+        )
+        + "\n```"
+    )
     # Diagnose hints — pull from the cluster_evidence aggregates
     hints: list[str] = []
     c1 = ctx["cluster_ev"].get("cluster1") or {}
@@ -1174,14 +1236,16 @@ def _build_debug_markdown(**ctx) -> str:
         )
     c2 = ctx["cluster_ev"].get("cluster2") or {}
     if c2.get("missing_classes_60s"):
-        hints.append(
-            f"Cluster 2: Klassen ohne Detection in 60 s · {c2['missing_classes_60s']}"
-        )
+        hints.append(f"Cluster 2: Klassen ohne Detection in 60 s · {c2['missing_classes_60s']}")
     if ctx["top_off"]:
         hints.append(
             f"Cluster 3: Top False-Positive Klassen · {', '.join(k for k, _ in ctx['top_off'])}"
         )
-    hint_md = "```\n" + "\n".join(hints) + "\n```" if hints else "(keine — alle Cluster im grünen Bereich)"
+    hint_md = (
+        "```\n" + "\n".join(hints) + "\n```"
+        if hints
+        else "(keine — alle Cluster im grünen Bereich)"
+    )
     body = (
         head
         + _fmt_section("Live-Status", live_status)

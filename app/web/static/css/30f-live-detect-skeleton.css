@@ -314,6 +314,75 @@
   }
 }
 
+/* C2/C3 · Sim stream (Sub/Main) + detection-mode (Aus/Motion-ROI/2×2/3×3)
+   controls — pinned top-RIGHT so they never overlap the top-left overlay
+   toggles, and ALWAYS visible (they're primary sim controls, not fade-in
+   overlays). Same dark-glass chip language as the toggle pills. */
+.mv-ld-zone-video > #mvSimControls {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  left: auto;
+  z-index: 23;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 70%;
+}
+#mvSimControls .mv-sim-seg-group {
+  display: inline-flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+#mvSimControls .mv-sim-ctl,
+#mvSimControls .mv-sim-seg {
+  padding: 6px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  min-height: 44px;
+  min-width: 44px;
+}
+#mvSimControls .mv-sim-ctl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(11, 15, 20, 0.55);
+  color: #e5edf5;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 10px;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+#mvSimControls .mv-sim-ctl-k {
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 9px;
+}
+#mvSimControls .mv-sim-ctl-v {
+  color: #d6ecff;
+}
+#mvSimControls .mv-sim-seg[data-on='1'] .mv-sim-ctl-chip,
+#mvSimControls .mv-sim-ctl[data-val='main'] .mv-sim-ctl-chip {
+  background: rgba(28, 58, 82, 0.78);
+  color: #d6ecff;
+  box-shadow: inset 0 0 0 1px #6ec1ff;
+}
+@media (hover: hover) {
+  #mvSimControls .mv-sim-ctl:hover .mv-sim-ctl-chip,
+  #mvSimControls .mv-sim-seg:hover .mv-sim-ctl-chip {
+    background: rgba(20, 30, 42, 0.7);
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  }
+}
+
 /* The legend strip's auto-left margin (lb-legend { margin-left: auto })
    would push it to the right of a single-row flex — with flex-wrap
    on the pills, that's no longer the right place. Hide the inline

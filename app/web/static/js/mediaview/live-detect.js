@@ -203,6 +203,11 @@ export function openLiveDetect({ camId, cameraName }) {
     startedMs: Date.now(),
     lastNonEmptyTickMs: 0,
     holdHandle: null,
+    // C2/C3 · ephemeral sim controls (per-open, not persisted). Default
+    // MAIN stream so the sim mirrors the production alarm pipeline; tiling
+    // off until the operator engages a mode.
+    stream: 'main',
+    detMode: 'off',
   };
   _traceLines = [];
   _traceTicks = [];
@@ -373,6 +378,8 @@ export function closeLiveDetect() {
   if (zoneMask) zoneMask.remove();
   const toggleRow = byId('mvLiveToggles');
   if (toggleRow) toggleRow.remove();
+  const simControls = byId('mvSimControls');
+  if (simControls) simControls.remove();
   const diagStrip = byId('mvSimDiagStrip');
   if (diagStrip) diagStrip.remove();
   const livePill = byId('mvLiveScrubPill');
@@ -625,6 +632,7 @@ function _setupLiveChrome(camId, cameraName) {
   _ensureTrailsOverlay();
   _ensureZoneMaskOverlay();
   _mountOverlayToggles();
+  _mountSimControls();
   _pinScrubberRight();
   // dn487 — paint zones + masks BEFORE the first detection tick
   // arrives. _renderZoneMaskOverlay falls back to {w:1920, h:1080}
@@ -877,6 +885,76 @@ function _hideToggleTip() {
   clearTimeout(_toggleTipLongPressTimer);
 }
 
+// C2/C3 · re-tick immediately when the operator changes a sim control so
+// the new stream / mode takes visible effect on the next frame instead of
+// waiting out the current cadence delay.
+function _forceImmediateTick() {
+  const session = _session;
+  if (!session) return;
+  if (session.tickHandle) {
+    clearTimeout(session.tickHandle);
+    session.tickHandle = null;
+  }
+  try {
+    session.abort?.abort();
+  } catch {
+    /* ignore */
+  }
+  _tick();
+}
+
+// C2/C3 · always-visible controls row pinned top-right over the video:
+// a Sub/Main stream toggle + an Aus/Motion-ROI/2×2/3×3 detection-mode
+// segmented control. Ephemeral (session-scoped) — no persistence here
+// (per-camera persistence is D3). Re-rendered on each change to refresh
+// the active-state highlight.
+function _mountSimControls() {
+  const host = zoneEl('video') || byId('lightboxInner');
+  if (!host || !_session) return;
+  let row = byId('mvSimControls');
+  if (!row) {
+    row = document.createElement('div');
+    row.id = 'mvSimControls';
+    row.className = 'mv-sim-controls';
+  }
+  if (row.parentNode !== host) host.appendChild(row);
+  const stream = _session.stream || 'main';
+  const mode = _session.detMode || 'off';
+  const MODES = [
+    ['off', 'Aus'],
+    ['roi', 'Motion-ROI'],
+    ['2x2', '2×2'],
+    ['3x3', '3×3'],
+  ];
+  const streamBtn =
+    `<button type="button" class="mv-sim-ctl" data-ctl="stream" data-val="${esc(stream)}" ` +
+    `title="Welchen Stream der Simulator prüft (Main = Produktions-Pipeline, Sub = 640×360)" ` +
+    `aria-label="Stream umschalten, aktuell ${esc(stream)}">` +
+    `<span class="mv-sim-ctl-chip"><span class="mv-sim-ctl-k">Stream</span>` +
+    `<span class="mv-sim-ctl-v">${stream === 'sub' ? 'Sub' : 'Main'}</span></span></button>`;
+  const modeBtns = MODES.map(
+    ([id, lbl]) =>
+      `<button type="button" class="mv-sim-seg" data-ctl="mode" data-val="${id}" ` +
+      `data-on="${id === mode ? '1' : '0'}" aria-pressed="${id === mode ? 'true' : 'false'}" ` +
+      `aria-label="Erkennungsmodus ${esc(lbl)}"><span class="mv-sim-ctl-chip">${esc(lbl)}</span></button>`,
+  ).join('');
+  row.innerHTML =
+    streamBtn +
+    `<span class="mv-sim-seg-group" role="group" aria-label="Erkennungsmodus">${modeBtns}</span>`;
+  row.querySelectorAll('button[data-ctl]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (!_session) return;
+      if (btn.dataset.ctl === 'stream') {
+        _session.stream = _session.stream === 'sub' ? 'main' : 'sub';
+      } else {
+        _session.detMode = btn.dataset.val;
+      }
+      _mountSimControls();
+      _forceImmediateTick();
+    });
+  });
+}
+
 function _mountOverlayToggles() {
   // SIMU-01 · the toggle row used to live between #lightboxMediaWrap
   // and #lightboxBottomStack inside #lightboxInner. With the 5-zone
@@ -1059,8 +1137,14 @@ async function _tick() {
     // paints the exact frame inference ran on (data.snapshot) as the
     // background so the bbox overlay and the picture are one and the
     // same frame. See _setupLiveChrome for the full rationale.
+    // C2/C3 · pass the ephemeral sim controls — which stream to inspect
+    // (main|sub) and the detection mode (off|roi|2x2|3x3).
+    const _params = new URLSearchParams({
+      stream: session.stream || 'main',
+      mode: session.detMode || 'off',
+    });
     const r = await fetch(
-      `/api/cameras/${encodeURIComponent(session.camId)}/test-detection`,
+      `/api/cameras/${encodeURIComponent(session.camId)}/test-detection?${_params}`,
       { method: 'POST', signal: controller.signal },
     );
     _tickState.lastStatus = r.status;
