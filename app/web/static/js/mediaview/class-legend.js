@@ -45,7 +45,8 @@ function _swatchHtml(key) {
 export function renderClassLegend(host, opts = {}) {
   const el = typeof host === 'string' ? byId(host) : host;
   if (!el) return null;
-  const requested = Array.isArray(opts.classes) && opts.classes.length ? opts.classes : MV_CLASS_ORDER;
+  const requested =
+    Array.isArray(opts.classes) && opts.classes.length ? opts.classes : MV_CLASS_ORDER;
   // Keep canonical order regardless of the caller's order, and drop
   // anything without a known colour so the row never shows a bare key.
   const keys = MV_CLASS_ORDER.filter((k) => requested.includes(k) && CLASS_COLORS[k]);

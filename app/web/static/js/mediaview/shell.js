@@ -27,11 +27,41 @@ import { renderFineAnalysisFold } from './fine-analysis-fold.js';
 // floating legend dodges it; contextKey → overlay-toggle persistence
 // scope; retrigger / fineFold → whether those pieces mount by default.
 const _MODE_FLAGS = {
-  recorded: { interactiveMode: false, osdBand: 'top', contextKey: 'mediathek', retrigger: true, fineFold: true },
-  timelapse: { interactiveMode: false, osdBand: 'top', contextKey: 'timelapse', retrigger: false, fineFold: false },
-  weather: { interactiveMode: false, osdBand: 'top', contextKey: 'weather', retrigger: false, fineFold: true },
-  live: { interactiveMode: true, osdBand: 'top', contextKey: 'live', retrigger: true, fineFold: true },
-  'live-detect': { interactiveMode: true, osdBand: 'top', contextKey: 'live', retrigger: true, fineFold: true },
+  recorded: {
+    interactiveMode: false,
+    osdBand: 'top',
+    contextKey: 'mediathek',
+    retrigger: true,
+    fineFold: true,
+  },
+  timelapse: {
+    interactiveMode: false,
+    osdBand: 'top',
+    contextKey: 'timelapse',
+    retrigger: false,
+    fineFold: false,
+  },
+  weather: {
+    interactiveMode: false,
+    osdBand: 'top',
+    contextKey: 'weather',
+    retrigger: false,
+    fineFold: true,
+  },
+  live: {
+    interactiveMode: true,
+    osdBand: 'top',
+    contextKey: 'live',
+    retrigger: true,
+    fineFold: true,
+  },
+  'live-detect': {
+    interactiveMode: true,
+    osdBand: 'top',
+    contextKey: 'live',
+    retrigger: true,
+    fineFold: true,
+  },
 };
 
 // Panel-flag key → tab descriptor. F mounts placeholder bodies; G/H/I
@@ -45,18 +75,23 @@ const _TAB_META = {
   weather: { id: 'weather', label: 'Wetter' },
 };
 
-function _buildTabs(panels) {
+function _buildTabs(panels, panelRenderers, item) {
   const out = [];
   for (const key of Object.keys(_TAB_META)) {
     if (!panels[key]) continue;
     const meta = _TAB_META[key];
+    // A real renderer wired by the consumer (G: weather; H/I: recorded
+    // / live panels) takes over; otherwise a placeholder marks the tab
+    // as not-yet-migrated so the strip still composes.
+    const custom = panelRenderers && typeof panelRenderers[key] === 'function';
     out.push({
       id: meta.id,
       label: meta.label,
-      render: (host) => {
-        // Placeholder until G/H/I migrate the real body in.
-        host.innerHTML = `<div class="mv-tab-placeholder">${meta.label} · wird migriert</div>`;
-      },
+      render: custom
+        ? (host) => panelRenderers[key](host, item)
+        : (host) => {
+            host.innerHTML = `<div class="mv-tab-placeholder">${meta.label} · wird migriert</div>`;
+          },
     });
   }
   return out;
@@ -181,13 +216,22 @@ export function mountMediaView(config = {}) {
     }
   }
 
-  const tabs = _buildTabs(panels);
+  const tabs = _buildTabs(panels, config.panelRenderers, config.item);
   if (tabs.length) {
-    const pt = renderPanelTabs(slot('tabs'), tabs, { mode, initialId: tabs[0].id });
+    const pt = renderPanelTabs(slot('tabs'), tabs, {
+      mode,
+      initialId: config.initialTab || tabs[0].id,
+    });
     if (pt) components.panelTabs = pt;
   }
 
-  if (flags.fineFold || panels.fineAnalysis) {
+  // config.showFineFold overrides the mode default — recaps pass false
+  // (a compilation has no per-event trace), sightings keep the fold.
+  const wantFold =
+    config.showFineFold !== undefined
+      ? !!config.showFineFold
+      : flags.fineFold || !!panels.fineAnalysis;
+  if (wantFold) {
     // renderFineAnalysisFold(host, lines, opts) — live modes pass the
     // ``live`` flag so the fold reads "Warte auf ersten Tick …" and
     // gets the live accent; recorded/weather start with no lines.

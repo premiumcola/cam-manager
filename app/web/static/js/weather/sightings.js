@@ -31,7 +31,8 @@ function _weatherSightingLabel(s, meta) {
   }
   return meta.de;
 }
-import { WEATHER_FIELD_LABEL_DE, WEATHER_FIELD_UNIT_DE } from './stats.js';
+import { openMediaView } from '../mediaview/index.js';
+import { closeWeatherMode } from '../mediaview/weather-mode.js';
 
 async function loadWeatherSightings(filter) {
   // Filter migrates from single-string to Set semantics: state.weather.filter
@@ -304,7 +305,7 @@ function _renderWeatherGrid() {
     )
     .join('');
   grid.querySelectorAll('.ws-card').forEach((card) => {
-    card.addEventListener('click', () => _openSightingInLightbox(parseInt(card.dataset.idx, 10)));
+    card.addEventListener('click', () => openWeatherLightbox(parseInt(card.dataset.idx, 10)));
   });
   // Hover-reveal delete (top-right) mirrors the Mediathek media-card:
   // stopPropagation so the trash tap removes the event instead of opening
@@ -394,174 +395,66 @@ window.addEventListener(
 
 let _wsLbIdx = -1;
 
-// Open a weather sighting in the main motion-clip lightbox shell
-// (scrubber, ticks, panel-tab strip with Wetter + Nach-Erkennung +
-// fine-analysis fold, Space / ← → keyboard, …) instead of the
-// legacy wsLightbox modal. The sighting payload is reshaped into
-// the timelapse item shape openTLPlayer expects; api_snapshot +
-// sun_snapshot ride along so the Wetter tab renders the same rows
-// the old static block did. Legacy openWeatherLightbox stays as
-// the fallback if openTLPlayer is unavailable (e.g. lightbox.js
-// failed to load).
-function _openSightingInLightbox(idx) {
-  const items = state.weather.itemsFiltered || state.weather.items || [];
-  if (idx < 0 || idx >= items.length) {
-    return;
-  }
-  const s = items[idx];
-  const open = typeof window !== 'undefined' && window.openTLPlayer;
-  if (typeof open !== 'function') {
-    openWeatherLightbox(idx);
-    return;
-  }
-  const synth = {
-    type: 'timelapse',
-    event_id: s.id,
-    camera_id: s.cam_id,
-    camera_name: s.cam_name,
-    // openTLPlayer reads video_url / video_relpath / url / relpath in
-    // that order; the sighting clip is served through a dedicated
-    // weather endpoint so a plain video_url drops it in unchanged.
-    video_url: `/api/weather/sightings/${encodeURIComponent(s.id)}/clip`,
-    // Tag the source so the Wetter tab renders sighting rows; the
-    // existing api_snapshot key already carries the Open-Meteo dict.
+// Reshape a weather sighting into the MediaView shell item: the title
+// bar reads camera_name + time_label; the Wetter tab reads
+// api_snapshot + sun_snapshot. event_type seeds a short type word in
+// the time label so the header still reads "Sonnenuntergang · 30.05.".
+function _sightingItem(s) {
+  const meta = WEATHER_TYPES[s.event_type] || { de: s.event_type || '' };
+  const t = new Date(s.started_at);
+  const when = Number.isNaN(t.getTime())
+    ? ''
+    : t.toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+  const label = _weatherSightingLabel(s, meta);
+  return {
+    camera_name: s.cam_name || s.cam_id || '',
+    time_label: [label, when].filter(Boolean).join(' · '),
     api_snapshot: s.api_snapshot,
     sun_snapshot: s.sun_snapshot,
     event_type: s.event_type,
-    started_at: s.started_at,
-    duration_s: s.duration_s,
-    // Periodlabel + window_key drive the meta-bar badges in
-    // openTLPlayer. Synthesised from the sighting's metadata so the
-    // header reads like an ordinary timelapse.
-    profile: s.event_type || 'weather',
-    window_key: s.started_at,
-    // Explicit source marker so the lightbox delete handler can
-    // route DELETE to the weather-sightings endpoint instead of the
-    // camera-timelapse endpoint (which would 404 for sighting ids).
-    source: 'weather',
   };
-  open(synth);
 }
 
+// Confirm + delete a sighting from inside the player, then close the
+// modal and refresh the grid so counts / filter pills stay consistent.
+function _confirmDeleteSighting(s) {
+  showConfirm('Wetter-Ereignis wirklich löschen?').then((ok) => {
+    if (!ok) return;
+    apiDelete(`/api/weather/sightings/${encodeURIComponent(s.id)}`)
+      .then(() => {
+        closeWeatherMode();
+        loadWeatherSightings(state.weather.filter);
+      })
+      .catch((err) => showToast('Löschen fehlgeschlagen: ' + (err?.message || err), 'error'));
+  });
+}
+
+// Open a weather sighting in the unified MediaView shell (blue tabs,
+// Wetter panel, Fein-Analyse fold, prev/next across the filtered list,
+// download + delete). Replaces the legacy ws-lb modal entirely. idx is
+// the absolute index into state.weather.itemsFiltered so prev/next
+// walk the whole filtered set, not just the current page.
 function openWeatherLightbox(idx) {
-  // Cards carry an absolute index into the filtered list (the slice
-  // window for the current page is just a render concern). When no
-  // filter is active, itemsFiltered == items.
   const items = state.weather.itemsFiltered || state.weather.items || [];
   if (idx < 0 || idx >= items.length) return;
   _wsLbIdx = idx;
   const s = items[idx];
-  // Build the modal lazily so the DOM stays clean when no sighting open.
-  let modal = byId('wsLightbox');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'wsLightbox';
-    modal.className = 'ws-lb';
-    modal.innerHTML = `
-      <div class="ws-lb-backdrop" data-action="close"></div>
-      <div class="ws-lb-shell">
-        <button class="ws-lb-close" data-action="close" aria-label="Schließen">✕</button>
-        <button class="ws-lb-prev" data-action="prev" aria-label="Vorherige">‹</button>
-        <button class="ws-lb-next" data-action="next" aria-label="Nächste">›</button>
-        <div class="ws-lb-video-wrap"><video id="wsLbVideo" controls playsinline autoplay muted loop preload="metadata"></video></div>
-        <div class="ws-lb-meta" id="wsLbMeta"></div>
-        <div class="ws-lb-actions">
-          <button class="btn-action" data-action="download">⬇ Herunterladen</button>
-          <button class="btn-action danger-btn" data-action="delete">🗑 Löschen</button>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
-    modal.addEventListener('click', (e) => {
-      const action = e.target.closest('[data-action]')?.dataset.action;
-      if (!action) return;
-      if (action === 'close') closeWeatherLightbox();
-      if (action === 'prev') openWeatherLightbox(_wsLbIdx - 1);
-      if (action === 'next') openWeatherLightbox(_wsLbIdx + 1);
-      if (action === 'download') {
-        const cur = (state.weather.itemsFiltered || state.weather.items)[_wsLbIdx];
-        if (cur) window.open(`/api/weather/sightings/${encodeURIComponent(cur.id)}/clip`, '_blank');
-      }
-      if (action === 'delete') {
-        const cur = (state.weather.itemsFiltered || state.weather.items)[_wsLbIdx];
-        if (cur) {
-          showConfirm('Wetter-Ereignis wirklich löschen?').then((ok) => {
-            if (!ok) return;
-            apiDelete(`/api/weather/sightings/${encodeURIComponent(cur.id)}`).then(() => {
-              closeWeatherLightbox();
-              loadWeatherSightings(state.weather.filter);
-            });
-          });
-        }
-      }
-    });
-    document.addEventListener('keydown', (e) => {
-      if (modal.classList.contains('open') === false) return;
-      if (e.key === 'Escape') closeWeatherLightbox();
-      if (e.key === 'ArrowLeft') openWeatherLightbox(_wsLbIdx - 1);
-      if (e.key === 'ArrowRight') openWeatherLightbox(_wsLbIdx + 1);
-    });
-  }
-  // Update video src + metadata
-  const video = byId('wsLbVideo');
-  video.src = `/api/weather/sightings/${encodeURIComponent(s.id)}/clip`;
-  video.load();
-  video.play().catch(() => {});
-  byId('wsLbMeta').innerHTML = _renderWsLbMeta(s);
-  modal.classList.add('open');
-  document.body.style.overflow = 'hidden';
-  modal.querySelector('.ws-lb-prev').style.opacity = idx > 0 ? '1' : '0.25';
-  modal.querySelector('.ws-lb-next').style.opacity = idx < items.length - 1 ? '1' : '0.25';
-}
-
-function closeWeatherLightbox() {
-  const modal = byId('wsLightbox');
-  if (!modal) return;
-  modal.classList.remove('open');
-  document.body.style.overflow = '';
-  const v = byId('wsLbVideo');
-  if (v) {
-    try {
-      v.pause();
-      v.src = '';
-    } catch (_err) {}
-  }
-}
-
-function _renderWsLbMeta(s) {
-  const meta = WEATHER_TYPES[s.event_type] || { de: s.event_type, color: '#94a3b8' };
-  const t = new Date(s.started_at);
-  const fullDate = t.toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
-  const snap = s.api_snapshot || {};
-  const apiRows = Object.entries(snap)
-    .filter(([k, v]) => v !== null && v !== undefined && k !== 'time')
-    .map(([k, v]) => {
-      const lbl = WEATHER_FIELD_LABEL_DE[k] || k;
-      const unit = WEATHER_FIELD_UNIT_DE[k] || '';
-      return `<div class="ws-lb-row"><span class="ws-lb-row-key">${esc(lbl)}</span><span class="ws-lb-row-val">${esc(String(v))}${unit ? ' ' + unit : ''}</span></div>`;
-    })
-    .join('');
-  const showSun = (s.event_type === 'sunset' || s.event_type === 'fog') && s.sun_snapshot;
-  const sunRows =
-    showSun && s.sun_snapshot
-      ? Object.entries(s.sun_snapshot)
-          .filter(([_k, v]) => v !== null && v !== undefined)
-          .map(
-            ([k, v]) =>
-              `<div class="ws-lb-row"><span class="ws-lb-row-key">${k === 'altitude' ? 'Höhe' : 'Azimut'}</span><span class="ws-lb-row-val">${Number(v).toFixed(1)}°</span></div>`,
-          )
-          .join('')
-      : '';
-  const displayLabel = _weatherSightingLabel(s, meta);
-  return `
-    <div class="ws-lb-headline">
-      <span class="ws-lb-type-badge" style="background:${meta.color}33;border:1px solid ${meta.color}66;color:${meta.color}">${meta.icon || ''} ${esc(displayLabel)}</span>
-      <span class="ws-lb-date">${esc(fullDate)}</span>
-    </div>
-    <div class="ws-lb-cam">📷 ${esc(s.cam_name || s.cam_id || '')}</div>
-    <div class="ws-lb-section-title">Wetter-Daten zur Aufnahme</div>
-    <div class="ws-lb-rows">${apiRows || '<div class="ws-lb-row ws-lb-row--empty">— keine Mess­werte —</div>'}</div>
-    ${sunRows ? `<div class="ws-lb-section-title">Sonne</div><div class="ws-lb-rows">${sunRows}</div>` : ''}
-  `;
+  openMediaView({
+    mode: 'weather',
+    item: _sightingItem(s),
+    source: {
+      type: 'video',
+      url: `/api/weather/sightings/${encodeURIComponent(s.id)}/clip`,
+      loop: true,
+    },
+    actions: {
+      onPrev: idx > 0 ? () => openWeatherLightbox(idx - 1) : null,
+      onNext: idx < items.length - 1 ? () => openWeatherLightbox(idx + 1) : null,
+      onDownload: () =>
+        window.open(`/api/weather/sightings/${encodeURIComponent(s.id)}/clip`, '_blank'),
+      onDelete: () => _confirmDeleteSighting(s),
+    },
+  });
 }
 
 // ── Settings: Wetter-Ereignisse ──────────────────────────────────────────────
@@ -608,63 +501,39 @@ function _renderWeatherRecaps() {
   });
 }
 
-function openWeatherRecapLightbox(idx) {
-  // Reuse the wsLightbox shell built by Phase 2 — swap the video src and
-  // metadata, no separate DOM. The Prev/Next nav stays disabled because
-  // recaps don't form an ordered series across the year.
+// Open a weather recap (a multi-clip compilation) in the MediaView
+// shell. Recaps carry no per-event snapshot — no Wetter tab, no
+// Fein-Analyse fold, just the clip + title. No prev/next: recaps don't
+// form an ordered series. Tolerant signature — the Telegram router
+// calls openWeatherRecap(item, idx); a bare idx also works.
+function openWeatherRecapLightbox(itemOrIdx, idx) {
   const items = state.weather.recaps || [];
-  if (idx < 0 || idx >= items.length) return;
-  const m = items[idx];
-  // Lazily build the modal if it doesn't exist yet (mirrors openWeatherLightbox).
-  let modal = byId('wsLightbox');
-  if (!modal) {
-    // Trigger Phase-2 lightbox creation once via a no-op open that closes
-    // immediately — it builds the shell, which we then reuse here.
-    if ((state.weather.items || []).length) {
-      openWeatherLightbox(0);
-      closeWeatherLightbox();
-      modal = byId('wsLightbox');
-    }
-    if (!modal) {
-      // Cold start with no sightings yet — build a minimal shell inline.
-      modal = document.createElement('div');
-      modal.id = 'wsLightbox';
-      modal.className = 'ws-lb';
-      modal.innerHTML = `
-        <div class="ws-lb-backdrop" data-action="close"></div>
-        <div class="ws-lb-shell">
-          <button class="ws-lb-close" data-action="close" aria-label="Schließen">✕</button>
-          <div class="ws-lb-video-wrap"><video id="wsLbVideo" controls playsinline autoplay muted loop preload="metadata"></video></div>
-          <div class="ws-lb-meta" id="wsLbMeta"></div>
-          <div class="ws-lb-actions"></div>
-        </div>`;
-      document.body.appendChild(modal);
-      modal.addEventListener('click', (e) => {
-        if (e.target.closest('[data-action="close"]')) closeWeatherLightbox();
-      });
-      document.addEventListener('keydown', (e) => {
-        if (modal.classList.contains('open') && e.key === 'Escape') closeWeatherLightbox();
-      });
-    }
+  let m;
+  if (itemOrIdx && typeof itemOrIdx === 'object') {
+    m = itemOrIdx;
+  } else {
+    const i = typeof itemOrIdx === 'number' ? itemOrIdx : idx;
+    if (i == null || i < 0 || i >= items.length) return;
+    m = items[i];
   }
-  const video = byId('wsLbVideo');
-  video.src = `/api/weather/recaps/${encodeURIComponent(m.id)}/clip`;
-  video.load();
-  video.play().catch(() => {});
-  byId('wsLbMeta').innerHTML = `
-    <div class="ws-lb-headline">
-      <span class="ws-lb-type-badge" style="background:#7faec933;border:1px solid #7faec966;color:#7faec9">🎞 ${esc(m.period_label || m.id)}</span>
-      <span class="ws-lb-date">${esc(m.built_at || '')}</span>
-    </div>
-    <div class="ws-lb-cam">${m.n_clips || 0} Sichtungen · Zeitraum ${esc(m.period_start || '')} → ${esc(m.period_end || '')}</div>
-  `;
-  // Hide nav arrows (recaps don't form a navigable series here).
-  const prev = modal.querySelector('.ws-lb-prev');
-  const next = modal.querySelector('.ws-lb-next');
-  if (prev) prev.style.display = 'none';
-  if (next) next.style.display = 'none';
-  modal.classList.add('open');
-  document.body.style.overflow = 'hidden';
+  if (!m) return;
+  openMediaView({
+    mode: 'weather',
+    item: {
+      camera_name: m.period_label || m.id || 'Recap',
+      time_label: [m.built_at || '', m.n_clips != null ? `${m.n_clips} Sichtungen` : '']
+        .filter(Boolean)
+        .join(' · '),
+    },
+    source: {
+      type: 'video',
+      url: `/api/weather/recaps/${encodeURIComponent(m.id)}/clip`,
+      loop: true,
+    },
+    showWeatherTab: false,
+    showFineFold: false,
+    actions: {},
+  });
 }
 
 // ── Hash anchor handler — open lightbox for #weather/<id> on page load ──────
@@ -705,7 +574,6 @@ export {
   loadWeatherSightings,
   renderWeatherSightings,
   openWeatherLightbox,
-  closeWeatherLightbox,
   loadWeatherRecaps,
   openWeatherRecapLightbox,
 };

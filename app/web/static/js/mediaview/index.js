@@ -51,6 +51,7 @@ import {
   lbStopTrackingPlayback,
 } from '../mediathek/bbox-overlay/index.js';
 import { openLiveDetect } from './live-detect.js';
+import { openWeatherMode } from './weather-mode.js';
 
 // ── Public surface ─────────────────────────────────────────────────────────
 // Verbatim back-compat exports — every name the old bbox-overlay
@@ -99,6 +100,14 @@ export function openMediaView(config) {
       throw new Error('openMediaView(recorded): legacy renderer not loaded');
     }
     return render(config.item);
+  }
+  if (mode === 'weather') {
+    // G · Weather opens in its own MediaView modal (the recorded /
+    // live modes still ride the legacy #lightboxModal chrome). The
+    // caller (weather/sightings.js) has already reshaped the sighting /
+    // recap into the shell item + source + actions, so the config flows
+    // straight through to the weather-mode controller.
+    return openWeatherMode(config);
   }
   if (mode === 'live-detect') {
     // Live-detect mounts the same recorded-mode chrome (lb-fs-video
