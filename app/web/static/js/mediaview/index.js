@@ -17,15 +17,9 @@
 //   title-bar.js             — header, prev/next/close
 //   canvas/
 //     index.js               — image | video | mjpeg source switch
-//     bbox-layer.js          — derived from bbox-overlay/renderer.js + raf.js
-//     trail-layer.js         — placeholder for path trails (future)
+//     trail-layer.js         — shared trail geometry (canvas + SVG)
 //     zone-layer.js          — read-only camera-zone polygon overlay
-//   playbar/
-//     index.js               — composes scrubber + axis + lanes + cursor
-//     scrubber.js
-//     time-axis.js
-//     swimlane.js            — per-class row builder
-//     playhead-line.js       — the ONE vertical line cutting every row
+//     zone-overlay-mount.js  — recorded-lightbox zone wiring
 //   panel-tabs.js
 //   panels/
 //     detections.js
