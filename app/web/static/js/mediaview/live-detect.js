@@ -24,6 +24,10 @@ import { byId, esc } from '../core/dom.js';
 import { state } from '../core/state.js';
 import { OBJ_LABEL, OBJ_SVG, colors, objIconSvg } from '../core/icons.js';
 import { renderFineAnalysisFold } from './fine-analysis-fold.js';
+// I1 · single source of the Aus/Motion-ROI/2×2/3×3 list — the F
+// mode-indicator owns it; _mountSimControls renders from the same
+// array so the live chips and the shell badge can never drift.
+import { MV_DETECTION_MODES } from './mode-indicator.js';
 import { normalizePolygon } from '../core/polygon-source.js';
 import { renderZoneLayerForMediaEl } from './canvas/zone-layer.js';
 import { fittedRect } from '../core/video-fit.js';
@@ -503,14 +507,12 @@ function _showStallBanner() {
       '<button type="button" class="mv-ld-stall-retry" data-action="stall-retry">' +
       'Erneut versuchen</button>' +
       '</div>';
-    banner
-      .querySelector('[data-action="stall-retry"]')
-      ?.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        console.warn('[sim-stall] manual retry');
-        _stallState.backoffMs = _STALL_BACKOFF_START;
-        _retryTickNow();
-      });
+    banner.querySelector('[data-action="stall-retry"]')?.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      console.warn('[sim-stall] manual retry');
+      _stallState.backoffMs = _STALL_BACKOFF_START;
+      _retryTickNow();
+    });
     host.appendChild(banner);
   }
   banner.style.display = 'flex';
@@ -706,8 +708,7 @@ function _ensureOverlayLayer(id, type, zIndex) {
   // H2.b Fix 3 · z-indexes 14/15/16 — zones+masks bottom (14),
   // trails middle (15), bboxes top (16). Stack order is
   // deterministic regardless of DOM insertion order.
-  el.style.cssText =
-    `position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:${zIndex}`;
+  el.style.cssText = `position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:${zIndex}`;
   host.appendChild(el);
   return el;
 }
@@ -920,12 +921,7 @@ function _mountSimControls() {
   if (row.parentNode !== host) host.appendChild(row);
   const stream = _session.stream || 'main';
   const mode = _session.detMode || 'off';
-  const MODES = [
-    ['off', 'Aus'],
-    ['roi', 'Motion-ROI'],
-    ['2x2', '2×2'],
-    ['3x3', '3×3'],
-  ];
+  const MODES = MV_DETECTION_MODES;
   const streamBtn =
     `<button type="button" class="mv-sim-ctl" data-ctl="stream" data-val="${esc(stream)}" ` +
     `title="Welchen Stream der Simulator prüft (Main = Produktions-Pipeline, Sub = 640×360)" ` +
@@ -2496,7 +2492,13 @@ function _buildTrackEventsHtml() {
               ? '#ffcd6e'
               : '#b6d4be';
       const tagLabel =
-        kind === 'spawn' ? 'SPAWN' : kind === 'death' ? 'DEATH' : kind === 'reid' ? 'RE-ID' : 'CONT.';
+        kind === 'spawn'
+          ? 'SPAWN'
+          : kind === 'death'
+            ? 'DEATH'
+            : kind === 'reid'
+              ? 'RE-ID'
+              : 'CONT.';
       return `<div class="mv-ld-track-event">
         <span class="mv-ld-track-event-tag" style="color:${tagColor}">${tagLabel}</span>
         <span class="mv-ld-track-event-text">${esc(text)}</span>
