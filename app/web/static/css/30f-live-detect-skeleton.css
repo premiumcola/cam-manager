@@ -383,89 +383,13 @@
   }
 }
 
-/* The legend strip's auto-left margin (lb-legend { margin-left: auto })
-   would push it to the right of a single-row flex — with flex-wrap
-   on the pills, that's no longer the right place. Hide the inline
-   legend; SIMU-02b adds its own floating pill at the bottom of the
-   video instead. */
+/* L3 · in live mode the inline status legend (mounted into
+   #mvLiveToggles by _setupVideoChrome) is hidden — the same shared
+   legend is mounted as a floating overlay over the video instead
+   (.mv-legend[data-float], 30g), auto-positioned opposite the OSD
+   band. Suppress the inline copy here so live shows just one. */
 .mv-ld-zone-video #mvLiveToggles .mv-legend {
   display: none;
-}
-
-/* SIMU-02b · floating verdict-legend pill. Same dark-glass surface
-   as the toggle pills above; centred 8 px above the video's bottom
-   edge. Hugs content (width:auto). SIMU-02c · default hidden;
-   fade-in slides up 4 px, fade-out reverses. */
-.mv-ld-floating-legend {
-  position: absolute;
-  bottom: 8px;
-  left: 50%;
-  z-index: 22;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  padding: 4px 12px;
-  background: rgba(11, 15, 20, 0.55);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  border-radius: 9px;
-  font-size: 9px;
-  color: #9fb8a8;
-  white-space: nowrap;
-  pointer-events: none;
-  letter-spacing: 0.01em;
-  opacity: 0;
-  transform: translate(-50%, 4px);
-  transition:
-    opacity 220ms ease-in,
-    transform 220ms ease-in;
-}
-
-.mv-ld-zone-video[data-overlay-visible='1'] .mv-ld-floating-legend {
-  opacity: 1;
-  transform: translate(-50%, 0);
-  transition:
-    opacity 180ms ease-out,
-    transform 180ms ease-out;
-}
-
-.mv-ld-leg-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.mv-ld-leg-sw {
-  display: inline-block;
-  width: 8px;
-  height: 6px;
-  flex-shrink: 0;
-}
-
-.mv-ld-leg-sw-pass {
-  background: #6ee7b7;
-}
-
-.mv-ld-leg-sw-below {
-  background: #ffcd6e;
-}
-
-/* ▨ gefiltert · diagonal-stripe pattern via repeating-linear-gradient.
-   Cheap to render, no extra DOM. */
-.mv-ld-leg-sw-filtered {
-  background: repeating-linear-gradient(
-    45deg,
-    #7a8896 0,
-    #7a8896 2px,
-    transparent 2px,
-    transparent 4px
-  );
-  box-shadow: inset 0 0 0 1px #7a8896;
-}
-
-.mv-ld-leg-lbl {
-  color: #9fb8a8;
-  line-height: 1;
 }
 
 /* ─── SIMU-03 · Live-Detect swimlane ───────────────────────────────── */
