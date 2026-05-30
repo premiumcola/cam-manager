@@ -260,11 +260,15 @@ function _renderWeatherGrid() {
   });
 }
 
-// Page-pill row underneath the grid. Re-uses the .media-pagination
-// look from the main Library so the visual rhythm matches. We render
-// numeric pills (max 5 visible) plus prev/next chevrons; for 1-page
-// lists the strip stays hidden via [hidden]. The page index lives on
-// state.weather.page and is read by _renderWeatherGrid on every call.
+// Pagination strip underneath the grid. Copied 1:1 from the Mediathek
+// renderMediaPagination() recipe (mediathek/orchestration.js): a prev
+// chip, a "Seite X von Y" label, and a next chip — no numbered pill row
+// (it got ugly with many pages). The container
+// (#weatherSightingsPagination) already carries `media-pagination` so
+// the `.page-pill` / `.page-pill-chip` / `.page-label` styling is shared
+// with the Library. Wiring is unchanged: prev/next move
+// state.weather.page, re-render the grid, and scroll it back into view;
+// the strip stays hidden for single-page lists.
 function _renderWeatherPagination(totalItems, pageSize) {
   const pag = byId('weatherSightingsPagination');
   if (!pag) return;
@@ -276,30 +280,16 @@ function _renderWeatherPagination(totalItems, pageSize) {
   pag.hidden = false;
   const pageCount = Math.max(1, Math.ceil(totalItems / pageSize));
   const cur = Number.isInteger(state.weather.page) ? state.weather.page : 0;
-  // Window of up to 5 numeric pills around the current page.
-  const winStart = Math.max(0, Math.min(cur - 2, pageCount - 5));
-  const winEnd = Math.min(pageCount, winStart + 5);
-  const pills = [];
-  pills.push(
-    `<button type="button" class="page-pill" data-act="prev" ${cur === 0 ? 'disabled' : ''} aria-label="Vorherige Seite"><span class="page-pill-chip">‹</span></button>`,
-  );
-  for (let i = winStart; i < winEnd; i++) {
-    pills.push(
-      `<button type="button" class="page-pill${i === cur ? ' active' : ''}" data-go="${i}"><span class="page-pill-chip">${i + 1}</span></button>`,
-    );
-  }
-  pills.push(
-    `<button type="button" class="page-pill" data-act="next" ${cur >= pageCount - 1 ? 'disabled' : ''} aria-label="Nächste Seite"><span class="page-pill-chip">›</span></button>`,
-  );
-  pag.innerHTML = pills.join('');
+  pag.innerHTML =
+    `<button type="button" class="page-pill" data-act="prev" ${cur === 0 ? 'disabled' : ''} aria-label="Vorherige Seite"><span class="page-pill-chip">‹</span></button>` +
+    `<span class="page-label">Seite ${cur + 1} von ${pageCount}</span>` +
+    `<button type="button" class="page-pill" data-act="next" ${cur >= pageCount - 1 ? 'disabled' : ''} aria-label="Nächste Seite"><span class="page-pill-chip">›</span></button>`;
   pag.querySelectorAll('button').forEach((btn) => {
     btn.addEventListener('click', () => {
       if (btn.disabled) return;
-      const act = btn.dataset.act;
       let next = state.weather.page || 0;
-      if (act === 'prev') next = Math.max(0, next - 1);
-      else if (act === 'next') next = Math.min(pageCount - 1, next + 1);
-      else if (btn.dataset.go !== undefined) next = parseInt(btn.dataset.go, 10);
+      if (btn.dataset.act === 'prev') next = Math.max(0, next - 1);
+      else if (btn.dataset.act === 'next') next = Math.min(pageCount - 1, next + 1);
       if (next === state.weather.page) return;
       state.weather.page = next;
       _renderWeatherGrid();
