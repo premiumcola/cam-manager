@@ -37,7 +37,7 @@ import {
   unmountZoneOverlayForLightbox,
 } from './mediaview/canvas/zone-overlay-mount.js';
 import { mountWeatherToggleBar } from './mediaview/overlay-toggles.js';
-import { mountStatusLegend } from './mediathek/bbox-overlay/legend.js';
+import { renderStatusLegend } from './mediaview/status-legend.js';
 import { mountReindexButton } from './mediathek/bbox-overlay/reindex-button.js';
 import { _iosNativeVideoOpen } from './mediathek/ios-video.js';
 import { closeLiveView } from './chrome/live-view.js';
@@ -185,8 +185,9 @@ export function _setupVideoChrome(item) {
   }
   // Status legend — appended to the toggle row so the same band
   // explains both "what layers are on" and "what each track stroke
-  // style means". Self-contained popover handles the mobile collapse.
-  mountStatusLegend('mvLiveToggles');
+  // style means". The ONE shared legend (mediaview/status-legend.js)
+  // serves recorded + weather + live; popover handles mobile collapse.
+  renderStatusLegend('mvLiveToggles');
   // Sync ALL four layers' initial visibility to whatever the toggle
   // bar resolved (persisted localStorage values for bboxes/trails;
   // declared defaults for zones/masks). Without this the layer

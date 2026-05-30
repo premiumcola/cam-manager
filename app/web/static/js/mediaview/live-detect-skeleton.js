@@ -22,6 +22,7 @@
 //                                          lightbox keeps working.
 
 import { byId } from '../core/dom.js';
+import { renderStatusLegend } from './status-legend.js';
 
 const CONTAINER_ID = 'mvLdContainer';
 const ZONE_IDS = {
@@ -146,6 +147,9 @@ let _fsRestore = null;
 let _overlayVisible = false;
 let _hideTimer = 0;
 const _OVERLAY_HIDE_MS = 3000;
+// L3 · handle for the ONE shared status legend mounted over the video;
+// kept so unmountLdSkeleton can tear down its document listeners.
+let _legendHandle = null;
 
 // localStorage helpers — silent on private mode / quota errors.
 function _lsGet(key) {
@@ -229,10 +233,12 @@ export function mountLdSkeleton({ camId, cameraName } = {}) {
   }
   // Title chrome — name + ● Live + chevron + close X.
   zoneTitle.appendChild(_buildTitleBar(cameraName));
-  // SIMU-02b · floating legend at the bottom of the video. Lives
-  // inside zone-video so its visibility tracks the video; SIMU-02c
-  // ties show/hide to the tap-on-video gesture.
-  zoneVideo.appendChild(_buildFloatingLegend());
+  // L3 · the ONE shared status legend (Bestätigt / ↓ Schwach / ≈ Ghost
+  // / ⊘ Maskiert · "Farbe = Person-Nr.") floats over the video, auto-
+  // positioned opposite the OSD timestamp band so it never overlaps it.
+  // The same component the recorded + weather modes mount — one legend
+  // everywhere, replacing the old live-only pass/unter-Schwelle pill.
+  _legendHandle = renderStatusLegend(zoneVideo, { float: true, osdBand: 'top' });
   // SIMU-02c · default hidden, pointerup listener handles the toggle.
   // passive:true so the gesture doesn't block scroll on the detail
   // panel below. pointerup (not click) for snappier response on iOS
@@ -274,6 +280,14 @@ function _applyInitialCollapsedStates(camId) {
 export function unmountLdSkeleton() {
   const container = byId(CONTAINER_ID);
   if (!container) return;
+  // L3 · tear down the shared legend (document listeners + popover)
+  // before the container goes so nothing leaks across re-opens.
+  try {
+    _legendHandle?.teardown();
+  } catch {
+    /* ignore */
+  }
+  _legendHandle = null;
   const inner = byId('lightboxInner');
   const wrap = byId('lightboxMediaWrap');
   if (!wrap || !inner) {
@@ -389,26 +403,6 @@ function _renderTitleText(camName) {
   const textEl = byId(CONTAINER_ID)?.querySelector('[data-mv-ld-title-text]');
   const camText = camName || '';
   if (textEl) textEl.textContent = camText ? `${camText} · Live` : 'Live';
-}
-
-// SIMU-02b · the verdict legend pill. Single dark-glass surface
-// centred 8 px above the video's bottom edge. Three swatches:
-//   #6ee7b7 pass · #ffcd6e unter Schwelle · #7a8896 striped gefiltert
-function _buildFloatingLegend() {
-  const el = document.createElement('div');
-  el.id = 'mvLdFloatingLegend';
-  el.className = 'mv-ld-floating-legend';
-  el.innerHTML =
-    '<span class="mv-ld-leg-item">' +
-    '<span class="mv-ld-leg-sw mv-ld-leg-sw-pass"></span>' +
-    '<span class="mv-ld-leg-lbl">pass</span></span>' +
-    '<span class="mv-ld-leg-item">' +
-    '<span class="mv-ld-leg-sw mv-ld-leg-sw-below"></span>' +
-    '<span class="mv-ld-leg-lbl">unter Schwelle</span></span>' +
-    '<span class="mv-ld-leg-item">' +
-    '<span class="mv-ld-leg-sw mv-ld-leg-sw-filtered"></span>' +
-    '<span class="mv-ld-leg-lbl">gefiltert</span></span>';
-  return el;
 }
 
 function _buildTimelineHeader() {

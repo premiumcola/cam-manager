@@ -44,7 +44,7 @@ export function mountReindexButton(host) {
     <span class="lb-reindex-label">Neu erkennen</span>`;
   // Insert BEFORE the legend so the order stays
   // [Bboxes][Trails][Zonen][Masken][Reindex][Legend].
-  const legend = row.querySelector('.lb-legend');
+  const legend = row.querySelector('.mv-legend');
   if (legend) row.insertBefore(btn, legend);
   else row.appendChild(btn);
   btn.addEventListener('click', (ev) => {

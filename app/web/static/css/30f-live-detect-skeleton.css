@@ -388,7 +388,7 @@
    on the pills, that's no longer the right place. Hide the inline
    legend; SIMU-02b adds its own floating pill at the bottom of the
    video instead. */
-.mv-ld-zone-video #mvLiveToggles .lb-legend {
+.mv-ld-zone-video #mvLiveToggles .mv-legend {
   display: none;
 }
 

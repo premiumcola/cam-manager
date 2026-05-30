@@ -185,6 +185,13 @@
 .mv-legend[data-float='1'][data-osd-avoid='bottom'] {
   bottom: 10px;
 }
+/* Inline in the recorded/live overlay-toggle row (#mvLiveToggles):
+   push the legend to the right edge so the pills sit left and the
+   legend right — mirrors the retired .lb-legend { margin-left:auto }.
+   In live the inline copy is hidden (30f) and the floating one shows. */
+#mvLiveToggles .mv-legend:not([data-float='1']) {
+  margin-left: auto;
+}
 .mv-legend-desktop {
   display: flex;
   align-items: center;
