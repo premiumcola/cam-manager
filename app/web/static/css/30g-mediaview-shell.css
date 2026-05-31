@@ -432,3 +432,115 @@
   min-height: 100dvh;
   margin: 0 auto;
 }
+
+/* ── Shared gauge pill content (.mvdp-* · L5 detail-pill) ─────────────
+   ONE Score/Höhe/Fläche gauge markup for recorded (#lightboxConfidence-
+   Meter) + live (#mvLiveDetailPill). Each host owns its absolute
+   positioning + surface (30c / 30e); these rules style the inner cards
+   globally so both pills read identically. Mirrors the retired .lbcm-*
+   and .mv-live-detail-* values into one table. */
+.mvdp-track {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mvdp-track + .mvdp-track {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.mvdp-head {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.mvdp-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mvdp-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mvdp-row-label {
+  font-size: 12px;
+  color: rgba(226, 232, 240, 0.85);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.mvdp-row-pct {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  color: #f1f5f9;
+  font-variant-numeric: tabular-nums;
+}
+.mvdp-row-bar {
+  position: relative;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2.5px;
+  margin-top: 10px; /* room for the threshold number above */
+}
+.mvdp-row-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 2.5px;
+}
+.mvdp-row-tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: #fff;
+  pointer-events: none;
+  transform: translateX(-1px);
+}
+.mvdp-row-tick-num {
+  position: absolute;
+  top: -14px;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 9px;
+  font-weight: 500;
+  color: #fff;
+  letter-spacing: 0.02em;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.mvdp-missing {
+  font-size: 9.5px;
+  color: rgba(226, 232, 240, 0.45);
+  font-style: italic;
+  margin: 0 0 4px;
+  letter-spacing: 0.02em;
+}
+.mvdp-empty {
+  font-size: 11px;
+  color: rgba(226, 232, 240, 0.6);
+  font-style: italic;
+}
+.mvdp-legend {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  font-size: 9px;
+  color: rgba(226, 232, 240, 0.5);
+}
+.mvdp-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.mvdp-legend-tick {
+  color: #fff;
+}
+.mvdp-legend-fill {
+  color: #94a3b8;
+}

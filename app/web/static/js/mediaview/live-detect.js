@@ -29,6 +29,7 @@ import { renderFineAnalysisFold } from './fine-analysis-fold.js';
 // array so the live chips and the shell badge can never drift.
 import { MV_DETECTION_MODES } from './mode-indicator.js';
 import { renderOverlayToggles } from './overlay-toggles.js';
+import { renderDetailPill } from './detail-pill.js';
 import { normalizePolygon } from '../core/polygon-source.js';
 import { renderZoneLayerForMediaEl } from './canvas/zone-layer.js';
 import { fittedRect } from '../core/video-fit.js';
@@ -2434,8 +2435,9 @@ function _renderDetailPill() {
   // Find the live detection for this label (most recent).
   const det = (_session?.lastDetections || []).find((d) => d.label === _selectedLabel);
   if (!det) {
-    pill.innerHTML = `<div class="mv-live-detail-head" style="color:${c}">${esc(lblText)}</div>
-      <div class="mv-live-detail-empty">Aktuell nicht im Bild</div>`;
+    // L5 · shared renderer's empty-state so the "not in frame" copy
+    // matches every mode.
+    renderDetailPill(pill, { tracks: [], emptyText: `${lblText} · aktuell nicht im Bild` });
     return;
   }
   const cam = (state.cameras || []).find((x) => x.id === _session.camId) || {};
@@ -2446,40 +2448,22 @@ function _renderDetailPill() {
   const fs = _session.lastFrameSize || { w: 1920, h: 1080 };
   const bh = det.bbox?.[3] || 0;
   const bw = det.bbox?.[2] || 0;
-  const fracH = fs.h > 0 ? bh / fs.h : 0;
-  const fracArea = fs.w * fs.h > 0 ? (bw * bh) / (fs.w * fs.h) : 0;
-  const score = det.score || 0;
-  const scorePct = Math.round(score * 100);
-  const threshPct = Math.round(scoreThresh * 100);
-  const heightPct = Math.round(fracH * 100);
-  const areaPct = Math.round(fracArea * 100);
-  const scoreColor = score >= scoreThresh ? c : '#f59e0b';
-  pill.innerHTML = `
-    <div class="mv-live-detail-head" style="color:${c}">${esc(lblText)}</div>
-    <div class="mv-live-detail-gauge">
-      <div class="mv-live-detail-row">
-        <span class="mv-live-detail-key">Score</span>
-        <span class="mv-live-detail-val">${scorePct} %</span>
-      </div>
-      <div class="mv-live-detail-bar">
-        <span class="mv-live-detail-fill" style="width:${scorePct}%;background:${scoreColor}"></span>
-        <span class="mv-live-detail-tick" style="left:${threshPct}%"></span>
-      </div>
-      <div class="mv-live-detail-row">
-        <span class="mv-live-detail-key">Höhe</span>
-        <span class="mv-live-detail-val">${heightPct} %</span>
-      </div>
-      <div class="mv-live-detail-bar">
-        <span class="mv-live-detail-fill" style="width:${heightPct}%;background:${c}"></span>
-      </div>
-      <div class="mv-live-detail-row">
-        <span class="mv-live-detail-key">Fläche</span>
-        <span class="mv-live-detail-val">${areaPct} %</span>
-      </div>
-      <div class="mv-live-detail-bar">
-        <span class="mv-live-detail-fill" style="width:${areaPct}%;background:${c}"></span>
-      </div>
-    </div>`;
+  // L5 · the ONE shared gauge renderer (detail-pill.js) — single-track
+  // card for the pinned label (Score with Settings-Limit tick + amber
+  // below, Höhe, Fläche). Same cards the recorded gauge draws.
+  renderDetailPill(pill, {
+    tracks: [
+      {
+        label: lblText,
+        color: c,
+        score: det.score || 0,
+        scoreThresh,
+        fracH: fs.h > 0 ? bh / fs.h : 0,
+        fracArea: fs.w * fs.h > 0 ? (bw * bh) / (fs.w * fs.h) : 0,
+        num: Number.isFinite(det.track_num) ? det.track_num : null,
+      },
+    ],
+  });
 }
 
 function _appendTrace(lines) {
