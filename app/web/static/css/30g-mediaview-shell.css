@@ -118,12 +118,57 @@
   stroke-dasharray: 3 2;
   vector-effect: non-scaling-stroke;
 }
-/* Mode indicator — top-left of the stage (matches live-detect). */
-.mv-shell-modeind {
+/* Overlay-toggle pills — pinned top-LEFT inside the stage (sim-player
+   layout). Wraps on narrow stages; collapses when a mode mounts none. */
+.mv-shell-toggles {
   position: absolute;
   top: 8px;
   left: 8px;
   z-index: 18;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: calc(100% - 16px);
+}
+.mv-shell-toggles:empty {
+  display: none;
+}
+/* Stream-selector + mode-indicator cluster — pinned top-RIGHT inside the
+   stage. The Stream slot is reserved (empty until live-detect migrates in
+   F); :empty collapses it so the gap doesn't show before then. */
+.mv-shell-topright {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 18;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mv-shell-streamslot:empty {
+  display: none;
+}
+.mv-shell-modeind {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Stacked overlay layers over the media — sized to the letterbox rect by
+   canvas/index.js; painters (E/F) draw their svg/canvas inside. Order:
+   zones under trails under bbox. All sit BELOW the tiling grid (z 6) and
+   the pinned chrome (z 18), inside the frame's own stacking context. */
+.mv-canvas-layer {
+  position: absolute;
+  pointer-events: none;
+}
+.mv-canvas-layer[data-layer='zones'] {
+  z-index: 3;
+}
+.mv-canvas-layer[data-layer='trails'] {
+  z-index: 4;
+}
+.mv-canvas-layer[data-layer='bbox'] {
+  z-index: 5;
 }
 /* L2 · recorded read-only mode badge — top-right over the clip (matches
    the live STREAM+mode cluster's corner); its #lbRecModeGrid reuses
@@ -311,15 +356,32 @@
   flex-shrink: 0;
 }
 
-/* ── Chrome row ──────────────────────────────────────────────────── */
-.mv-shell-chrome {
+/* ── Status-legend band (below the stage, above the playbar) ─────────
+   Inline status legend + class-colour legend share this band; the
+   "Neu erkennen" pill pins to the right. Collapses when a mode mounts
+   none of them (weather), so no empty gap shows. */
+.mv-shell-legendband {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 12px;
+  padding: 2px 6px;
 }
-.mv-shell-actions {
+.mv-shell-legendband:empty {
+  display: none;
+}
+.mv-shell-legendband .mv-retrigger {
   margin-left: auto;
+}
+
+/* ── Playbar + per-class swimlane ────────────────────────────────────
+   Hosts the recorded scrubber + swimlane (timeline-panel) or the live
+   swimlane. Collapses for modes with no timeline (weather). */
+.mv-shell-playbar {
+  width: 100%;
+}
+.mv-shell-playbar:empty {
+  display: none;
 }
 
 /* ── Re-trigger "Neu erkennen" (F4) ──────────────────────────────── */

@@ -26,10 +26,14 @@ import {
 } from './time-axis.js';
 import { _wireBarEndTooltips } from './track-loss-tooltip.js';
 
-export function lbClearTrackTimeline() {
-  const host = byId('lightboxBottomStack');
-  if (!host) return;
-  host.innerHTML = '';
+// ``host`` defaults to the legacy #lightboxBottomStack so every existing
+// caller keeps working unchanged; the MediaView shell passes its own
+// playbar slot so the same renderer can mount into the shared shell
+// (D · migration enabler) without a fork.
+export function lbClearTrackTimeline(host) {
+  const el = host || byId('lightboxBottomStack');
+  if (!el) return;
+  el.innerHTML = '';
 }
 
 // Classify a single sample into one of four buckets matching the
@@ -248,8 +252,14 @@ function _synthTracksFromDetections(item) {
 // origin. The shared --play-pct CSS variable on .lb-time-stack drives
 // scrubber-fill width + scrubber-thumb left + play-line left in
 // lockstep so a single rAF write paints all three.
-export function lbRenderTrackTimeline(item) {
-  const host = byId('lightboxBottomStack');
+export function lbRenderTrackTimeline(item, opts = {}) {
+  // ``opts.host`` overrides the legacy #lightboxBottomStack so the
+  // MediaView shell can mount the recorded scrubber + per-class swimlane
+  // into its own playbar slot (D). All existing callers pass item only →
+  // unchanged behaviour. The play/scrub WIRING (time-axis.js) still binds
+  // to the global #lightboxVideo / .lb-time-stack; E wires the shell's
+  // video element into that path.
+  const host = opts.host || byId('lightboxBottomStack');
   if (!host) return;
   if (!item) {
     host.innerHTML = '';

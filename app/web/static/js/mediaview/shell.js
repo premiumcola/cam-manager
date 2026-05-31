@@ -1,12 +1,14 @@
 // ─── mediaview/shell.js ────────────────────────────────────────────────────
-// Config-driven composition of the MediaView chrome. mountMediaView
-// builds the shell host node and assembles the shared pieces — title
-// bar, mode indicator + tiling-grid layer, status legend, overlay
-// toggles, class-colour legend, re-trigger button, colour-coded panel
-// tabs, fine-analysis fold — entirely from the openMediaView config
-// (mode + overlays{} + panels{}). The actual viewer bodies (recorded /
-// weather / live) are migrated onto this shell in tasks G/H/I; F builds
-// and verifies the chrome shell itself with no real data wired.
+// Config-driven composition of the MediaView chrome — now a COMPLETE
+// player. mountMediaView builds the shell host node and assembles the
+// shared pieces in the unified layout (top → bottom): title bar; video
+// stage (media frame + overlay layers, tiling grid, overlay-toggle pills
+// top-left, Stream+mode cluster top-right); inline status-legend band;
+// playbar + per-class swimlane; colour-coded panel tabs + fine-analysis
+// fold — entirely from the openMediaView config (mode + overlays{} +
+// panels{}). Weather already rides this shell; recorded (E) + live (F)
+// route through it next, so D makes every region present + composable
+// with placeholder data.
 //
 // Each mode flips a small flag set (_MODE_FLAGS) the composition reads;
 // every piece is guarded so any mode × overlay × panel flag combination
@@ -21,6 +23,8 @@ import { renderOverlayToggles } from './overlay-toggles.js';
 import { renderRetriggerButton } from './retrigger-button.js';
 import { renderPanelTabs } from './panel-tabs.js';
 import { renderFineAnalysisFold } from './fine-analysis-fold.js';
+import { lbRenderTrackTimeline, lbClearTrackTimeline } from '../mediathek/bbox-overlay/index.js';
+import { renderLiveSwimlane } from './live-swimlane.js';
 
 // Per-mode shell behaviour. interactiveMode → live segmented control vs
 // read-only badge; osdBand → where the camera OSD timestamp sits so the
@@ -97,17 +101,27 @@ function _buildTabs(panels, panelRenderers, item) {
   return out;
 }
 
+// Unified player layout, top → bottom (matches the live sim-player):
+//   titlebar
+//   stage    — frame + media + overlay layers, tiling grid, overlay-
+//              toggle pills pinned top-left, Stream+mode cluster (with a
+//              reserved Stream-selector slot) pinned top-right.
+//   legendband — inline status legend + class legend + re-trigger pill,
+//                directly below the stage (collapses via :empty).
+//   playbar  — recorded/timelapse scrubber + per-class swimlane, or the
+//              live swimlane (collapses via :empty for weather).
+//   panels   — colour-coded tabs + fine-analysis fold.
 const _SHELL_HTML =
   `<div class="mv-shell-titlebar" data-slot="titlebar"></div>` +
   `<div class="mv-shell-stage" data-slot="stage">` +
   `<div class="mv-shell-frame" data-slot="frame"></div>` +
   `<svg class="mv-shell-grid" data-slot="grid" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" hidden></svg>` +
-  `<div class="mv-shell-modeind" data-slot="modeind"></div>` +
-  `<div class="mv-shell-legend" data-slot="legend"></div></div>` +
-  `<div class="mv-shell-chrome" data-slot="chrome">` +
   `<div class="mv-shell-toggles" data-slot="toggles"></div>` +
-  `<div class="mv-shell-classlegend" data-slot="classlegend"></div>` +
-  `<div class="mv-shell-actions" data-slot="actions"></div></div>` +
+  `<div class="mv-shell-topright" data-slot="topright">` +
+  `<div class="mv-shell-streamslot" data-slot="stream"></div>` +
+  `<div class="mv-shell-modeind" data-slot="modeind"></div></div></div>` +
+  `<div class="mv-shell-legendband" data-slot="legendband"></div>` +
+  `<div class="mv-shell-playbar" data-slot="playbar"></div>` +
   `<div class="mv-shell-panels" data-slot="panels">` +
   `<div class="mv-shell-tabs" data-slot="tabs"></div>` +
   `<div class="mv-shell-fafold" data-slot="fafold"></div></div>`;
@@ -163,7 +177,15 @@ export function mountMediaView(config = {}) {
       interactive: flags.interactiveMode,
       value: config.detMode || config.appliedTiling || 'off',
       onChange: (id) => {
-        if (gridVisible()) renderTilingGrid(gridSvg, id);
+        // Interactive (live): selecting a tiling draws the matching split
+        // over the frame; "Aus" clears it — so the operator sees how the
+        // frame is subdivided for scanning. Read-only badges fire
+        // onToggleGrid instead, so this branch only runs for live.
+        if (flags.interactiveMode) {
+          setGridVisible(id !== 'off', id);
+        } else if (gridVisible()) {
+          renderTilingGrid(gridSvg, id);
+        }
         if (typeof actions.onModeChange === 'function') actions.onModeChange(id);
       },
       onToggleGrid: (show, id) => setGridVisible(show, id),
@@ -174,18 +196,9 @@ export function mountMediaView(config = {}) {
     }
   }
 
-  // Status legend floats over the frame only when detections are
-  // meaningful (the bbox layer is available in this mode).
-  if (overlays.bboxes) {
-    const sl = renderStatusLegend(slot('legend'), { float: true, osdBand });
-    if (sl) {
-      components.statusLegend = sl;
-      teardowns.push(sl.teardown);
-    }
-  }
-
-  // Overlay toggles — the available layers are the keys present in
-  // config.overlays (weather passes only zones/masks, etc.).
+  // Overlay-toggle pills pinned top-left INSIDE the stage. The available
+  // layers are the keys present in config.overlays (weather passes none,
+  // so the pinned slot stays empty + collapses).
   const available = Object.keys(overlays);
   if (available.length) {
     const ot = renderOverlayToggles(slot('toggles'), {
@@ -199,20 +212,53 @@ export function mountMediaView(config = {}) {
     }
   }
 
-  // Class-colour legend pairs with the bbox layer.
+  // Inline status-legend band directly below the stage (float:false —
+  // no longer a floating frame overlay). The class-colour legend and the
+  // "Neu erkennen" pill share the same band (retrigger pinned right via
+  // 30g); the band collapses via :empty when a mode mounts none of them.
+  const legendBand = slot('legendband');
   if (overlays.bboxes) {
-    const cl = renderClassLegend(slot('classlegend'), { classes: config.classes });
+    const sl = renderStatusLegend(legendBand, { float: false, osdBand });
+    if (sl) {
+      components.statusLegend = sl;
+      teardowns.push(sl.teardown);
+    }
+    const cl = renderClassLegend(legendBand, { classes: config.classes });
     if (cl) {
       components.classLegend = cl;
       teardowns.push(cl.teardown);
     }
   }
-
   if (flags.retrigger || typeof actions.onRetrigger === 'function') {
-    const rt = renderRetriggerButton(slot('actions'), { onClick: actions.onRetrigger });
+    const rt = renderRetriggerButton(legendBand, { onClick: actions.onRetrigger });
     if (rt) {
       components.retrigger = rt;
       teardowns.push(rt.teardown);
+    }
+  }
+
+  // Playbar + per-class swimlane, between the legend band and the panel
+  // tabs. recorded/timelapse reuse the recorded scrubber + swimlane
+  // (timeline-panel, host-parameterised onto the shell slot); live modes
+  // reuse the live swimlane. Weather has no timeline → slot collapses.
+  // Placeholder/empty data is fine this batch (no consumer feeds real
+  // tracks through the shell yet — E/F wire the data path).
+  const playbar = slot('playbar');
+  if (playbar) {
+    if (mode === 'recorded' || mode === 'timelapse') {
+      lbRenderTrackTimeline(config.item || null, { host: playbar });
+      teardowns.push(() => {
+        try {
+          lbClearTrackTimeline(playbar);
+        } catch {
+          /* ignore */
+        }
+      });
+    } else if (flags.interactiveMode) {
+      renderLiveSwimlane(playbar, { detBuffer: [], windowMs: 60_000, objectFilter: null });
+      teardowns.push(() => {
+        playbar.innerHTML = '';
+      });
     }
   }
 
