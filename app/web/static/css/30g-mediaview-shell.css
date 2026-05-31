@@ -403,42 +403,32 @@
   text-align: right;
 }
 
-/* ── MediaView modal host (G · weather) ──────────────────────────── */
-/* Full-screen overlay that hosts the shell for modes owning their own
-   modal. iOS-safe: 100dvh, safe-area insets, one scroll container. */
-.mv-modal {
-  position: fixed;
-  inset: 0;
-  z-index: var(--z-modal, 1100);
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-}
-.mv-modal-backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(2, 5, 10, 0.86);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
-}
-.mv-modal-scroll {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  max-width: 980px;
-  height: 100dvh;
+/* ── #lightboxModal · weather mode (L1 · one container) ──────────────
+   Weather folds into the shared #lightboxModal instead of a separate
+   mv-modal overlay (modal.js deleted). The shell mounts into
+   #lightboxInner; the legacy recorded chrome (top bar, media wrap,
+   buttons, scrubber, settings) is hidden so only the .mv-shell shows,
+   full-screen. #lightboxInner becomes the single scroll container —
+   iOS-safe: 100dvh, safe-area inset, momentum scroll. !important on the
+   inner overrides beats #lightboxInner's inline width (mirrors how
+   .lb-live-detect re-purposes the same node, 30f). */
+#lightboxModal.lb-weather #lightboxInner {
+  width: 100vw !important;
+  max-width: none !important;
+  height: 100dvh !important;
+  display: block !important;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 0 10px env(safe-area-inset-bottom, 12px) 10px;
-  display: flex;
-  flex-direction: column;
+  padding: 0 0 env(safe-area-inset-bottom, 0px) 0 !important;
+  margin: 0 !important;
 }
-.mv-modal .mv-shell {
-  margin: auto 0;
+/* Hide every legacy recorded child — only the mounted shell shows. */
+#lightboxModal.lb-weather #lightboxInner > :not(.mv-shell) {
+  display: none !important;
 }
-@media (max-width: 768px) {
-  .mv-modal-scroll {
-    padding-left: 0;
-    padding-right: 0;
-  }
+#lightboxModal.lb-weather .mv-shell {
+  width: 100%;
+  max-width: 980px;
+  min-height: 100dvh;
+  margin: 0 auto;
 }

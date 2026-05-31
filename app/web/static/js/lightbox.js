@@ -569,6 +569,15 @@ export function closeLightbox() {
   } catch {
     /* ignore */
   }
+  // L1 · weather now rides this same #lightboxModal container (mv-modal
+  // deleted). Tear its shell down too so Esc / backdrop close converge
+  // here. No-op when nothing weather is open; guarded like the bridge
+  // above so this file needn't import the weather module directly.
+  try {
+    window.closeWeatherMode?.();
+  } catch {
+    /* ignore */
+  }
   // Tear down the zone/mask overlay + its ResizeObserver. The
   // helper is idempotent; the next open re-mounts cleanly.
   try {
@@ -628,7 +637,15 @@ function _lbShowSeekOverlay(text) {
 // ── DOM wiring (runs once on import) ────────────────────────────────────────
 byId('lightboxClose').onclick = closeLightbox;
 byId('lightboxModal').onclick = (e) => {
-  if (e.target === byId('lightboxModal')) closeLightbox();
+  const modal = byId('lightboxModal');
+  if (e.target === modal) {
+    closeLightbox();
+  } else if (modal.classList.contains('lb-weather') && e.target === byId('lightboxInner')) {
+    // L1 · in weather mode #lightboxInner fills the viewport (the shell
+    // is a centred 980 px column), so a click on the side gutter lands
+    // on the inner, not the modal — treat it as backdrop dismiss too.
+    closeLightbox();
+  }
 };
 byId('lightboxPrev').onclick = () => {
   const nav = _lbNavList();
@@ -686,12 +703,16 @@ document.addEventListener('keydown', (e) => {
   // route through their normal handlers below so the user keeps
   // close-on-Esc and fullscreen-on-F.
   const _liveDetect = byId('lightboxModal').classList.contains('lb-live-detect');
+  // L1 · weather shares this container too; like live it has no recorded
+  // item to seek/label, so it suppresses the prev/next + confirm/delete
+  // keys (its own title-bar chevrons handle navigation).
+  const _weather = byId('lightboxModal').classList.contains('lb-weather');
   // Seek step — was 10 s; tightened to 5 s to match the mediaview
   // task #6 spec. Five-second granularity reads more naturally for
   // 10-30 s motion clips, where 10 s would overshoot interesting
   // segments in two presses.
   if (e.key === 'ArrowLeft') {
-    if (_liveDetect) {
+    if (_liveDetect || _weather) {
       e.preventDefault();
       return;
     }
@@ -705,7 +726,7 @@ document.addEventListener('keydown', (e) => {
       if (i > 0) openLightbox(nav[i - 1]);
     }
   } else if (e.key === 'ArrowRight') {
-    if (_liveDetect) {
+    if (_liveDetect || _weather) {
       e.preventDefault();
       return;
     }
@@ -721,14 +742,14 @@ document.addEventListener('keydown', (e) => {
       if (i >= 0 && i < nav.length - 1) openLightbox(nav[i + 1]);
     }
   } else if (e.key === 'ArrowUp') {
-    if (_liveDetect) {
+    if (_liveDetect || _weather) {
       e.preventDefault();
       return;
     }
     e.preventDefault();
     byId('lightboxConfirm').click();
   } else if (e.key === 'ArrowDown') {
-    if (_liveDetect) {
+    if (_liveDetect || _weather) {
       e.preventDefault();
       return;
     }

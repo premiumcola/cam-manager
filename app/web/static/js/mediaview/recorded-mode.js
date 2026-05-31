@@ -40,6 +40,15 @@ import { _LB_TRASH_HTML, _updateLbConfirmBtn, _lbResetToPhoto } from './panels/l
 // Photo path: centred-modal layout (chrome torn down, labels bubble row).
 // Video path: full-screen chrome (top bar, playbar, panel tabs, fold).
 export function openRecorded(item) {
+  // L1 · the shared #lightboxModal may have been left in weather mode
+  // (one container for all modes). Tear that down + drop its class so
+  // the recorded chrome shows instead of staying hidden under lb-weather.
+  try {
+    window.closeWeatherMode?.();
+  } catch {
+    /* ignore */
+  }
+  byId('lightboxModal').classList.remove('lb-weather');
   // Index into the GLOBAL list (state._allMedia) so prev/next can cross
   // pagination boundaries — the page-slice (state.media) is a render
   // optimisation, not a navigation boundary.
