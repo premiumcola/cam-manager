@@ -153,6 +153,59 @@
   align-items: center;
 }
 
+/* G2 · Stream selector + mode segments dark-glass chips. The F migration
+   moved .mv-sim-ctl / .mv-sim-seg from .mv-ld-zone-video > #mvSimControls
+   into .mv-shell-topright, where 30f's #mvSimControls-scoped chip CSS no
+   longer reaches them — restate it here so the cluster reads as pills that
+   match the top-left toggles instead of unstyled default buttons. */
+.mv-shell-topright .mv-sim-ctl,
+.mv-shell-topright .mv-sim-seg {
+  padding: 6px;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  min-height: 44px;
+  min-width: 44px;
+}
+.mv-shell-topright .mv-sim-ctl-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(11, 15, 20, 0.82);
+  color: #e5edf5;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 10px;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+.mv-shell-topright .mv-sim-seg[data-on='1'] .mv-sim-ctl-chip {
+  background: rgba(28, 58, 82, 0.85);
+  color: #d6ecff;
+  box-shadow: inset 0 0 0 1px #6ec1ff;
+}
+.mv-shell-topright .mv-sim-ctl-k {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(226, 232, 240, 0.55);
+}
+.mv-shell-topright .mv-sim-ctl-v {
+  font-weight: 700;
+  color: #f1f5f9;
+}
+@media (hover: hover) {
+  .mv-shell-topright .mv-sim-ctl:hover .mv-sim-ctl-chip,
+  .mv-shell-topright .mv-sim-seg:hover .mv-sim-ctl-chip {
+    background: rgba(20, 30, 42, 0.7);
+    color: #fff;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+  }
+}
+
 /* Stacked overlay layers over the media — sized to the letterbox rect by
    canvas/index.js; painters (E/F) draw their svg/canvas inside. Order:
    zones under trails under bbox. All sit BELOW the tiling grid (z 6) and
@@ -494,6 +547,9 @@
   -webkit-overflow-scrolling: touch;
   padding: 0 0 env(safe-area-inset-bottom, 0px) 0 !important;
   margin: 0 !important;
+  /* G1 · opaque dark base — fills the chrome regions + flex gaps so no
+     dashboard/quest content bleeds through behind the player. */
+  background: #0b0f17;
 }
 /* Live-detect keeps the viewport itself fixed (the shell owns one inner
    scroll region — the detail panel below the tabs) so the live frame never
@@ -515,6 +571,7 @@
   max-width: 980px;
   min-height: 100dvh;
   margin: 0 auto;
+  background: #0b0f17;
 }
 
 /* ── #lightboxModal · recorded/timelapse mode (E · shared shell) ──────
@@ -561,6 +618,7 @@
   max-width: none;
   height: 100dvh;
   min-height: 0;
+  background: #0b0f17;
 }
 /* The panels block grows to fill the leftover height; its detail host is
    the sole scroll region (mirrors the retired 5-zone zone-detail). */
@@ -574,6 +632,38 @@
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+}
+
+/* G5 · thin dark scrollbar on the modal scroll regions — the live detail
+   panel + the recorded/weather scroll column. Replaces the chunky light OS
+   bar that clashes with the dark UI. Firefox: scrollbar-* ; WebKit: the
+   ::-webkit-scrollbar pseudo-elements. */
+#lightboxModal.lb-live-detect .mv-ld-shell-detail,
+#lightboxModal.lb-recorded #lightboxInner,
+#lightboxModal.lb-weather #lightboxInner {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+#lightboxModal.lb-live-detect .mv-ld-shell-detail::-webkit-scrollbar,
+#lightboxModal.lb-recorded #lightboxInner::-webkit-scrollbar,
+#lightboxModal.lb-weather #lightboxInner::-webkit-scrollbar {
+  width: 8px;
+}
+#lightboxModal.lb-live-detect .mv-ld-shell-detail::-webkit-scrollbar-track,
+#lightboxModal.lb-recorded #lightboxInner::-webkit-scrollbar-track,
+#lightboxModal.lb-weather #lightboxInner::-webkit-scrollbar-track {
+  background: transparent;
+}
+#lightboxModal.lb-live-detect .mv-ld-shell-detail::-webkit-scrollbar-thumb,
+#lightboxModal.lb-recorded #lightboxInner::-webkit-scrollbar-thumb,
+#lightboxModal.lb-weather #lightboxInner::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+}
+#lightboxModal.lb-live-detect .mv-ld-shell-detail::-webkit-scrollbar-thumb:hover,
+#lightboxModal.lb-recorded #lightboxInner::-webkit-scrollbar-thumb:hover,
+#lightboxModal.lb-weather #lightboxInner::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 /* Override 30f's legacy 5-zone wrap rule (!important, 100vw/100dvh,
    aspect-ratio:auto) so the reused wrap fills the shell's 16:9 stage

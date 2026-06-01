@@ -15,21 +15,27 @@
 // needed, so it works in every mode and in the data-free skeleton.
 
 import { byId, esc } from '../core/dom.js';
+import { attachHoverAndLongPress } from '../core/tooltip.js';
 
-// Mode id → label. SAHI tiling: 2×2 / 3×3 split the frame into equal
-// regions; ``roi`` runs inference on the motion crop only; ``off`` is
-// whole-frame single-shot.
+// Mode id → [label, title]. SAHI tiling: 2×2 / 3×3 split the frame into
+// equal regions; ``roi`` runs inference on the motion crop only; ``off`` is
+// whole-frame single-shot. The title is the German hover / long-press
+// explanation surfaced on the interactive segments (F3-G4) — kept here so
+// label + explanation share one source.
 export const MV_DETECTION_MODES = [
-  ['off', 'Aus'],
-  ['roi', 'Motion-ROI'],
-  ['2x2', '2×2'],
-  ['3x3', '3×3'],
+  ['off', 'Aus', 'Ganzer Frame, ein einziger Durchlauf'],
+  ['roi', 'Motion-ROI', 'Inferenz nur auf dem Bewegungs-Ausschnitt (Motion-Crop)'],
+  ['2x2', '2×2', 'Frame in 2×2 Kacheln, jede einzeln geprüft — findet kleine/ferne Tiere besser'],
+  ['3x3', '3×3', 'Frame in 3×3 Kacheln, jede einzeln — am genauesten, langsamer'],
 ];
 
-const _MODE_LABEL = Object.fromEntries(MV_DETECTION_MODES);
+// id → { label, title }, derived from the single MV_DETECTION_MODES source.
+const _MODE_LABEL = Object.fromEntries(
+  MV_DETECTION_MODES.map(([id, label, title]) => [id, { label, title }]),
+);
 
 export function mvModeLabel(id) {
-  return _MODE_LABEL[id] || id || 'Aus';
+  return (_MODE_LABEL[id] && _MODE_LABEL[id].label) || id || 'Aus';
 }
 
 const _SVG_NS = 'http://www.w3.org/2000/svg';
@@ -74,12 +80,14 @@ export function renderTilingGrid(svg, modeId) {
 }
 
 function _segHtml(value) {
-  // The label sits inside .mv-sim-ctl-chip — that inner span is the
-  // visible pill 30f styles (#mvSimControls .mv-sim-seg is only the 44 px
-  // touch target; the active highlight is .mv-sim-seg[data-on='1'] .chip).
+  // The label sits inside .mv-sim-ctl-chip — that inner span is the visible
+  // pill (.mv-shell-topright .mv-sim-seg is only the 44 px touch target; the
+  // active highlight is .mv-sim-seg[data-on='1'] .chip). title + data-desc
+  // carry the German explanation (native tooltip + the shared popover wired
+  // in renderModeIndicator).
   return MV_DETECTION_MODES.map(
-    ([id, label]) =>
-      `<button type="button" class="mv-sim-seg" data-val="${id}" data-on="${id === value ? '1' : '0'}" aria-pressed="${id === value}"><span class="mv-sim-ctl-chip">${esc(label)}</span></button>`,
+    ([id, label, title]) =>
+      `<button type="button" class="mv-sim-seg" data-val="${id}" data-on="${id === value ? '1' : '0'}" aria-pressed="${id === value}" title="${esc(title)}" data-desc="${esc(title)}"><span class="mv-sim-ctl-chip">${esc(label)}</span></button>`,
   ).join('');
 }
 
@@ -103,6 +111,9 @@ export function renderModeIndicator(host, opts = {}) {
   const wrap = document.createElement('div');
   wrap.className = 'mv-mode-ind';
   wrap.dataset.interactive = opts.interactive ? '1' : '0';
+  // Hover / long-press popover teardowns for the interactive segments
+  // (released in teardown()); stays empty for the read-only badge.
+  const tipTeardowns = [];
 
   if (opts.interactive) {
     wrap.innerHTML = `<div class="mv-sim-seg-group" role="group" aria-label="Erkennungs-Modus">${_segHtml(value)}</div>`;
@@ -118,6 +129,10 @@ export function renderModeIndicator(host, opts = {}) {
         });
         if (typeof opts.onChange === 'function') opts.onChange(value);
       });
+      // G4 · German explanation on desktop hover + touch long-press, reusing
+      // the shared overlay-toggle popover. A long-press swallows the click
+      // (no mode switch); a normal tap still switches the mode.
+      tipTeardowns.push(attachHoverAndLongPress(btn, btn.getAttribute('data-desc') || ''));
     });
   } else {
     let gridOn = false;
@@ -151,6 +166,15 @@ export function renderModeIndicator(host, opts = {}) {
         if (v) v.textContent = mvModeLabel(value);
       }
     },
-    teardown: () => wrap.remove(),
+    teardown: () => {
+      for (const fn of tipTeardowns) {
+        try {
+          fn();
+        } catch {
+          /* ignore */
+        }
+      }
+      wrap.remove();
+    },
   };
 }
